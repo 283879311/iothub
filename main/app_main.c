@@ -16,6 +16,8 @@
 #include "esp_bt_device.h"
 #include "esp_bt_main.h"
 #include "esp_check.h"
+#include "cJSON.h"
+#include "app_json.h"
 #include "esp_crt_bundle.h"
 #include "esp_event.h"
 #include "esp_gap_ble_api.h"
@@ -28,6 +30,7 @@
 #include "esp_mac.h"
 #include "esp_netif.h"
 #include "esp_ota_ops.h"
+#include "esp_random.h"
 #include "esp_spp_api.h"
 #include "esp_system.h"
 #include "esp_wifi.h"
@@ -40,12 +43,16 @@
 
 #define APP_NAMESPACE "iothub"
 #define APP_CONFIG_KEY "runtime_cfg"
+#define APP_CONFIG_VERSION_KEY "cfg_ver"
 #define APP_CONFIG_MAGIC 0x494f5448UL
 #define APP_CONFIG_VERSION 6
 #define APP_BASE_PATH "/web"
 #define APP_SCRATCH_SIZE 4096
 #define APP_JSON_BUFFER_SIZE 4096
 #define APP_OTA_REBOOT_DELAY_MS 1500
+#define APP_AUTH_PASSWORD CONFIG_IOTHUB_ADMIN_PASSWORD
+#define APP_AUTH_TOKEN_HEX_LEN 32
+#define APP_AUTH_HEADER "X-IoTHub-Auth"
 
 // Relay output GPIO. Recommended choices are output-capable pins such as
 // GPIO18/19/21/22/23/25/26/27/32/33. Avoid Flash/PSRAM pins and role conflicts.
@@ -312,6 +319,8 @@ static rmt_symbol_word_t s_rmt_probe_symbols[64];
 static size_t s_rmt_probe_symbol_count = 0;
 static SemaphoreHandle_t s_rmt_probe_done_sem = NULL;
 static wifi_runtime_t s_wifi = {0};
+static char s_auth_token[APP_AUTH_TOKEN_HEX_LEN + 1] = {0};
+static SemaphoreHandle_t s_mqtt_mutex = NULL;
 
 static void app_uart_reset_probe_metrics(void);
 static void app_uart_reset_manual_session(void);
@@ -765,6 +774,91 @@ static void app_set_defaults(void)
     app_copy_string(s_wifi.last_disconnect, sizeof(s_wifi.last_disconnect), "none");
 }
 
+static esp_err_t app_nvs_set_str(nvs_handle_t nvs_handle, const char *key, const char *value)
+{
+    return nvs_set_str(nvs_handle, key, value != NULL ? value : "");
+}
+
+static void app_nvs_get_str(nvs_handle_t nvs_handle, const char *key, char *value, size_t value_size)
+{
+    size_t required_size = value_size;
+
+    if (value_size == 0) {
+        return;
+    }
+    if (nvs_get_str(nvs_handle, key, value, &required_size) != ESP_OK) {
+        return;
+    }
+    value[value_size - 1] = '\0';
+}
+
+static esp_err_t app_save_config_to_nvs(nvs_handle_t nvs_handle)
+{
+    esp_err_t err = ESP_OK;
+
+#define APP_NVS_TRY(call) do { err = (call); if (err != ESP_OK) { return err; } } while (0)
+    APP_NVS_TRY(nvs_set_u16(nvs_handle, APP_CONFIG_VERSION_KEY, APP_CONFIG_VERSION));
+    APP_NVS_TRY(nvs_set_u8(nvs_handle, "relay_ah", s_config.relay_active_high));
+    APP_NVS_TRY(nvs_set_u8(nvs_handle, "led_ah", s_config.led_active_high));
+    APP_NVS_TRY(nvs_set_u8(nvs_handle, "input_al", s_config.input_active_low));
+    APP_NVS_TRY(nvs_set_u8(nvs_handle, "relay_on", s_config.relay_on));
+    APP_NVS_TRY(nvs_set_u8(nvs_handle, "led_on", s_config.led_on));
+    APP_NVS_TRY(nvs_set_u8(nvs_handle, "bt_mode", s_config.bt_mode));
+    APP_NVS_TRY(nvs_set_u8(nvs_handle, "net_mode", s_config.net_mode));
+    APP_NVS_TRY(nvs_set_u8(nvs_handle, "mqtt_tls", s_config.mqtt_use_tls));
+    APP_NVS_TRY(nvs_set_u8(nvs_handle, "uart_par", s_config.uart_parity_mode));
+    APP_NVS_TRY(nvs_set_u8(nvs_handle, "uart_data", s_config.uart_data_bits));
+    APP_NVS_TRY(nvs_set_u8(nvs_handle, "uart_stop", s_config.uart_stop_bits));
+    APP_NVS_TRY(nvs_set_u16(nvs_handle, "mqtt_port", s_config.mqtt_port));
+    APP_NVS_TRY(nvs_set_u32(nvs_handle, "uart_baud", s_config.uart_baudrate));
+    APP_NVS_TRY(app_nvs_set_str(nvs_handle, "ap_ssid", s_config.ap_ssid));
+    APP_NVS_TRY(app_nvs_set_str(nvs_handle, "ap_pass", s_config.ap_password));
+    APP_NVS_TRY(app_nvs_set_str(nvs_handle, "sta_ssid", s_config.sta_ssid));
+    APP_NVS_TRY(app_nvs_set_str(nvs_handle, "sta_pass", s_config.sta_password));
+    APP_NVS_TRY(app_nvs_set_str(nvs_handle, "bt_name", s_config.bt_device_name));
+    APP_NVS_TRY(app_nvs_set_str(nvs_handle, "mqtt_backend", s_config.mqtt_backend));
+    APP_NVS_TRY(app_nvs_set_str(nvs_handle, "mqtt_host", s_config.mqtt_host));
+    APP_NVS_TRY(app_nvs_set_str(nvs_handle, "mqtt_token", s_config.mqtt_token));
+#undef APP_NVS_TRY
+    return ESP_OK;
+}
+
+static void app_load_config_from_nvs(nvs_handle_t nvs_handle)
+{
+    uint8_t u8_value;
+    uint16_t u16_value;
+    uint32_t u32_value;
+
+#define APP_NVS_GET_U8(key, field) do { if (nvs_get_u8(nvs_handle, (key), &u8_value) == ESP_OK) { s_config.field = u8_value; } } while (0)
+#define APP_NVS_GET_U16(key, field) do { if (nvs_get_u16(nvs_handle, (key), &u16_value) == ESP_OK) { s_config.field = u16_value; } } while (0)
+#define APP_NVS_GET_U32(key, field) do { if (nvs_get_u32(nvs_handle, (key), &u32_value) == ESP_OK) { s_config.field = u32_value; } } while (0)
+    APP_NVS_GET_U8("relay_ah", relay_active_high);
+    APP_NVS_GET_U8("led_ah", led_active_high);
+    APP_NVS_GET_U8("input_al", input_active_low);
+    APP_NVS_GET_U8("relay_on", relay_on);
+    APP_NVS_GET_U8("led_on", led_on);
+    APP_NVS_GET_U8("bt_mode", bt_mode);
+    APP_NVS_GET_U8("net_mode", net_mode);
+    APP_NVS_GET_U8("mqtt_tls", mqtt_use_tls);
+    APP_NVS_GET_U8("uart_par", uart_parity_mode);
+    APP_NVS_GET_U8("uart_data", uart_data_bits);
+    APP_NVS_GET_U8("uart_stop", uart_stop_bits);
+    APP_NVS_GET_U16("mqtt_port", mqtt_port);
+    APP_NVS_GET_U32("uart_baud", uart_baudrate);
+#undef APP_NVS_GET_U8
+#undef APP_NVS_GET_U16
+#undef APP_NVS_GET_U32
+    app_nvs_get_str(nvs_handle, "ap_ssid", s_config.ap_ssid, sizeof(s_config.ap_ssid));
+    app_nvs_get_str(nvs_handle, "ap_pass", s_config.ap_password, sizeof(s_config.ap_password));
+    app_nvs_get_str(nvs_handle, "sta_ssid", s_config.sta_ssid, sizeof(s_config.sta_ssid));
+    app_nvs_get_str(nvs_handle, "sta_pass", s_config.sta_password, sizeof(s_config.sta_password));
+    app_nvs_get_str(nvs_handle, "bt_name", s_config.bt_device_name, sizeof(s_config.bt_device_name));
+    app_nvs_get_str(nvs_handle, "mqtt_backend", s_config.mqtt_backend, sizeof(s_config.mqtt_backend));
+    app_nvs_get_str(nvs_handle, "mqtt_host", s_config.mqtt_host, sizeof(s_config.mqtt_host));
+    app_nvs_get_str(nvs_handle, "mqtt_token", s_config.mqtt_token, sizeof(s_config.mqtt_token));
+    app_sanitize_gpio_config();
+}
+
 static esp_err_t app_save_config(void)
 {
     nvs_handle_t nvs_handle;
@@ -773,7 +867,7 @@ static esp_err_t app_save_config(void)
         return err;
     }
 
-    err = nvs_set_blob(nvs_handle, APP_CONFIG_KEY, &s_config, sizeof(s_config));
+    err = app_save_config_to_nvs(nvs_handle);
     if (err == ESP_OK) {
         err = nvs_commit(nvs_handle);
     }
@@ -866,6 +960,8 @@ static void app_load_config(void)
 {
     nvs_handle_t nvs_handle;
     size_t size = 0;
+    uint16_t stored_version = 0;
+    esp_err_t err;
 
     app_set_defaults();
 
@@ -874,71 +970,73 @@ static void app_load_config(void)
         return;
     }
 
-    if (nvs_get_blob(nvs_handle, APP_CONFIG_KEY, NULL, &size) != ESP_OK) {
-        ESP_LOGI(TAG, "No compatible saved config found, storing defaults");
-        app_set_defaults();
-        nvs_set_blob(nvs_handle, APP_CONFIG_KEY, &s_config, sizeof(s_config));
-        nvs_commit(nvs_handle);
+    if (nvs_get_u16(nvs_handle, APP_CONFIG_VERSION_KEY, &stored_version) == ESP_OK &&
+        stored_version == APP_CONFIG_VERSION) {
+        app_load_config_from_nvs(nvs_handle);
         nvs_close(nvs_handle);
         return;
     }
 
-    if (size == sizeof(s_config)) {
+    err = nvs_get_blob(nvs_handle, APP_CONFIG_KEY, NULL, &size);
+    if (err == ESP_OK && size == sizeof(s_config)) {
         size_t current_size = sizeof(s_config);
         if (nvs_get_blob(nvs_handle, APP_CONFIG_KEY, &s_config, &current_size) == ESP_OK &&
             s_config.magic == APP_CONFIG_MAGIC &&
             s_config.version == APP_CONFIG_VERSION) {
+            ESP_LOGI(TAG, "Migrating saved config blob v6 to key-value NVS");
             app_sanitize_gpio_config();
+            app_save_config_to_nvs(nvs_handle);
+            nvs_commit(nvs_handle);
             nvs_close(nvs_handle);
             return;
         }
-    } else if (size == sizeof(app_config_v5_t)) {
+    } else if (err == ESP_OK && size == sizeof(app_config_v5_t)) {
         app_config_v5_t legacy = {0};
         size_t legacy_size = sizeof(legacy);
 
         if (nvs_get_blob(nvs_handle, APP_CONFIG_KEY, &legacy, &legacy_size) == ESP_OK &&
             legacy.magic == APP_CONFIG_MAGIC &&
             legacy.version == 5) {
-            ESP_LOGI(TAG, "Migrating saved config from v5 to v6");
+            ESP_LOGI(TAG, "Migrating saved config from v5 blob to key-value NVS");
             app_migrate_config_v5(&legacy);
-            nvs_set_blob(nvs_handle, APP_CONFIG_KEY, &s_config, sizeof(s_config));
+            app_save_config_to_nvs(nvs_handle);
             nvs_commit(nvs_handle);
             nvs_close(nvs_handle);
             return;
         }
-    } else if (size == sizeof(app_config_v4_t)) {
+    } else if (err == ESP_OK && size == sizeof(app_config_v4_t)) {
         app_config_v4_t legacy = {0};
         size_t legacy_size = sizeof(legacy);
 
         if (nvs_get_blob(nvs_handle, APP_CONFIG_KEY, &legacy, &legacy_size) == ESP_OK &&
             legacy.magic == APP_CONFIG_MAGIC &&
             legacy.version == 4) {
-            ESP_LOGI(TAG, "Migrating saved config from v4 to v6");
+            ESP_LOGI(TAG, "Migrating saved config from v4 blob to key-value NVS");
             app_migrate_config_v4(&legacy);
-            nvs_set_blob(nvs_handle, APP_CONFIG_KEY, &s_config, sizeof(s_config));
+            app_save_config_to_nvs(nvs_handle);
             nvs_commit(nvs_handle);
             nvs_close(nvs_handle);
             return;
         }
-    } else if (size == sizeof(app_config_v3_t)) {
+    } else if (err == ESP_OK && size == sizeof(app_config_v3_t)) {
         app_config_v3_t legacy = {0};
         size_t legacy_size = sizeof(legacy);
 
         if (nvs_get_blob(nvs_handle, APP_CONFIG_KEY, &legacy, &legacy_size) == ESP_OK &&
             legacy.magic == APP_CONFIG_MAGIC &&
             legacy.version == 3) {
-            ESP_LOGI(TAG, "Migrating saved config from v3 to v6");
+            ESP_LOGI(TAG, "Migrating saved config from v3 blob to key-value NVS");
             app_migrate_config_v3(&legacy);
-            nvs_set_blob(nvs_handle, APP_CONFIG_KEY, &s_config, sizeof(s_config));
+            app_save_config_to_nvs(nvs_handle);
             nvs_commit(nvs_handle);
             nvs_close(nvs_handle);
             return;
         }
     }
 
-    ESP_LOGI(TAG, "No compatible saved config found, storing defaults");
+    ESP_LOGI(TAG, "No compatible saved config found, storing defaults as key-value NVS");
     app_set_defaults();
-    nvs_set_blob(nvs_handle, APP_CONFIG_KEY, &s_config, sizeof(s_config));
+    app_save_config_to_nvs(nvs_handle);
     nvs_commit(nvs_handle);
     nvs_close(nvs_handle);
 }
@@ -1055,6 +1153,32 @@ static bool app_network_mode_has_ap(uint8_t mode)
     return mode == NET_MODE_AP || mode == NET_MODE_APSTA;
 }
 
+static bool app_start_task(TaskFunction_t task_func, const char *name, uint32_t stack_depth,
+                           void *arg, UBaseType_t priority)
+{
+    BaseType_t created = xTaskCreate(task_func, name, stack_depth, arg, priority, NULL);
+
+    if (created != pdPASS) {
+        ESP_LOGE(TAG, "Failed to create task %s", name != NULL ? name : "<unnamed>");
+        return false;
+    }
+    return true;
+}
+
+static void app_mqtt_lock(void)
+{
+    if (s_mqtt_mutex != NULL) {
+        xSemaphoreTakeRecursive(s_mqtt_mutex, portMAX_DELAY);
+    }
+}
+
+static void app_mqtt_unlock(void)
+{
+    if (s_mqtt_mutex != NULL) {
+        xSemaphoreGiveRecursive(s_mqtt_mutex);
+    }
+}
+
 static esp_err_t app_configure_ap_netif_ip(void)
 {
     esp_netif_ip_info_t ip_info = {0};
@@ -1066,7 +1190,10 @@ static esp_err_t app_configure_ap_netif_ip(void)
     IP4_ADDR(&ip_info.ip, 192, 168, 8, 1);
     IP4_ADDR(&ip_info.gw, 192, 168, 8, 1);
     IP4_ADDR(&ip_info.netmask, 255, 255, 255, 0);
-    ESP_ERROR_CHECK(esp_netif_set_ip_info(s_ap_netif, &ip_info));
+    err = esp_netif_set_ip_info(s_ap_netif, &ip_info);
+    if (err != ESP_OK) {
+        return err;
+    }
     return esp_netif_dhcps_start(s_ap_netif);
 }
 
@@ -1110,7 +1237,7 @@ static void app_wifi_event_handler(void *arg, esp_event_base_t event_base, int32
         s_wifi.sta_has_ip = true;
         s_wifi.sta_retries = 0;
         app_set_sta_ip_strings(&event->ip_info);
-        xTaskCreate(app_mqtt_restart_task, "mqtt_restart_ip", 4096, NULL, 5, NULL);
+        app_start_task(app_mqtt_restart_task, "mqtt_restart_ip", 4096, NULL, 5);
     }
 }
 
@@ -1148,20 +1275,28 @@ static esp_err_t app_apply_wifi_config(void)
     s_wifi.sta_retries = 0;
     app_set_sta_ip_strings(NULL);
 
-    ESP_ERROR_CHECK(esp_wifi_set_mode(app_network_mode_to_wifi_mode(s_config.net_mode)));
+    err = esp_wifi_set_mode(app_network_mode_to_wifi_mode(s_config.net_mode));
+    if (err != ESP_OK) {
+        return err;
+    }
     if (app_network_mode_has_ap(s_config.net_mode)) {
-        ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_AP, &ap_cfg));
-        ESP_ERROR_CHECK(app_configure_ap_netif_ip());
+        err = esp_wifi_set_config(WIFI_IF_AP, &ap_cfg);
+        if (err != ESP_OK) {
+            return err;
+        }
+        err = app_configure_ap_netif_ip();
+        if (err != ESP_OK) {
+            return err;
+        }
     }
     if (app_network_mode_has_sta(s_config.net_mode)) {
-        ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &sta_cfg));
+        err = esp_wifi_set_config(WIFI_IF_STA, &sta_cfg);
+        if (err != ESP_OK) {
+            return err;
+        }
     }
 
-    ESP_ERROR_CHECK(esp_wifi_start());
-    if (app_network_mode_has_sta(s_config.net_mode) && strlen(s_config.sta_ssid) > 0) {
-        ESP_ERROR_CHECK(esp_wifi_connect());
-    }
-    return ESP_OK;
+    return esp_wifi_start();
 }
 
 static esp_err_t app_wifi_perform_scan(void)
@@ -1169,22 +1304,36 @@ static esp_err_t app_wifi_perform_scan(void)
     wifi_mode_t old_mode = WIFI_MODE_NULL;
     bool temporary_apsta = false;
     uint16_t number = WIFI_SCAN_LIST_SIZE;
+    esp_err_t err;
 
-    ESP_ERROR_CHECK(esp_wifi_get_mode(&old_mode));
+    err = esp_wifi_get_mode(&old_mode);
+    if (err != ESP_OK) {
+        return err;
+    }
     if (old_mode == WIFI_MODE_AP) {
-        ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_APSTA));
+        err = esp_wifi_set_mode(WIFI_MODE_APSTA);
+        if (err != ESP_OK) {
+            return err;
+        }
         temporary_apsta = true;
         vTaskDelay(pdMS_TO_TICKS(120));
     }
 
-    ESP_ERROR_CHECK(esp_wifi_scan_start(NULL, true));
-    ESP_ERROR_CHECK(esp_wifi_scan_get_ap_records(&number, s_wifi.scan_records));
-    s_wifi.scan_count = number;
+    err = esp_wifi_scan_start(NULL, true);
+    if (err == ESP_OK) {
+        err = esp_wifi_scan_get_ap_records(&number, s_wifi.scan_records);
+    }
+    if (err == ESP_OK) {
+        s_wifi.scan_count = number;
+    }
 
     if (temporary_apsta) {
-        ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_AP));
+        esp_err_t restore_err = esp_wifi_set_mode(WIFI_MODE_AP);
+        if (err == ESP_OK) {
+            err = restore_err;
+        }
     }
-    return ESP_OK;
+    return err;
 }
 
 static void app_wifi_restart_task(void *arg)
@@ -1241,6 +1390,21 @@ static esp_err_t http_send_jsonf(httpd_req_t *req, const char *status, const cha
     return err;
 }
 
+
+static esp_err_t http_send_cjson(httpd_req_t *req, const char *status, cJSON *root)
+{
+    char *payload = cJSON_PrintUnformatted(root);
+    esp_err_t err;
+
+    if (payload == NULL) {
+        return http_send_json_text(req, "500 Internal Server Error",
+                                   "{\"status\":\"error\",\"message\":\"out_of_memory\"}");
+    }
+    err = http_send_json_text(req, status, payload);
+    cJSON_free(payload);
+    return err;
+}
+
 static esp_err_t http_read_body(httpd_req_t *req, char *buf, size_t buf_len)
 {
     int remaining = req->content_len;
@@ -1265,131 +1429,52 @@ static esp_err_t http_read_body(httpd_req_t *req, char *buf, size_t buf_len)
     return ESP_OK;
 }
 
-static bool json_find_string(const char *json, const char *key, char *out, size_t out_size)
+static void app_auth_generate_token(void)
 {
-    char pattern[48];
-    const char *pos;
-    size_t idx = 0;
+    uint8_t random_bytes[APP_AUTH_TOKEN_HEX_LEN / 2];
 
-    snprintf(pattern, sizeof(pattern), "\"%s\":\"", key);
-    pos = strstr(json, pattern);
-    if (pos == NULL) {
-        snprintf(pattern, sizeof(pattern), "\"%s\": \"", key);
-        pos = strstr(json, pattern);
-        if (pos == NULL) {
-            return false;
-        }
+    esp_fill_random(random_bytes, sizeof(random_bytes));
+    for (size_t index = 0; index < sizeof(random_bytes); index++) {
+        snprintf(&s_auth_token[index * 2], 3, "%02x", random_bytes[index]);
     }
-
-    pos += strlen(pattern);
-    while (*pos != '\0' && idx + 1 < out_size) {
-        if (*pos == '"') {
-            break;
-        }
-        if (*pos == '\\' && pos[1] != '\0') {
-            pos++;
-            switch (*pos) {
-            case 'n':
-                out[idx++] = '\n';
-                break;
-            case 'r':
-                out[idx++] = '\r';
-                break;
-            case 't':
-                out[idx++] = '\t';
-                break;
-            case '"':
-                out[idx++] = '"';
-                break;
-            case '\\':
-                out[idx++] = '\\';
-                break;
-            default:
-                out[idx++] = *pos;
-                break;
-            }
-            pos++;
-            continue;
-        }
-        out[idx++] = *pos++;
-    }
-    out[idx] = '\0';
-    return true;
+    s_auth_token[APP_AUTH_TOKEN_HEX_LEN] = '\0';
 }
 
-static bool json_find_bool(const char *json, const char *key, bool *value)
+static bool app_auth_request_has_valid_token(httpd_req_t *req)
 {
-    char pattern[48];
-    const char *pos;
+    char token[APP_AUTH_TOKEN_HEX_LEN + 1];
+    size_t token_len = httpd_req_get_hdr_value_len(req, APP_AUTH_HEADER);
 
-    snprintf(pattern, sizeof(pattern), "\"%s\":", key);
-    pos = strstr(json, pattern);
-    if (pos == NULL) {
+    if (s_auth_token[0] == '\0') {
         return false;
     }
-
-    pos += strlen(pattern);
-    while (*pos == ' ') {
-        pos++;
+    if (token_len != APP_AUTH_TOKEN_HEX_LEN || token_len >= sizeof(token)) {
+        return false;
     }
-    if (strncmp(pos, "true", 4) == 0) {
-        *value = true;
-        return true;
+    if (httpd_req_get_hdr_value_str(req, APP_AUTH_HEADER, token, sizeof(token)) != ESP_OK) {
+        return false;
     }
-    if (strncmp(pos, "false", 5) == 0) {
-        *value = false;
-        return true;
-    }
-    return false;
+    return strcmp(token, s_auth_token) == 0;
 }
 
-static bool json_find_u16(const char *json, const char *key, uint16_t *value)
+static esp_err_t http_require_auth(httpd_req_t *req)
 {
-    char pattern[48];
-    const char *pos;
-    long parsed;
-
-    snprintf(pattern, sizeof(pattern), "\"%s\":", key);
-    pos = strstr(json, pattern);
-    if (pos == NULL) {
-        return false;
+    if (app_auth_request_has_valid_token(req)) {
+        return ESP_OK;
     }
-
-    pos += strlen(pattern);
-    while (*pos == ' ') {
-        pos++;
-    }
-
-    parsed = strtol(pos, NULL, 10);
-    if (parsed < 0 || parsed > 65535) {
-        return false;
-    }
-
-    *value = (uint16_t)parsed;
-    return true;
+    httpd_resp_set_hdr(req, "WWW-Authenticate", "IoTHub");
+    return http_send_json_text(req, "401 Unauthorized",
+                               "{\"status\":\"error\",\"message\":\"auth_required\"}");
 }
 
-static bool json_find_u32(const char *json, const char *key, uint32_t *value)
-{
-    char pattern[48];
-    const char *pos;
-    unsigned long parsed;
+#define APP_REQUIRE_AUTH(req) \
+    do { \
+        esp_err_t auth_err__ = http_require_auth((req)); \
+        if (auth_err__ != ESP_OK) { \
+            return auth_err__; \
+        } \
+    } while (0)
 
-    snprintf(pattern, sizeof(pattern), "\"%s\":", key);
-    pos = strstr(json, pattern);
-    if (pos == NULL) {
-        return false;
-    }
-
-    pos += strlen(pattern);
-    while (*pos == ' ') {
-        pos++;
-    }
-
-    parsed = strtoul(pos, NULL, 10);
-    *value = (uint32_t)parsed;
-    return true;
-}
 
 static esp_err_t http_serve_index(httpd_req_t *req)
 {
@@ -2713,7 +2798,9 @@ static void app_mqtt_publish_attributes(void)
     char payload[384];
     char detected_frame[8];
 
+    app_mqtt_lock();
     if (s_mqtt.client == NULL || !s_mqtt.connected) {
+        app_mqtt_unlock();
         return;
     }
 
@@ -2734,6 +2821,7 @@ static void app_mqtt_publish_attributes(void)
              (unsigned)s_uart.detected_baudrate);
 
     esp_mqtt_client_publish(s_mqtt.client, app_mqtt_attributes_topic(), payload, 0, 1, 0);
+    app_mqtt_unlock();
 }
 
 static void app_mqtt_publish_state(void)
@@ -2741,7 +2829,9 @@ static void app_mqtt_publish_state(void)
     char payload[512];
     char detected_frame[8];
 
+    app_mqtt_lock();
     if (s_mqtt.client == NULL || !s_mqtt.connected) {
+        app_mqtt_unlock();
         return;
     }
 
@@ -2771,6 +2861,7 @@ static void app_mqtt_publish_state(void)
     if (s_mqtt.last_msg_id >= 0) {
         s_mqtt.publish_count++;
     }
+    app_mqtt_unlock();
 }
 
 static void app_mqtt_apply_command(const char *topic, const char *payload)
@@ -2781,50 +2872,38 @@ static void app_mqtt_apply_command(const char *topic, const char *payload)
     char response_topic[128];
     char response_payload[256];
     const char *request_id = NULL;
+    cJSON *root = cJSON_Parse(payload);
+    cJSON *relay_on = root != NULL ? cJSON_GetObjectItemCaseSensitive(root, "relay_on") : NULL;
+    cJSON *led_on = root != NULL ? cJSON_GetObjectItemCaseSensitive(root, "led_on") : NULL;
+    cJSON *method = root != NULL ? cJSON_GetObjectItemCaseSensitive(root, "method") : NULL;
+    cJSON *params = root != NULL ? cJSON_GetObjectItemCaseSensitive(root, "params") : NULL;
 
-    if (strstr(payload, "\"relay_on\":true") != NULL) {
-        s_config.relay_on = true;
+    if (cJSON_IsBool(relay_on)) {
+        s_config.relay_on = cJSON_IsTrue(relay_on);
         changed = true;
         handled = true;
-    } else if (strstr(payload, "\"relay_on\":false") != NULL) {
-        s_config.relay_on = false;
+    }
+    if (cJSON_IsBool(led_on)) {
+        s_config.led_on = cJSON_IsTrue(led_on);
         changed = true;
         handled = true;
     }
 
-    if (strstr(payload, "\"led_on\":true") != NULL) {
-        s_config.led_on = true;
-        changed = true;
-        handled = true;
-    } else if (strstr(payload, "\"led_on\":false") != NULL) {
-        s_config.led_on = false;
-        changed = true;
-        handled = true;
-    }
-
-    if (strstr(payload, "\"method\":\"setRelay\"") != NULL) {
-        if (strstr(payload, "\"params\":true") != NULL || strstr(payload, "\"params\":1") != NULL) {
-            s_config.relay_on = true;
-        } else {
-            s_config.relay_on = false;
+    if (cJSON_IsString(method) && method->valuestring != NULL) {
+        if (strcmp(method->valuestring, "setRelay") == 0) {
+            s_config.relay_on = cJSON_IsTrue(params) ||
+                                (cJSON_IsNumber(params) && params->valuedouble != 0);
+            changed = true;
+            handled = true;
+        } else if (strcmp(method->valuestring, "setLed") == 0) {
+            s_config.led_on = cJSON_IsTrue(params) ||
+                              (cJSON_IsNumber(params) && params->valuedouble != 0);
+            changed = true;
+            handled = true;
+        } else if (strcmp(method->valuestring, "getStatus") == 0) {
+            handled = true;
+            request_status = true;
         }
-        changed = true;
-        handled = true;
-    }
-
-    if (strstr(payload, "\"method\":\"setLed\"") != NULL) {
-        if (strstr(payload, "\"params\":true") != NULL || strstr(payload, "\"params\":1") != NULL) {
-            s_config.led_on = true;
-        } else {
-            s_config.led_on = false;
-        }
-        changed = true;
-        handled = true;
-    }
-
-    if (strstr(payload, "\"method\":\"getStatus\"") != NULL) {
-        handled = true;
-        request_status = true;
     }
 
     if (changed) {
@@ -2853,13 +2932,18 @@ static void app_mqtt_apply_command(const char *topic, const char *payload)
                      s_config.relay_on ? "true" : "false",
                      s_config.led_on ? "true" : "false");
         }
-        esp_mqtt_client_publish(s_mqtt.client, response_topic, response_payload, 0, 1, 0);
+        app_mqtt_lock();
+        if (s_mqtt.client != NULL) {
+            esp_mqtt_client_publish(s_mqtt.client, response_topic, response_payload, 0, 1, 0);
+        }
+        app_mqtt_unlock();
     }
 
     if (handled) {
         app_mqtt_publish_attributes();
     }
     app_mqtt_publish_state();
+    cJSON_Delete(root);
 }
 
 static void app_mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_t event_id, void *event_data)
@@ -2874,18 +2958,24 @@ static void app_mqtt_event_handler(void *handler_args, esp_event_base_t base, in
 
     switch ((esp_mqtt_event_id_t)event_id) {
     case MQTT_EVENT_CONNECTED:
+        app_mqtt_lock();
         s_mqtt.connected = true;
         app_copy_string(s_mqtt.last_error, sizeof(s_mqtt.last_error), "");
+        app_mqtt_unlock();
         esp_mqtt_client_subscribe(event->client, app_mqtt_rpc_topic(), 1);
         app_mqtt_publish_attributes();
         app_mqtt_publish_state();
         break;
     case MQTT_EVENT_DISCONNECTED:
+        app_mqtt_lock();
         s_mqtt.connected = false;
         app_copy_string(s_mqtt.last_error, sizeof(s_mqtt.last_error), "disconnected");
+        app_mqtt_unlock();
         break;
     case MQTT_EVENT_PUBLISHED:
+        app_mqtt_lock();
         s_mqtt.last_msg_id = event->msg_id;
+        app_mqtt_unlock();
         break;
     case MQTT_EVENT_DATA:
         copy_len = event->topic_len < (int)sizeof(topic) - 1 ? event->topic_len : (int)sizeof(topic) - 1;
@@ -2897,8 +2987,10 @@ static void app_mqtt_event_handler(void *handler_args, esp_event_base_t base, in
         app_mqtt_apply_command(topic, payload);
         break;
     case MQTT_EVENT_ERROR:
+        app_mqtt_lock();
         s_mqtt.connected = false;
         snprintf(s_mqtt.last_error, sizeof(s_mqtt.last_error), "event_error_%ld", (long)event_id);
+        app_mqtt_unlock();
         break;
     default:
         break;
@@ -2907,12 +2999,14 @@ static void app_mqtt_event_handler(void *handler_args, esp_event_base_t base, in
 
 static void app_mqtt_stop(void)
 {
+    app_mqtt_lock();
     if (s_mqtt.client != NULL) {
         esp_mqtt_client_stop(s_mqtt.client);
         esp_mqtt_client_destroy(s_mqtt.client);
         s_mqtt.client = NULL;
     }
     s_mqtt.connected = false;
+    app_mqtt_unlock();
 }
 
 static esp_err_t app_mqtt_apply_config(void)
@@ -2921,12 +3015,15 @@ static esp_err_t app_mqtt_apply_config(void)
 
     app_mqtt_stop();
 
+    app_mqtt_lock();
     if (strlen(s_config.mqtt_host) == 0 || s_config.mqtt_port == 0) {
         app_copy_string(s_mqtt.last_error, sizeof(s_mqtt.last_error), "mqtt_not_configured");
+        app_mqtt_unlock();
         return ESP_OK;
     }
     if (!app_network_mode_has_sta(s_config.net_mode) || !s_wifi.sta_has_ip) {
         app_copy_string(s_mqtt.last_error, sizeof(s_mqtt.last_error), "waiting_sta_ip");
+        app_mqtt_unlock();
         return ESP_OK;
     }
 
@@ -2945,12 +3042,18 @@ static esp_err_t app_mqtt_apply_config(void)
     s_mqtt.client = esp_mqtt_client_init(&mqtt_cfg);
     if (s_mqtt.client == NULL) {
         app_copy_string(s_mqtt.last_error, sizeof(s_mqtt.last_error), "mqtt_init_failed");
+        app_mqtt_unlock();
         return ESP_FAIL;
     }
 
     esp_mqtt_client_register_event(s_mqtt.client, ESP_EVENT_ANY_ID, app_mqtt_event_handler, NULL);
-    ESP_RETURN_ON_ERROR(esp_mqtt_client_start(s_mqtt.client), TAG, "mqtt start failed");
+    esp_err_t err = esp_mqtt_client_start(s_mqtt.client);
+    if (err != ESP_OK) {
+        app_mqtt_unlock();
+        ESP_RETURN_ON_ERROR(err, TAG, "mqtt start failed");
+    }
     app_copy_string(s_mqtt.last_error, sizeof(s_mqtt.last_error), "connecting");
+    app_mqtt_unlock();
     return ESP_OK;
 }
 
@@ -2976,6 +3079,33 @@ static void app_reboot_task(void *arg)
 {
     vTaskDelay(pdMS_TO_TICKS(APP_OTA_REBOOT_DELAY_MS));
     esp_restart();
+}
+
+static esp_err_t auth_login_handler(httpd_req_t *req)
+{
+    char password[65];
+
+    if (http_read_body(req, s_web.scratch, sizeof(s_web.scratch)) != ESP_OK) {
+        return ESP_FAIL;
+    }
+    if (!app_json_find_string(s_web.scratch, "password", password, sizeof(password)) ||
+        strcmp(password, APP_AUTH_PASSWORD) != 0) {
+        return http_send_json_text(req, "401 Unauthorized",
+                                   "{\"status\":\"error\",\"message\":\"invalid_password\"}");
+    }
+
+    app_auth_generate_token();
+    return http_send_jsonf(req, NULL,
+                           "{\"status\":\"ok\",\"token\":\"%s\"}",
+                           s_auth_token);
+}
+
+static esp_err_t auth_logout_handler(httpd_req_t *req)
+{
+    APP_REQUIRE_AUTH(req);
+    memset(s_auth_token, 0, sizeof(s_auth_token));
+    return http_send_json_text(req, NULL,
+                               "{\"status\":\"ok\",\"message\":\"logged_out\"}");
 }
 
 static esp_err_t device_info_get_handler(httpd_req_t *req)
@@ -3076,6 +3206,7 @@ static esp_err_t device_status_get_handler(httpd_req_t *req)
 
 static esp_err_t network_get_handler(httpd_req_t *req)
 {
+    APP_REQUIRE_AUTH(req);
     char ip[16];
     char gateway[16];
     char netmask[16];
@@ -3101,6 +3232,7 @@ static esp_err_t network_get_handler(httpd_req_t *req)
 
 static esp_err_t network_put_handler(httpd_req_t *req)
 {
+    APP_REQUIRE_AUTH(req);
     char value[65];
     const bool ap_enabled_before = app_network_mode_has_ap(s_config.net_mode);
     char current_ap_ip[16];
@@ -3115,23 +3247,23 @@ static esp_err_t network_put_handler(httpd_req_t *req)
         return ESP_FAIL;
     }
 
-    if (json_find_string(s_web.scratch, "ap_ssid", value, sizeof(s_config.ap_ssid)) && strlen(value) > 0) {
+    if (app_json_find_string(s_web.scratch, "ap_ssid", value, sizeof(s_config.ap_ssid)) && strlen(value) > 0) {
         app_copy_string(s_config.ap_ssid, sizeof(s_config.ap_ssid), value);
     }
-    if (json_find_string(s_web.scratch, "mode", value, sizeof(value))) {
+    if (app_json_find_string(s_web.scratch, "mode", value, sizeof(value))) {
         s_config.net_mode = app_network_mode_from_string(value);
     }
-    if (json_find_string(s_web.scratch, "ap_password", value, sizeof(s_config.ap_password))) {
+    if (app_json_find_string(s_web.scratch, "ap_password", value, sizeof(s_config.ap_password))) {
         if (strlen(value) > 0 && strlen(value) < 8) {
             return http_send_json_text(req, "400 Bad Request",
                                        "{\"status\":\"error\",\"message\":\"password_too_short\"}");
         }
         app_copy_string(s_config.ap_password, sizeof(s_config.ap_password), value);
     }
-    if (json_find_string(s_web.scratch, "sta_ssid", value, sizeof(s_config.sta_ssid))) {
+    if (app_json_find_string(s_web.scratch, "sta_ssid", value, sizeof(s_config.sta_ssid))) {
         app_copy_string(s_config.sta_ssid, sizeof(s_config.sta_ssid), value);
     }
-    if (json_find_string(s_web.scratch, "sta_password", value, sizeof(s_config.sta_password))) {
+    if (app_json_find_string(s_web.scratch, "sta_password", value, sizeof(s_config.sta_password))) {
         if (strlen(value) > 0 && strlen(value) < 8) {
             return http_send_json_text(req, "400 Bad Request",
                                        "{\"status\":\"error\",\"message\":\"sta_password_too_short\"}");
@@ -3158,48 +3290,61 @@ static esp_err_t network_put_handler(httpd_req_t *req)
 
 static esp_err_t network_restart_handler(httpd_req_t *req)
 {
+    APP_REQUIRE_AUTH(req);
     (void)req;
     http_send_json_text(req, NULL,
                         "{\"status\":\"restarting\",\"message\":\"network restart started\"}");
-    xTaskCreate(app_wifi_restart_task, "wifi_restart", 4096, NULL, 5, NULL);
+    app_start_task(app_wifi_restart_task, "wifi_restart", 4096, NULL, 5);
     return ESP_OK;
 }
 
 static esp_err_t network_scan_handler(httpd_req_t *req)
 {
-    char *payload;
-    int offset;
-    uint16_t index;
+    APP_REQUIRE_AUTH(req);
+    cJSON *root = NULL;
+    cJSON *aps = NULL;
+    esp_err_t err;
 
-    if (app_wifi_perform_scan() != ESP_OK) {
+    err = app_wifi_perform_scan();
+    if (err != ESP_OK) {
         return http_send_json_text(req, "500 Internal Server Error",
                                    "{\"status\":\"error\",\"message\":\"wifi_scan_failed\"}");
     }
 
-    payload = malloc(APP_JSON_BUFFER_SIZE);
-    if (payload == NULL) {
+    root = cJSON_CreateObject();
+    aps = cJSON_CreateArray();
+    if (root == NULL || aps == NULL) {
+        cJSON_Delete(root);
+        cJSON_Delete(aps);
         return http_send_json_text(req, "500 Internal Server Error",
                                    "{\"status\":\"error\",\"message\":\"out_of_memory\"}");
     }
 
-    offset = snprintf(payload, APP_JSON_BUFFER_SIZE, "{\"status\":\"ok\",\"count\":%u,\"aps\":[",
-                      s_wifi.scan_count);
-    for (index = 0; index < s_wifi.scan_count && offset < APP_JSON_BUFFER_SIZE - 96; index++) {
-        offset += snprintf(payload + offset, APP_JSON_BUFFER_SIZE - offset,
-                           "%s{\"ssid\":\"%s\",\"rssi\":%d,\"auth\":\"%s\"}",
-                           index == 0 ? "" : ",",
-                           (char *)s_wifi.scan_records[index].ssid,
-                           s_wifi.scan_records[index].rssi,
-                           app_wifi_authmode_to_string(s_wifi.scan_records[index].authmode));
+    cJSON_AddStringToObject(root, "status", "ok");
+    cJSON_AddNumberToObject(root, "count", s_wifi.scan_count);
+    cJSON_AddItemToObject(root, "aps", aps);
+    for (uint16_t index = 0; index < s_wifi.scan_count; index++) {
+        cJSON *ap = cJSON_CreateObject();
+        if (ap == NULL) {
+            cJSON_Delete(root);
+            return http_send_json_text(req, "500 Internal Server Error",
+                                       "{\"status\":\"error\",\"message\":\"out_of_memory\"}");
+        }
+        cJSON_AddStringToObject(ap, "ssid", (char *)s_wifi.scan_records[index].ssid);
+        cJSON_AddNumberToObject(ap, "rssi", s_wifi.scan_records[index].rssi);
+        cJSON_AddStringToObject(ap, "auth",
+                                app_wifi_authmode_to_string(s_wifi.scan_records[index].authmode));
+        cJSON_AddItemToArray(aps, ap);
     }
-    snprintf(payload + offset, APP_JSON_BUFFER_SIZE - offset, "]}");
-    http_send_json_text(req, NULL, payload);
-    free(payload);
-    return ESP_OK;
+
+    err = http_send_cjson(req, NULL, root);
+    cJSON_Delete(root);
+    return err;
 }
 
 static esp_err_t gpio_get_handler(httpd_req_t *req)
 {
+    APP_REQUIRE_AUTH(req);
     char *payload = malloc(APP_JSON_BUFFER_SIZE);
     size_t offset = 0;
 
@@ -3236,17 +3381,18 @@ static esp_err_t gpio_get_handler(httpd_req_t *req)
 
 static esp_err_t gpio_put_handler(httpd_req_t *req)
 {
+    APP_REQUIRE_AUTH(req);
     bool value;
 
     if (http_read_body(req, s_web.scratch, sizeof(s_web.scratch)) != ESP_OK) {
         return ESP_FAIL;
     }
 
-    if (json_find_bool(s_web.scratch, "relay_on", &value)) {
+    if (app_json_find_bool(s_web.scratch, "relay_on", &value)) {
         s_config.relay_on = value;
         app_apply_output(app_relay_gpio(), s_config.relay_active_high, s_config.relay_on);
     }
-    if (json_find_bool(s_web.scratch, "led_on", &value)) {
+    if (app_json_find_bool(s_web.scratch, "led_on", &value)) {
         s_config.led_on = value;
         app_apply_output(app_led_gpio(), s_config.led_active_high, s_config.led_on);
     }
@@ -3263,6 +3409,7 @@ static esp_err_t gpio_put_handler(httpd_req_t *req)
 
 static esp_err_t bluetooth_get_handler(httpd_req_t *req)
 {
+    APP_REQUIRE_AUTH(req);
     return http_send_jsonf(req, NULL,
                            "{\"mode\":\"%s\",\"device_name\":\"%s\",\"runtime_mode\":\"%s\","
                            "\"last_error\":\"%s\"}",
@@ -3274,16 +3421,17 @@ static esp_err_t bluetooth_get_handler(httpd_req_t *req)
 
 static esp_err_t bluetooth_put_handler(httpd_req_t *req)
 {
+    APP_REQUIRE_AUTH(req);
     char value[64];
 
     if (http_read_body(req, s_web.scratch, sizeof(s_web.scratch)) != ESP_OK) {
         return ESP_FAIL;
     }
 
-    if (json_find_string(s_web.scratch, "mode", value, sizeof(value))) {
+    if (app_json_find_string(s_web.scratch, "mode", value, sizeof(value))) {
         s_config.bt_mode = app_bt_mode_from_string(value);
     }
-    if (json_find_string(s_web.scratch, "device_name", value, sizeof(s_config.bt_device_name)) &&
+    if (app_json_find_string(s_web.scratch, "device_name", value, sizeof(s_config.bt_device_name)) &&
         strlen(value) > 0) {
         app_copy_string(s_config.bt_device_name, sizeof(s_config.bt_device_name), value);
     }
@@ -3295,12 +3443,13 @@ static esp_err_t bluetooth_put_handler(httpd_req_t *req)
 
     http_send_json_text(req, NULL,
                         "{\"status\":\"saved\",\"message\":\"bluetooth config saved, mode will restart\"}");
-    xTaskCreate(app_bt_restart_task, "bt_restart", 4096, NULL, 5, NULL);
+    app_start_task(app_bt_restart_task, "bt_restart", 4096, NULL, 5);
     return ESP_OK;
 }
 
 static esp_err_t mqtt_get_handler(httpd_req_t *req)
 {
+    APP_REQUIRE_AUTH(req);
     app_uart_capture_sample(0);
     return http_send_jsonf(req, NULL,
                            "{\"backend\":\"%s\",\"host\":\"%s\",\"port\":%u,\"token\":\"%s\","
@@ -3316,6 +3465,7 @@ static esp_err_t mqtt_get_handler(httpd_req_t *req)
 
 static esp_err_t mqtt_put_handler(httpd_req_t *req)
 {
+    APP_REQUIRE_AUTH(req);
     char value[128];
     bool bool_value;
     uint16_t port;
@@ -3324,19 +3474,19 @@ static esp_err_t mqtt_put_handler(httpd_req_t *req)
         return ESP_FAIL;
     }
 
-    if (json_find_string(s_web.scratch, "backend", value, sizeof(s_config.mqtt_backend)) && strlen(value) > 0) {
+    if (app_json_find_string(s_web.scratch, "backend", value, sizeof(s_config.mqtt_backend)) && strlen(value) > 0) {
         app_copy_string(s_config.mqtt_backend, sizeof(s_config.mqtt_backend), value);
     }
-    if (json_find_string(s_web.scratch, "host", value, sizeof(s_config.mqtt_host)) && strlen(value) > 0) {
+    if (app_json_find_string(s_web.scratch, "host", value, sizeof(s_config.mqtt_host)) && strlen(value) > 0) {
         app_copy_string(s_config.mqtt_host, sizeof(s_config.mqtt_host), value);
     }
-    if (json_find_string(s_web.scratch, "token", value, sizeof(s_config.mqtt_token))) {
+    if (app_json_find_string(s_web.scratch, "token", value, sizeof(s_config.mqtt_token))) {
         app_copy_string(s_config.mqtt_token, sizeof(s_config.mqtt_token), value);
     }
-    if (json_find_u16(s_web.scratch, "port", &port) && port > 0) {
+    if (app_json_find_u16(s_web.scratch, "port", &port) && port > 0) {
         s_config.mqtt_port = port;
     }
-    if (json_find_bool(s_web.scratch, "use_tls", &bool_value)) {
+    if (app_json_find_bool(s_web.scratch, "use_tls", &bool_value)) {
         s_config.mqtt_use_tls = bool_value;
     }
 
@@ -3347,18 +3497,20 @@ static esp_err_t mqtt_put_handler(httpd_req_t *req)
 
     http_send_json_text(req, NULL,
                         "{\"status\":\"saved\",\"message\":\"mqtt config saved, connection will restart\"}");
-    xTaskCreate(app_mqtt_restart_task, "mqtt_restart", 4096, NULL, 5, NULL);
+    app_start_task(app_mqtt_restart_task, "mqtt_restart", 4096, NULL, 5);
     return ESP_OK;
 }
 
 static esp_err_t uart_get_handler(httpd_req_t *req)
 {
+    APP_REQUIRE_AUTH(req);
     app_uart_capture_sample(0);
     return app_uart_send_runtime_json(req, "uart_runtime");
 }
 
 static esp_err_t uart_put_handler(httpd_req_t *req)
 {
+    APP_REQUIRE_AUTH(req);
     char value[64];
     uint32_t baudrate;
     uint16_t short_value;
@@ -3368,20 +3520,20 @@ static esp_err_t uart_put_handler(httpd_req_t *req)
         return ESP_FAIL;
     }
 
-    if (json_find_u32(s_web.scratch, "baudrate", &baudrate) && baudrate > 0) {
+    if (app_json_find_u32(s_web.scratch, "baudrate", &baudrate) && baudrate > 0) {
         s_config.uart_baudrate = baudrate;
     }
-    if (json_find_string(s_web.scratch, "parity", value, sizeof(value))) {
+    if (app_json_find_string(s_web.scratch, "parity", value, sizeof(value))) {
         s_config.uart_parity_mode = app_uart_parity_from_string(value);
     }
-    if (json_find_u16(s_web.scratch, "data_bits", &short_value)) {
+    if (app_json_find_u16(s_web.scratch, "data_bits", &short_value)) {
         if (!app_uart_data_bits_valid((uint8_t)short_value)) {
             return http_send_json_text(req, "400 Bad Request",
                                        "{\"status\":\"error\",\"message\":\"invalid_uart_data_bits\"}");
         }
         s_config.uart_data_bits = (uint8_t)short_value;
     }
-    if (json_find_u16(s_web.scratch, "stop_bits", &short_value)) {
+    if (app_json_find_u16(s_web.scratch, "stop_bits", &short_value)) {
         if (!app_uart_stop_bits_valid((uint8_t)short_value)) {
             return http_send_json_text(req, "400 Bad Request",
                                        "{\"status\":\"error\",\"message\":\"invalid_uart_stop_bits\"}");
@@ -3419,6 +3571,7 @@ static esp_err_t uart_put_handler(httpd_req_t *req)
 
 static esp_err_t uart_probe_auto_detect_handler(httpd_req_t *req)
 {
+    APP_REQUIRE_AUTH(req);
     uint32_t detected_baudrate = 0;
     int score;
     TickType_t probe_ticks;
@@ -3489,6 +3642,7 @@ static esp_err_t uart_probe_auto_detect_handler(httpd_req_t *req)
 
 static esp_err_t uart_probe_manual_detect_handler(httpd_req_t *req)
 {
+    APP_REQUIRE_AUTH(req);
     char action[16] = "next";
     char apply_error[48];
     uint32_t preferred_baudrate;
@@ -3503,7 +3657,7 @@ static esp_err_t uart_probe_manual_detect_handler(httpd_req_t *req)
         if (http_read_body(req, s_web.scratch, sizeof(s_web.scratch)) != ESP_OK) {
             return ESP_FAIL;
         }
-        json_find_string(s_web.scratch, "action", action, sizeof(action));
+        app_json_find_string(s_web.scratch, "action", action, sizeof(action));
     }
 
     start_session = strcmp(action, "start") == 0 || !s_uart.manual_session_active;
@@ -3599,6 +3753,7 @@ static esp_err_t uart_probe_manual_detect_handler(httpd_req_t *req)
 
 static esp_err_t uart_probe_confirm_handler(httpd_req_t *req)
 {
+    APP_REQUIRE_AUTH(req);
     if (req->content_len > 0) {
         if (http_read_body(req, s_web.scratch, sizeof(s_web.scratch)) != ESP_OK) {
             return ESP_FAIL;
@@ -3636,6 +3791,7 @@ static esp_err_t uart_probe_confirm_handler(httpd_req_t *req)
 
 static esp_err_t uart_probe_stop_handler(httpd_req_t *req)
 {
+    APP_REQUIRE_AUTH(req);
     if (req->content_len > 0) {
         if (http_read_body(req, s_web.scratch, sizeof(s_web.scratch)) != ESP_OK) {
             return ESP_FAIL;
@@ -3706,6 +3862,7 @@ static bool app_uart_parse_hex_bytes(const char *text, uint8_t *out, size_t out_
 
 static esp_err_t uart_console_get_handler(httpd_req_t *req)
 {
+    APP_REQUIRE_AUTH(req);
     char *plain_json = NULL;
     char *hex_json = NULL;
     esp_err_t err;
@@ -3747,6 +3904,7 @@ static esp_err_t uart_console_get_handler(httpd_req_t *req)
 
 static esp_err_t uart_send_handler(httpd_req_t *req)
 {
+    APP_REQUIRE_AUTH(req);
     char data[UART_TX_BUFFER_SIZE];
     char encoding[8] = "plain";
     uint8_t tx_bytes[UART_TX_BUFFER_SIZE / 2];
@@ -3762,11 +3920,11 @@ static esp_err_t uart_send_handler(httpd_req_t *req)
         return ESP_FAIL;
     }
 
-    if (!json_find_string(s_web.scratch, "data", data, sizeof(data))) {
+    if (!app_json_find_string(s_web.scratch, "data", data, sizeof(data))) {
         return http_send_json_text(req, "400 Bad Request",
                                    "{\"status\":\"error\",\"message\":\"uart_data_required\"}");
     }
-    json_find_string(s_web.scratch, "encoding", encoding, sizeof(encoding));
+    app_json_find_string(s_web.scratch, "encoding", encoding, sizeof(encoding));
 
     if (strcmp(encoding, "hex") == 0) {
         if (!app_uart_parse_hex_bytes(data, tx_bytes, sizeof(tx_bytes), &payload_len) || payload_len == 0) {
@@ -3796,6 +3954,7 @@ static esp_err_t uart_send_handler(httpd_req_t *req)
 
 static esp_err_t ota_upload_handler(httpd_req_t *req)
 {
+    APP_REQUIRE_AUTH(req);
     const esp_partition_t *update_partition;
     esp_ota_handle_t update_handle = 0;
     int remaining = req->content_len;
@@ -3854,7 +4013,7 @@ static esp_err_t ota_upload_handler(httpd_req_t *req)
 
     http_send_json_text(req, NULL,
                         "{\"status\":\"ok\",\"message\":\"ota image received, device will reboot\"}");
-    xTaskCreate(app_reboot_task, "ota_reboot", 2048, NULL, 5, NULL);
+    app_start_task(app_reboot_task, "ota_reboot", 2048, NULL, 5);
     return ESP_OK;
 }
 
@@ -3871,6 +4030,8 @@ static void app_start_webserver(void)
     ESP_ERROR_CHECK(httpd_start(&s_web.server, &config));
 
     const httpd_uri_t uris[] = {
+        {.uri = "/api/v1/auth/login", .method = HTTP_POST, .handler = auth_login_handler},
+        {.uri = "/api/v1/auth/logout", .method = HTTP_POST, .handler = auth_logout_handler},
         {.uri = "/api/v1/device/info", .method = HTTP_GET, .handler = device_info_get_handler},
         {.uri = "/api/v1/device/status", .method = HTTP_GET, .handler = device_status_get_handler},
         {.uri = "/api/v1/config/network", .method = HTTP_GET, .handler = network_get_handler},
@@ -3909,6 +4070,10 @@ void app_main(void)
     if (s_uart_console_mutex == NULL) {
         ESP_LOGE(TAG, "Failed to create uart console mutex");
     }
+    s_mqtt_mutex = xSemaphoreCreateRecursiveMutex();
+    if (s_mqtt_mutex == NULL) {
+        ESP_LOGE(TAG, "Failed to create mqtt mutex");
+    }
 
     esp_err_t err = nvs_flash_init();
     if (err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND) {
@@ -3930,7 +4095,7 @@ void app_main(void)
     if (app_mqtt_apply_config() != ESP_OK) {
         ESP_LOGW(TAG, "MQTT init skipped");
     }
-    xTaskCreate(app_mqtt_telemetry_task, "mqtt_telemetry", 4096, NULL, 5, NULL);
+    app_start_task(app_mqtt_telemetry_task, "mqtt_telemetry", 4096, NULL, 5);
     app_start_webserver();
 
     ESP_LOGI(TAG, "iothub phase-4 ready: mode=%s, AP SSID='%s', open http://192.168.8.1 when AP is enabled",
