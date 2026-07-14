@@ -1,0 +1,251 @@
+Command: /home/tc/.espressif/tools/python/v6.0.2/venv/bin/python /home/tc/.espressif/v6.0.2/esp-idf/tools/idf_monitor.py -p /dev/ttyUSB0 -b 115200 --toolchain-prefix xtensa-esp32-elf- --target esp32 --revision 0 /home/tc/workspace/iothub/build/iothub.elf /home/tc/workspace/iothub/build/blink.elf /home/tc/workspace/iothub/build/bootloader/bootloader.elf -m '/home/tc/.espressif/tools/python/v6.0.2/venv/bin/python' '/home/tc/.espressif/v6.0.2/esp-idf/tools/idf.py'
+ets Jul 29 2019 12:21:46
+
+rst:0x1 (POWERON_RESET),boot:0x13 (SPI_FAST_FLASH_BOOT)
+configsip: 0, SPIWP:0xee
+clk_drv:0x00,q_drv:0x00,d_drv:0x00,cs0_drv:0x00,hd_drv:0x00,wp_drv:0x00
+mode:DIO, clock div:2
+load:0x3fff0040,len:6272
+load:0x40078000,len:15820
+load:0x40080400,len:3920
+entry 0x40080644
+[0;32mI (27) boot: ESP-IDF v6.0.2 2nd stage bootloader[0m
+[0;32mI (27) boot: compile time Jul  9 2026 14:59:42[0m
+[0;32mI (28) boot: Multicore bootloader[0m
+[0;32mI (29) boot: chip revision: v3.1[0m
+[0;32mI (32) boot.esp32: SPI Speed      : 40MHz[0m
+[0;32mI (35) boot.esp32: SPI Mode       : DIO[0m
+[0;32mI (39) boot.esp32: SPI Flash Size : 4MB[0m
+[0;32mI (42) boot: Enabling RNG early entropy source...[0m
+[0;32mI (47) boot: Partition Table:[0m
+[0;32mI (49) boot: ## Label            Usage          Type ST Offset   Length[0m
+[0;32mI (56) boot:  0 nvs              WiFi data        01 02 00009000 00006000[0m
+[0;32mI (62) boot:  1 otadata          OTA data         01 00 0000f000 00002000[0m
+[0;32mI (69) boot:  2 phy_init         RF data          01 01 00011000 00001000[0m
+[0;32mI (75) boot:  3 ota_0            OTA app          00 10 00020000 001e0000[0m
+[0;32mI (82) boot:  4 ota_1            OTA app          00 11 00200000 001e0000[0m
+[0;32mI (88) boot:  5 storage          Unknown data     01 83 003e0000 00020000[0m
+[0;32mI (95) boot: End of partition table[0m
+[0;32mI (98) esp_image: segment 0: paddr=00020020 vaddr=3f400020 size=41390h (267152) map[0m
+[0;32mI (201) esp_image: segment 1: paddr=000613b8 vaddr=3ffbdb60 size=05ee8h ( 24296) load[0m
+[0;32mI (211) esp_image: segment 2: paddr=000672a8 vaddr=40080000 size=08d70h ( 36208) load[0m
+[0;32mI (226) esp_image: segment 3: paddr=00070020 vaddr=400d0020 size=10c004h (1097732) map[0m
+[0;32mI (617) esp_image: segment 4: paddr=0017c02c vaddr=40088d70 size=15c40h ( 89152) load[0m
+[0;32mI (654) esp_image: segment 5: paddr=00191c74 vaddr=50000000 size=00028h (    40) load[0m
+[0;32mI (669) boot: Loaded app from partition at offset 0x20000[0m
+[0;32mI (669) boot: Disabling RNG early entropy source...[0m
+[0;33mW (775) wifi:Password length matches WPA2 standards, authmode threshold changes from OPEN to WPA2[0m
+[1;31mE (865) wifi:sta is connecting, return error[0m
+[1;31mE (9635) esp-tls: [sock=57] delayed connect error: Connection reset by peer[0m
+[1;31mE (9635) transport_base: Failed to open a new connection: 32772[0m
+[1;31mE (9635) mqtt_client: Error transport connect[0m
+[1;31mE (17205) esp-tls: [sock=57] delayed connect error: Connection reset by peer[0m
+[1;31mE (17205) transport_base: Failed to open a new connection: 32772[0m
+[1;31mE (17205) mqtt_client: Error transport connect[0m
+[1;31mE (24785) esp-tls: [sock=57] delayed connect error: Connection reset by peer[0m
+[1;31mE (24785) transport_base: Failed to open a new connection: 32772[0m
+[1;31mE (24785) mqtt_client: Error transport connect[0m
+[1;31mE (32355) esp-tls: [sock=62] delayed connect error: Connection reset by peer[0m
+[1;31mE (32355) transport_base: Failed to open a new connection: 32772[0m
+[1;31mE (32355) mqtt_client: Error transport connect[0m
+[1;31mE (39865) esp-tls: [sock=62] delayed connect error: Connection reset by peer[0m
+[1;31mE (39865) transport_base: Failed to open a new connection: 32772[0m
+[1;31mE (39865) mqtt_client: Error transport connect[0m
+[1;31mE (47425) esp-tls: [sock=62] delayed connect error: Connection reset by peer[0m
+[1;31mE (47425) transport_base: Failed to open a new connection: 32772[0m
+[1;31mE (47425) mqtt_client: Error transport connect[0m
+[1;31mE (54995) esp-tls: [sock=62] delayed connect error: Connection reset by peer[0m
+[1;31mE (55005) transport_base: Failed to open a new connection: 32772[0m
+[1;31mE (55005) mqtt_client: Error transport connect[0m
+[1;31mE (62575) esp-tls: [sock=62] delayed connect error: Connection reset by peer[0m
+[1;31mE (62575) transport_base: Failed to open a new connection: 32772[0m
+[1;31mE (62585) mqtt_client: Error transport connect[0m
+[1;31mE (70155) esp-tls: [sock=62] delayed connect error: Connection reset by peer[0m
+[1;31mE (70155) transport_base: Failed to open a new connection: 32772[0m
+[1;31mE (70155) mqtt_client: Error transport connect[0m
+[1;31mE (77725) esp-tls: [sock=62] delayed connect error: Connection reset by peer[0m
+[1;31mE (77725) transport_base: Failed to open a new connection: 32772[0m
+[1;31mE (77725) mqtt_client: Error transport connect[0m
+[1;31mE (85305) esp-tls: [sock=62] delayed connect error: Connection reset by peer[0m
+[1;31mE (85305) transport_base: Failed to open a new connection: 32772[0m
+[1;31mE (85305) mqtt_client: Error transport connect[0m
+[1;31mE (92875) esp-tls: [sock=62] delayed connect error: Connection reset by peer[0m
+[1;31mE (92875) transport_base: Failed to open a new connection: 32772[0m
+[1;31mE (92875) mqtt_client: Error transport connect[0m
+[1;31mE (100465) esp-tls: [sock=62] delayed connect error: Connection reset by peer[0m
+[1;31mE (100465) transport_base: Failed to open a new connection: 32772[0m
+[1;31mE (100475) mqtt_client: Error transport connect[0m
+[1;31mE (108035) esp-tls: [sock=62] delayed connect error: Connection reset by peer[0m
+[1;31mE (108035) transport_base: Failed to open a new connection: 32772[0m
+[1;31mE (108035) mqtt_client: Error transport connect[0m
+[1;31mE (115615) esp-tls: [sock=62] delayed connect error: Connection reset by peer[0m
+[1;31mE (115615) transport_base: Failed to open a new connection: 32772[0m
+[1;31mE (115625) mqtt_client: Error transport connect[0m
+[1;31mE (123185) esp-tls: [sock=62] delayed connect error: Connection reset by peer[0m
+[1;31mE (123185) transport_base: Failed to open a new connection: 32772[0m
+[1;31mE (123185) mqtt_client: Error transport connect[0m
+[1;31mE (130765) esp-tls: [sock=62] delayed connect error: Connection reset by peer[0m
+[1;31mE (130765) transport_base: Failed to open a new connection: 32772[0m
+[1;31mE (130765) mqtt_client: Error transport connect[0m
+[1;31mE (138345) esp-tls: [sock=62] delayed connect error: Connection reset by peer[0m
+[1;31mE (138345) transport_base: Failed to open a new connection: 32772[0m
+[1;31mE (138345) mqtt_client: Error transport connect[0m
+[1;31mE (145915) esp-tls: [sock=62] delayed connect error: Connection reset by peer[0m
+[1;31mE (145915) transport_base: Failed to open a new connection: 32772[0m
+[1;31mE (145915) mqtt_client: Error transport connect[0m
+[1;31mE (153425) esp-tls: [sock=62] delayed connect error: Connection reset by peer[0m
+[1;31mE (153425) transport_base: Failed to open a new connection: 32772[0m
+[1;31mE (153425) mqtt_client: Error transport connect[0m
+[1;31mE (160975) esp-tls: [sock=62] delayed connect error: Connection reset by peer[0m
+[1;31mE (160975) transport_base: Failed to open a new connection: 32772[0m
+[1;31mE (160975) mqtt_client: Error transport connect[0m
+[1;31mE (168485) esp-tls: [sock=62] delayed connect error: Connection reset by peer[0m
+[1;31mE (168485) transport_base: Failed to open a new connection: 32772[0m
+[1;31mE (168485) mqtt_client: Error transport connect[0m
+[1;31mE (176025) esp-tls: [sock=62] delayed connect error: Connection reset by peer[0m
+[1;31mE (176025) transport_base: Failed to open a new connection: 32772[0m
+[1;31mE (176025) mqtt_client: Error transport connect[0m
+[1;31mE (183615) esp-tls: [sock=62] delayed connect error: Connection reset by peer[0m
+[1;31mE (183615) transport_base: Failed to open a new connection: 32772[0m
+[1;31mE (183615) mqtt_client: Error transport connect[0m
+[1;31mE (191175) esp-tls: [sock=62] delayed connect error: Connection reset by peer[0m
+[1;31mE (191175) transport_base: Failed to open a new connection: 32772[0m
+[1;31mE (191185) mqtt_client: Error transport connect[0m
+[1;31mE (198755) esp-tls: [sock=62] delayed connect error: Connection reset by peer[0m
+[1;31mE (198755) transport_base: Failed to open a new connection: 32772[0m
+[1;31mE (198755) mqtt_client: Error transport connect[0m
+[1;31mE (206345) esp-tls: [sock=62] delayed connect error: Connection reset by peer[0m
+[1;31mE (206345) transport_base: Failed to open a new connection: 32772[0m
+[1;31mE (206345) mqtt_client: Error transport connect[0m
+[1;31mE (213925) esp-tls: [sock=62] delayed connect error: Connection reset by peer[0m
+[1;31mE (213925) transport_base: Failed to open a new connection: 32772[0m
+[1;31mE (213925) mqtt_client: Error transport connect[0m
+[1;31mE (221485) esp-tls: [sock=62] delayed connect error: Connection reset by peer[0m
+[1;31mE (221485) transport_base: Failed to open a new connection: 32772[0m
+[1;31mE (221495) mqtt_client: Error transport connect[0m
+[1;31mE (229065) esp-tls: [sock=62] delayed connect error: Connection reset by peer[0m
+[1;31mE (229065) transport_base: Failed to open a new connection: 32772[0m
+[1;31mE (229065) mqtt_client: Error transport connect[0m
+[1;31mE (236655) esp-tls: [sock=62] delayed connect error: Connection reset by peer[0m
+[1;31mE (236655) transport_base: Failed to open a new connection: 32772[0m
+[1;31mE (236655) mqtt_client: Error transport connect[0m
+[1;31mE (244225) esp-tls: [sock=62] delayed connect error: Connection reset by peer[0m
+[1;31mE (244225) transport_base: Failed to open a new connection: 32772[0m
+[1;31mE (244225) mqtt_client: Error transport connect[0m
+[1;31mE (251795) esp-tls: [sock=62] delayed connect error: Connection reset by peer[0m
+[1;31mE (251805) transport_base: Failed to open a new connection: 32772[0m
+[1;31mE (251805) mqtt_client: Error transport connect[0m
+[1;31mE (259385) esp-tls: [sock=62] delayed connect error: Connection reset by peer[0m
+[1;31mE (259385) transport_base: Failed to open a new connection: 32772[0m
+[1;31mE (259395) mqtt_client: Error transport connect[0m
+[1;31mE (266955) esp-tls: [sock=62] delayed connect error: Connection reset by peer[0m
+[1;31mE (266955) transport_base: Failed to open a new connection: 32772[0m
+[1;31mE (266955) mqtt_client: Error transport connect[0m
+[1;31mE (274535) esp-tls: [sock=62] delayed connect error: Connection reset by peer[0m
+[1;31mE (274535) transport_base: Failed to open a new connection: 32772[0m
+[1;31mE (274535) mqtt_client: Error transport connect[0m
+[1;31mE (282095) esp-tls: [sock=62] delayed connect error: Connection reset by peer[0m
+[1;31mE (282105) transport_base: Failed to open a new connection: 32772[0m
+[1;31mE (282105) mqtt_client: Error transport connect[0m
+[1;31mE (289615) esp-tls: [sock=62] delayed connect error: Connection reset by peer[0m
+[1;31mE (289615) transport_base: Failed to open a new connection: 32772[0m
+[1;31mE (289615) mqtt_client: Error transport connect[0m
+[1;31mE (297175) esp-tls: [sock=62] delayed connect error: Connection reset by peer[0m
+[1;31mE (297175) transport_base: Failed to open a new connection: 32772[0m
+[1;31mE (297175) mqtt_client: Error transport connect[0m
+[1;31mE (304745) esp-tls: [sock=62] delayed connect error: Connection reset by peer[0m
+[1;31mE (304745) transport_base: Failed to open a new connection: 32772[0m
+[1;31mE (304745) mqtt_client: Error transport connect[0m
+[1;31mE (312325) esp-tls: [sock=62] delayed connect error: Connection reset by peer[0m
+[1;31mE (312325) transport_base: Failed to open a new connection: 32772[0m
+[1;31mE (312325) mqtt_client: Error transport connect[0m
+[1;31mE (319895) esp-tls: [sock=62] delayed connect error: Connection reset by peer[0m
+[1;31mE (319895) transport_base: Failed to open a new connection: 32772[0m
+[1;31mE (319895) mqtt_client: Error transport connect[0m
+[1;31mE (327475) esp-tls: [sock=62] delayed connect error: Connection reset by peer[0m
+[1;31mE (327475) transport_base: Failed to open a new connection: 32772[0m
+[1;31mE (327485) mqtt_client: Error transport connect[0m
+[1;31mE (335045) esp-tls: [sock=62] delayed connect error: Connection reset by peer[0m
+[1;31mE (335045) transport_base: Failed to open a new connection: 32772[0m
+[1;31mE (335055) mqtt_client: Error transport connect[0m
+[1;31mE (342635) esp-tls: [sock=62] delayed connect error: Connection reset by peer[0m
+[1;31mE (342645) transport_base: Failed to open a new connection: 32772[0m
+[1;31mE (342645) mqtt_client: Error transport connect[0m
+[1;31mE (350205) esp-tls: [sock=62] delayed connect error: Connection reset by peer[0m
+[1;31mE (350205) transport_base: Failed to open a new connection: 32772[0m
+[1;31mE (350205) mqtt_client: Error transport connect[0m
+[1;31mE (357785) esp-tls: [sock=62] delayed connect error: Connection reset by peer[0m
+[1;31mE (357785) transport_base: Failed to open a new connection: 32772[0m
+[1;31mE (357785) mqtt_client: Error transport connect[0m
+[1;31mE (365365) esp-tls: [sock=62] delayed connect error: Connection reset by peer[0m
+[1;31mE (365365) transport_base: Failed to open a new connection: 32772[0m
+[1;31mE (365365) mqtt_client: Error transport connect[0m
+[1;31mE (372945) esp-tls: [sock=62] delayed connect error: Connection reset by peer[0m
+[1;31mE (372945) transport_base: Failed to open a new connection: 32772[0m
+[1;31mE (372945) mqtt_client: Error transport connect[0m
+[1;31mE (380525) esp-tls: [sock=62] delayed connect error: Connection reset by peer[0m
+[1;31mE (380525) transport_base: Failed to open a new connection: 32772[0m
+[1;31mE (380525) mqtt_client: Error transport connect[0m
+[1;31mE (388095) esp-tls: [sock=62] delayed connect error: Connection reset by peer[0m
+[1;31mE (388095) transport_base: Failed to open a new connection: 32772[0m
+[1;31mE (388105) mqtt_client: Error transport connect[0m
+[1;31mE (395675) esp-tls: [sock=62] delayed connect error: Connection reset by peer[0m
+[1;31mE (395675) transport_base: Failed to open a new connection: 32772[0m
+[1;31mE (395675) mqtt_client: Error transport connect[0m
+[1;31mE (403245) esp-tls: [sock=62] delayed connect error: Connection reset by peer[0m
+[1;31mE (403245) transport_base: Failed to open a new connection: 32772[0m
+[1;31mE (403245) mqtt_client: Error transport connect[0m
+[1;31mE (410825) esp-tls: [sock=62] delayed connect error: Connection reset by peer[0m
+[1;31mE (410825) transport_base: Failed to open a new connection: 32772[0m
+[1;31mE (410825) mqtt_client: Error transport connect[0m
+[1;31mE (418395) esp-tls: [sock=62] delayed connect error: Connection reset by peer[0m
+[1;31mE (418395) transport_base: Failed to open a new connection: 32772[0m
+[1;31mE (418395) mqtt_client: Error transport connect[0m
+[1;31mE (425905) esp-tls: [sock=62] delayed connect error: Connection reset by peer[0m
+[1;31mE (425905) transport_base: Failed to open a new connection: 32772[0m
+[1;31mE (425905) mqtt_client: Error transport connect[0m
+[1;31mE (433465) esp-tls: [sock=62] delayed connect error: Connection reset by peer[0m
+[1;31mE (433465) transport_base: Failed to open a new connection: 32772[0m
+[1;31mE (433465) mqtt_client: Error transport connect[0m
+[1;31mE (441035) esp-tls: [sock=62] delayed connect error: Connection reset by peer[0m
+[1;31mE (441035) transport_base: Failed to open a new connection: 32772[0m
+[1;31mE (441035) mqtt_client: Error transport connect[0m
+[1;31mE (448595) esp-tls: [sock=62] delayed connect error: Connection reset by peer[0m
+[1;31mE (448605) transport_base: Failed to open a new connection: 32772[0m
+[1;31mE (448605) mqtt_client: Error transport connect[0m
+[1;31mE (456175) esp-tls: [sock=62] delayed connect error: Connection reset by peer[0m
+[1;31mE (456175) transport_base: Failed to open a new connection: 32772[0m
+[1;31mE (456185) mqtt_client: Error transport connect[0m
+[1;31mE (463705) esp-tls: [sock=62] delayed connect error: Connection reset by peer[0m
+[1;31mE (463705) transport_base: Failed to open a new connection: 32772[0m
+[1;31mE (463705) mqtt_client: Error transport connect[0m
+[1;31mE (471245) esp-tls: [sock=62] delayed connect error: Connection reset by peer[0m
+[1;31mE (471255) transport_base: Failed to open a new connection: 32772[0m
+[1;31mE (471255) mqtt_client: Error transport connect[0m
+[1;31mE (478825) esp-tls: [sock=62] delayed connect error: Connection reset by peer[0m
+[1;31mE (478825) transport_base: Failed to open a new connection: 32772[0m
+[1;31mE (478825) mqtt_client: Error transport connect[0m
+[1;31mE (486405) esp-tls: [sock=62] delayed connect error: Connection reset by peer[0m
+[1;31mE (486405) transport_base: Failed to open a new connection: 32772[0m
+[1;31mE (486405) mqtt_client: Error transport connect[0m
+[1;31mE (493975) esp-tls: [sock=62] delayed connect error: Connection reset by peer[0m
+[1;31mE (493975) transport_base: Failed to open a new connection: 32772[0m
+[1;31mE (493985) mqtt_client: Error transport connect[0m
+[1;31mE (501545) esp-tls: [sock=62] delayed connect error: Connection reset by peer[0m
+[1;31mE (501545) transport_base: Failed to open a new connection: 32772[0m
+[1;31mE (501555) mqtt_client: Error transport connect[0m
+[1;31mE (509115) esp-tls: [sock=62] delayed connect error: Connection reset by peer[0m
+[1;31mE (509115) transport_base: Failed to open a new connection: 32772[0m
+[1;31mE (509115) mqtt_client: Error transport connect[0m
+[1;31mE (516695) esp-tls: [sock=62] delayed connect error: Connection reset by peer[0m
+[1;31mE (516695) transport_base: Failed to open a new connection: 32772[0m
+[1;31mE (516695) mqtt_client: Error transport connect[0m
+[1;31mE (524215) esp-tls: [sock=62] delayed connect error: Connection reset by peer[0m
+[1;31mE (524215) transport_base: Failed to open a new connection: 32772[0m
+[1;31mE (524215) mqtt_client: Error transport connect[0m
+[1;31mE (531765) esp-tls: [sock=62] delayed connect error: Connection reset by peer[0m
+[1;31mE (531765) transport_base: Failed to open a new connection: 32772[0m
+[1;31mE (531765) mqtt_client: Error transport connect[0m
+[1;31mE (539345) esp-tls: [sock=62] delayed connect error: Connection reset by peer[0m
+[1;31mE (539345) transport_base: Failed to open a new connection: 32772[0m
+[1;31mE (539345) mqtt_client: Error transport connect[0m

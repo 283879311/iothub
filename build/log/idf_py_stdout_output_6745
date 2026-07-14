@@ -1,0 +1,8 @@
+Command: ninja all
+[1/4] Performing build step for 'bootloader'
+[1/1] cd /home/tc/workspace/iothub/build/bootloader && /home/tc/.espressif/tools/python/v6.0.2/venv/bin/python /home/tc/.espressif/v6.0.2/esp-idf/components/partition_table/check_sizes.py --offset 0x8000 bootloader 0x1000 /home/tc/workspace/iothub/build/bootloader/bootloader.bin
+Bootloader binary size 0x65f0 bytes. 0xa10 bytes (9%) free.
+[2/4] No install step for 'bootloader'
+[3/4] cd /home/tc/workspace/iothub/build && /home/tc/.espressif/tools/python/v6.0.2/venv/bin/python /home/tc/.espressif/v6.0.2/esp-idf/components/partition_table/check_sizes.py --offset 0x8000 partition --type app /home/tc/workspace/iothub/build/partition_table/partition-table.bin /home/tc/workspace/iothub/build/blink.bin
+blink.bin binary size 0x1efa0 bytes. Smallest app partition is 0x100000 bytes. 0xe1060 bytes (88%) free.
+[4/4] Completed 'bootloader'

@@ -1,0 +1,75 @@
+Command: ninja all
+Loading defaults file /home/tc/workspace/iothub/sdkconfig.defaults...
+Loading defaults file /home/tc/workspace/iothub/sdkconfig.defaults.esp32...
+info: Default value for BT_ENABLED in sdkconfig is y but it is n according to Kconfig.
+Using default value from sdkconfig (y).
+Configuration Report                                                            
+ ────────────────────────────────────────────────────────────────────────────── 
+   Parser Version: 1                                                            
+   Verbosity: default                                                           
+   Defaults policy: sdkconfig                                                   
+   Status: Finished with notifications                                          
+                                                                                
+  Miscellaneous                                                                 
+   ──────────────────────────────────────────────────────────────────────────   
+    * BT_NIMBLE_MESH_PROVISIONER (defined at                                    
+    /home/tc/.espressif/v6.0.2/esp-idf/components/bt/host/nimble/Kconfig.in…    
+    'default 0' is not a valid bool value (only 'y' and 'n' are allowed).       
+    Value is treated as 'n'.                                                    
+    * BTDM_CTRL_LEGACY_AUTH_VENDOR_EVT_EFF (defined at                          
+    /home/tc/.espressif/v6.0.2/esp-idf/components/bt/controller/esp32/Kconf…    
+    'default 0' is not a valid bool value (only 'y' and 'n' are allowed).       
+    Value is treated as 'n'.                                                    
+    * FATFS_PRINT_LLI (defined at                                               
+    /home/tc/.espressif/v6.0.2/esp-idf/components/fatfs/Kconfig:230):           
+    'default 0' is not a valid bool value (only 'y' and 'n' are allowed).       
+    Value is treated as 'n'.                                                    
+    * FATFS_PRINT_FLOAT (defined at                                             
+    /home/tc/.espressif/v6.0.2/esp-idf/components/fatfs/Kconfig:235):           
+    'default 0' is not a valid bool value (only 'y' and 'n' are allowed).       
+    Value is treated as 'n'.                                                    
+   ──────────────────────────────────────────────────────────────────────────   
+  Default Value Mismatch                                                        
+   ──────────────────────────────────────────────────────────────────────────   
+    Using sdkconfig default values                                              
+    Config symbols with different default value between sdkconfig and           
+    Kconfig                                                                     
+    BT_ENABLED: Kconfig default value: n, sdkconfig default value: y            
+                                                                                
+    Choice symbols with different default selection between sdkconfig and       
+    Kconfig                                                                     
+    COMPILER_OPTIMIZATION: Kconfig default selection:                           
+    COMPILER_OPTIMIZATION_DEBUG, sdkconfig default selection:                   
+    COMPILER_OPTIMIZATION_SIZE                                                  
+    LOG_DEFAULT_LEVEL: Kconfig default selection: LOG_DEFAULT_LEVEL_INFO,       
+    sdkconfig default selection: LOG_DEFAULT_LEVEL_WARN                         
+    ESPTOOLPY_FLASHSIZE: Kconfig default selection:                             
+    ESPTOOLPY_FLASHSIZE_2MB, sdkconfig default selection:                       
+    ESPTOOLPY_FLASHSIZE_4MB                                                     
+    PARTITION_TABLE_TYPE: Kconfig default selection:                            
+    PARTITION_TABLE_SINGLE_APP, sdkconfig default selection:                    
+    PARTITION_TABLE_CUSTOM                                                      
+   ──────────────────────────────────────────────────────────────────────────   
+  Multiple Assignments                                                          
+   ─────────────────────────────────────────────────────                        
+    Choice ESPTOOLPY_FLASHSIZE:                                                 
+        ESPTOOLPY_FLASHSIZE_2MB (default selection)                             
+        ESPTOOLPY_FLASHSIZE_4MB (default selection)                             
+        -> using ESPTOOLPY_FLASHSIZE_4MB                                        
+    Choice PARTITION_TABLE_TYPE:                                                
+        PARTITION_TABLE_SINGLE_APP (default selection)                          
+        PARTITION_TABLE_CUSTOM (default selection)                              
+        -> using PARTITION_TABLE_CUSTOM                                         
+    Choice COMPILER_OPTIMIZATION:                                               
+        COMPILER_OPTIMIZATION_DEBUG (default selection)                         
+        COMPILER_OPTIMIZATION_SIZE (default selection)                          
+        -> using COMPILER_OPTIMIZATION_SIZE                                     
+   ─────────────────────────────────────────────────────                        
+  Disabled Symbols/Choices With User-Set Value                                  
+   ──────────────────────────────────────────────────────────────────────────   
+    * <choice BTDM_CTRL_MODE> (defined at                                       
+    /home/tc/.espressif/v6.0.2/esp-idf/components/bt/controller/esp32/Kconf…    
+    with user-set value BTDM_CTRL_MODE_BTDM from                                
+    /home/tc/workspace/iothub/sdkconfig                                         
+   ──────────────────────────────────────────────────────────────────────────   
+ ────────────────────────────────────────────────────────────────────────────── 

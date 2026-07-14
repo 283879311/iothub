@@ -1,0 +1,11 @@
+Command: cmake -G Ninja -B /home/tc/workspace/iothub/build -DPYTHON_DEPS_CHECKED=1 -DPYTHON=/home/tc/.espressif/tools/python/v6.0.2/venv/bin/python -DESP_PLATFORM=1 -DCCACHE_ENABLE=False /home/tc/workspace/iothub
+Loading defaults file /home/tc/workspace/iothub/sdkconfig.defaults...
+Loading defaults file /home/tc/workspace/iothub/sdkconfig.defaults.esp32...
+Configuration Report               
+ ───────────────────────────────── 
+   Parser Version: 1               
+   Verbosity: default              
+   Defaults policy: sdkconfig      
+   Status: Finished successfully   
+                                   
+ ───────────────────────────────── 

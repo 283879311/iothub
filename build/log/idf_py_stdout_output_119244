@@ -1,0 +1,33 @@
+Command: ninja all
+[1/10] Performing build step for 'bootloader'
+[1/1] cd /home/tc/workspace/iothub/build/bootloader && /home/tc/.espressif/tools/python/v6.0.2/venv/bin/python /home/tc/.espressif/v6.0.2/esp-idf/components/partition_table/check_sizes.py --offset 0x8000 bootloader 0x1000 /home/tc/workspace/iothub/build/bootloader/bootloader.bin
+Bootloader binary size 0x65f0 bytes. 0xa10 bytes (9%) free.
+[2/10] No install step for 'bootloader'
+[3/10] Completed 'bootloader'
+[4/10] cd /home/tc/workspace/iothub/build/esp-idf/main && /home/tc/workspace/iothub/build/littlefs_py_venv/bin/littlefs-python create /home/tc/workspace/iothub/littlefs_data /home/tc/workspace/iothub/build/storage.bin -v --fs-size=0xe0000 --name-max=64 --block-size=4096
+LittleFS Configuration:
+  Block Size:       4096  /  0x1000
+  Image Size:     917504  /  0xE0000
+  Block Count:       224
+  Name Max:           64
+  Image:       /home/tc/workspace/iothub/build/storage.bin
+Adding File:      index.html
+[5/10] Building C object esp-idf/main/CMakeFiles/__idf_main.dir/app_main.c.obj
+[6/10] Linking C static library esp-idf/main/libmain.a
+[7/10] Generating esp-idf/esp_system/ld/sections.ld
+info: Default value for BT_ENABLED in sdkconfig is y but it is n according to Kconfig.
+Using default value from sdkconfig (y).
+[8/10] Linking CXX executable iothub.elf
+[9/10] Generating binary image from built executable
+esptool v5.3.1
+Creating ESP32 image...
+Merged 3 ELF sections.
+Successfully created ESP32 image.
+Generated /home/tc/workspace/iothub/build/iothub.bin
+[10/10] cd /home/tc/workspace/iothub/build && /home/tc/.espressif/tools/python/v6.0.2/venv/bin/python /home/tc/.espressif/v6.0.2/esp-idf/components/partition_table/check_sizes.py --offset 0x8000 partition --type app /home/tc/workspace/iothub/build/partition_table/partition-table.bin /home/tc/workspace/iothub/build/iothub.bin
+FAILED: CMakeFiles/app_check_size /home/tc/workspace/iothub/build/CMakeFiles/app_check_size 
+cd /home/tc/workspace/iothub/build && /home/tc/.espressif/tools/python/v6.0.2/venv/bin/python /home/tc/.espressif/v6.0.2/esp-idf/components/partition_table/check_sizes.py --offset 0x8000 partition --type app /home/tc/workspace/iothub/build/partition_table/partition-table.bin /home/tc/workspace/iothub/build/iothub.bin
+Error: All app partitions are too small for binary iothub.bin size 0x180ad0:
+  - Part 'ota_0' 0/16 @ 0x20000 size 0x180000 (overflow 0xad0)
+  - Part 'ota_1' 0/17 @ 0x1a0000 size 0x180000 (overflow 0xad0)
+ninja: build stopped: subcommand failed.

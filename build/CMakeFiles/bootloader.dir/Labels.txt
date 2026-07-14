@@ -1,0 +1,13 @@
+# Target labels
+ bootloader
+# Source files and their labels
+/home/tc/workspace/iothub/build/CMakeFiles/bootloader
+/home/tc/workspace/iothub/build/CMakeFiles/bootloader.rule
+/home/tc/workspace/iothub/build/CMakeFiles/bootloader-complete.rule
+/home/tc/workspace/iothub/build/bootloader-prefix/src/bootloader-stamp/bootloader-build.rule
+/home/tc/workspace/iothub/build/bootloader-prefix/src/bootloader-stamp/bootloader-configure.rule
+/home/tc/workspace/iothub/build/bootloader-prefix/src/bootloader-stamp/bootloader-download.rule
+/home/tc/workspace/iothub/build/bootloader-prefix/src/bootloader-stamp/bootloader-install.rule
+/home/tc/workspace/iothub/build/bootloader-prefix/src/bootloader-stamp/bootloader-mkdir.rule
+/home/tc/workspace/iothub/build/bootloader-prefix/src/bootloader-stamp/bootloader-patch.rule
+/home/tc/workspace/iothub/build/bootloader-prefix/src/bootloader-stamp/bootloader-update.rule
