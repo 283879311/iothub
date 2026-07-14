@@ -16,6 +16,7 @@
 #include "esp_bt_device.h"
 #include "esp_bt_main.h"
 #include "esp_check.h"
+#include "cJSON.h"
 #include "esp_crt_bundle.h"
 #include "esp_event.h"
 #include "esp_gap_ble_api.h"
@@ -317,6 +318,7 @@ static size_t s_rmt_probe_symbol_count = 0;
 static SemaphoreHandle_t s_rmt_probe_done_sem = NULL;
 static wifi_runtime_t s_wifi = {0};
 static char s_auth_token[APP_AUTH_TOKEN_HEX_LEN + 1] = {0};
+static SemaphoreHandle_t s_mqtt_mutex = NULL;
 
 static void app_uart_reset_probe_metrics(void);
 static void app_uart_reset_manual_session(void);
@@ -1060,6 +1062,32 @@ static bool app_network_mode_has_ap(uint8_t mode)
     return mode == NET_MODE_AP || mode == NET_MODE_APSTA;
 }
 
+static bool app_start_task(TaskFunction_t task_func, const char *name, uint32_t stack_depth,
+                           void *arg, UBaseType_t priority)
+{
+    BaseType_t created = xTaskCreate(task_func, name, stack_depth, arg, priority, NULL);
+
+    if (created != pdPASS) {
+        ESP_LOGE(TAG, "Failed to create task %s", name != NULL ? name : "<unnamed>");
+        return false;
+    }
+    return true;
+}
+
+static void app_mqtt_lock(void)
+{
+    if (s_mqtt_mutex != NULL) {
+        xSemaphoreTakeRecursive(s_mqtt_mutex, portMAX_DELAY);
+    }
+}
+
+static void app_mqtt_unlock(void)
+{
+    if (s_mqtt_mutex != NULL) {
+        xSemaphoreGiveRecursive(s_mqtt_mutex);
+    }
+}
+
 static esp_err_t app_configure_ap_netif_ip(void)
 {
     esp_netif_ip_info_t ip_info = {0};
@@ -1071,7 +1099,10 @@ static esp_err_t app_configure_ap_netif_ip(void)
     IP4_ADDR(&ip_info.ip, 192, 168, 8, 1);
     IP4_ADDR(&ip_info.gw, 192, 168, 8, 1);
     IP4_ADDR(&ip_info.netmask, 255, 255, 255, 0);
-    ESP_ERROR_CHECK(esp_netif_set_ip_info(s_ap_netif, &ip_info));
+    err = esp_netif_set_ip_info(s_ap_netif, &ip_info);
+    if (err != ESP_OK) {
+        return err;
+    }
     return esp_netif_dhcps_start(s_ap_netif);
 }
 
@@ -1115,7 +1146,7 @@ static void app_wifi_event_handler(void *arg, esp_event_base_t event_base, int32
         s_wifi.sta_has_ip = true;
         s_wifi.sta_retries = 0;
         app_set_sta_ip_strings(&event->ip_info);
-        xTaskCreate(app_mqtt_restart_task, "mqtt_restart_ip", 4096, NULL, 5, NULL);
+        app_start_task(app_mqtt_restart_task, "mqtt_restart_ip", 4096, NULL, 5);
     }
 }
 
@@ -1153,20 +1184,28 @@ static esp_err_t app_apply_wifi_config(void)
     s_wifi.sta_retries = 0;
     app_set_sta_ip_strings(NULL);
 
-    ESP_ERROR_CHECK(esp_wifi_set_mode(app_network_mode_to_wifi_mode(s_config.net_mode)));
+    err = esp_wifi_set_mode(app_network_mode_to_wifi_mode(s_config.net_mode));
+    if (err != ESP_OK) {
+        return err;
+    }
     if (app_network_mode_has_ap(s_config.net_mode)) {
-        ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_AP, &ap_cfg));
-        ESP_ERROR_CHECK(app_configure_ap_netif_ip());
+        err = esp_wifi_set_config(WIFI_IF_AP, &ap_cfg);
+        if (err != ESP_OK) {
+            return err;
+        }
+        err = app_configure_ap_netif_ip();
+        if (err != ESP_OK) {
+            return err;
+        }
     }
     if (app_network_mode_has_sta(s_config.net_mode)) {
-        ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &sta_cfg));
+        err = esp_wifi_set_config(WIFI_IF_STA, &sta_cfg);
+        if (err != ESP_OK) {
+            return err;
+        }
     }
 
-    ESP_ERROR_CHECK(esp_wifi_start());
-    if (app_network_mode_has_sta(s_config.net_mode) && strlen(s_config.sta_ssid) > 0) {
-        ESP_ERROR_CHECK(esp_wifi_connect());
-    }
-    return ESP_OK;
+    return esp_wifi_start();
 }
 
 static esp_err_t app_wifi_perform_scan(void)
@@ -1174,22 +1213,36 @@ static esp_err_t app_wifi_perform_scan(void)
     wifi_mode_t old_mode = WIFI_MODE_NULL;
     bool temporary_apsta = false;
     uint16_t number = WIFI_SCAN_LIST_SIZE;
+    esp_err_t err;
 
-    ESP_ERROR_CHECK(esp_wifi_get_mode(&old_mode));
+    err = esp_wifi_get_mode(&old_mode);
+    if (err != ESP_OK) {
+        return err;
+    }
     if (old_mode == WIFI_MODE_AP) {
-        ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_APSTA));
+        err = esp_wifi_set_mode(WIFI_MODE_APSTA);
+        if (err != ESP_OK) {
+            return err;
+        }
         temporary_apsta = true;
         vTaskDelay(pdMS_TO_TICKS(120));
     }
 
-    ESP_ERROR_CHECK(esp_wifi_scan_start(NULL, true));
-    ESP_ERROR_CHECK(esp_wifi_scan_get_ap_records(&number, s_wifi.scan_records));
-    s_wifi.scan_count = number;
+    err = esp_wifi_scan_start(NULL, true);
+    if (err == ESP_OK) {
+        err = esp_wifi_scan_get_ap_records(&number, s_wifi.scan_records);
+    }
+    if (err == ESP_OK) {
+        s_wifi.scan_count = number;
+    }
 
     if (temporary_apsta) {
-        ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_AP));
+        esp_err_t restore_err = esp_wifi_set_mode(WIFI_MODE_AP);
+        if (err == ESP_OK) {
+            err = restore_err;
+        }
     }
-    return ESP_OK;
+    return err;
 }
 
 static void app_wifi_restart_task(void *arg)
@@ -1243,6 +1296,21 @@ static esp_err_t http_send_jsonf(httpd_req_t *req, const char *status, const cha
     va_end(args);
     err = http_send_json_text(req, status, payload);
     free(payload);
+    return err;
+}
+
+
+static esp_err_t http_send_cjson(httpd_req_t *req, const char *status, cJSON *root)
+{
+    char *payload = cJSON_PrintUnformatted(root);
+    esp_err_t err;
+
+    if (payload == NULL) {
+        return http_send_json_text(req, "500 Internal Server Error",
+                                   "{\"status\":\"error\",\"message\":\"out_of_memory\"}");
+    }
+    err = http_send_json_text(req, status, payload);
+    cJSON_free(payload);
     return err;
 }
 
@@ -1317,130 +1385,71 @@ static esp_err_t http_require_auth(httpd_req_t *req)
     } while (0)
 
 
+static cJSON *json_parse_body(const char *json)
+{
+    if (json == NULL) {
+        return NULL;
+    }
+    return cJSON_Parse(json);
+}
+
 static bool json_find_string(const char *json, const char *key, char *out, size_t out_size)
 {
-    char pattern[48];
-    const char *pos;
-    size_t idx = 0;
+    bool found = false;
+    cJSON *root = json_parse_body(json);
+    cJSON *item = root != NULL ? cJSON_GetObjectItemCaseSensitive(root, key) : NULL;
 
-    snprintf(pattern, sizeof(pattern), "\"%s\":\"", key);
-    pos = strstr(json, pattern);
-    if (pos == NULL) {
-        snprintf(pattern, sizeof(pattern), "\"%s\": \"", key);
-        pos = strstr(json, pattern);
-        if (pos == NULL) {
-            return false;
-        }
+    if (out_size > 0) {
+        out[0] = '\0';
     }
-
-    pos += strlen(pattern);
-    while (*pos != '\0' && idx + 1 < out_size) {
-        if (*pos == '"') {
-            break;
-        }
-        if (*pos == '\\' && pos[1] != '\0') {
-            pos++;
-            switch (*pos) {
-            case 'n':
-                out[idx++] = '\n';
-                break;
-            case 'r':
-                out[idx++] = '\r';
-                break;
-            case 't':
-                out[idx++] = '\t';
-                break;
-            case '"':
-                out[idx++] = '"';
-                break;
-            case '\\':
-                out[idx++] = '\\';
-                break;
-            default:
-                out[idx++] = *pos;
-                break;
-            }
-            pos++;
-            continue;
-        }
-        out[idx++] = *pos++;
+    if (cJSON_IsString(item) && item->valuestring != NULL) {
+        app_copy_string(out, out_size, item->valuestring);
+        found = true;
     }
-    out[idx] = '\0';
-    return true;
+    cJSON_Delete(root);
+    return found;
 }
 
 static bool json_find_bool(const char *json, const char *key, bool *value)
 {
-    char pattern[48];
-    const char *pos;
+    bool found = false;
+    cJSON *root = json_parse_body(json);
+    cJSON *item = root != NULL ? cJSON_GetObjectItemCaseSensitive(root, key) : NULL;
 
-    snprintf(pattern, sizeof(pattern), "\"%s\":", key);
-    pos = strstr(json, pattern);
-    if (pos == NULL) {
-        return false;
+    if (cJSON_IsBool(item)) {
+        *value = cJSON_IsTrue(item);
+        found = true;
     }
-
-    pos += strlen(pattern);
-    while (*pos == ' ') {
-        pos++;
-    }
-    if (strncmp(pos, "true", 4) == 0) {
-        *value = true;
-        return true;
-    }
-    if (strncmp(pos, "false", 5) == 0) {
-        *value = false;
-        return true;
-    }
-    return false;
+    cJSON_Delete(root);
+    return found;
 }
 
 static bool json_find_u16(const char *json, const char *key, uint16_t *value)
 {
-    char pattern[48];
-    const char *pos;
-    long parsed;
+    bool found = false;
+    cJSON *root = json_parse_body(json);
+    cJSON *item = root != NULL ? cJSON_GetObjectItemCaseSensitive(root, key) : NULL;
 
-    snprintf(pattern, sizeof(pattern), "\"%s\":", key);
-    pos = strstr(json, pattern);
-    if (pos == NULL) {
-        return false;
+    if (cJSON_IsNumber(item) && item->valuedouble >= 0 && item->valuedouble <= UINT16_MAX) {
+        *value = (uint16_t)item->valuedouble;
+        found = true;
     }
-
-    pos += strlen(pattern);
-    while (*pos == ' ') {
-        pos++;
-    }
-
-    parsed = strtol(pos, NULL, 10);
-    if (parsed < 0 || parsed > 65535) {
-        return false;
-    }
-
-    *value = (uint16_t)parsed;
-    return true;
+    cJSON_Delete(root);
+    return found;
 }
 
 static bool json_find_u32(const char *json, const char *key, uint32_t *value)
 {
-    char pattern[48];
-    const char *pos;
-    unsigned long parsed;
+    bool found = false;
+    cJSON *root = json_parse_body(json);
+    cJSON *item = root != NULL ? cJSON_GetObjectItemCaseSensitive(root, key) : NULL;
 
-    snprintf(pattern, sizeof(pattern), "\"%s\":", key);
-    pos = strstr(json, pattern);
-    if (pos == NULL) {
-        return false;
+    if (cJSON_IsNumber(item) && item->valuedouble >= 0 && item->valuedouble <= UINT32_MAX) {
+        *value = (uint32_t)item->valuedouble;
+        found = true;
     }
-
-    pos += strlen(pattern);
-    while (*pos == ' ') {
-        pos++;
-    }
-
-    parsed = strtoul(pos, NULL, 10);
-    *value = (uint32_t)parsed;
-    return true;
+    cJSON_Delete(root);
+    return found;
 }
 
 static esp_err_t http_serve_index(httpd_req_t *req)
@@ -2765,7 +2774,9 @@ static void app_mqtt_publish_attributes(void)
     char payload[384];
     char detected_frame[8];
 
+    app_mqtt_lock();
     if (s_mqtt.client == NULL || !s_mqtt.connected) {
+        app_mqtt_unlock();
         return;
     }
 
@@ -2786,6 +2797,7 @@ static void app_mqtt_publish_attributes(void)
              (unsigned)s_uart.detected_baudrate);
 
     esp_mqtt_client_publish(s_mqtt.client, app_mqtt_attributes_topic(), payload, 0, 1, 0);
+    app_mqtt_unlock();
 }
 
 static void app_mqtt_publish_state(void)
@@ -2793,7 +2805,9 @@ static void app_mqtt_publish_state(void)
     char payload[512];
     char detected_frame[8];
 
+    app_mqtt_lock();
     if (s_mqtt.client == NULL || !s_mqtt.connected) {
+        app_mqtt_unlock();
         return;
     }
 
@@ -2823,6 +2837,7 @@ static void app_mqtt_publish_state(void)
     if (s_mqtt.last_msg_id >= 0) {
         s_mqtt.publish_count++;
     }
+    app_mqtt_unlock();
 }
 
 static void app_mqtt_apply_command(const char *topic, const char *payload)
@@ -2833,50 +2848,38 @@ static void app_mqtt_apply_command(const char *topic, const char *payload)
     char response_topic[128];
     char response_payload[256];
     const char *request_id = NULL;
+    cJSON *root = cJSON_Parse(payload);
+    cJSON *relay_on = root != NULL ? cJSON_GetObjectItemCaseSensitive(root, "relay_on") : NULL;
+    cJSON *led_on = root != NULL ? cJSON_GetObjectItemCaseSensitive(root, "led_on") : NULL;
+    cJSON *method = root != NULL ? cJSON_GetObjectItemCaseSensitive(root, "method") : NULL;
+    cJSON *params = root != NULL ? cJSON_GetObjectItemCaseSensitive(root, "params") : NULL;
 
-    if (strstr(payload, "\"relay_on\":true") != NULL) {
-        s_config.relay_on = true;
+    if (cJSON_IsBool(relay_on)) {
+        s_config.relay_on = cJSON_IsTrue(relay_on);
         changed = true;
         handled = true;
-    } else if (strstr(payload, "\"relay_on\":false") != NULL) {
-        s_config.relay_on = false;
+    }
+    if (cJSON_IsBool(led_on)) {
+        s_config.led_on = cJSON_IsTrue(led_on);
         changed = true;
         handled = true;
     }
 
-    if (strstr(payload, "\"led_on\":true") != NULL) {
-        s_config.led_on = true;
-        changed = true;
-        handled = true;
-    } else if (strstr(payload, "\"led_on\":false") != NULL) {
-        s_config.led_on = false;
-        changed = true;
-        handled = true;
-    }
-
-    if (strstr(payload, "\"method\":\"setRelay\"") != NULL) {
-        if (strstr(payload, "\"params\":true") != NULL || strstr(payload, "\"params\":1") != NULL) {
-            s_config.relay_on = true;
-        } else {
-            s_config.relay_on = false;
+    if (cJSON_IsString(method) && method->valuestring != NULL) {
+        if (strcmp(method->valuestring, "setRelay") == 0) {
+            s_config.relay_on = cJSON_IsTrue(params) ||
+                                (cJSON_IsNumber(params) && params->valuedouble != 0);
+            changed = true;
+            handled = true;
+        } else if (strcmp(method->valuestring, "setLed") == 0) {
+            s_config.led_on = cJSON_IsTrue(params) ||
+                              (cJSON_IsNumber(params) && params->valuedouble != 0);
+            changed = true;
+            handled = true;
+        } else if (strcmp(method->valuestring, "getStatus") == 0) {
+            handled = true;
+            request_status = true;
         }
-        changed = true;
-        handled = true;
-    }
-
-    if (strstr(payload, "\"method\":\"setLed\"") != NULL) {
-        if (strstr(payload, "\"params\":true") != NULL || strstr(payload, "\"params\":1") != NULL) {
-            s_config.led_on = true;
-        } else {
-            s_config.led_on = false;
-        }
-        changed = true;
-        handled = true;
-    }
-
-    if (strstr(payload, "\"method\":\"getStatus\"") != NULL) {
-        handled = true;
-        request_status = true;
     }
 
     if (changed) {
@@ -2905,13 +2908,18 @@ static void app_mqtt_apply_command(const char *topic, const char *payload)
                      s_config.relay_on ? "true" : "false",
                      s_config.led_on ? "true" : "false");
         }
-        esp_mqtt_client_publish(s_mqtt.client, response_topic, response_payload, 0, 1, 0);
+        app_mqtt_lock();
+        if (s_mqtt.client != NULL) {
+            esp_mqtt_client_publish(s_mqtt.client, response_topic, response_payload, 0, 1, 0);
+        }
+        app_mqtt_unlock();
     }
 
     if (handled) {
         app_mqtt_publish_attributes();
     }
     app_mqtt_publish_state();
+    cJSON_Delete(root);
 }
 
 static void app_mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_t event_id, void *event_data)
@@ -2926,18 +2934,24 @@ static void app_mqtt_event_handler(void *handler_args, esp_event_base_t base, in
 
     switch ((esp_mqtt_event_id_t)event_id) {
     case MQTT_EVENT_CONNECTED:
+        app_mqtt_lock();
         s_mqtt.connected = true;
         app_copy_string(s_mqtt.last_error, sizeof(s_mqtt.last_error), "");
+        app_mqtt_unlock();
         esp_mqtt_client_subscribe(event->client, app_mqtt_rpc_topic(), 1);
         app_mqtt_publish_attributes();
         app_mqtt_publish_state();
         break;
     case MQTT_EVENT_DISCONNECTED:
+        app_mqtt_lock();
         s_mqtt.connected = false;
         app_copy_string(s_mqtt.last_error, sizeof(s_mqtt.last_error), "disconnected");
+        app_mqtt_unlock();
         break;
     case MQTT_EVENT_PUBLISHED:
+        app_mqtt_lock();
         s_mqtt.last_msg_id = event->msg_id;
+        app_mqtt_unlock();
         break;
     case MQTT_EVENT_DATA:
         copy_len = event->topic_len < (int)sizeof(topic) - 1 ? event->topic_len : (int)sizeof(topic) - 1;
@@ -2949,8 +2963,10 @@ static void app_mqtt_event_handler(void *handler_args, esp_event_base_t base, in
         app_mqtt_apply_command(topic, payload);
         break;
     case MQTT_EVENT_ERROR:
+        app_mqtt_lock();
         s_mqtt.connected = false;
         snprintf(s_mqtt.last_error, sizeof(s_mqtt.last_error), "event_error_%ld", (long)event_id);
+        app_mqtt_unlock();
         break;
     default:
         break;
@@ -2959,12 +2975,14 @@ static void app_mqtt_event_handler(void *handler_args, esp_event_base_t base, in
 
 static void app_mqtt_stop(void)
 {
+    app_mqtt_lock();
     if (s_mqtt.client != NULL) {
         esp_mqtt_client_stop(s_mqtt.client);
         esp_mqtt_client_destroy(s_mqtt.client);
         s_mqtt.client = NULL;
     }
     s_mqtt.connected = false;
+    app_mqtt_unlock();
 }
 
 static esp_err_t app_mqtt_apply_config(void)
@@ -2973,12 +2991,15 @@ static esp_err_t app_mqtt_apply_config(void)
 
     app_mqtt_stop();
 
+    app_mqtt_lock();
     if (strlen(s_config.mqtt_host) == 0 || s_config.mqtt_port == 0) {
         app_copy_string(s_mqtt.last_error, sizeof(s_mqtt.last_error), "mqtt_not_configured");
+        app_mqtt_unlock();
         return ESP_OK;
     }
     if (!app_network_mode_has_sta(s_config.net_mode) || !s_wifi.sta_has_ip) {
         app_copy_string(s_mqtt.last_error, sizeof(s_mqtt.last_error), "waiting_sta_ip");
+        app_mqtt_unlock();
         return ESP_OK;
     }
 
@@ -2997,12 +3018,18 @@ static esp_err_t app_mqtt_apply_config(void)
     s_mqtt.client = esp_mqtt_client_init(&mqtt_cfg);
     if (s_mqtt.client == NULL) {
         app_copy_string(s_mqtt.last_error, sizeof(s_mqtt.last_error), "mqtt_init_failed");
+        app_mqtt_unlock();
         return ESP_FAIL;
     }
 
     esp_mqtt_client_register_event(s_mqtt.client, ESP_EVENT_ANY_ID, app_mqtt_event_handler, NULL);
-    ESP_RETURN_ON_ERROR(esp_mqtt_client_start(s_mqtt.client), TAG, "mqtt start failed");
+    esp_err_t err = esp_mqtt_client_start(s_mqtt.client);
+    if (err != ESP_OK) {
+        app_mqtt_unlock();
+        ESP_RETURN_ON_ERROR(err, TAG, "mqtt start failed");
+    }
     app_copy_string(s_mqtt.last_error, sizeof(s_mqtt.last_error), "connecting");
+    app_mqtt_unlock();
     return ESP_OK;
 }
 
@@ -3243,42 +3270,52 @@ static esp_err_t network_restart_handler(httpd_req_t *req)
     (void)req;
     http_send_json_text(req, NULL,
                         "{\"status\":\"restarting\",\"message\":\"network restart started\"}");
-    xTaskCreate(app_wifi_restart_task, "wifi_restart", 4096, NULL, 5, NULL);
+    app_start_task(app_wifi_restart_task, "wifi_restart", 4096, NULL, 5);
     return ESP_OK;
 }
 
 static esp_err_t network_scan_handler(httpd_req_t *req)
 {
     APP_REQUIRE_AUTH(req);
-    char *payload;
-    int offset;
-    uint16_t index;
+    cJSON *root = NULL;
+    cJSON *aps = NULL;
+    esp_err_t err;
 
-    if (app_wifi_perform_scan() != ESP_OK) {
+    err = app_wifi_perform_scan();
+    if (err != ESP_OK) {
         return http_send_json_text(req, "500 Internal Server Error",
                                    "{\"status\":\"error\",\"message\":\"wifi_scan_failed\"}");
     }
 
-    payload = malloc(APP_JSON_BUFFER_SIZE);
-    if (payload == NULL) {
+    root = cJSON_CreateObject();
+    aps = cJSON_CreateArray();
+    if (root == NULL || aps == NULL) {
+        cJSON_Delete(root);
+        cJSON_Delete(aps);
         return http_send_json_text(req, "500 Internal Server Error",
                                    "{\"status\":\"error\",\"message\":\"out_of_memory\"}");
     }
 
-    offset = snprintf(payload, APP_JSON_BUFFER_SIZE, "{\"status\":\"ok\",\"count\":%u,\"aps\":[",
-                      s_wifi.scan_count);
-    for (index = 0; index < s_wifi.scan_count && offset < APP_JSON_BUFFER_SIZE - 96; index++) {
-        offset += snprintf(payload + offset, APP_JSON_BUFFER_SIZE - offset,
-                           "%s{\"ssid\":\"%s\",\"rssi\":%d,\"auth\":\"%s\"}",
-                           index == 0 ? "" : ",",
-                           (char *)s_wifi.scan_records[index].ssid,
-                           s_wifi.scan_records[index].rssi,
-                           app_wifi_authmode_to_string(s_wifi.scan_records[index].authmode));
+    cJSON_AddStringToObject(root, "status", "ok");
+    cJSON_AddNumberToObject(root, "count", s_wifi.scan_count);
+    cJSON_AddItemToObject(root, "aps", aps);
+    for (uint16_t index = 0; index < s_wifi.scan_count; index++) {
+        cJSON *ap = cJSON_CreateObject();
+        if (ap == NULL) {
+            cJSON_Delete(root);
+            return http_send_json_text(req, "500 Internal Server Error",
+                                       "{\"status\":\"error\",\"message\":\"out_of_memory\"}");
+        }
+        cJSON_AddStringToObject(ap, "ssid", (char *)s_wifi.scan_records[index].ssid);
+        cJSON_AddNumberToObject(ap, "rssi", s_wifi.scan_records[index].rssi);
+        cJSON_AddStringToObject(ap, "auth",
+                                app_wifi_authmode_to_string(s_wifi.scan_records[index].authmode));
+        cJSON_AddItemToArray(aps, ap);
     }
-    snprintf(payload + offset, APP_JSON_BUFFER_SIZE - offset, "]}");
-    http_send_json_text(req, NULL, payload);
-    free(payload);
-    return ESP_OK;
+
+    err = http_send_cjson(req, NULL, root);
+    cJSON_Delete(root);
+    return err;
 }
 
 static esp_err_t gpio_get_handler(httpd_req_t *req)
@@ -3382,7 +3419,7 @@ static esp_err_t bluetooth_put_handler(httpd_req_t *req)
 
     http_send_json_text(req, NULL,
                         "{\"status\":\"saved\",\"message\":\"bluetooth config saved, mode will restart\"}");
-    xTaskCreate(app_bt_restart_task, "bt_restart", 4096, NULL, 5, NULL);
+    app_start_task(app_bt_restart_task, "bt_restart", 4096, NULL, 5);
     return ESP_OK;
 }
 
@@ -3436,7 +3473,7 @@ static esp_err_t mqtt_put_handler(httpd_req_t *req)
 
     http_send_json_text(req, NULL,
                         "{\"status\":\"saved\",\"message\":\"mqtt config saved, connection will restart\"}");
-    xTaskCreate(app_mqtt_restart_task, "mqtt_restart", 4096, NULL, 5, NULL);
+    app_start_task(app_mqtt_restart_task, "mqtt_restart", 4096, NULL, 5);
     return ESP_OK;
 }
 
@@ -3952,7 +3989,7 @@ static esp_err_t ota_upload_handler(httpd_req_t *req)
 
     http_send_json_text(req, NULL,
                         "{\"status\":\"ok\",\"message\":\"ota image received, device will reboot\"}");
-    xTaskCreate(app_reboot_task, "ota_reboot", 2048, NULL, 5, NULL);
+    app_start_task(app_reboot_task, "ota_reboot", 2048, NULL, 5);
     return ESP_OK;
 }
 
@@ -4009,6 +4046,10 @@ void app_main(void)
     if (s_uart_console_mutex == NULL) {
         ESP_LOGE(TAG, "Failed to create uart console mutex");
     }
+    s_mqtt_mutex = xSemaphoreCreateRecursiveMutex();
+    if (s_mqtt_mutex == NULL) {
+        ESP_LOGE(TAG, "Failed to create mqtt mutex");
+    }
 
     esp_err_t err = nvs_flash_init();
     if (err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND) {
@@ -4030,7 +4071,7 @@ void app_main(void)
     if (app_mqtt_apply_config() != ESP_OK) {
         ESP_LOGW(TAG, "MQTT init skipped");
     }
-    xTaskCreate(app_mqtt_telemetry_task, "mqtt_telemetry", 4096, NULL, 5, NULL);
+    app_start_task(app_mqtt_telemetry_task, "mqtt_telemetry", 4096, NULL, 5);
     app_start_webserver();
 
     ESP_LOGI(TAG, "iothub phase-4 ready: mode=%s, AP SSID='%s', open http://192.168.8.1 when AP is enabled",

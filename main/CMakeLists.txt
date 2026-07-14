@@ -14,6 +14,7 @@ idf_component_register(
         esp_system
         esp_wifi
         littlefs
+        json
         nvs_flash
 )
 
