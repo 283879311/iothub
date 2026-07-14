@@ -47,3 +47,14 @@ menu "Example Configuration"
             Define the blinking period in milliseconds.
 
 endmenu
+
+menu "IoTHub Security"
+
+    config IOTHUB_ADMIN_PASSWORD
+        string "Web admin password"
+        default "admin"
+        help
+            Password required by the web UI to call management APIs. Change this
+            before deploying devices outside a trusted lab network.
+
+endmenu

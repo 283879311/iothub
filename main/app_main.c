@@ -28,6 +28,7 @@
 #include "esp_mac.h"
 #include "esp_netif.h"
 #include "esp_ota_ops.h"
+#include "esp_random.h"
 #include "esp_spp_api.h"
 #include "esp_system.h"
 #include "esp_wifi.h"
@@ -46,6 +47,9 @@
 #define APP_SCRATCH_SIZE 4096
 #define APP_JSON_BUFFER_SIZE 4096
 #define APP_OTA_REBOOT_DELAY_MS 1500
+#define APP_AUTH_PASSWORD CONFIG_IOTHUB_ADMIN_PASSWORD
+#define APP_AUTH_TOKEN_HEX_LEN 32
+#define APP_AUTH_HEADER "X-IoTHub-Auth"
 
 // Relay output GPIO. Recommended choices are output-capable pins such as
 // GPIO18/19/21/22/23/25/26/27/32/33. Avoid Flash/PSRAM pins and role conflicts.
@@ -312,6 +316,7 @@ static rmt_symbol_word_t s_rmt_probe_symbols[64];
 static size_t s_rmt_probe_symbol_count = 0;
 static SemaphoreHandle_t s_rmt_probe_done_sem = NULL;
 static wifi_runtime_t s_wifi = {0};
+static char s_auth_token[APP_AUTH_TOKEN_HEX_LEN + 1] = {0};
 
 static void app_uart_reset_probe_metrics(void);
 static void app_uart_reset_manual_session(void);
@@ -1264,6 +1269,53 @@ static esp_err_t http_read_body(httpd_req_t *req, char *buf, size_t buf_len)
     buf[received] = '\0';
     return ESP_OK;
 }
+
+static void app_auth_generate_token(void)
+{
+    uint8_t random_bytes[APP_AUTH_TOKEN_HEX_LEN / 2];
+
+    esp_fill_random(random_bytes, sizeof(random_bytes));
+    for (size_t index = 0; index < sizeof(random_bytes); index++) {
+        snprintf(&s_auth_token[index * 2], 3, "%02x", random_bytes[index]);
+    }
+    s_auth_token[APP_AUTH_TOKEN_HEX_LEN] = '\0';
+}
+
+static bool app_auth_request_has_valid_token(httpd_req_t *req)
+{
+    char token[APP_AUTH_TOKEN_HEX_LEN + 1];
+    size_t token_len = httpd_req_get_hdr_value_len(req, APP_AUTH_HEADER);
+
+    if (s_auth_token[0] == '\0') {
+        return false;
+    }
+    if (token_len != APP_AUTH_TOKEN_HEX_LEN || token_len >= sizeof(token)) {
+        return false;
+    }
+    if (httpd_req_get_hdr_value_str(req, APP_AUTH_HEADER, token, sizeof(token)) != ESP_OK) {
+        return false;
+    }
+    return strcmp(token, s_auth_token) == 0;
+}
+
+static esp_err_t http_require_auth(httpd_req_t *req)
+{
+    if (app_auth_request_has_valid_token(req)) {
+        return ESP_OK;
+    }
+    httpd_resp_set_hdr(req, "WWW-Authenticate", "IoTHub");
+    return http_send_json_text(req, "401 Unauthorized",
+                               "{\"status\":\"error\",\"message\":\"auth_required\"}");
+}
+
+#define APP_REQUIRE_AUTH(req) \
+    do { \
+        esp_err_t auth_err__ = http_require_auth((req)); \
+        if (auth_err__ != ESP_OK) { \
+            return auth_err__; \
+        } \
+    } while (0)
+
 
 static bool json_find_string(const char *json, const char *key, char *out, size_t out_size)
 {
@@ -2978,6 +3030,33 @@ static void app_reboot_task(void *arg)
     esp_restart();
 }
 
+static esp_err_t auth_login_handler(httpd_req_t *req)
+{
+    char password[65];
+
+    if (http_read_body(req, s_web.scratch, sizeof(s_web.scratch)) != ESP_OK) {
+        return ESP_FAIL;
+    }
+    if (!json_find_string(s_web.scratch, "password", password, sizeof(password)) ||
+        strcmp(password, APP_AUTH_PASSWORD) != 0) {
+        return http_send_json_text(req, "401 Unauthorized",
+                                   "{\"status\":\"error\",\"message\":\"invalid_password\"}");
+    }
+
+    app_auth_generate_token();
+    return http_send_jsonf(req, NULL,
+                           "{\"status\":\"ok\",\"token\":\"%s\"}",
+                           s_auth_token);
+}
+
+static esp_err_t auth_logout_handler(httpd_req_t *req)
+{
+    APP_REQUIRE_AUTH(req);
+    memset(s_auth_token, 0, sizeof(s_auth_token));
+    return http_send_json_text(req, NULL,
+                               "{\"status\":\"ok\",\"message\":\"logged_out\"}");
+}
+
 static esp_err_t device_info_get_handler(httpd_req_t *req)
 {
     uint8_t mac[6] = {0};
@@ -3076,6 +3155,7 @@ static esp_err_t device_status_get_handler(httpd_req_t *req)
 
 static esp_err_t network_get_handler(httpd_req_t *req)
 {
+    APP_REQUIRE_AUTH(req);
     char ip[16];
     char gateway[16];
     char netmask[16];
@@ -3101,6 +3181,7 @@ static esp_err_t network_get_handler(httpd_req_t *req)
 
 static esp_err_t network_put_handler(httpd_req_t *req)
 {
+    APP_REQUIRE_AUTH(req);
     char value[65];
     const bool ap_enabled_before = app_network_mode_has_ap(s_config.net_mode);
     char current_ap_ip[16];
@@ -3158,6 +3239,7 @@ static esp_err_t network_put_handler(httpd_req_t *req)
 
 static esp_err_t network_restart_handler(httpd_req_t *req)
 {
+    APP_REQUIRE_AUTH(req);
     (void)req;
     http_send_json_text(req, NULL,
                         "{\"status\":\"restarting\",\"message\":\"network restart started\"}");
@@ -3167,6 +3249,7 @@ static esp_err_t network_restart_handler(httpd_req_t *req)
 
 static esp_err_t network_scan_handler(httpd_req_t *req)
 {
+    APP_REQUIRE_AUTH(req);
     char *payload;
     int offset;
     uint16_t index;
@@ -3200,6 +3283,7 @@ static esp_err_t network_scan_handler(httpd_req_t *req)
 
 static esp_err_t gpio_get_handler(httpd_req_t *req)
 {
+    APP_REQUIRE_AUTH(req);
     char *payload = malloc(APP_JSON_BUFFER_SIZE);
     size_t offset = 0;
 
@@ -3236,6 +3320,7 @@ static esp_err_t gpio_get_handler(httpd_req_t *req)
 
 static esp_err_t gpio_put_handler(httpd_req_t *req)
 {
+    APP_REQUIRE_AUTH(req);
     bool value;
 
     if (http_read_body(req, s_web.scratch, sizeof(s_web.scratch)) != ESP_OK) {
@@ -3263,6 +3348,7 @@ static esp_err_t gpio_put_handler(httpd_req_t *req)
 
 static esp_err_t bluetooth_get_handler(httpd_req_t *req)
 {
+    APP_REQUIRE_AUTH(req);
     return http_send_jsonf(req, NULL,
                            "{\"mode\":\"%s\",\"device_name\":\"%s\",\"runtime_mode\":\"%s\","
                            "\"last_error\":\"%s\"}",
@@ -3274,6 +3360,7 @@ static esp_err_t bluetooth_get_handler(httpd_req_t *req)
 
 static esp_err_t bluetooth_put_handler(httpd_req_t *req)
 {
+    APP_REQUIRE_AUTH(req);
     char value[64];
 
     if (http_read_body(req, s_web.scratch, sizeof(s_web.scratch)) != ESP_OK) {
@@ -3301,6 +3388,7 @@ static esp_err_t bluetooth_put_handler(httpd_req_t *req)
 
 static esp_err_t mqtt_get_handler(httpd_req_t *req)
 {
+    APP_REQUIRE_AUTH(req);
     app_uart_capture_sample(0);
     return http_send_jsonf(req, NULL,
                            "{\"backend\":\"%s\",\"host\":\"%s\",\"port\":%u,\"token\":\"%s\","
@@ -3316,6 +3404,7 @@ static esp_err_t mqtt_get_handler(httpd_req_t *req)
 
 static esp_err_t mqtt_put_handler(httpd_req_t *req)
 {
+    APP_REQUIRE_AUTH(req);
     char value[128];
     bool bool_value;
     uint16_t port;
@@ -3353,12 +3442,14 @@ static esp_err_t mqtt_put_handler(httpd_req_t *req)
 
 static esp_err_t uart_get_handler(httpd_req_t *req)
 {
+    APP_REQUIRE_AUTH(req);
     app_uart_capture_sample(0);
     return app_uart_send_runtime_json(req, "uart_runtime");
 }
 
 static esp_err_t uart_put_handler(httpd_req_t *req)
 {
+    APP_REQUIRE_AUTH(req);
     char value[64];
     uint32_t baudrate;
     uint16_t short_value;
@@ -3419,6 +3510,7 @@ static esp_err_t uart_put_handler(httpd_req_t *req)
 
 static esp_err_t uart_probe_auto_detect_handler(httpd_req_t *req)
 {
+    APP_REQUIRE_AUTH(req);
     uint32_t detected_baudrate = 0;
     int score;
     TickType_t probe_ticks;
@@ -3489,6 +3581,7 @@ static esp_err_t uart_probe_auto_detect_handler(httpd_req_t *req)
 
 static esp_err_t uart_probe_manual_detect_handler(httpd_req_t *req)
 {
+    APP_REQUIRE_AUTH(req);
     char action[16] = "next";
     char apply_error[48];
     uint32_t preferred_baudrate;
@@ -3599,6 +3692,7 @@ static esp_err_t uart_probe_manual_detect_handler(httpd_req_t *req)
 
 static esp_err_t uart_probe_confirm_handler(httpd_req_t *req)
 {
+    APP_REQUIRE_AUTH(req);
     if (req->content_len > 0) {
         if (http_read_body(req, s_web.scratch, sizeof(s_web.scratch)) != ESP_OK) {
             return ESP_FAIL;
@@ -3636,6 +3730,7 @@ static esp_err_t uart_probe_confirm_handler(httpd_req_t *req)
 
 static esp_err_t uart_probe_stop_handler(httpd_req_t *req)
 {
+    APP_REQUIRE_AUTH(req);
     if (req->content_len > 0) {
         if (http_read_body(req, s_web.scratch, sizeof(s_web.scratch)) != ESP_OK) {
             return ESP_FAIL;
@@ -3706,6 +3801,7 @@ static bool app_uart_parse_hex_bytes(const char *text, uint8_t *out, size_t out_
 
 static esp_err_t uart_console_get_handler(httpd_req_t *req)
 {
+    APP_REQUIRE_AUTH(req);
     char *plain_json = NULL;
     char *hex_json = NULL;
     esp_err_t err;
@@ -3747,6 +3843,7 @@ static esp_err_t uart_console_get_handler(httpd_req_t *req)
 
 static esp_err_t uart_send_handler(httpd_req_t *req)
 {
+    APP_REQUIRE_AUTH(req);
     char data[UART_TX_BUFFER_SIZE];
     char encoding[8] = "plain";
     uint8_t tx_bytes[UART_TX_BUFFER_SIZE / 2];
@@ -3796,6 +3893,7 @@ static esp_err_t uart_send_handler(httpd_req_t *req)
 
 static esp_err_t ota_upload_handler(httpd_req_t *req)
 {
+    APP_REQUIRE_AUTH(req);
     const esp_partition_t *update_partition;
     esp_ota_handle_t update_handle = 0;
     int remaining = req->content_len;
@@ -3871,6 +3969,8 @@ static void app_start_webserver(void)
     ESP_ERROR_CHECK(httpd_start(&s_web.server, &config));
 
     const httpd_uri_t uris[] = {
+        {.uri = "/api/v1/auth/login", .method = HTTP_POST, .handler = auth_login_handler},
+        {.uri = "/api/v1/auth/logout", .method = HTTP_POST, .handler = auth_logout_handler},
         {.uri = "/api/v1/device/info", .method = HTTP_GET, .handler = device_info_get_handler},
         {.uri = "/api/v1/device/status", .method = HTTP_GET, .handler = device_status_get_handler},
         {.uri = "/api/v1/config/network", .method = HTTP_GET, .handler = network_get_handler},
