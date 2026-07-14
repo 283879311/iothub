@@ -17,6 +17,7 @@
 #include "esp_bt_main.h"
 #include "esp_check.h"
 #include "cJSON.h"
+#include "app_json.h"
 #include "esp_crt_bundle.h"
 #include "esp_event.h"
 #include "esp_gap_ble_api.h"
@@ -42,6 +43,7 @@
 
 #define APP_NAMESPACE "iothub"
 #define APP_CONFIG_KEY "runtime_cfg"
+#define APP_CONFIG_VERSION_KEY "cfg_ver"
 #define APP_CONFIG_MAGIC 0x494f5448UL
 #define APP_CONFIG_VERSION 6
 #define APP_BASE_PATH "/web"
@@ -772,6 +774,91 @@ static void app_set_defaults(void)
     app_copy_string(s_wifi.last_disconnect, sizeof(s_wifi.last_disconnect), "none");
 }
 
+static esp_err_t app_nvs_set_str(nvs_handle_t nvs_handle, const char *key, const char *value)
+{
+    return nvs_set_str(nvs_handle, key, value != NULL ? value : "");
+}
+
+static void app_nvs_get_str(nvs_handle_t nvs_handle, const char *key, char *value, size_t value_size)
+{
+    size_t required_size = value_size;
+
+    if (value_size == 0) {
+        return;
+    }
+    if (nvs_get_str(nvs_handle, key, value, &required_size) != ESP_OK) {
+        return;
+    }
+    value[value_size - 1] = '\0';
+}
+
+static esp_err_t app_save_config_to_nvs(nvs_handle_t nvs_handle)
+{
+    esp_err_t err = ESP_OK;
+
+#define APP_NVS_TRY(call) do { err = (call); if (err != ESP_OK) { return err; } } while (0)
+    APP_NVS_TRY(nvs_set_u16(nvs_handle, APP_CONFIG_VERSION_KEY, APP_CONFIG_VERSION));
+    APP_NVS_TRY(nvs_set_u8(nvs_handle, "relay_ah", s_config.relay_active_high));
+    APP_NVS_TRY(nvs_set_u8(nvs_handle, "led_ah", s_config.led_active_high));
+    APP_NVS_TRY(nvs_set_u8(nvs_handle, "input_al", s_config.input_active_low));
+    APP_NVS_TRY(nvs_set_u8(nvs_handle, "relay_on", s_config.relay_on));
+    APP_NVS_TRY(nvs_set_u8(nvs_handle, "led_on", s_config.led_on));
+    APP_NVS_TRY(nvs_set_u8(nvs_handle, "bt_mode", s_config.bt_mode));
+    APP_NVS_TRY(nvs_set_u8(nvs_handle, "net_mode", s_config.net_mode));
+    APP_NVS_TRY(nvs_set_u8(nvs_handle, "mqtt_tls", s_config.mqtt_use_tls));
+    APP_NVS_TRY(nvs_set_u8(nvs_handle, "uart_par", s_config.uart_parity_mode));
+    APP_NVS_TRY(nvs_set_u8(nvs_handle, "uart_data", s_config.uart_data_bits));
+    APP_NVS_TRY(nvs_set_u8(nvs_handle, "uart_stop", s_config.uart_stop_bits));
+    APP_NVS_TRY(nvs_set_u16(nvs_handle, "mqtt_port", s_config.mqtt_port));
+    APP_NVS_TRY(nvs_set_u32(nvs_handle, "uart_baud", s_config.uart_baudrate));
+    APP_NVS_TRY(app_nvs_set_str(nvs_handle, "ap_ssid", s_config.ap_ssid));
+    APP_NVS_TRY(app_nvs_set_str(nvs_handle, "ap_pass", s_config.ap_password));
+    APP_NVS_TRY(app_nvs_set_str(nvs_handle, "sta_ssid", s_config.sta_ssid));
+    APP_NVS_TRY(app_nvs_set_str(nvs_handle, "sta_pass", s_config.sta_password));
+    APP_NVS_TRY(app_nvs_set_str(nvs_handle, "bt_name", s_config.bt_device_name));
+    APP_NVS_TRY(app_nvs_set_str(nvs_handle, "mqtt_backend", s_config.mqtt_backend));
+    APP_NVS_TRY(app_nvs_set_str(nvs_handle, "mqtt_host", s_config.mqtt_host));
+    APP_NVS_TRY(app_nvs_set_str(nvs_handle, "mqtt_token", s_config.mqtt_token));
+#undef APP_NVS_TRY
+    return ESP_OK;
+}
+
+static void app_load_config_from_nvs(nvs_handle_t nvs_handle)
+{
+    uint8_t u8_value;
+    uint16_t u16_value;
+    uint32_t u32_value;
+
+#define APP_NVS_GET_U8(key, field) do { if (nvs_get_u8(nvs_handle, (key), &u8_value) == ESP_OK) { s_config.field = u8_value; } } while (0)
+#define APP_NVS_GET_U16(key, field) do { if (nvs_get_u16(nvs_handle, (key), &u16_value) == ESP_OK) { s_config.field = u16_value; } } while (0)
+#define APP_NVS_GET_U32(key, field) do { if (nvs_get_u32(nvs_handle, (key), &u32_value) == ESP_OK) { s_config.field = u32_value; } } while (0)
+    APP_NVS_GET_U8("relay_ah", relay_active_high);
+    APP_NVS_GET_U8("led_ah", led_active_high);
+    APP_NVS_GET_U8("input_al", input_active_low);
+    APP_NVS_GET_U8("relay_on", relay_on);
+    APP_NVS_GET_U8("led_on", led_on);
+    APP_NVS_GET_U8("bt_mode", bt_mode);
+    APP_NVS_GET_U8("net_mode", net_mode);
+    APP_NVS_GET_U8("mqtt_tls", mqtt_use_tls);
+    APP_NVS_GET_U8("uart_par", uart_parity_mode);
+    APP_NVS_GET_U8("uart_data", uart_data_bits);
+    APP_NVS_GET_U8("uart_stop", uart_stop_bits);
+    APP_NVS_GET_U16("mqtt_port", mqtt_port);
+    APP_NVS_GET_U32("uart_baud", uart_baudrate);
+#undef APP_NVS_GET_U8
+#undef APP_NVS_GET_U16
+#undef APP_NVS_GET_U32
+    app_nvs_get_str(nvs_handle, "ap_ssid", s_config.ap_ssid, sizeof(s_config.ap_ssid));
+    app_nvs_get_str(nvs_handle, "ap_pass", s_config.ap_password, sizeof(s_config.ap_password));
+    app_nvs_get_str(nvs_handle, "sta_ssid", s_config.sta_ssid, sizeof(s_config.sta_ssid));
+    app_nvs_get_str(nvs_handle, "sta_pass", s_config.sta_password, sizeof(s_config.sta_password));
+    app_nvs_get_str(nvs_handle, "bt_name", s_config.bt_device_name, sizeof(s_config.bt_device_name));
+    app_nvs_get_str(nvs_handle, "mqtt_backend", s_config.mqtt_backend, sizeof(s_config.mqtt_backend));
+    app_nvs_get_str(nvs_handle, "mqtt_host", s_config.mqtt_host, sizeof(s_config.mqtt_host));
+    app_nvs_get_str(nvs_handle, "mqtt_token", s_config.mqtt_token, sizeof(s_config.mqtt_token));
+    app_sanitize_gpio_config();
+}
+
 static esp_err_t app_save_config(void)
 {
     nvs_handle_t nvs_handle;
@@ -780,7 +867,7 @@ static esp_err_t app_save_config(void)
         return err;
     }
 
-    err = nvs_set_blob(nvs_handle, APP_CONFIG_KEY, &s_config, sizeof(s_config));
+    err = app_save_config_to_nvs(nvs_handle);
     if (err == ESP_OK) {
         err = nvs_commit(nvs_handle);
     }
@@ -873,6 +960,8 @@ static void app_load_config(void)
 {
     nvs_handle_t nvs_handle;
     size_t size = 0;
+    uint16_t stored_version = 0;
+    esp_err_t err;
 
     app_set_defaults();
 
@@ -881,71 +970,73 @@ static void app_load_config(void)
         return;
     }
 
-    if (nvs_get_blob(nvs_handle, APP_CONFIG_KEY, NULL, &size) != ESP_OK) {
-        ESP_LOGI(TAG, "No compatible saved config found, storing defaults");
-        app_set_defaults();
-        nvs_set_blob(nvs_handle, APP_CONFIG_KEY, &s_config, sizeof(s_config));
-        nvs_commit(nvs_handle);
+    if (nvs_get_u16(nvs_handle, APP_CONFIG_VERSION_KEY, &stored_version) == ESP_OK &&
+        stored_version == APP_CONFIG_VERSION) {
+        app_load_config_from_nvs(nvs_handle);
         nvs_close(nvs_handle);
         return;
     }
 
-    if (size == sizeof(s_config)) {
+    err = nvs_get_blob(nvs_handle, APP_CONFIG_KEY, NULL, &size);
+    if (err == ESP_OK && size == sizeof(s_config)) {
         size_t current_size = sizeof(s_config);
         if (nvs_get_blob(nvs_handle, APP_CONFIG_KEY, &s_config, &current_size) == ESP_OK &&
             s_config.magic == APP_CONFIG_MAGIC &&
             s_config.version == APP_CONFIG_VERSION) {
+            ESP_LOGI(TAG, "Migrating saved config blob v6 to key-value NVS");
             app_sanitize_gpio_config();
+            app_save_config_to_nvs(nvs_handle);
+            nvs_commit(nvs_handle);
             nvs_close(nvs_handle);
             return;
         }
-    } else if (size == sizeof(app_config_v5_t)) {
+    } else if (err == ESP_OK && size == sizeof(app_config_v5_t)) {
         app_config_v5_t legacy = {0};
         size_t legacy_size = sizeof(legacy);
 
         if (nvs_get_blob(nvs_handle, APP_CONFIG_KEY, &legacy, &legacy_size) == ESP_OK &&
             legacy.magic == APP_CONFIG_MAGIC &&
             legacy.version == 5) {
-            ESP_LOGI(TAG, "Migrating saved config from v5 to v6");
+            ESP_LOGI(TAG, "Migrating saved config from v5 blob to key-value NVS");
             app_migrate_config_v5(&legacy);
-            nvs_set_blob(nvs_handle, APP_CONFIG_KEY, &s_config, sizeof(s_config));
+            app_save_config_to_nvs(nvs_handle);
             nvs_commit(nvs_handle);
             nvs_close(nvs_handle);
             return;
         }
-    } else if (size == sizeof(app_config_v4_t)) {
+    } else if (err == ESP_OK && size == sizeof(app_config_v4_t)) {
         app_config_v4_t legacy = {0};
         size_t legacy_size = sizeof(legacy);
 
         if (nvs_get_blob(nvs_handle, APP_CONFIG_KEY, &legacy, &legacy_size) == ESP_OK &&
             legacy.magic == APP_CONFIG_MAGIC &&
             legacy.version == 4) {
-            ESP_LOGI(TAG, "Migrating saved config from v4 to v6");
+            ESP_LOGI(TAG, "Migrating saved config from v4 blob to key-value NVS");
             app_migrate_config_v4(&legacy);
-            nvs_set_blob(nvs_handle, APP_CONFIG_KEY, &s_config, sizeof(s_config));
+            app_save_config_to_nvs(nvs_handle);
             nvs_commit(nvs_handle);
             nvs_close(nvs_handle);
             return;
         }
-    } else if (size == sizeof(app_config_v3_t)) {
+    } else if (err == ESP_OK && size == sizeof(app_config_v3_t)) {
         app_config_v3_t legacy = {0};
         size_t legacy_size = sizeof(legacy);
 
         if (nvs_get_blob(nvs_handle, APP_CONFIG_KEY, &legacy, &legacy_size) == ESP_OK &&
             legacy.magic == APP_CONFIG_MAGIC &&
             legacy.version == 3) {
-            ESP_LOGI(TAG, "Migrating saved config from v3 to v6");
+            ESP_LOGI(TAG, "Migrating saved config from v3 blob to key-value NVS");
             app_migrate_config_v3(&legacy);
-            nvs_set_blob(nvs_handle, APP_CONFIG_KEY, &s_config, sizeof(s_config));
+            app_save_config_to_nvs(nvs_handle);
             nvs_commit(nvs_handle);
             nvs_close(nvs_handle);
             return;
         }
     }
 
-    ESP_LOGI(TAG, "No compatible saved config found, storing defaults");
+    ESP_LOGI(TAG, "No compatible saved config found, storing defaults as key-value NVS");
     app_set_defaults();
-    nvs_set_blob(nvs_handle, APP_CONFIG_KEY, &s_config, sizeof(s_config));
+    app_save_config_to_nvs(nvs_handle);
     nvs_commit(nvs_handle);
     nvs_close(nvs_handle);
 }
@@ -1384,73 +1475,6 @@ static esp_err_t http_require_auth(httpd_req_t *req)
         } \
     } while (0)
 
-
-static cJSON *json_parse_body(const char *json)
-{
-    if (json == NULL) {
-        return NULL;
-    }
-    return cJSON_Parse(json);
-}
-
-static bool json_find_string(const char *json, const char *key, char *out, size_t out_size)
-{
-    bool found = false;
-    cJSON *root = json_parse_body(json);
-    cJSON *item = root != NULL ? cJSON_GetObjectItemCaseSensitive(root, key) : NULL;
-
-    if (out_size > 0) {
-        out[0] = '\0';
-    }
-    if (cJSON_IsString(item) && item->valuestring != NULL) {
-        app_copy_string(out, out_size, item->valuestring);
-        found = true;
-    }
-    cJSON_Delete(root);
-    return found;
-}
-
-static bool json_find_bool(const char *json, const char *key, bool *value)
-{
-    bool found = false;
-    cJSON *root = json_parse_body(json);
-    cJSON *item = root != NULL ? cJSON_GetObjectItemCaseSensitive(root, key) : NULL;
-
-    if (cJSON_IsBool(item)) {
-        *value = cJSON_IsTrue(item);
-        found = true;
-    }
-    cJSON_Delete(root);
-    return found;
-}
-
-static bool json_find_u16(const char *json, const char *key, uint16_t *value)
-{
-    bool found = false;
-    cJSON *root = json_parse_body(json);
-    cJSON *item = root != NULL ? cJSON_GetObjectItemCaseSensitive(root, key) : NULL;
-
-    if (cJSON_IsNumber(item) && item->valuedouble >= 0 && item->valuedouble <= UINT16_MAX) {
-        *value = (uint16_t)item->valuedouble;
-        found = true;
-    }
-    cJSON_Delete(root);
-    return found;
-}
-
-static bool json_find_u32(const char *json, const char *key, uint32_t *value)
-{
-    bool found = false;
-    cJSON *root = json_parse_body(json);
-    cJSON *item = root != NULL ? cJSON_GetObjectItemCaseSensitive(root, key) : NULL;
-
-    if (cJSON_IsNumber(item) && item->valuedouble >= 0 && item->valuedouble <= UINT32_MAX) {
-        *value = (uint32_t)item->valuedouble;
-        found = true;
-    }
-    cJSON_Delete(root);
-    return found;
-}
 
 static esp_err_t http_serve_index(httpd_req_t *req)
 {
@@ -3064,7 +3088,7 @@ static esp_err_t auth_login_handler(httpd_req_t *req)
     if (http_read_body(req, s_web.scratch, sizeof(s_web.scratch)) != ESP_OK) {
         return ESP_FAIL;
     }
-    if (!json_find_string(s_web.scratch, "password", password, sizeof(password)) ||
+    if (!app_json_find_string(s_web.scratch, "password", password, sizeof(password)) ||
         strcmp(password, APP_AUTH_PASSWORD) != 0) {
         return http_send_json_text(req, "401 Unauthorized",
                                    "{\"status\":\"error\",\"message\":\"invalid_password\"}");
@@ -3223,23 +3247,23 @@ static esp_err_t network_put_handler(httpd_req_t *req)
         return ESP_FAIL;
     }
 
-    if (json_find_string(s_web.scratch, "ap_ssid", value, sizeof(s_config.ap_ssid)) && strlen(value) > 0) {
+    if (app_json_find_string(s_web.scratch, "ap_ssid", value, sizeof(s_config.ap_ssid)) && strlen(value) > 0) {
         app_copy_string(s_config.ap_ssid, sizeof(s_config.ap_ssid), value);
     }
-    if (json_find_string(s_web.scratch, "mode", value, sizeof(value))) {
+    if (app_json_find_string(s_web.scratch, "mode", value, sizeof(value))) {
         s_config.net_mode = app_network_mode_from_string(value);
     }
-    if (json_find_string(s_web.scratch, "ap_password", value, sizeof(s_config.ap_password))) {
+    if (app_json_find_string(s_web.scratch, "ap_password", value, sizeof(s_config.ap_password))) {
         if (strlen(value) > 0 && strlen(value) < 8) {
             return http_send_json_text(req, "400 Bad Request",
                                        "{\"status\":\"error\",\"message\":\"password_too_short\"}");
         }
         app_copy_string(s_config.ap_password, sizeof(s_config.ap_password), value);
     }
-    if (json_find_string(s_web.scratch, "sta_ssid", value, sizeof(s_config.sta_ssid))) {
+    if (app_json_find_string(s_web.scratch, "sta_ssid", value, sizeof(s_config.sta_ssid))) {
         app_copy_string(s_config.sta_ssid, sizeof(s_config.sta_ssid), value);
     }
-    if (json_find_string(s_web.scratch, "sta_password", value, sizeof(s_config.sta_password))) {
+    if (app_json_find_string(s_web.scratch, "sta_password", value, sizeof(s_config.sta_password))) {
         if (strlen(value) > 0 && strlen(value) < 8) {
             return http_send_json_text(req, "400 Bad Request",
                                        "{\"status\":\"error\",\"message\":\"sta_password_too_short\"}");
@@ -3364,11 +3388,11 @@ static esp_err_t gpio_put_handler(httpd_req_t *req)
         return ESP_FAIL;
     }
 
-    if (json_find_bool(s_web.scratch, "relay_on", &value)) {
+    if (app_json_find_bool(s_web.scratch, "relay_on", &value)) {
         s_config.relay_on = value;
         app_apply_output(app_relay_gpio(), s_config.relay_active_high, s_config.relay_on);
     }
-    if (json_find_bool(s_web.scratch, "led_on", &value)) {
+    if (app_json_find_bool(s_web.scratch, "led_on", &value)) {
         s_config.led_on = value;
         app_apply_output(app_led_gpio(), s_config.led_active_high, s_config.led_on);
     }
@@ -3404,10 +3428,10 @@ static esp_err_t bluetooth_put_handler(httpd_req_t *req)
         return ESP_FAIL;
     }
 
-    if (json_find_string(s_web.scratch, "mode", value, sizeof(value))) {
+    if (app_json_find_string(s_web.scratch, "mode", value, sizeof(value))) {
         s_config.bt_mode = app_bt_mode_from_string(value);
     }
-    if (json_find_string(s_web.scratch, "device_name", value, sizeof(s_config.bt_device_name)) &&
+    if (app_json_find_string(s_web.scratch, "device_name", value, sizeof(s_config.bt_device_name)) &&
         strlen(value) > 0) {
         app_copy_string(s_config.bt_device_name, sizeof(s_config.bt_device_name), value);
     }
@@ -3450,19 +3474,19 @@ static esp_err_t mqtt_put_handler(httpd_req_t *req)
         return ESP_FAIL;
     }
 
-    if (json_find_string(s_web.scratch, "backend", value, sizeof(s_config.mqtt_backend)) && strlen(value) > 0) {
+    if (app_json_find_string(s_web.scratch, "backend", value, sizeof(s_config.mqtt_backend)) && strlen(value) > 0) {
         app_copy_string(s_config.mqtt_backend, sizeof(s_config.mqtt_backend), value);
     }
-    if (json_find_string(s_web.scratch, "host", value, sizeof(s_config.mqtt_host)) && strlen(value) > 0) {
+    if (app_json_find_string(s_web.scratch, "host", value, sizeof(s_config.mqtt_host)) && strlen(value) > 0) {
         app_copy_string(s_config.mqtt_host, sizeof(s_config.mqtt_host), value);
     }
-    if (json_find_string(s_web.scratch, "token", value, sizeof(s_config.mqtt_token))) {
+    if (app_json_find_string(s_web.scratch, "token", value, sizeof(s_config.mqtt_token))) {
         app_copy_string(s_config.mqtt_token, sizeof(s_config.mqtt_token), value);
     }
-    if (json_find_u16(s_web.scratch, "port", &port) && port > 0) {
+    if (app_json_find_u16(s_web.scratch, "port", &port) && port > 0) {
         s_config.mqtt_port = port;
     }
-    if (json_find_bool(s_web.scratch, "use_tls", &bool_value)) {
+    if (app_json_find_bool(s_web.scratch, "use_tls", &bool_value)) {
         s_config.mqtt_use_tls = bool_value;
     }
 
@@ -3496,20 +3520,20 @@ static esp_err_t uart_put_handler(httpd_req_t *req)
         return ESP_FAIL;
     }
 
-    if (json_find_u32(s_web.scratch, "baudrate", &baudrate) && baudrate > 0) {
+    if (app_json_find_u32(s_web.scratch, "baudrate", &baudrate) && baudrate > 0) {
         s_config.uart_baudrate = baudrate;
     }
-    if (json_find_string(s_web.scratch, "parity", value, sizeof(value))) {
+    if (app_json_find_string(s_web.scratch, "parity", value, sizeof(value))) {
         s_config.uart_parity_mode = app_uart_parity_from_string(value);
     }
-    if (json_find_u16(s_web.scratch, "data_bits", &short_value)) {
+    if (app_json_find_u16(s_web.scratch, "data_bits", &short_value)) {
         if (!app_uart_data_bits_valid((uint8_t)short_value)) {
             return http_send_json_text(req, "400 Bad Request",
                                        "{\"status\":\"error\",\"message\":\"invalid_uart_data_bits\"}");
         }
         s_config.uart_data_bits = (uint8_t)short_value;
     }
-    if (json_find_u16(s_web.scratch, "stop_bits", &short_value)) {
+    if (app_json_find_u16(s_web.scratch, "stop_bits", &short_value)) {
         if (!app_uart_stop_bits_valid((uint8_t)short_value)) {
             return http_send_json_text(req, "400 Bad Request",
                                        "{\"status\":\"error\",\"message\":\"invalid_uart_stop_bits\"}");
@@ -3633,7 +3657,7 @@ static esp_err_t uart_probe_manual_detect_handler(httpd_req_t *req)
         if (http_read_body(req, s_web.scratch, sizeof(s_web.scratch)) != ESP_OK) {
             return ESP_FAIL;
         }
-        json_find_string(s_web.scratch, "action", action, sizeof(action));
+        app_json_find_string(s_web.scratch, "action", action, sizeof(action));
     }
 
     start_session = strcmp(action, "start") == 0 || !s_uart.manual_session_active;
@@ -3896,11 +3920,11 @@ static esp_err_t uart_send_handler(httpd_req_t *req)
         return ESP_FAIL;
     }
 
-    if (!json_find_string(s_web.scratch, "data", data, sizeof(data))) {
+    if (!app_json_find_string(s_web.scratch, "data", data, sizeof(data))) {
         return http_send_json_text(req, "400 Bad Request",
                                    "{\"status\":\"error\",\"message\":\"uart_data_required\"}");
     }
-    json_find_string(s_web.scratch, "encoding", encoding, sizeof(encoding));
+    app_json_find_string(s_web.scratch, "encoding", encoding, sizeof(encoding));
 
     if (strcmp(encoding, "hex") == 0) {
         if (!app_uart_parse_hex_bytes(data, tx_bytes, sizeof(tx_bytes), &payload_len) || payload_len == 0) {

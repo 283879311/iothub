@@ -1,5 +1,5 @@
 idf_component_register(
-    SRCS "app_main.c"
+    SRCS "app_main.c" "app_json.c"
     INCLUDE_DIRS "."
     REQUIRES
         app_update
