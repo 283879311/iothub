@@ -1,0 +1,19 @@
+# ESP-IDF 构建产物（由 idf.py build 重新生成）
+build/
+
+# 组件管理器拉取的依赖（由 idf.py 根据 idf_component.yml / dependencies.lock 重新生成）
+managed_components/
+
+# clangd 索引缓存
+.cache/
+
+# 本地工具目录
+.vscode/
+.dbg/
+
+# Python 缓存
+__pycache__/
+*.pyc
+
+# 本地 sdkconfig 备份
+sdkconfig.old

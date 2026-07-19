@@ -1,2 +1,0 @@
-source /home/tc/workspace/iothub/build/bootloader/gdbinit/symbols
-source /home/tc/workspace/iothub/build/bootloader/gdbinit/connect
