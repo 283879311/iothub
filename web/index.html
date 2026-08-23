@@ -3,14 +3,15 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>iothub 配置页</title>
+  <title>iothub 串口发送页</title>
   <style>
     :root {
       color-scheme: light dark;
       --bg: #0f172a;
-      --panel: #111827;
+      --panel: rgba(17, 24, 39, 0.92);
       --panel-border: #334155;
       --accent: #38bdf8;
+      --accent-text: #062033;
       --text: #e5e7eb;
       --muted: #94a3b8;
       --ok: #22c55e;
@@ -25,1610 +26,1181 @@
       color: var(--text);
     }
     main {
-      max-width: 1100px;
+      max-width: 960px;
       margin: 0 auto;
-      padding: 24px 16px 48px;
-    }
-    h1, h2 { margin: 0 0 12px; }
-    p { color: var(--muted); }
-    .grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-      gap: 16px;
+      padding: 20px 16px 40px;
     }
     .card {
-      background: rgba(17, 24, 39, 0.92);
+      background: var(--panel);
       border: 1px solid var(--panel-border);
-      border-radius: 16px;
-      padding: 16px;
-      box-shadow: 0 12px 30px rgba(0, 0, 0, 0.2);
+      border-radius: 18px;
+      padding: 18px;
+      box-shadow: 0 12px 30px rgba(0, 0, 0, 0.22);
     }
-    .row {
-      display: flex;
-      justify-content: space-between;
-      gap: 12px;
-      margin: 8px 0;
-      align-items: center;
+    .stack {
+      display: grid;
+      gap: 16px;
     }
-    .row span:first-child {
-      color: var(--muted);
+    .grid {
+      display: grid;
+      gap: 16px;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
     }
-    .row-main {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      flex: 1;
-      min-width: 0;
-    }
-    .row-main > span {
-      min-width: 88px;
-      color: var(--muted);
-    }
-    .row-control {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      flex-wrap: wrap;
-      justify-content: flex-end;
-    }
-    .row-control select {
-      width: auto;
-      min-width: 110px;
+    h1, h2, h3, p {
       margin: 0;
     }
-    .row-control strong {
-      min-width: 32px;
-      text-align: right;
+    h1 {
+      font-size: 28px;
+      margin-bottom: 8px;
+    }
+    h2 {
+      font-size: 18px;
+      margin-bottom: 12px;
+    }
+    p, .hint, .meta-label {
+      color: var(--muted);
+      line-height: 1.5;
+    }
+    label {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 14px;
+      color: var(--muted);
     }
     input[type="text"],
-    input[type="password"],
-    input[type="number"],
-    textarea,
-    select {
+    input[type="number"] {
       width: 100%;
-      padding: 10px 12px;
-      margin: 6px 0 12px;
-      border-radius: 10px;
+      padding: 12px 14px;
+      border-radius: 12px;
       border: 1px solid var(--panel-border);
       background: #0b1220;
       color: var(--text);
+      font-size: 16px;
     }
-    input[type="file"] {
-      width: 100%;
-      margin: 8px 0 12px;
+    .mono {
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
     }
-    .checkbox {
+    .actions {
       display: flex;
-      align-items: center;
-      gap: 10px;
-      margin: 8px 0 12px;
-      color: var(--muted);
+      gap: 12px;
+      flex-wrap: wrap;
     }
-    button {
+    button, .link-button {
       border: 0;
-      border-radius: 10px;
-      padding: 10px 14px;
+      border-radius: 12px;
+      padding: 12px 16px;
       font-weight: 700;
       cursor: pointer;
+      text-decoration: none;
       background: var(--accent);
-      color: #062033;
+      color: var(--accent-text);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
     }
     button.secondary {
       background: #1e293b;
       color: var(--text);
       border: 1px solid var(--panel-border);
     }
-    button.probing {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
+    button.online {
+      background: #166534;
+      color: #dcfce7;
+      border: 1px solid #22c55e;
+    }
+    button.warn {
       background: #991b1b;
       color: #fee2e2;
       border: 1px solid #ef4444;
     }
-    button.probing::after {
-      content: "";
-      width: 12px;
-      height: 12px;
-      border: 2px solid rgba(254, 226, 226, 0.35);
-      border-top-color: #fee2e2;
-      border-radius: 50%;
-      animation: probe-spin 0.8s linear infinite;
+    button.vehicle-start {
+      background: #f59e0b;
+      color: #3b2300;
+      border: 1px solid #fbbf24;
     }
-    @keyframes probe-spin {
-      from { transform: rotate(0deg); }
-      to { transform: rotate(360deg); }
+    button:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
     }
-    .hint {
-      font-size: 13px;
-      color: var(--muted);
+    .preview {
+      min-height: 56px;
+      padding: 12px 14px;
+      border-radius: 12px;
+      border: 1px solid var(--panel-border);
+      background: #0b1220;
+      white-space: pre-wrap;
+      word-break: break-word;
     }
     .status {
-      margin-top: 12px;
-      padding: 10px 12px;
-      border-radius: 10px;
+      min-height: 48px;
+      padding: 12px 14px;
+      border-radius: 12px;
       background: rgba(56, 189, 248, 0.08);
-      color: var(--text);
-      min-height: 42px;
+    }
+    .field-status {
+      margin-top: 8px;
+      min-height: 0;
     }
     .status.ok { background: rgba(34, 197, 94, 0.14); }
     .status.warn { background: rgba(245, 158, 11, 0.14); }
     .status.bad { background: rgba(248, 113, 113, 0.14); }
-    .pill {
-      display: inline-block;
-      padding: 4px 10px;
-      border-radius: 999px;
-      background: rgba(34, 197, 94, 0.15);
-      color: var(--ok);
-      font-size: 12px;
-      margin-left: 8px;
-    }
-    .subgrid {
+    .meta-grid {
       display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 12px;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
     }
-    .actions {
-      display: flex;
-      gap: 12px;
-      flex-wrap: wrap;
-      margin-top: 8px;
-    }
-    .scan-list {
-      margin-top: 12px;
-      display: grid;
-      gap: 8px;
-    }
-    .scan-item {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 12px;
-      padding: 10px 12px;
-      border-radius: 10px;
+    .meta-item {
+      padding: 12px 14px;
+      border-radius: 12px;
       border: 1px solid var(--panel-border);
       background: #0b1220;
     }
-    .scan-item button {
-      padding: 8px 12px;
+    .meta-value {
+      margin-top: 6px;
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--text);
     }
-    .toolbar {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 12px;
-      flex-wrap: wrap;
+    .footer-link {
+      padding-top: 4px;
+      text-align: center;
     }
-    .lang-switch {
-      min-width: 150px;
+    .footer-link a {
+      color: var(--accent);
+      text-decoration: none;
+      font-weight: 700;
     }
-    .mono {
-      font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    .footer-link a:hover {
+      text-decoration: underline;
     }
-    .uart-console {
-      min-height: 96px;
-      resize: vertical;
-      white-space: pre-wrap;
-    }
-    .uart-send {
-      margin-bottom: 0;
-    }
-    .modal-overlay {
-      position: fixed;
-      inset: 0;
-      background: rgba(2, 6, 23, 0.72);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 16px;
-      z-index: 1000;
-    }
-    .modal-overlay[hidden] {
-      display: none;
-    }
-    .modal-card {
-      width: min(520px, 100%);
-      background: rgba(17, 24, 39, 0.98);
-      border: 1px solid var(--panel-border);
-      border-radius: 16px;
-      padding: 18px;
-      box-shadow: 0 20px 48px rgba(0, 0, 0, 0.35);
-    }
-    .modal-card h3 {
-      margin: 0 0 10px;
-    }
-    .modal-card p {
-      margin: 0 0 12px;
-      line-height: 1.5;
+    @media (max-width: 768px) {
+      main {
+        padding: 16px 12px 28px;
+      }
+      .grid,
+      .meta-grid {
+        grid-template-columns: 1fr;
+      }
+      .actions > * {
+        width: 100%;
+      }
     }
   </style>
 </head>
 <body>
-  <main>
-    <section class="card">
-      <div class="toolbar">
-        <h1><span data-i18n="page.title">iothub 设备配置页</span> <span class="pill">Phase 4</span></h1>
-        <div class="lang-switch">
-          <label for="languageSelect" data-i18n="language.label">语言</label>
-          <select id="languageSelect">
-            <option value="zh-CN" data-i18n="language.zh">中文</option>
-            <option value="en" data-i18n="language.en">English</option>
-          </select>
+  <main class="stack">
+    <section class="card stack">
+      <div class="grid">
+        <div>
+          <label for="weightValue">停稳目标重量 (kg)</label>
+          <input id="weightValue" type="text" inputmode="numeric" placeholder="例如 12000">
+          <div id="sendStatus" class="status field-status">输入值表示车辆停稳且驾驶员仍在车上时的重量。仅支持 1000-100000 之间的整数。</div>
+        </div>
+        <div>
+          <label for="vehicleSpeedKmh">车辆速度 (km/h)</label>
+          <input id="vehicleSpeedKmh" type="number" min="1" max="15" step="1" value="6">
+          <div class="hint">用于车辆上磅与驶出仿真的动态过程控制，取值范围 1-15 km/h。</div>
         </div>
       </div>
-      <p data-i18n="page.subtitle">当前阶段补齐了 AP / STA / APSTA 网络模式、Wi-Fi 扫描、STA 联网状态展示，以及 MQTT 与 STA 上网链路的联动入口。</p>
+      <div class="grid">
+        <div>
+          <label for="protocolType">重量协议</label>
+          <select id="protocolType">
+            <option value="ems">EMS</option>
+            <option value="ds10" selected>DS10</option>
+          </select>
+          <div class="hint">`EMS` 为现有文本协议；`DS10` 为 12 字节格式，包含 `0x02/0x03` 和异或校验。</div>
+        </div>
+        <div>
+          <label for="frameIntervalMs">发送/刷新节拍</label>
+          <select id="frameIntervalMs">
+            <option value="200">0.2 秒</option>
+            <option value="500">0.5 秒</option>
+            <option value="1000" selected>1 秒</option>
+          </select>
+          <div class="hint">该选项会同时影响 UART 发送频率和页面状态刷新节拍。</div>
+        </div>
+      </div>
+      <div class="grid">
+        <div>
+          <label class="checkbox">
+            <input id="allowDecimalValues" type="checkbox">
+            <span>允许小数值输出</span>
+          </label>
+          <div class="hint">未勾选时，实际跳动数值和最终稳定值都按整数发送。此规则适用于所有秤协议。</div>
+        </div>
+        <div>
+          <label for="weightStepKg">步进跳动 (kg)</label>
+          <select id="weightStepKg">
+            <option value="2">2 kg</option>
+            <option value="5" selected>5 kg</option>
+            <option value="10">10 kg</option>
+            <option value="20">20 kg</option>
+          </select>
+          <div class="hint">与小数选项并列可选；仅在未勾选小数值输出时生效。</div>
+        </div>
+      </div>
+
+      <div>
+        <label for="formattedPayload">当前预览报文</label>
+        <div id="formattedPayload" class="preview mono">-</div>
+      </div>
+      <div>
+        <label for="formattedPayloadHex">当前预览十六进制</label>
+        <div id="formattedPayloadHex" class="preview mono">-</div>
+      </div>
+
+      <div class="actions">
+        <button id="deviceOnline" class="online">设备上线</button>
+        <button id="startSend" class="vehicle-start">车辆上磅</button>
+        <button id="stopSend" class="warn" disabled>停止发送</button>
+        <button id="exitVehicle" disabled>车辆驶出</button>
+        <button id="clearInput" class="secondary">清空重填</button>
+      </div>
+
+      <div class="meta-grid">
+        <div class="meta-item">
+          <div class="meta-label">已发送次数</div>
+          <div id="sendCount" class="meta-value mono">0</div>
+        </div>
+        <div class="meta-item">
+          <div class="meta-label">剩余时间</div>
+          <div id="remainingTime" class="meta-value mono">60 s</div>
+        </div>
+        <div class="meta-item">
+          <div class="meta-label">当前间隔</div>
+          <div id="activeInterval" class="meta-value mono">1000 ms</div>
+        </div>
+        <div class="meta-item">
+          <div class="meta-label">当前阶段</div>
+          <div id="currentPhase" class="meta-value">待机</div>
+        </div>
+        <div class="meta-item">
+          <div class="meta-label">停稳目标重量</div>
+          <div id="activeTargetWeight" class="meta-value mono">-</div>
+        </div>
+        <div class="meta-item">
+          <div class="meta-label">当前发送重量</div>
+          <div id="currentSendWeight" class="meta-value mono">-</div>
+        </div>
+      </div>
+
+      <div>
+        <label for="lastSentPayload">最近一次实际发送内容</label>
+        <div id="lastSentPayload" class="preview mono">-</div>
+      </div>
     </section>
 
-    <section class="grid" style="margin-top:16px;">
-      <article class="card">
-        <h2 data-i18n="section.device">设备信息</h2>
-        <div id="deviceInfo"></div>
-      </article>
-
-      <article class="card">
-        <h2 data-i18n="section.network">网络配置</h2>
-        <label for="netMode" data-i18n="network.mode">网络模式</label>
-        <select id="netMode">
-          <option value="ap" data-i18n="mode.ap">AP</option>
-          <option value="sta" data-i18n="mode.sta">STA</option>
-          <option value="apsta" data-i18n="mode.apsta">AP + STA</option>
-        </select>
-        <div class="subgrid">
-          <div>
-            <label for="ssid" data-i18n="network.apSsid">AP 名称</label>
-            <input id="ssid" type="text" maxlength="32">
-          </div>
-          <div>
-            <label for="password" data-i18n="network.apPassword">AP 密码</label>
-            <input id="password" type="password" maxlength="64" data-i18n-placeholder="placeholder.apPassword" placeholder="留空表示开放网络">
-          </div>
-        </div>
-        <div class="subgrid">
-          <div>
-            <label for="staSsid" data-i18n="network.staSsid">STA 名称</label>
-            <input id="staSsid" type="text" maxlength="32" data-i18n-placeholder="placeholder.staSsid" placeholder="上游路由器 SSID">
-          </div>
-          <div>
-            <label for="staPassword" data-i18n="network.staPassword">STA 密码</label>
-            <input id="staPassword" type="password" maxlength="64" data-i18n-placeholder="placeholder.staPassword" placeholder="至少 8 位或留空">
-          </div>
-        </div>
-        <div class="actions">
-          <button id="saveNetwork" data-i18n="button.saveNetwork">保存网络配置</button>
-          <button id="scanWifi" class="secondary" data-i18n="button.scanWifi">扫描 Wi-Fi</button>
-        </div>
-        <div class="hint" data-i18n="hint.network">设备默认 AP 地址为 `192.168.8.1`。STA 模式下可连接上游网络，MQTT 会在 STA 获取 IP 后再尝试连出。</div>
-        <div id="networkStatus" class="status" data-i18n="status.networkLoading">等待加载网络配置...</div>
-        <div id="wifiScanList" class="scan-list"></div>
-      </article>
-
-      <article class="card">
-        <h2 data-i18n="section.gpio">GPIO控制部分</h2>
-        <div class="row">
-          <div class="row-main">
-            <span data-i18n="gpio.relay">继电器输出</span>
-            <div id="relayGpioDisplay" class="hint">GPIO-</div>
-          </div>
-          <div class="row-control">
-            <button id="toggleRelay" class="secondary" data-i18n="button.toggle">切换</button>
-          </div>
-        </div>
-        <div class="row">
-          <div class="row-main">
-            <span data-i18n="gpio.led">状态灯</span>
-            <div id="ledGpioDisplay" class="hint">GPIO-</div>
-          </div>
-          <div class="row-control">
-            <button id="toggleLed" class="secondary" data-i18n="button.toggle">切换</button>
-          </div>
-        </div>
-        <div class="row">
-          <div class="row-main">
-            <span data-i18n="gpio.input">开关量输入</span>
-            <div id="inputGpioDisplay" class="hint">GPIO-</div>
-          </div>
-          <div class="row-control">
-            <strong id="inputState">-</strong>
-          </div>
-        </div>
-        <div class="hint" data-i18n="hint.gpio">引脚已固定在固件中。如需调整，请修改源码宏定义后重新编译烧录。GPIO34/35/36/39 仅支持输入且需要外部上下拉。</div>
-        <div id="gpioInfo" class="status" data-i18n="status.gpioLoading">等待加载 GPIO 状态...</div>
-      </article>
-
-      <article class="card">
-        <h2 data-i18n="section.bluetooth">蓝牙配置</h2>
-        <label for="btMode" data-i18n="bluetooth.mode">蓝牙模式</label>
-        <select id="btMode">
-          <option value="off" data-i18n="bt.off">关闭</option>
-          <option value="ble" data-i18n="bt.ble">BLE 广播</option>
-          <option value="spp" data-i18n="bt.spp">经典蓝牙 SPP</option>
-        </select>
-        <label for="btName" data-i18n="bluetooth.name">蓝牙名称</label>
-        <input id="btName" type="text" maxlength="32">
-        <button id="saveBluetooth" data-i18n="button.saveBluetooth">保存蓝牙配置</button>
-        <div class="hint" data-i18n="hint.bluetooth">BLE 模式下设备会广播名称；SPP 模式下会以从机服务方式等待连接。</div>
-        <div id="bluetoothStatus" class="status" data-i18n="status.bluetoothLoading">等待加载蓝牙配置...</div>
-      </article>
-
-      <article class="card">
-        <h2 data-i18n="section.ota">OTA 升级</h2>
-        <label for="otaFile" data-i18n="ota.file">选择固件 `.bin` 文件</label>
-        <input id="otaFile" type="file" accept=".bin,application/octet-stream">
-        <button id="uploadOta" data-i18n="button.uploadOta">上传并升级</button>
-        <div class="hint" data-i18n="hint.ota">上传完成后设备会自动重启并切换到新的 OTA 分区。</div>
-        <div id="otaStatus" class="status" data-i18n="status.otaWaiting">等待选择固件</div>
-      </article>
-
-      <article class="card">
-        <h2 data-i18n="section.mqtt">MQTT / ThingsBoard</h2>
-        <label for="mqttBackend" data-i18n="mqtt.backend">后端类型</label>
-        <select id="mqttBackend">
-          <option value="tb_cloud" data-i18n="mqtt.tbCloud">ThingsBoard Cloud</option>
-          <option value="tb_selfhost" data-i18n="mqtt.tbSelfhost">ThingsBoard 自建</option>
-          <option value="custom" data-i18n="mqtt.custom">自定义 MQTT</option>
-        </select>
-        <div class="subgrid">
-          <div>
-            <label for="mqttHost" data-i18n="mqtt.host">主机地址</label>
-            <input id="mqttHost" type="text" maxlength="63">
-          </div>
-          <div>
-            <label for="mqttPort" data-i18n="mqtt.port">端口</label>
-            <input id="mqttPort" type="number" min="1" max="65535">
-          </div>
-        </div>
-        <label for="mqttToken" data-i18n="mqtt.token">Token / 密钥</label>
-        <input id="mqttToken" type="text" maxlength="127">
-        <label class="checkbox">
-          <input id="mqttTls" type="checkbox">
-          <span data-i18n="mqtt.tls">启用 TLS</span>
-        </label>
-        <button id="saveMqtt" data-i18n="button.saveMqtt">保存 MQTT 配置</button>
-        <div class="hint" data-i18n="hint.mqtt">当前阶段会实际发起 MQTT 连接，并周期上报基础遥测。若仍未连接，请确认网络可达和 Broker 配置正确。</div>
-        <div id="mqttStatus" class="status" data-i18n="status.mqttLoading">等待加载 MQTT 配置...</div>
-      </article>
-
-      <article class="card">
-        <h2 data-i18n="section.uart">UART 探测</h2>
-        <div class="subgrid">
-          <div>
-            <label data-i18n="uart.rx">RX GPIO</label>
-            <div id="uartRxDisplay" class="hint">GPIO-</div>
-          </div>
-          <div>
-            <label data-i18n="uart.tx">TX GPIO</label>
-            <div id="uartTxDisplay" class="hint">GPIO-</div>
-          </div>
-        </div>
-        <div class="subgrid">
-          <div>
-            <label for="uartBaud" data-i18n="uart.baudrate">波特率</label>
-            <input id="uartBaud" type="number" min="50" max="5000000" list="uartBaudList">
-            <datalist id="uartBaudList"></datalist>
-          </div>
-          <div>
-            <label for="uartDataBits" data-i18n="uart.dataBits">数据位</label>
-            <select id="uartDataBits">
-              <option value="5">5</option>
-              <option value="6">6</option>
-              <option value="7">7</option>
-              <option value="8">8</option>
-            </select>
-          </div>
-          <div>
-            <label for="uartStopBits" data-i18n="uart.stopBits">停止位</label>
-            <select id="uartStopBits">
-              <option value="1">1</option>
-              <option value="2">2</option>
-            </select>
-          </div>
-          <div>
-            <label for="uartParity" data-i18n="uart.parity">奇偶校验</label>
-            <select id="uartParity">
-              <option value="none">None</option>
-              <option value="even">Even</option>
-              <option value="odd">Odd</option>
-            </select>
-          </div>
-        </div>
-        <div class="row">
-          <button id="saveUart" data-i18n="button.saveUart">保存 UART 配置</button>
-          <button id="probeUart" class="secondary" data-i18n="button.probeUart">自动探测</button>
-        </div>
-        <div class="subgrid">
-          <div>
-            <label for="uartRxFormat" data-i18n="uart.rxFormat">接收显示</label>
-            <select id="uartRxFormat">
-              <option value="plain" data-i18n="encoding.plain">Plain</option>
-              <option value="hex" data-i18n="encoding.hex">Hex</option>
-            </select>
-          </div>
-          <div>
-            <label for="uartTxFormat" data-i18n="uart.txFormat">发送编码</label>
-            <select id="uartTxFormat">
-              <option value="plain" data-i18n="encoding.plain">Plain</option>
-              <option value="hex" data-i18n="encoding.hex">Hex</option>
-            </select>
-          </div>
-        </div>
-        <label for="uartRxConsole" data-i18n="uart.rxWindow">接收数据</label>
-        <textarea id="uartRxConsole" class="mono uart-console" rows="4" readonly></textarea>
-        <label for="uartTxData" data-i18n="uart.txWindow">发送数据</label>
-        <div class="actions">
-          <input id="uartTxData" class="mono uart-send" type="text" maxlength="255" data-i18n-placeholder="placeholder.uartTx" placeholder="输入待发送数据，hex 模式可用空格分隔">
-          <button id="sendUart" class="secondary" data-i18n="button.sendUart">发送</button>
-        </div>
-        <div class="hint" data-i18n="hint.uart">RX/TX 引脚已固定在固件中。自动检测阶段先使用底层自动估算波特率并按 8N1 预览；如果不对，再进入常用波特率与校验方式的手动轮询。</div>
-        <div id="uartStatus" class="status" data-i18n="status.uartLoading">等待加载 UART 配置...</div>
-        <label for="uartProbeDetails" data-i18n="uart.probeDetails">探测明细</label>
-        <textarea id="uartProbeDetails" class="mono uart-console" rows="6" readonly></textarea>
-      </article>
+    <section class="footer-link">
+      <a href="/config">前往 config.html 配置串口参数</a>
     </section>
   </main>
-  <div id="uartProbeModal" class="modal-overlay" hidden>
-    <div class="modal-card">
-      <h3 data-i18n="dialog.probeTitle">串口检测确认</h3>
-      <p id="uartProbeModalMessage"></p>
-      <div class="actions">
-        <button id="uartProbeConfirm" data-i18n="button.probeConfirm">正确，保存</button>
-        <button id="uartProbeReject" class="secondary" data-i18n="button.probeRejectAuto">不对，手动轮询</button>
-        <button id="uartProbeStop" class="secondary" data-i18n="button.probeStop">停止检测</button>
-      </div>
-    </div>
-  </div>
 
   <script>
+    const DEFAULT_FRAME_INTERVAL_MS = 1000;
+    const STORAGE_KEY_PROTOCOL = "iothub.index.protocol";
+    const STORAGE_KEY_ALLOW_DECIMALS = "iothub.index.allowDecimals";
+    const STORAGE_KEY_WEIGHT_STEP = "iothub.index.weightStep";
+    const STORAGE_KEY_FRAME_INTERVAL = "iothub.index.frameInterval";
+    const STORAGE_KEY_RUNTIME = "iothub.index.runtime";
+    const TARGET_WEIGHT_MIN = 1000;
+    const TARGET_WEIGHT_MAX = 100000;
+    const RUNTIME_POLL_INTERVAL_MS = 1000;
+    const RUNTIME_ACTIVE_WINDOW_MS = 5000;
+    const DEFAULT_WEIGHT_STATUS = "输入值表示车辆停稳且驾驶员仍在车上时的重量。仅支持 1000-100000 之间的整数。";
+
     const state = {
-      uartCommonBaudrates: [1200, 2400, 3600, 4800, 7200, 9600, 14400, 19200, 28800, 38400, 57600, 74880, 115200, 230400, 460800, 921600],
-      relayOn: false,
-      ledOn: false,
-      gpioConfig: null,
+      countdownTimer: null,
       statusPollTimer: null,
       statusPollBusy: false,
-      uartProbeBusy: false,
-      uartConfig: null,
-      uartConsolePlain: "",
-      uartConsoleHex: "",
-      uartRxFormat: "plain",
-      uartTxFormat: "plain",
-      uartPollTimer: null,
-      uartPollBusy: false,
-      uartProbeMode: "idle",
-      uartProbePending: false,
-      uartProbeManualHasMore: false
+      sendRunning: false,
+      sendBusy: false,
+      sendCount: 0,
+      loopEndsAt: 0,
+      remainingInfinite: false,
+      activeIntervalMs: DEFAULT_FRAME_INTERVAL_MS,
+      phaseKey: "idle",
+      onlineArmed: false,
+      onlineKeepalive: false,
+      deviceKeepalive: false,
+      backendSimActive: false,
+      exitWaiting: false,
+      runtimeRecentlyActive: false
     };
 
-    const translations = {
-      "zh-CN": {
-        "page.title": "iothub 设备配置页",
-        "page.subtitle": "当前阶段补齐了 AP / STA / APSTA 网络模式、Wi-Fi 扫描、STA 联网状态展示，以及 MQTT 与 STA 上网链路的联动入口。",
-        "language.label": "语言",
-        "language.zh": "中文",
-        "language.en": "English",
-        "section.device": "设备信息",
-        "section.network": "网络配置",
-        "section.gpio": "GPIO 控制",
-        "section.bluetooth": "蓝牙配置",
-        "section.ota": "OTA 升级",
-        "section.mqtt": "MQTT / ThingsBoard",
-        "section.uart": "UART 探测",
-        "network.mode": "网络模式",
-        "network.apSsid": "AP 名称",
-        "network.apPassword": "AP 密码",
-        "network.staSsid": "STA 名称",
-        "network.staPassword": "STA 密码",
-        "placeholder.apPassword": "留空表示开放网络",
-        "placeholder.staSsid": "上游路由器 SSID",
-        "placeholder.staPassword": "至少 8 位或留空",
-        "placeholder.uartTx": "输入待发送数据，hex 模式可用空格分隔",
-        "mode.ap": "AP",
-        "mode.sta": "STA",
-        "mode.apsta": "AP + STA",
-        "button.saveNetwork": "保存网络配置",
-        "button.scanWifi": "扫描 Wi-Fi",
-        "button.toggle": "切换",
-        "button.saveGpio": "保存 GPIO 配置",
-        "button.saveBluetooth": "保存蓝牙配置",
-        "button.uploadOta": "上传并升级",
-        "button.saveMqtt": "保存 MQTT 配置",
-        "button.saveUart": "保存 UART 配置",
-        "button.probeUart": "自动探测",
-        "button.probeUartBusyAuto": "自动检测中...",
-        "button.probeUartBusyManual": "手动轮询中...",
-        "button.probeConfirm": "正确，保存",
-        "button.probeRejectAuto": "不对，手动轮询",
-        "button.probeRejectNext": "不对，下一个参数",
-        "button.probeStop": "停止检测",
-        "dialog.probeTitle": "串口检测确认",
-        "button.sendUart": "发送",
-        "button.use": "使用",
-        "hint.network": "设备默认 AP 地址为 `192.168.8.1`。STA 模式下可连接上游网络，MQTT 会在 STA 获取 IP 后再尝试连出。",
-        "hint.gpio": "引脚已固定在固件中。如需调整，请修改源码宏定义后重新编译烧录。GPIO34/35/36/39 仅支持输入且需要外部上下拉。",
-        "hint.bluetooth": "BLE 模式下设备会广播名称；SPP 模式下会以从机服务方式等待连接。",
-        "hint.ota": "上传完成后设备会自动重启并切换到新的 OTA 分区。",
-        "hint.mqtt": "当前阶段会实际发起 MQTT 连接，并周期上报基础遥测。若仍未连接，请确认网络可达和 Broker 配置正确。",
-        "hint.uart": "RX/TX 引脚已固定在固件中。自动检测阶段先使用乐鑫底层自动估算波特率并按 8N1 预览；如果不对，再进入常用波特率与校验方式的手动轮询。",
-        "gpio.relay": "继电器输出",
-        "gpio.led": "状态灯",
-        "gpio.input": "开关量输入",
-        "gpio.relayPin": "继电器引脚",
-        "gpio.ledPin": "状态灯引脚",
-        "gpio.inputPin": "输入引脚",
-        "bluetooth.mode": "蓝牙模式",
-        "bluetooth.name": "蓝牙名称",
-        "ota.file": "选择固件 `.bin` 文件",
-        "mqtt.backend": "后端类型",
-        "mqtt.tbCloud": "ThingsBoard Cloud",
-        "mqtt.tbSelfhost": "ThingsBoard 自建",
-        "mqtt.custom": "自定义 MQTT",
-        "mqtt.host": "主机地址",
-        "mqtt.port": "端口",
-        "mqtt.token": "Token / 密钥",
-        "mqtt.tls": "启用 TLS",
-        "uart.rx": "RX GPIO",
-        "uart.tx": "TX GPIO",
-        "uart.baudrate": "波特率",
-        "uart.dataBits": "数据位",
-        "uart.stopBits": "停止位",
-        "uart.parity": "奇偶校验",
-        "uart.rxFormat": "接收显示",
-        "uart.txFormat": "发送编码",
-        "uart.rxWindow": "接收数据",
-        "uart.txWindow": "发送数据",
-        "encoding.plain": "文本",
-        "encoding.hex": "16进制",
-        "status.networkLoading": "等待加载网络配置...",
-        "status.gpioLoading": "等待加载 GPIO 状态...",
-        "status.bluetoothLoading": "等待加载蓝牙配置...",
-        "status.otaWaiting": "等待选择固件",
-        "status.mqttLoading": "等待加载 MQTT 配置...",
-        "status.uartLoading": "等待加载 UART 配置...",
-        "scan.emptyTitle": "尚无扫描结果",
-        "scan.emptyHint": "点击“扫描 Wi-Fi”获取附近热点",
-        "scan.hidden": "(隐藏 SSID)",
-        "device.project": "项目",
-        "device.target": "目标",
-        "device.idf_version": "IDF 版本",
-        "device.app_version": "应用版本",
-        "device.mac": "MAC",
-        "device.free_heap": "空闲堆",
-        "device.app_partition": "应用分区",
-        "device.app_usage": "固件占用",
-        "device.storage_usage": "网页占用",
-        "device.net_mode": "网络模式",
-        "device.ap_ip": "AP 地址",
-        "device.sta_ip": "STA 地址",
-        "device.bt_mode": "蓝牙运行模式",
-        "device.mqtt": "MQTT 状态",
-        "state.connected": "已连接",
-        "state.disconnected": "未连接",
-        "state.valid": "有效",
-        "state.invalid": "无输入",
-        "state.on": "ON",
-        "state.off": "OFF",
-        "state.yes": "是",
-        "state.no": "否",
-        "usage.free": "剩余",
-        "network.summary": "模式={mode}，AP={ap}，STA={sta}，联网={staIp}，最近断开={lastDisconnect}",
-        "network.noIp": "未获取 IP",
-        "network.none": "-",
-        "network.savedNeedsRestart": "网络配置已保存。新的访问地址：{address}。是否现在重启网络以应用配置？",
-        "network.savedStaOnly": "网络配置已保存。当前为纯 STA 模式，重启后请到路由器 DHCP 列表查看新 IP。是否现在重启网络以应用配置？",
-        "network.restartStarted": "网络正在重启。若 AP 可用，请使用 http://{address} 重新连接。",
-        "network.scanning": "正在扫描附近 Wi-Fi 热点...",
-        "network.scanDone": "扫描完成，发现 {count} 个热点。可点击“使用”填入 STA SSID。",
-        "bluetooth.summary": "配置模式={mode}，当前运行模式={runtimeMode}，名称={name}",
-        "bluetooth.summaryWithError": "配置模式={mode}，当前运行模式={runtimeMode}，名称={name}，错误={error}",
-        "bluetooth.saving": "蓝牙配置已保存，正在重启蓝牙并刷新状态...",
-        "mqtt.summary": "后端={backend}，主机={host}，端口={port}，连接状态={connected}，错误={error}",
-        "uart.summary": "当前={frame} @ {baudrate}bps，raw={rawBaudrate}bps，归一化={detectedBaudrate}bps，来源={probeSource}，边沿数={edgeCount}，可靠={reliable}，协议提示={protocolHint}，样本={sample}",
-        "uart.probeDone": "探测完成：{frame} @ {detectedBaudrate}bps，raw={rawBaudrate}bps，来源={probeSource}，边沿数={edgeCount}，可靠={reliable}，样本={sample}",
-        "uart.probeDetails": "探测明细",
-        "uart.probeAttemptsEmpty": "暂无探测明细",
-        "uart.probeConfirmSummary": "二次确认={confirmed}，确认分={confirmScore}，初选最高分={bestScore}",
-        "uart.probeAttemptLine": "#{index} {frame} @ {baudrate}bps，分数={score}，字节={sampleBytes}，ASCII={asciiRatio}% ，协议={protocolHint}，样本={sample}",
-        "uart.probeRunningAlert": "UART 正在自动检测，请等待当前检测完成。",
-        "uart.probeStartConfirm": "开始串口探测前，请确认数据线已经接好，并且上位机/设备已经开始持续发送数据。现在开始探测吗？",
-        "uart.autoReady": "自动检测结果：{frame} @ {baudrate}bps，样本={sample}。请确认是否正确。",
-        "uart.manualReady": "手动轮询 {index}/{count}：{frame} @ {baudrate}bps，样本={sample}。请确认是否正确。",
-        "uart.manualStarting": "自动检测未命中，开始按常用参数手动轮询...",
-        "uart.probeSaved": "已保存 UART 参数：{frame} @ {baudrate}bps。",
-        "uart.probeStopped": "已停止本次 UART 探测，并恢复到已保存参数。",
-        "uart.manualExhausted": "常用参数已经轮询完，请检查接线、发送内容或补充新的候选参数。",
-        "uart.source.low_high": "低高电平",
-        "uart.source.edge_avg": "双边沿均值",
-        "uart.source.pos_edge": "正沿",
-        "uart.source.neg_edge": "负沿",
-        "uart.source.none": "无",
-        "uart.sent": "已发送 {bytes} 字节，编码={encoding}",
-        "ota.uploading": "正在上传 {name} ({size} bytes)...",
-        "ota.done": "{message}，请等待设备重启",
-        "gpio.summary": "继电器 GPIO{relayGpio}={relayOn}，状态灯 GPIO{ledGpio}={ledOn}，输入 GPIO{inputGpio}",
-        "error.selectFirmware": "请先选择一个固件文件"
-      },
-      "en": {
-        "page.title": "iothub Configuration",
-        "page.subtitle": "This phase adds AP / STA / APSTA mode switching, Wi-Fi scanning, STA connection status, and MQTT startup linkage after STA gets an IP.",
-        "language.label": "Language",
-        "language.zh": "中文",
-        "language.en": "English",
-        "section.device": "Device Info",
-        "section.network": "Network",
-        "section.gpio": "GPIO Control",
-        "section.bluetooth": "Bluetooth",
-        "section.ota": "OTA Upgrade",
-        "section.mqtt": "MQTT / ThingsBoard",
-        "section.uart": "UART Probe",
-        "network.mode": "Network Mode",
-        "network.apSsid": "AP SSID",
-        "network.apPassword": "AP Password",
-        "network.staSsid": "STA SSID",
-        "network.staPassword": "STA Password",
-        "placeholder.apPassword": "Leave empty for open network",
-        "placeholder.staSsid": "Upstream router SSID",
-        "placeholder.staPassword": "At least 8 characters or empty",
-        "placeholder.uartTx": "Enter data to send; hex mode accepts space-separated bytes",
-        "mode.ap": "AP",
-        "mode.sta": "STA",
-        "mode.apsta": "AP + STA",
-        "button.saveNetwork": "Save Network",
-        "button.scanWifi": "Scan Wi-Fi",
-        "button.toggle": "Toggle",
-        "button.saveGpio": "Save GPIO",
-        "button.saveBluetooth": "Save Bluetooth",
-        "button.uploadOta": "Upload And Upgrade",
-        "button.saveMqtt": "Save MQTT",
-        "button.saveUart": "Save UART",
-        "button.probeUart": "Auto Probe",
-        "button.probeUartBusyAuto": "Auto Detecting...",
-        "button.probeUartBusyManual": "Manual Scanning...",
-        "button.probeConfirm": "Correct, Save",
-        "button.probeRejectAuto": "Incorrect, Manual Scan",
-        "button.probeRejectNext": "Incorrect, Next",
-        "button.probeStop": "Stop Probe",
-        "dialog.probeTitle": "UART Probe Confirmation",
-        "button.sendUart": "Send",
-        "button.use": "Use",
-        "hint.network": "The default AP address is `192.168.8.1`. In STA mode the device can connect upstream, and MQTT starts after STA gets an IP.",
-        "hint.gpio": "Pins are fixed in firmware. To change them, update the source macros and rebuild/reflash. GPIO34/35/36/39 are input-only and require external pull resistors.",
-        "hint.bluetooth": "In BLE mode the device advertises its name. In SPP mode it waits for incoming connections as a slave service.",
-        "hint.ota": "After upload finishes, the device reboots and switches to the new OTA partition.",
-        "hint.mqtt": "This phase starts a real MQTT connection and publishes basic telemetry periodically. If it is still disconnected, verify network reachability and broker settings.",
-        "hint.uart": "RX/TX pins are fixed in firmware. Automatic detection first uses the Espressif low-level auto baud path and previews data with 8N1. If it is still incorrect, the page switches to manual scanning over common baud/parity combinations.",
-        "gpio.relay": "Relay Output",
-        "gpio.led": "Status LED",
-        "gpio.input": "Digital Input",
-        "gpio.relayPin": "Relay Pin",
-        "gpio.ledPin": "LED Pin",
-        "gpio.inputPin": "Input Pin",
-        "bluetooth.mode": "Bluetooth Mode",
-        "bluetooth.name": "Bluetooth Name",
-        "ota.file": "Select Firmware `.bin`",
-        "mqtt.backend": "Backend Type",
-        "mqtt.tbCloud": "ThingsBoard Cloud",
-        "mqtt.tbSelfhost": "Self-hosted ThingsBoard",
-        "mqtt.custom": "Custom MQTT",
-        "mqtt.host": "Host",
-        "mqtt.port": "Port",
-        "mqtt.token": "Token / Secret",
-        "mqtt.tls": "Enable TLS",
-        "uart.rx": "RX GPIO",
-        "uart.tx": "TX GPIO",
-        "uart.baudrate": "Baud Rate",
-        "uart.dataBits": "Data Bits",
-        "uart.stopBits": "Stop Bits",
-        "uart.parity": "Parity",
-        "uart.rxFormat": "Receive View",
-        "uart.txFormat": "Send Encoding",
-        "uart.rxWindow": "Received Data",
-        "uart.txWindow": "Send Data",
-        "encoding.plain": "Plain",
-        "encoding.hex": "Hex",
-        "status.networkLoading": "Loading network configuration...",
-        "status.gpioLoading": "Loading GPIO status...",
-        "status.bluetoothLoading": "Loading Bluetooth configuration...",
-        "status.otaWaiting": "Waiting for firmware selection",
-        "status.mqttLoading": "Loading MQTT configuration...",
-        "status.uartLoading": "Loading UART configuration...",
-        "scan.emptyTitle": "No scan results yet",
-        "scan.emptyHint": "Click \"Scan Wi-Fi\" to discover nearby networks",
-        "scan.hidden": "(hidden SSID)",
-        "device.project": "Project",
-        "device.target": "Target",
-        "device.idf_version": "IDF Version",
-        "device.app_version": "App Version",
-        "device.mac": "MAC",
-        "device.free_heap": "Free Heap",
-        "device.app_partition": "App Partition",
-        "device.app_usage": "Firmware Usage",
-        "device.storage_usage": "Web Usage",
-        "device.net_mode": "Network Mode",
-        "device.ap_ip": "AP IP",
-        "device.sta_ip": "STA IP",
-        "device.bt_mode": "Bluetooth Runtime",
-        "device.mqtt": "MQTT Status",
-        "state.connected": "connected",
-        "state.disconnected": "disconnected",
-        "state.valid": "active",
-        "state.invalid": "inactive",
-        "state.on": "ON",
-        "state.off": "OFF",
-        "state.yes": "yes",
-        "state.no": "no",
-        "usage.free": "free",
-        "network.summary": "Mode={mode}, AP={ap}, STA={sta}, Online={staIp}, Last disconnect={lastDisconnect}",
-        "network.noIp": "no IP",
-        "network.none": "-",
-        "network.savedNeedsRestart": "Network settings were saved. New access address: {address}. Restart networking now to apply the changes?",
-        "network.savedStaOnly": "Network settings were saved. STA-only mode cannot predict the next IP. After restart, check your router DHCP list for the new address. Restart networking now?",
-        "network.restartStarted": "Network restart started. If AP is enabled, reconnect using http://{address}.",
-        "network.scanning": "Scanning nearby Wi-Fi networks...",
-        "network.scanDone": "Scan finished. Found {count} networks. Click \"Use\" to fill the STA SSID.",
-        "bluetooth.summary": "Configured mode={mode}, runtime mode={runtimeMode}, name={name}",
-        "bluetooth.summaryWithError": "Configured mode={mode}, runtime mode={runtimeMode}, name={name}, error={error}",
-        "bluetooth.saving": "Bluetooth settings saved. Restarting Bluetooth and refreshing status...",
-        "mqtt.summary": "Backend={backend}, host={host}, port={port}, status={connected}, error={error}",
-        "uart.summary": "Current={frame} @ {baudrate}bps, raw={rawBaudrate}bps, normalized={detectedBaudrate}bps, source={probeSource}, edges={edgeCount}, reliable={reliable}, protocol={protocolHint}, sample={sample}",
-        "uart.probeDone": "Probe complete: {frame} @ {detectedBaudrate}bps, raw={rawBaudrate}bps, source={probeSource}, edges={edgeCount}, reliable={reliable}, sample={sample}",
-        "uart.probeDetails": "Probe Details",
-        "uart.probeAttemptsEmpty": "No probe details yet",
-        "uart.probeConfirmSummary": "Confirmed={confirmed}, confirm score={confirmScore}, best initial score={bestScore}",
-        "uart.probeAttemptLine": "#{index} {frame} @ {baudrate}bps, score={score}, bytes={sampleBytes}, ASCII={asciiRatio}%, protocol={protocolHint}, sample={sample}",
-        "uart.probeRunningAlert": "UART auto probe is already running. Please wait for it to finish.",
-        "uart.probeStartConfirm": "Before starting UART probe, confirm the wiring is connected and the upstream device has already started sending data continuously. Start probing now?",
-        "uart.autoReady": "Automatic result: {frame} @ {baudrate}bps, sample={sample}. Please confirm whether it is correct.",
-        "uart.manualReady": "Manual scan {index}/{count}: {frame} @ {baudrate}bps, sample={sample}. Please confirm whether it is correct.",
-        "uart.manualStarting": "Automatic detection was not confirmed. Starting manual scan with common parameters...",
-        "uart.probeSaved": "UART parameters saved: {frame} @ {baudrate}bps.",
-        "uart.probeStopped": "UART probe stopped and the saved parameters have been restored.",
-        "uart.manualExhausted": "The common parameter list has been exhausted. Check wiring, transmitted data, or add more candidates.",
-        "uart.source.low_high": "low+high",
-        "uart.source.edge_avg": "edge average",
-        "uart.source.pos_edge": "positive edge",
-        "uart.source.neg_edge": "negative edge",
-        "uart.source.none": "none",
-        "uart.sent": "Sent {bytes} bytes, encoding={encoding}",
-        "ota.uploading": "Uploading {name} ({size} bytes)...",
-        "ota.done": "{message}, please wait for the device to reboot",
-        "gpio.summary": "Relay GPIO{relayGpio}={relayOn}, LED GPIO{ledGpio}={ledOn}, Input GPIO{inputGpio}",
-        "error.selectFirmware": "Please choose a firmware file first"
-      }
-    };
-
-    function detectLanguage() {
-      const saved = localStorage.getItem("iothub_lang");
-      if (saved && translations[saved]) {
-        return saved;
-      }
-      return navigator.language && navigator.language.toLowerCase().startsWith("zh") ? "zh-CN" : "en";
+    function setStatus(message, tone = "") {
+      const element = document.getElementById("sendStatus");
+      element.textContent = message;
+      element.className = tone ? `status field-status ${tone}` : "status field-status";
     }
 
-    state.language = detectLanguage();
-
-    function t(key, vars = {}) {
-      const dict = translations[state.language] || translations["zh-CN"];
-      const fallback = translations["zh-CN"];
-      const template = dict[key] ?? fallback[key] ?? key;
-      return template.replace(/\{(\w+)\}/g, (_, name) => vars[name] ?? "");
+    function getStatusTone() {
+      const className = document.getElementById("sendStatus").className || "status";
+      if (className.includes("bad")) {
+        return "bad";
+      }
+      if (className.includes("warn")) {
+        return "warn";
+      }
+      if (className.includes("ok")) {
+        return "ok";
+      }
+      return "";
     }
 
-    function humanMode(mode) {
-      return t(`mode.${mode}`) || mode || "-";
+    function buildRuntimeSnapshot() {
+      return {
+        version: 1,
+        sendRunning: state.sendRunning,
+        sendCount: state.sendCount,
+        activeIntervalMs: state.activeIntervalMs,
+        remainingInfinite: state.remainingInfinite,
+        phaseKey: state.phaseKey,
+        onlineArmed: state.onlineArmed,
+        onlineKeepalive: state.onlineKeepalive,
+        deviceKeepalive: state.deviceKeepalive,
+        backendSimActive: state.backendSimActive,
+        exitWaiting: state.exitWaiting,
+        activeTargetWeight: document.getElementById("activeTargetWeight").textContent,
+        currentSendWeight: document.getElementById("currentSendWeight").textContent,
+        weightValue: document.getElementById("weightValue").value,
+        vehicleSpeedKmh: document.getElementById("vehicleSpeedKmh").value,
+        formattedPayload: document.getElementById("formattedPayload").textContent,
+        formattedPayloadHex: document.getElementById("formattedPayloadHex").textContent,
+        lastSentPayload: document.getElementById("lastSentPayload").textContent
+      };
     }
 
-    function humanUartProbeSource(source) {
-      return t(`uart.source.${source}`) || source || t("uart.source.none");
-    }
-
-    function applyTranslations() {
-      document.documentElement.lang = state.language;
-      document.title = t("page.title");
-      document.getElementById("languageSelect").value = state.language;
-      document.querySelectorAll("[data-i18n]").forEach((element) => {
-        element.textContent = t(element.dataset.i18n);
-      });
-      document.querySelectorAll("[data-i18n-placeholder]").forEach((element) => {
-        element.placeholder = t(element.dataset.i18nPlaceholder);
-      });
-    }
-
-    function setStatus(id, text, tone) {
-      const element = document.getElementById(id);
-      element.textContent = text;
-      element.className = "status" + (tone ? ` ${tone}` : "");
-    }
-
-    function setProbeButtonBusy(busy, manualMode = false) {
-      const button = document.getElementById("probeUart");
-      const confirmButton = document.getElementById("uartProbeConfirm");
-      const rejectButton = document.getElementById("uartProbeReject");
-      const stopButton = document.getElementById("uartProbeStop");
-      if (!button) {
-        return;
-      }
-      state.uartProbeBusy = busy;
-      button.classList.toggle("probing", busy);
-      button.setAttribute("aria-busy", busy ? "true" : "false");
-      if (confirmButton) {
-        confirmButton.disabled = busy;
-      }
-      if (rejectButton) {
-        rejectButton.disabled = busy || (state.uartProbeMode === "manual" && !state.uartProbeManualHasMore);
-      }
-      if (stopButton) {
-        stopButton.disabled = busy;
-      }
-      button.textContent = busy
-        ? t(manualMode ? "button.probeUartBusyManual" : "button.probeUartBusyAuto")
-        : t("button.probeUart");
-    }
-
-    function renderUartConsole() {
-      const rxFormat = document.getElementById("uartRxFormat");
-      const txFormat = document.getElementById("uartTxFormat");
-      const consoleBox = document.getElementById("uartRxConsole");
-      if (!consoleBox) {
-        return;
-      }
-
-      if (rxFormat) {
-        rxFormat.value = state.uartRxFormat;
-      }
-      if (txFormat) {
-        txFormat.value = state.uartTxFormat;
-      }
-
-      consoleBox.value = state.uartRxFormat === "hex"
-        ? (state.uartConsoleHex || "")
-        : (state.uartConsolePlain || "");
-      consoleBox.scrollTop = consoleBox.scrollHeight;
-    }
-
-    function renderUartProbeDetails(data) {
-      const detailBox = document.getElementById("uartProbeDetails");
-      const attempts = Array.isArray(data?.probe_attempts) ? data.probe_attempts : [];
-      if (!detailBox) {
-        return;
-      }
-      if (attempts.length === 0) {
-        detailBox.value = t("uart.probeAttemptsEmpty");
-        return;
-      }
-      const lines = [
-        t("uart.probeConfirmSummary", {
-          confirmed: data.probe_confirmed ? t("state.yes") : t("state.no"),
-          confirmScore: data.probe_confirm_score ?? -1,
-          bestScore: data.probe_best_score ?? -1
-        })
-      ];
-      attempts.forEach((item, index) => {
-        lines.push(t("uart.probeAttemptLine", {
-          index: index + 1,
-          frame: item.frame || "8N1",
-          baudrate: item.baudrate || 0,
-          score: item.score ?? -1,
-          sampleBytes: item.sample_bytes ?? 0,
-          asciiRatio: item.ascii_ratio_pct ?? 0,
-          protocolHint: item.protocol_hint || t("network.none"),
-          sample: item.sample || t("network.none")
-        }));
-      });
-      detailBox.value = lines.join("\n");
-      detailBox.scrollTop = 0;
-    }
-
-    function renderUartProbeActions(data) {
-      const modal = document.getElementById("uartProbeModal");
-      const modalMessage = document.getElementById("uartProbeModalMessage");
-      const confirmButton = document.getElementById("uartProbeConfirm");
-      const rejectButton = document.getElementById("uartProbeReject");
-      const stopButton = document.getElementById("uartProbeStop");
-      const pending = Boolean(data?.probe_pending_confirmation);
-
-      state.uartProbePending = pending;
-      state.uartProbeMode = data?.probe_mode || "idle";
-      state.uartProbeManualHasMore = Boolean(data?.manual_has_more);
-
-      if (!modal || !modalMessage || !confirmButton || !rejectButton || !stopButton) {
-        return;
-      }
-
-      modal.hidden = !pending;
-      if (!pending) {
-        return;
-      }
-
-      modalMessage.textContent = buildUartProbeStatus(data);
-      confirmButton.textContent = t("button.probeConfirm");
-      stopButton.textContent = t("button.probeStop");
-      if (state.uartProbeMode === "manual") {
-        rejectButton.textContent = t("button.probeRejectNext");
-        rejectButton.disabled = !state.uartProbeManualHasMore;
-      } else {
-        rejectButton.textContent = t("button.probeRejectAuto");
-        rejectButton.disabled = false;
+    function saveRuntimeSnapshot() {
+      try {
+        window.localStorage.setItem(STORAGE_KEY_RUNTIME, JSON.stringify(buildRuntimeSnapshot()));
+      } catch (error) {
+        // Ignore storage failures and keep using the in-memory state.
       }
     }
 
-    function buildUartProbeStatus(data) {
-      const frame = data?.pending_frame || data?.frame || "8N1";
-      const baudrate = data?.pending_baudrate || data?.detected_baudrate || 0;
-      const sample = data?.sample || t("network.none");
-
-      // 错误状态：把后端的 message + detail 暴露给用户。
-      if (data?.status === "error" || data?.message) {
-        const msg = data?.message || t("network.error");
-        const detail = data?.detail ? ` (${data.detail})` : "";
-        return `${msg}${detail}`;
+    function clearRuntimeSnapshot() {
+      try {
+        window.localStorage.removeItem(STORAGE_KEY_RUNTIME);
+      } catch (error) {
+        // Ignore storage failures and keep using the in-memory state.
       }
-
-      if ((data?.probe_mode || "idle") === "manual") {
-        return t("uart.manualReady", {
-          index: data?.manual_candidate_index || 0,
-          count: data?.manual_candidate_count || 0,
-          frame,
-          baudrate,
-          sample
-        });
-      }
-
-      return t("uart.autoReady", {
-        frame,
-        baudrate,
-        sample
-      });
     }
 
-    function renderKeyValues(targetId, data) {
-      const target = document.getElementById(targetId);
-      target.innerHTML = Object.entries(data).map(([key, value]) => {
-        return `<div class="row"><span>${t(`device.${key}`)}</span><strong>${value}</strong></div>`;
-      }).join("");
-    }
-
-    function formatBytes(bytes) {
-      const value = Number(bytes) || 0;
-      if (value >= 1024 * 1024) {
-        return `${(value / (1024 * 1024)).toFixed(2)} MiB`;
+    function loadRuntimeSnapshot() {
+      try {
+        const rawValue = window.localStorage.getItem(STORAGE_KEY_RUNTIME);
+        return rawValue ? JSON.parse(rawValue) : null;
+      } catch (error) {
+        return null;
       }
-      if (value >= 1024) {
-        return `${(value / 1024).toFixed(1)} KiB`;
-      }
-      return `${value} B`;
-    }
-
-    function formatUsage(usedBytes, totalBytes) {
-      const used = Number(usedBytes) || 0;
-      const total = Number(totalBytes) || 0;
-      const free = total > used ? total - used : 0;
-      const percent = total > 0 ? ((used * 100) / total).toFixed(1) : "0.0";
-      return `${formatBytes(used)} / ${formatBytes(total)} (${percent}%), ${t("usage.free")} ${formatBytes(free)}`;
-    }
-
-    function formatGpioLabel(gpio) {
-      return Number.isFinite(Number(gpio)) ? `GPIO${gpio}` : "GPIO-";
-    }
-
-    function renderUartBaudList() {
-      const list = document.getElementById("uartBaudList");
-      if (!list) {
-        return;
-      }
-
-      list.innerHTML = state.uartCommonBaudrates.map((baudrate) =>
-        `<option value="${baudrate}"></option>`).join("");
-    }
-
-    function renderScanResults(aps) {
-      const target = document.getElementById("wifiScanList");
-      if (!aps || aps.length === 0) {
-        target.innerHTML = `<div class="scan-item"><span>${t("scan.emptyTitle")}</span><span class="hint">${t("scan.emptyHint")}</span></div>`;
-        return;
-      }
-      target.innerHTML = aps.map((ap) => {
-        const ssid = ap.ssid || t("scan.hidden");
-        return `<div class="scan-item">
-          <div>
-            <strong>${ssid}</strong>
-            <div class="hint">RSSI ${ap.rssi} dBm / ${ap.auth}</div>
-          </div>
-          <button class="secondary" data-ssid="${ssid}">${t("button.use")}</button>
-        </div>`;
-      }).join("");
-
-      target.querySelectorAll("button[data-ssid]").forEach((button) => {
-        button.addEventListener("click", () => {
-          document.getElementById("staSsid").value = button.dataset.ssid === t("scan.hidden") ? "" : button.dataset.ssid;
-        });
-      });
     }
 
     async function getJson(url, options) {
       const response = await fetch(url, options);
       const text = await response.text();
-      let body;
-
+      let body = {};
       try {
         body = text ? JSON.parse(text) : {};
       } catch (error) {
-        body = { message: text || "invalid_response" };
+        throw new Error(text || "invalid_response");
       }
-
       if (!response.ok) {
-        // 把 body 一起附到 Error 上，方便调用方拿到 detail 等字段。
-        const err = new Error(body.message || body.error || text || `HTTP ${response.status}`);
-        err.body = body;
-        err.status = response.status;
-        throw err;
+        throw new Error(body.message || `HTTP ${response.status}`);
       }
-
       return body;
     }
 
-    async function loadDevice() {
-      const data = await getJson("/api/v1/device/status");
-      renderDevice(data);
+    function isIntegerWeightInput(value) {
+      return /^(?:0|[1-9]\d*)$/.test(value.trim());
     }
 
-    function renderDevice(data) {
-      renderKeyValues("deviceInfo", {
-        project: data.project,
-        target: data.idf_target,
-        idf_version: data.idf_version,
-        app_version: data.app_version,
-        mac: data.mac,
-        free_heap: formatBytes(data.free_heap),
-        app_partition: data.app_partition?.label || "-",
-        app_usage: formatUsage(data.app_partition?.used_bytes, data.app_partition?.total_bytes),
-        storage_usage: formatUsage(data.storage?.used_bytes, data.storage?.total_bytes),
-        net_mode: humanMode(data.network.mode),
-        ap_ip: data.network.ap_ip,
-        sta_ip: data.network.sta_ip,
-        bt_mode: data.bluetooth.runtime_mode,
-        mqtt: data.mqtt.connected ? t("state.connected") : data.mqtt.last_error
-      });
+    function getTargetWeightInput() {
+      const rawValue = document.getElementById("weightValue").value.trim();
+      if (!rawValue) {
+        return { valid: false, empty: true, weight: 0, rawValue: "", reason: "empty" };
+      }
+      if (!isIntegerWeightInput(rawValue)) {
+        return { valid: false, empty: false, weight: 0, rawValue, reason: "format" };
+      }
+      const weight = Number(rawValue);
+      if (!Number.isInteger(weight) || weight < TARGET_WEIGHT_MIN || weight > TARGET_WEIGHT_MAX) {
+        return { valid: false, empty: false, weight, rawValue, reason: "range" };
+      }
+      return { valid: true, empty: false, weight, rawValue, reason: "" };
     }
 
-    async function loadNetwork() {
-      const data = await getJson("/api/v1/config/network");
-      document.getElementById("netMode").value = data.mode || "ap";
-      document.getElementById("ssid").value = data.ap_ssid || "";
-      document.getElementById("password").value = data.ap_password || "";
-      document.getElementById("staSsid").value = data.sta_ssid || "";
-      document.getElementById("staPassword").value = data.sta_password || "";
-      renderScanResults([]);
-      renderNetworkStatus(data);
+    function formatTargetWeightDisplay(rawValue) {
+      const trimmedValue = typeof rawValue === "string" ? rawValue.trim() : "";
+      return trimmedValue ? `${trimmedValue} kg` : "-";
     }
 
-    function renderNetworkStatus(data) {
-      setStatus("networkStatus", t("network.summary", {
-        mode: humanMode(data.mode),
-        ap: `${data.ap_ssid}@${data.ap_ip}`,
-        sta: data.sta_ssid || t("network.none"),
-        staIp: data.sta_has_ip ? data.sta_ip : t("network.noIp"),
-        lastDisconnect: data.last_disconnect || t("network.none")
-      }), data.sta_has_ip ? "ok" : "warn");
+    function setActiveTargetWeight(rawValue) {
+      document.getElementById("activeTargetWeight").textContent = formatTargetWeightDisplay(rawValue);
     }
 
-    async function loadGpio() {
-      const data = await getJson("/api/v1/config/gpio");
-      state.relayOn = Boolean(data.relay_on);
-      state.ledOn = Boolean(data.led_on);
-      state.gpioConfig = data;
-      document.getElementById("relayGpioDisplay").textContent = formatGpioLabel(data.relay_gpio);
-      document.getElementById("ledGpioDisplay").textContent = formatGpioLabel(data.led_gpio);
-      document.getElementById("inputGpioDisplay").textContent = formatGpioLabel(data.input_gpio);
-      document.getElementById("inputState").textContent = data.input_active ? t("state.valid") : t("state.invalid");
-      setStatus("gpioInfo", t("gpio.summary", {
-        relayGpio: data.relay_gpio,
-        relayOn: data.relay_on ? t("state.on") : t("state.off"),
-        ledGpio: data.led_gpio,
-        ledOn: data.led_on ? t("state.on") : t("state.off"),
-        inputGpio: data.input_gpio
-      }), "ok");
-    }
-
-    async function loadBluetooth() {
-      const data = await getJson("/api/v1/config/bluetooth");
-      document.getElementById("btMode").value = data.mode || "off";
-      document.getElementById("btName").value = data.device_name || "";
-      renderBluetoothStatus(data);
-    }
-
-    function renderBluetoothStatus(data) {
-      const hasError = Boolean(data.last_error);
-      setStatus("bluetoothStatus", t(hasError ? "bluetooth.summaryWithError" : "bluetooth.summary", {
-        mode: data.mode,
-        runtimeMode: data.runtime_mode,
-        name: data.device_name,
-        error: data.last_error || t("network.none")
-      }), hasError ? "warn" : "ok");
-    }
-
-    async function loadMqtt() {
-      const data = await getJson("/api/v1/config/mqtt");
-      document.getElementById("mqttBackend").value = data.backend || "tb_cloud";
-      document.getElementById("mqttHost").value = data.host || "";
-      document.getElementById("mqttPort").value = data.port || 1883;
-      document.getElementById("mqttToken").value = data.token || "";
-      document.getElementById("mqttTls").checked = Boolean(data.use_tls);
-      renderMqttStatus(data);
-    }
-
-    function renderMqttStatus(data) {
-      setStatus("mqttStatus", t("mqtt.summary", {
-        backend: data.backend,
-        host: data.host,
-        port: data.port,
-        connected: data.connected ? t("state.connected") : t("state.disconnected"),
-        error: data.last_error || t("network.none")
-      }), data.connected ? "ok" : "warn");
-    }
-
-    async function refreshStatusPanels() {
-      if (state.statusPollBusy) {
+    function setCurrentSendWeight(value) {
+      if (value === "" || value === null || value === undefined || !Number.isFinite(Number(value))) {
+        document.getElementById("currentSendWeight").textContent = "-";
         return;
       }
+      document.getElementById("currentSendWeight").textContent = `${formatWeightText(Number(value))} kg`;
+    }
+
+    function formatScalePayload(status, value) {
+      const normalized = formatWeightText(value);
+      return `${status},NT,${normalized.padStart(8, " ")} kg\r\n`;
+    }
+
+    function getProtocolValue() {
+      return document.getElementById("protocolType").value === "ds10" ? "ds10" : "ems";
+    }
+
+    function saveProtocolPreference() {
+      try {
+        window.localStorage.setItem(STORAGE_KEY_PROTOCOL, getProtocolValue());
+      } catch (error) {
+        // Ignore storage failures and keep using the in-memory selection.
+      }
+    }
+
+    function restoreProtocolPreference() {
+      try {
+        const savedValue = window.localStorage.getItem(STORAGE_KEY_PROTOCOL);
+        if (savedValue === "ems" || savedValue === "ds10") {
+          document.getElementById("protocolType").value = savedValue;
+        } else {
+          document.getElementById("protocolType").value = "ds10";
+        }
+      } catch (error) {
+        document.getElementById("protocolType").value = "ds10";
+      }
+    }
+
+    function saveDecimalPreference() {
+      try {
+        window.localStorage.setItem(STORAGE_KEY_ALLOW_DECIMALS,
+          document.getElementById("allowDecimalValues").checked ? "1" : "0");
+      } catch (error) {
+        // Ignore storage failures and keep using the in-memory selection.
+      }
+    }
+
+    function restoreDecimalPreference() {
+      try {
+        const savedValue = window.localStorage.getItem(STORAGE_KEY_ALLOW_DECIMALS);
+        if (savedValue === "1" || savedValue === "0") {
+          document.getElementById("allowDecimalValues").checked = savedValue === "1";
+        }
+      } catch (error) {
+        // Ignore storage failures and keep using the default selection.
+      }
+    }
+
+    function saveWeightStepPreference() {
+      try {
+        const stepValue = document.getElementById("weightStepKg").value;
+        if (stepValue === "2" || stepValue === "5" || stepValue === "10" || stepValue === "20") {
+          window.localStorage.setItem(STORAGE_KEY_WEIGHT_STEP, stepValue);
+        }
+      } catch (error) {
+        // Ignore storage failures and keep using the in-memory selection.
+      }
+    }
+
+    function restoreWeightStepPreference() {
+      try {
+        const savedValue = window.localStorage.getItem(STORAGE_KEY_WEIGHT_STEP);
+        if (savedValue === "2" || savedValue === "5" || savedValue === "10" || savedValue === "20") {
+          document.getElementById("weightStepKg").value = savedValue;
+        }
+      } catch (error) {
+        // Ignore storage failures and keep using the default selection.
+      }
+    }
+
+    function getFrameIntervalValue() {
+      const intervalMs = Number(document.getElementById("frameIntervalMs").value);
+      return intervalMs === 200 || intervalMs === 500 || intervalMs === 1000
+        ? intervalMs
+        : DEFAULT_FRAME_INTERVAL_MS;
+    }
+
+    function saveFrameIntervalPreference() {
+      try {
+        window.localStorage.setItem(STORAGE_KEY_FRAME_INTERVAL, String(getFrameIntervalValue()));
+      } catch (error) {
+        // Ignore storage failures and keep using the in-memory selection.
+      }
+    }
+
+    function restoreFrameIntervalPreference() {
+      try {
+        const savedValue = window.localStorage.getItem(STORAGE_KEY_FRAME_INTERVAL);
+        if (savedValue === "200" || savedValue === "500" || savedValue === "1000") {
+          document.getElementById("frameIntervalMs").value = savedValue;
+        }
+      } catch (error) {
+        // Ignore storage failures and keep using the default selection.
+      }
+    }
+
+    function allowDecimalValues() {
+      return document.getElementById("allowDecimalValues").checked;
+    }
+
+    function getWeightStepValue() {
+      const stepValue = Number(document.getElementById("weightStepKg").value);
+      return Number.isFinite(stepValue) && stepValue > 0 ? stepValue : 2;
+    }
+
+    function getDs10DecimalPlaces() {
+      if (!allowDecimalValues()) {
+        return 0;
+      }
+
+      const rawValue = document.getElementById("weightValue").value.trim();
+      const decimalPart = rawValue.includes(".") ? rawValue.split(".")[1] : "";
+      if (!decimalPart) {
+        return 0;
+      }
+
+      return clamp(decimalPart.length, 0, 4);
+    }
+
+    function roundToDecimalPlaces(value, decimalPlaces) {
+      const factor = Math.pow(10, decimalPlaces);
+      return Math.round(value * factor) / factor;
+    }
+
+    function normalizeOutputWeight(value) {
+      const numericValue = Number(value);
+      if (!Number.isFinite(numericValue)) {
+        return 0;
+      }
+
+      if (getProtocolValue() === "ds10" && allowDecimalValues()) {
+        return roundToDecimalPlaces(numericValue, getDs10DecimalPlaces());
+      }
+
+      if (allowDecimalValues()) {
+        return Number(numericValue.toFixed(1));
+      }
+
+      const stepValue = getWeightStepValue();
+      return Math.round(numericValue / stepValue) * stepValue;
+    }
+
+    function formatWeightText(value) {
+      const normalizedValue = normalizeOutputWeight(value);
+      if (!allowDecimalValues()) {
+        return String(normalizedValue);
+      }
+
+      if (getProtocolValue() === "ds10") {
+        const decimalPlaces = getDs10DecimalPlaces();
+        return decimalPlaces > 0 ? normalizedValue.toFixed(decimalPlaces) : String(Math.round(normalizedValue));
+      }
+
+      return normalizedValue.toFixed(1);
+    }
+
+    function toHexNibble(value) {
+      return value.toString(16).toUpperCase();
+    }
+
+    function toHexByte(value) {
+      return value.toString(16).toUpperCase().padStart(2, "0");
+    }
+
+    function formatPayloadHex(data) {
+      return Array.from(data, (character) => toHexByte(character.charCodeAt(0))).join(" ");
+    }
+
+    function formatDs10Payload(value) {
+      const normalizedValue = normalizeOutputWeight(value);
+      const decimalPlaces = getDs10DecimalPlaces();
+      const signChar = normalizedValue < 0 ? "-" : "+";
+      const absoluteValue = Math.abs(normalizedValue);
+      const scaledValue = Math.round(absoluteValue * Math.pow(10, decimalPlaces));
+      const weightDigits = String(scaledValue).padStart(6, "0").slice(-6);
+      const decimalChar = String(decimalPlaces);
+      const xorSource = `${signChar}${weightDigits}${decimalChar}`;
+      let checksum = 0;
+
+      for (const character of xorSource) {
+        checksum ^= character.charCodeAt(0);
+      }
+
+      const checksumText = `${toHexNibble((checksum >> 4) & 0x0F)}${toHexNibble(checksum & 0x0F)}`;
+      const data = `\u0002${xorSource}${checksumText}\u0003`;
+      return {
+        data: formatPayloadHex(data),
+        encoding: "hex",
+        preview: `ASCII: \\x02${xorSource}${checksumText}\\x03`,
+        hexPreview: `HEX: ${formatPayloadHex(data)}`,
+        checksumText
+      };
+    }
+
+    function buildPayload(status, value) {
+      if (getProtocolValue() === "ds10") {
+        return formatDs10Payload(value);
+      }
+
+      const payload = formatScalePayload(status, value);
+      return {
+        data: payload,
+        encoding: "plain",
+        preview: `ASCII: ${payload}`,
+        hexPreview: `HEX: ${formatPayloadHex(payload)}`
+      };
+    }
+
+    function getSpeedValue() {
+      return Number(document.getElementById("vehicleSpeedKmh").value);
+    }
+
+    function clamp(value, min, max) {
+      return Math.min(max, Math.max(min, value));
+    }
+
+    function humanPhase(phase) {
+      const labels = {
+        idle: "待机",
+        front_axle: "前轮上磅",
+        ramp_up: "持续上磅",
+        oscillation: "动态波动",
+        settled_with_driver: "车辆停稳",
+        ramp_down: "下车离磅",
+        final_stable: "最终稳定"
+      };
+      return labels[phase] || "仿真中";
+    }
+
+    function setPhase(phase) {
+      state.phaseKey = phase;
+      document.getElementById("currentPhase").textContent = humanPhase(phase);
+    }
+
+    function startCountdownTimer() {
+      if (state.countdownTimer !== null) {
+        clearInterval(state.countdownTimer);
+      }
+      state.countdownTimer = window.setInterval(() => {
+        renderCountdown();
+      }, 250);
+    }
+
+    function restoreRuntimeSnapshot() {
+      const snapshot = loadRuntimeSnapshot();
+      if (!snapshot || typeof snapshot !== "object") {
+        return false;
+      }
+
+      if (typeof snapshot.weightValue === "string") {
+        document.getElementById("weightValue").value = snapshot.weightValue;
+      }
+      if (typeof snapshot.vehicleSpeedKmh === "string" && snapshot.vehicleSpeedKmh) {
+        document.getElementById("vehicleSpeedKmh").value = snapshot.vehicleSpeedKmh;
+      }
+      if (typeof snapshot.activeTargetWeight === "string" && snapshot.activeTargetWeight) {
+        document.getElementById("activeTargetWeight").textContent = snapshot.activeTargetWeight;
+      }
+      if (typeof snapshot.currentSendWeight === "string" && snapshot.currentSendWeight) {
+        document.getElementById("currentSendWeight").textContent = snapshot.currentSendWeight;
+      }
+      if (typeof snapshot.activeIntervalMs === "number" &&
+          (snapshot.activeIntervalMs === 200 || snapshot.activeIntervalMs === 500 || snapshot.activeIntervalMs === 1000)) {
+        document.getElementById("frameIntervalMs").value = String(snapshot.activeIntervalMs);
+        state.activeIntervalMs = snapshot.activeIntervalMs;
+      }
+
+      if (typeof snapshot.lastSentPayload === "string" && snapshot.lastSentPayload) {
+        document.getElementById("lastSentPayload").textContent = snapshot.lastSentPayload;
+      }
+      if (typeof snapshot.formattedPayload === "string" && snapshot.formattedPayload) {
+        document.getElementById("formattedPayload").textContent = snapshot.formattedPayload;
+      }
+      if (typeof snapshot.formattedPayloadHex === "string" && snapshot.formattedPayloadHex) {
+        document.getElementById("formattedPayloadHex").textContent = snapshot.formattedPayloadHex;
+      }
+      if (snapshot.sendRunning) {
+        setStatus("正在同步设备端真实发送状态。", "warn");
+      }
+      renderButtons();
+      return false;
+    }
+
+    function applyKeepaliveRuntime(data, message = "") {
+      const intervalMs = Number.isFinite(data.keepalive_interval_ms) ? data.keepalive_interval_ms : getFrameIntervalValue();
+
+      state.sendRunning = true;
+      state.sendBusy = false;
+      state.loopEndsAt = 0;
+      state.remainingInfinite = true;
+      state.activeIntervalMs = intervalMs;
+      state.onlineArmed = false;
+      state.onlineKeepalive = true;
+      state.deviceKeepalive = true;
+      state.backendSimActive = false;
+      state.exitWaiting = false;
+      state.sendCount = Number.isFinite(data.tx_sequence) ? data.tx_sequence : 0;
+
+      document.getElementById("sendCount").textContent = String(state.sendCount);
+      document.getElementById("activeInterval").textContent = `${intervalMs} ms`;
+      setActiveTargetWeight("");
+      setCurrentSendWeight(0);
+      setPhase("final_stable");
+      renderCountdown();
+      startCountdownTimer();
+      renderButtons();
+
+      if (typeof data.last_payload_preview === "string" && data.last_payload_preview) {
+        document.getElementById("lastSentPayload").textContent = `ASCII: ${data.last_payload_preview}`;
+      } else if (typeof data.last_payload_data === "string" && data.last_payload_data) {
+        document.getElementById("lastSentPayload").textContent = data.last_payload_encoding === "hex"
+          ? `HEX: ${data.last_payload_data}`
+          : `ASCII: ${data.last_payload_data}`;
+      }
+
+      const statusText = message || "设备端正在持续发送空秤重量 0 kg。";
+      setStatus(statusText, "ok");
+      saveRuntimeSnapshot();
+    }
+
+    function applyBackendSimulationStatus(data, message = "") {
+      const intervalMs = Number.isFinite(data.interval_ms) ? data.interval_ms : getFrameIntervalValue();
+      const currentWeight = Number.isFinite(data.current_weight) ? Number(data.current_weight) : 0;
+      const targetText = typeof data.target_weight_text === "string" ? data.target_weight_text : "-";
+      const phase = typeof data.phase === "string" && data.phase ? data.phase : "idle";
+      const exitWaiting = Boolean(data.exit_waiting);
+      const countdownRemainingMs = Number.isFinite(data.countdown_remaining_ms)
+        ? Math.max(0, Number(data.countdown_remaining_ms))
+        : null;
+      const backendIdleKeepalive = currentWeight === 0 && !exitWaiting && phase === "final_stable";
+
+      state.sendRunning = Boolean(data.active);
+      state.sendBusy = false;
+      state.remainingInfinite = countdownRemainingMs === null || countdownRemainingMs <= 0;
+      state.loopEndsAt = state.remainingInfinite ? 0 : Date.now() + countdownRemainingMs;
+      state.activeIntervalMs = intervalMs;
+      state.onlineArmed = false;
+      // 当设备端仿真已经回到 0 kg 空秤稳定态时，页面应恢复到可再次上磅的控制态。
+      state.onlineKeepalive = backendIdleKeepalive;
+      state.deviceKeepalive = false;
+      state.backendSimActive = Boolean(data.active);
+      state.exitWaiting = exitWaiting;
+      state.sendCount = Number.isFinite(data.send_count) ? data.send_count : 0;
+
+      document.getElementById("sendCount").textContent = String(state.sendCount);
+      document.getElementById("activeInterval").textContent = `${intervalMs} ms`;
+      setActiveTargetWeight(targetText === "-" ? "" : targetText.replace(/\s*kg$/i, ""));
+      setCurrentSendWeight(currentWeight);
+      setPhase(phase);
+      renderCountdown();
+      startCountdownTimer();
+      renderButtons();
+
+      if (typeof data.last_payload_preview === "string" && data.last_payload_preview) {
+        document.getElementById("lastSentPayload").textContent = `ASCII: ${data.last_payload_preview}`;
+      }
+
+      if (message) {
+        setStatus(message, "ok");
+      } else if (state.exitWaiting) {
+        setStatus("车辆已停稳。可点击“车辆驶出”；未操作将按设备端定时自动驶出。", "warn");
+      } else if (backendIdleKeepalive) {
+        setStatus("车辆已驶出，设备端正在保持空秤 0 kg，可再次点击“车辆上磅”。", "ok");
+      } else if (currentWeight === 0) {
+        setStatus("设备端正在持续发送空秤重量 0 kg。", "ok");
+      } else {
+        setStatus(`设备端正在执行仿真，当前阶段：${humanPhase(state.phaseKey)}。`, "ok");
+      }
+      saveRuntimeSnapshot();
+    }
+
+    function applyRuntimeStatus(data) {
+        if (!data || typeof data !== "object") {
+        return;
+      }
+
+        if (data.keepalive_active === true) {
+          applyKeepaliveRuntime(data);
+          return;
+        }
+
+        if (state.deviceKeepalive) {
+          stopSending("设备端空秤发送已停止。", "warn");
+        }
+
+        if (state.sendRunning) {
+          return;
+        }
+
+      if (typeof data.last_payload_preview === "string" && data.last_payload_preview) {
+        document.getElementById("lastSentPayload").textContent = `ASCII: ${data.last_payload_preview}`;
+      } else if (typeof data.last_payload_data === "string" && data.last_payload_data) {
+        document.getElementById("lastSentPayload").textContent = data.last_payload_encoding === "hex"
+          ? `HEX: ${data.last_payload_data}`
+          : `ASCII: ${data.last_payload_data}`;
+      }
+
+      if (data.driver_installed === false) {
+        state.runtimeRecentlyActive = false;
+        setStatus("串口驱动未就绪，暂时无法发送。", "bad");
+        return;
+      }
+
+      const hasRecentActivity = Number.isFinite(data.last_send_age_ms)
+        && data.last_send_age_ms >= 0
+        && data.last_send_age_ms <= RUNTIME_ACTIVE_WINDOW_MS;
+
+      if (hasRecentActivity) {
+        state.runtimeRecentlyActive = true;
+        setStatus(`检测到串口最近 ${Math.max(1, Math.ceil(data.last_send_age_ms / 1000))} 秒内有发送活动。`, "ok");
+      } else if (state.runtimeRecentlyActive) {
+        state.runtimeRecentlyActive = false;
+        updatePreview();
+      }
+    }
+
+      async function refreshRuntimeStatus() {
+        if (state.statusPollBusy || (state.sendRunning && !state.deviceKeepalive && !state.backendSimActive)) {
+        return;
+      }
+
       state.statusPollBusy = true;
       try {
-        const [deviceData, networkData, bluetoothData, mqttData] = await Promise.all([
-          getJson("/api/v1/device/status"),
-          getJson("/api/v1/config/network"),
-          getJson("/api/v1/config/bluetooth"),
-          getJson("/api/v1/config/mqtt")
-        ]);
-        renderDevice(deviceData);
-        renderNetworkStatus(networkData);
-        renderBluetoothStatus(bluetoothData);
-        renderMqttStatus(mqttData);
+          const simData = await getJson("/api/v1/sim/status");
+          if (simData && simData.active) {
+            applyBackendSimulationStatus(simData);
+            return;
+          }
+          if (state.backendSimActive) {
+            stopSending("设备端仿真已停止。", "warn");
+          }
+          const data = await getJson("/api/v1/uart/runtime");
+          applyRuntimeStatus(data);
+      } catch (error) {
+        state.runtimeRecentlyActive = false;
       } finally {
         state.statusPollBusy = false;
       }
     }
 
-    function startStatusPolling() {
-      if (state.statusPollTimer) {
+    function startRuntimePolling() {
+      if (state.statusPollTimer !== null) {
         clearInterval(state.statusPollTimer);
       }
-      state.statusPollTimer = setInterval(() => {
-        refreshStatusPanels().catch(() => {});
-      }, 3000);
+      state.statusPollTimer = window.setInterval(() => {
+        refreshRuntimeStatus().catch(() => {});
+      }, RUNTIME_POLL_INTERVAL_MS);
     }
 
-    async function loadUart() {
-      const data = await getJson("/api/v1/config/uart");
-      state.uartConfig = data;
-      document.getElementById("uartRxDisplay").textContent = formatGpioLabel(data.rx_gpio);
-      document.getElementById("uartTxDisplay").textContent = formatGpioLabel(data.tx_gpio);
-      renderUartBaudList();
-      document.getElementById("uartBaud").value = data.baudrate || 9600;
-      document.getElementById("uartDataBits").value = String(data.data_bits || 8);
-      document.getElementById("uartStopBits").value = String(data.stop_bits || 1);
-      document.getElementById("uartParity").value = data.parity || "none";
-      renderUartProbeDetails(data);
-      renderUartProbeActions(data);
-      if (data.probe_pending_confirmation) {
-        setStatus("uartStatus", buildUartProbeStatus(data), "warn");
-      } else {
-        setStatus("uartStatus", t("uart.summary", {
-          frame: data.frame,
-          baudrate: data.baudrate,
-          rawBaudrate: data.raw_baudrate || data.detected_baudrate || data.baudrate,
-          detectedBaudrate: data.detected_baudrate || data.baudrate,
-          probeSource: humanUartProbeSource(data.probe_source),
-          edgeCount: data.edge_count || 0,
-          reliable: data.probe_reliable ? t("state.yes") : t("state.no"),
-          protocolHint: data.protocol_hint,
-          sample: data.sample || t("network.none")
-        }), "warn");
-      }
+    function renderButtons() {
+      const inputState = getTargetWeightInput();
+      const controlsLocked = state.sendRunning && !state.onlineKeepalive;
+      const exitingVehicle = state.phaseKey === "ramp_down";
+      const weightInput = document.getElementById("weightValue");
+      const speedInput = document.getElementById("vehicleSpeedKmh");
+      const protocolInput = document.getElementById("protocolType");
+      const decimalInput = document.getElementById("allowDecimalValues");
+      const stepInput = document.getElementById("weightStepKg");
+      const frameIntervalInput = document.getElementById("frameIntervalMs");
+      const exitButton = document.getElementById("exitVehicle");
+      const onlineButton = document.getElementById("deviceOnline");
+
+      weightInput.disabled = controlsLocked;
+      speedInput.disabled = controlsLocked;
+      protocolInput.disabled = controlsLocked;
+      decimalInput.disabled = controlsLocked;
+      stepInput.disabled = controlsLocked;
+      frameIntervalInput.disabled = controlsLocked;
+      onlineButton.disabled = state.sendRunning;
+      document.getElementById("startSend").disabled = state.sendRunning
+        ? (!state.onlineKeepalive || state.sendBusy || exitingVehicle)
+        : (!inputState.valid || !Number.isFinite(getSpeedValue()) || getSpeedValue() < 1 || getSpeedValue() > 15);
+      document.getElementById("stopSend").disabled = !state.sendRunning;
+      exitButton.disabled = !state.sendRunning || !state.exitWaiting;
+      document.getElementById("clearInput").disabled = state.sendRunning;
     }
 
-    async function loadUartConsole() {
-      const data = await getJson("/api/v1/uart/console");
-      state.uartConsolePlain = data.plain || "";
-      state.uartConsoleHex = data.hex || "";
-      renderUartConsole();
-    }
+    function updatePreview() {
+      const inputState = getTargetWeightInput();
+      const preview = document.getElementById("formattedPayload");
+      const hexPreview = document.getElementById("formattedPayloadHex");
 
-    async function refreshUartConsole() {
-      if (state.uartPollBusy) {
+      if (!inputState.valid) {
+        preview.textContent = "-";
+        hexPreview.textContent = "-";
+        if (!state.sendRunning) {
+          if (inputState.reason === "empty") {
+            setStatus(DEFAULT_WEIGHT_STATUS);
+          } else if (inputState.reason === "format") {
+            setStatus("输入无效：仅支持整数，且不能包含小数点、字母或其他非法字符。", "bad");
+          } else {
+            setStatus("输入无效：目标重量必须是 1000-100000 kg 之间的整数。", "bad");
+          }
+        }
+        renderButtons();
+        saveRuntimeSnapshot();
         return;
       }
-      state.uartPollBusy = true;
-      try {
-        await loadUartConsole();
-      } finally {
-        state.uartPollBusy = false;
+      const targetWeight = inputState.weight;
+      const previewWeight = Math.max(0, targetWeight - 75);
+      const payload = buildPayload(getProtocolValue() === "ds10" ? "US" : "ST", previewWeight);
+      preview.textContent = payload.preview;
+      hexPreview.textContent = payload.hexPreview;
+      if (!state.sendRunning) {
+        setStatus(DEFAULT_WEIGHT_STATUS);
       }
+      renderButtons();
+      saveRuntimeSnapshot();
     }
 
-    function startUartConsolePolling() {
-      if (state.uartPollTimer) {
-        clearInterval(state.uartPollTimer);
+    function renderCountdown() {
+      if (!state.sendRunning || state.loopEndsAt === 0) {
+          document.getElementById("remainingTime").textContent = state.sendRunning && state.remainingInfinite ? "无限时" : "60 s";
+        return;
       }
-      state.uartPollTimer = setInterval(() => {
-        refreshUartConsole().catch(() => {});
-      }, 1000);
+      const remainMs = Math.max(0, state.loopEndsAt - Date.now());
+      document.getElementById("remainingTime").textContent = `${Math.ceil(remainMs / 1000)} s`;
     }
 
-    async function saveNetwork() {
-      const payload = {
-        mode: document.getElementById("netMode").value,
-        ap_ssid: document.getElementById("ssid").value.trim(),
-        ap_password: document.getElementById("password").value,
-        sta_ssid: document.getElementById("staSsid").value.trim(),
-        sta_password: document.getElementById("staPassword").value
-      };
-      const data = await getJson("/api/v1/config/network", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      });
-      const address = data.next_access_ip ? `http://${data.next_access_ip}` : "";
-      const confirmMessage = data.ap_enabled
-        ? t("network.savedNeedsRestart", { address })
-        : t("network.savedStaOnly");
-      setStatus("networkStatus", confirmMessage, "warn");
-
-      if (confirm(confirmMessage)) {
-        const restartData = await getJson("/api/v1/network/restart", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: "{}"
-        });
-        const restartMessage = data.ap_enabled
-          ? t("network.restartStarted", { address })
-          : restartData.message;
-        setStatus("networkStatus", restartMessage, "ok");
+    function stopSending(message, tone = "warn") {
+      if (state.countdownTimer !== null) {
+        clearInterval(state.countdownTimer);
+        state.countdownTimer = null;
       }
+      state.sendRunning = false;
+      state.sendBusy = false;
+      state.loopEndsAt = 0;
+      state.remainingInfinite = false;
+      renderCountdown();
+      state.onlineKeepalive = false;
+      state.deviceKeepalive = false;
+      state.backendSimActive = false;
+      state.exitWaiting = false;
+      setActiveTargetWeight("");
+      setCurrentSendWeight("");
+      setPhase("idle");
+      renderButtons();
+      setStatus(message, tone);
+      saveRuntimeSnapshot();
     }
 
-    async function scanNetwork() {
-      setStatus("networkStatus", t("network.scanning"), "warn");
-      const data = await getJson("/api/v1/network/scan");
-      renderScanResults(data.aps || []);
-      setStatus("networkStatus", t("network.scanDone", { count: data.count || 0 }), "ok");
-    }
-
-    async function saveGpio(patch) {
-      await getJson("/api/v1/config/gpio", {
-        method: "PUT",
+    async function startKeepaliveOnDevice() {
+      const intervalMs = getFrameIntervalValue();
+      const payload = buildPayload("ST", 0);
+      const data = await getJson("/api/v1/uart/keepalive/start", {
+        method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          relay_on: "relay_on" in patch ? patch.relay_on : state.relayOn,
-          led_on: "led_on" in patch ? patch.led_on : state.ledOn
+          encoding: payload.encoding,
+          data: payload.data,
+          interval_ms: intervalMs
         })
       });
-      await loadGpio();
+
+      document.getElementById("formattedPayload").textContent = payload.preview;
+      document.getElementById("formattedPayloadHex").textContent = payload.hexPreview;
+      applyKeepaliveRuntime(data, "设备端已开始持续发送空秤重量 0 kg。");
     }
 
-    async function saveBluetooth() {
-      const payload = {
-        mode: document.getElementById("btMode").value,
-        device_name: document.getElementById("btName").value.trim()
-      };
-      await getJson("/api/v1/config/bluetooth", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
+    async function stopKeepaliveOnDevice(message = "已手动停止仿真发送。") {
+      await getJson("/api/v1/uart/keepalive/stop", {
+        method: "POST"
       });
-      setStatus("bluetoothStatus", t("bluetooth.saving"), "warn");
-      await new Promise((resolve) => setTimeout(resolve, 800));
-      await loadBluetooth();
+      stopSending(message, "warn");
     }
 
-    async function saveMqtt() {
-      const payload = {
-        backend: document.getElementById("mqttBackend").value,
-        host: document.getElementById("mqttHost").value.trim(),
-        port: Number(document.getElementById("mqttPort").value),
-        token: document.getElementById("mqttToken").value.trim(),
-        use_tls: document.getElementById("mqttTls").checked
-      };
-      const data = await getJson("/api/v1/config/mqtt", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      });
-      setStatus("mqttStatus", data.message, "warn");
+    async function startOnlineKeepalive() {
+      if (state.countdownTimer !== null) {
+        clearInterval(state.countdownTimer);
+        state.countdownTimer = null;
+      }
+      setStatus("正在通知设备端开始持续发送 0 kg。", "warn");
+      renderButtons();
+      await startKeepaliveOnDevice();
     }
 
-    async function saveUart() {
-      const baudrate = Number(document.getElementById("uartBaud").value);
-      const payload = {
-        baudrate,
-        data_bits: Number(document.getElementById("uartDataBits").value),
-        stop_bits: Number(document.getElementById("uartStopBits").value),
-        parity: document.getElementById("uartParity").value
-      };
-      await getJson("/api/v1/config/uart", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      });
-      await loadUart();
-      await loadGpio();
-    }
-
-    async function runUartProbeRequest(endpoint, payload, manualMode) {
-      setProbeButtonBusy(true, manualMode);
-      try {
-        const data = await getJson(endpoint, {
+      async function startSimulationOnDevice(payload) {
+        const data = await getJson("/api/v1/sim/start", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload || {})
+          body: JSON.stringify(payload)
         });
-        renderUartProbeDetails(data);
-        renderUartProbeActions(data);
-        setStatus("uartStatus", buildUartProbeStatus(data), manualMode ? "warn" : "ok");
-        await refreshUartConsole();
-        return data;
-      } catch (error) {
-        // 错误处理：error.body 包含后端返回的完整 JSON {message, detail, ...}
-        const body = error.body || {};
-        const detail = body.detail ? ` (${body.detail})` : "";
-        setStatus("uartStatus", `${body.message || error.message}${detail}`, "bad");
-        // 仍然尝试把 detail 渲染到 probe details 区域，方便调试
-        if (body.message || body.detail) {
-          renderUartProbeDetails({ ...body, probe_mode: "idle" });
-        }
-        throw error;
-      } finally {
-        setProbeButtonBusy(false);
+        applyBackendSimulationStatus(data, "设备端已开始执行称重仿真。");
       }
-    }
 
-    async function probeUart() {
-      if (!confirm(t("uart.probeStartConfirm"))) {
+    async function startSending() {
+      const rawTargetWeightValue = document.getElementById("weightValue").value.trim();
+      const inputState = getTargetWeightInput();
+      const intervalMs = getFrameIntervalValue();
+      const speedKmh = getSpeedValue();
+
+      if (!rawTargetWeightValue) {
+        window.alert("请填写停稳目标重量 (kg)。");
+        setStatus("请先填写停稳目标重量 (kg)，再点击“车辆上磅”。", "warn");
+        document.getElementById("weightValue").focus();
+        renderButtons();
         return;
       }
-      await runUartProbeRequest("/api/v1/uart/probe/auto_detect", {}, false);
-    }
-
-    async function rejectUartProbe() {
-      if (state.uartProbeMode === "manual") {
-        if (!state.uartProbeManualHasMore) {
-          setStatus("uartStatus", t("uart.manualExhausted"), "warn");
-          return;
-        }
-        await runUartProbeRequest("/api/v1/uart/probe/manual_detect", { action: "next" }, true);
-        return;
-      }
-
-      setStatus("uartStatus", t("uart.manualStarting"), "warn");
-      await runUartProbeRequest("/api/v1/uart/probe/manual_detect", { action: "start" }, true);
-    }
-
-    async function confirmUartProbe() {
-      const data = await getJson("/api/v1/uart/probe/confirm", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: "{}"
-      });
-      renderUartProbeDetails(data);
-      renderUartProbeActions(data);
-      setStatus("uartStatus", t("uart.probeSaved", {
-        frame: data.frame,
-        baudrate: data.baudrate
-      }), "ok");
-      await loadUart();
-      await refreshUartConsole();
-    }
-
-    async function stopUartProbe() {
-      const data = await getJson("/api/v1/uart/probe/stop", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: "{}"
-      });
-      renderUartProbeDetails(data);
-      renderUartProbeActions(data);
-      setStatus("uartStatus", t("uart.probeStopped"), "warn");
-      await loadUart();
-      await refreshUartConsole();
-    }
-
-    async function sendUart() {
-      const payload = {
-        encoding: state.uartTxFormat,
-        data: document.getElementById("uartTxData").value
-      };
-      const data = await getJson("/api/v1/uart/send", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      });
-      setStatus("uartStatus", t("uart.sent", {
-        bytes: data.bytes_sent || 0,
-        encoding: state.uartTxFormat
-      }), "ok");
-      document.getElementById("uartTxData").value = "";
-      await refreshUartConsole();
-    }
-
-    async function uploadOta() {
-      const file = document.getElementById("otaFile").files[0];
-      if (!file) {
-        throw new Error(t("error.selectFirmware"));
-      }
-
-      setStatus("otaStatus", t("ota.uploading", { name: file.name, size: file.size }), "warn");
-      const data = await getJson("/api/v1/ota/upload", {
-        method: "POST",
-        headers: { "Content-Type": "application/octet-stream" },
-        body: file
-      });
-      setStatus("otaStatus", t("ota.done", { message: data.message }), "ok");
-    }
-
-    async function boot() {
-      renderUartConsole();
-      applyTranslations();
-      try {
-        await Promise.all([
-          loadDevice(),
-          loadNetwork(),
-          loadGpio(),
-          loadBluetooth(),
-          loadMqtt(),
-          loadUart()
-        ]);
-        await refreshUartConsole();
-      } catch (error) {
-        setStatus("networkStatus", error.message, "bad");
-        setStatus("gpioInfo", error.message, "bad");
-        setStatus("bluetoothStatus", error.message, "bad");
-        setStatus("mqttStatus", error.message, "bad");
-        setStatus("uartStatus", error.message, "bad");
-      }
-      startStatusPolling();
-      startUartConsolePolling();
-    }
-
-    document.getElementById("languageSelect").addEventListener("change", async (event) => {
-      state.language = event.target.value;
-      localStorage.setItem("iothub_lang", state.language);
-      await boot();
-    });
-
-    document.getElementById("saveNetwork").addEventListener("click", async () => {
-      try {
-        await saveNetwork();
-      } catch (error) {
-        setStatus("networkStatus", error.message, "bad");
-      }
-    });
-
-    document.getElementById("scanWifi").addEventListener("click", async () => {
-      try {
-        await scanNetwork();
-      } catch (error) {
-        setStatus("networkStatus", error.message, "bad");
-      }
-    });
-
-    document.getElementById("toggleRelay").addEventListener("click", async () => {
-      try {
-        await saveGpio({ relay_on: !state.relayOn });
-      } catch (error) {
-        setStatus("gpioInfo", error.message, "bad");
-      }
-    });
-
-    document.getElementById("toggleLed").addEventListener("click", async () => {
-      try {
-        await saveGpio({ led_on: !state.ledOn });
-      } catch (error) {
-        setStatus("gpioInfo", error.message, "bad");
-      }
-    });
-
-    document.getElementById("saveBluetooth").addEventListener("click", async () => {
-      try {
-        await saveBluetooth();
-      } catch (error) {
-        setStatus("bluetoothStatus", error.message, "bad");
-      }
-    });
-
-    document.getElementById("uploadOta").addEventListener("click", async () => {
-      try {
-        await uploadOta();
-      } catch (error) {
-        setStatus("otaStatus", error.message, "bad");
-      }
-    });
-
-    document.getElementById("saveMqtt").addEventListener("click", async () => {
-      try {
-        await saveMqtt();
-      } catch (error) {
-        setStatus("mqttStatus", error.message, "bad");
-      }
-    });
-
-    document.getElementById("saveUart").addEventListener("click", async () => {
-      try {
-        await saveUart();
-      } catch (error) {
-        setStatus("uartStatus", error.message, "bad");
-      }
-    });
-
-    document.getElementById("probeUart").addEventListener("click", async () => {
-      if (state.uartProbeBusy) {
-        alert(t("uart.probeRunningAlert"));
-        return;
-      }
-      try {
-        await probeUart();
-      } catch (error) {
-        // runUartProbeRequest 已经把 detail 显示到 uartStatus 并 throw 出来。
-        // 这里只需要兜底（防止 runUartProbeRequest 之前自己抛错）。
-        if (error && error.body) {
-          const body = error.body;
-          const detail = body.detail ? ` (${body.detail})` : "";
-          setStatus("uartStatus", `${body.message || error.message}${detail}`, "bad");
+      if (!inputState.valid) {
+        if (inputState.reason === "format") {
+          setStatus("输入无效：仅支持整数，且不能包含小数点、字母或其他非法字符。", "bad");
         } else {
-          setStatus("uartStatus", error.message, "bad");
+          setStatus("输入无效：目标重量必须是 1000-100000 kg 之间的整数。", "bad");
         }
-      }
-    });
-
-    document.getElementById("uartProbeConfirm").addEventListener("click", async () => {
-      try {
-        await confirmUartProbe();
-      } catch (error) {
-        setStatus("uartStatus", error.message, "bad");
-      }
-    });
-
-    document.getElementById("uartProbeReject").addEventListener("click", async () => {
-      if (state.uartProbeBusy) {
-        alert(t("uart.probeRunningAlert"));
+        renderButtons();
         return;
       }
-      try {
-        await rejectUartProbe();
-      } catch (error) {
-        if (error.message === "all_candidates_exhausted") {
-          setStatus("uartStatus", t("uart.manualExhausted"), "warn");
-          await loadUart();
+      if (!Number.isFinite(speedKmh) || speedKmh < 1 || speedKmh > 15) {
+        setStatus("车辆速度无效：请输入 1 到 15 之间的 km/h。", "bad");
+        renderButtons();
+        return;
+      }
+
+      if (state.deviceKeepalive) {
+        try {
+          await stopKeepaliveOnDevice("设备端空秤发送已切换为车辆仿真。");
+        } catch (error) {
+          setStatus(`停止设备端空秤发送失败：${error.message}`, "bad");
+          renderButtons();
           return;
         }
-        setStatus("uartStatus", error.message, "bad");
       }
-    });
+      if (state.countdownTimer !== null) {
+        clearInterval(state.countdownTimer);
+        state.countdownTimer = null;
+      }
 
-    document.getElementById("uartProbeStop").addEventListener("click", async () => {
       try {
-        await stopUartProbe();
+        await startSimulationOnDevice({
+          target_weight: inputState.weight,
+          target_weight_text: rawTargetWeightValue,
+          speed_kmh: speedKmh,
+          interval_ms: intervalMs,
+          protocol: getProtocolValue(),
+          allow_decimal: allowDecimalValues(),
+          decimal_places: getDs10DecimalPlaces(),
+          weight_step_kg: getWeightStepValue()
+        });
+        document.getElementById("weightValue").value = "";
       } catch (error) {
-        setStatus("uartStatus", error.message, "bad");
+        setStatus(`启动设备端仿真失败：${error.message}`, "bad");
+        renderButtons();
       }
-    });
+    }
 
-    document.getElementById("uartRxFormat").addEventListener("change", (event) => {
-      state.uartRxFormat = event.target.value;
-      renderUartConsole();
+    document.getElementById("weightValue").addEventListener("input", updatePreview);
+    document.getElementById("vehicleSpeedKmh").addEventListener("input", () => {
+      renderButtons();
+      saveRuntimeSnapshot();
     });
-
-    document.getElementById("uartTxFormat").addEventListener("change", (event) => {
-      state.uartTxFormat = event.target.value;
-      renderUartConsole();
+    document.getElementById("protocolType").addEventListener("change", () => {
+      saveProtocolPreference();
+      updatePreview();
+      renderButtons();
     });
-
-    document.getElementById("sendUart").addEventListener("click", async () => {
-      try {
-        await sendUart();
-      } catch (error) {
-        setStatus("uartStatus", error.message, "bad");
+    document.getElementById("allowDecimalValues").addEventListener("change", () => {
+      saveDecimalPreference();
+      updatePreview();
+      renderButtons();
+    });
+    document.getElementById("weightStepKg").addEventListener("change", () => {
+      saveWeightStepPreference();
+      updatePreview();
+      renderButtons();
+    });
+    document.getElementById("frameIntervalMs").addEventListener("change", () => {
+      saveFrameIntervalPreference();
+      document.getElementById("activeInterval").textContent = `${getFrameIntervalValue()} ms`;
+      renderButtons();
+      saveRuntimeSnapshot();
+    });
+    document.getElementById("startSend").addEventListener("click", async () => {
+      await startSending();
+    });
+    document.getElementById("deviceOnline").addEventListener("click", async () => {
+      if (state.sendRunning) {
+        return;
       }
+        state.onlineArmed = true;
+        updatePreview();
+        try {
+          await startOnlineKeepalive();
+        } catch (error) {
+          state.onlineArmed = false;
+          updatePreview();
+          setStatus(`设备上线失败：${error.message}`, "bad");
+        }
+    });
+      document.getElementById("stopSend").addEventListener("click", async () => {
+        if (state.backendSimActive) {
+          try {
+            const data = await getJson("/api/v1/sim/stop", { method: "POST" });
+            if (data && data.active === false) {
+              stopSending("已停止设备端仿真发送。", "warn");
+            }
+          } catch (error) {
+            setStatus(`停止设备端仿真失败：${error.message}`, "bad");
+          }
+          return;
+        }
+        if (state.deviceKeepalive) {
+          try {
+            await stopKeepaliveOnDevice();
+          } catch (error) {
+            setStatus(`停止设备端空秤发送失败：${error.message}`, "bad");
+          }
+          return;
+        }
+        stopSending("已手动停止仿真发送。", "warn");
+    });
+    document.getElementById("exitVehicle").addEventListener("click", () => {
+      if (!state.backendSimActive || !state.exitWaiting) {
+        return;
+      }
+      getJson("/api/v1/sim/exit", { method: "POST" })
+        .then((data) => {
+          applyBackendSimulationStatus(data, "已通知设备端开始车辆驶出。");
+        })
+        .catch((error) => {
+          setStatus(`触发设备端车辆驶出失败：${error.message}`, "bad");
+        });
+    });
+    document.getElementById("clearInput").addEventListener("click", () => {
+      document.getElementById("weightValue").value = "";
+      document.getElementById("vehicleSpeedKmh").value = "6";
+      document.getElementById("lastSentPayload").textContent = "-";
+      document.getElementById("sendCount").textContent = "0";
+      state.onlineArmed = false;
+      state.activeIntervalMs = getFrameIntervalValue();
+      document.getElementById("activeInterval").textContent = `${state.activeIntervalMs} ms`;
+      document.getElementById("formattedPayload").textContent = "-";
+      document.getElementById("formattedPayloadHex").textContent = "-";
+      setActiveTargetWeight("");
+      setCurrentSendWeight("");
+      setPhase("idle");
+      setStatus(DEFAULT_WEIGHT_STATUS);
+      updatePreview();
+      saveRuntimeSnapshot();
     });
 
-    applyTranslations();
-    boot();
+    restoreProtocolPreference();
+    restoreDecimalPreference();
+    restoreWeightStepPreference();
+    restoreFrameIntervalPreference();
+    state.activeIntervalMs = getFrameIntervalValue();
+    document.getElementById("activeInterval").textContent = `${state.activeIntervalMs} ms`;
+    setPhase("idle");
+    renderButtons();
+    updatePreview();
+    restoreRuntimeSnapshot();
+    startRuntimePolling();
+    void refreshRuntimeStatus();
   </script>
 </body>
 </html>

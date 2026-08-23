@@ -5,7 +5,9 @@
 #include "esp_log.h"
 #include "nvs.h"
 
+#include "common.h"
 #include "config.h"
+#include "wifi.h"
 
 #define APP_NAMESPACE "iothub"
 #define APP_CONFIG_KEY "runtime_cfg"
@@ -103,20 +105,53 @@ typedef struct {
 
 static const char *TAG = "iothub";
 
-static void app_config_copy_string(char *dst, size_t dst_size, const char *src)
-{
-    size_t index = 0;
+#define APP_COPY_STR(field_name) \
+    app_copy_string(config->field_name, sizeof(config->field_name), legacy->field_name)
 
-    if (dst_size == 0) {
-        return;
-    }
+#define APP_ASSIGN_UINT8(field_name) \
+    config->field_name = legacy->field_name
 
-    while (src[index] != '\0' && index + 1 < dst_size) {
-        dst[index] = src[index];
-        index++;
-    }
-    dst[index] = '\0';
-}
+#define APP_ASSIGN_INT32(field_name) \
+    config->field_name = legacy->field_name
+
+#define APP_ASSIGN_UINT16(field_name) \
+    config->field_name = legacy->field_name
+
+#define APP_ASSIGN_UINT32(field_name) \
+    config->field_name = legacy->field_name
+
+#define APP_MIGRATE_COMMON_PREFIX()                              \
+    do {                                                         \
+        APP_ASSIGN_UINT8(relay_active_high);                     \
+        APP_ASSIGN_UINT8(led_active_high);                       \
+        APP_ASSIGN_UINT8(input_active_low);                      \
+        APP_ASSIGN_UINT8(relay_on);                              \
+        APP_ASSIGN_UINT8(led_on);                                \
+        APP_ASSIGN_UINT8(bt_mode);                               \
+        APP_ASSIGN_UINT8(net_mode);                              \
+        APP_ASSIGN_UINT8(mqtt_use_tls);                          \
+        APP_ASSIGN_UINT8(uart_parity_mode);                      \
+        APP_ASSIGN_UINT16(mqtt_port);                            \
+        APP_ASSIGN_UINT32(uart_baudrate);                        \
+    } while (0)
+
+#define APP_MIGRATE_COMMON_STRINGS()                             \
+    do {                                                         \
+        APP_COPY_STR(ap_ssid);                                   \
+        APP_COPY_STR(ap_password);                               \
+        APP_COPY_STR(sta_ssid);                                  \
+        APP_COPY_STR(sta_password);                              \
+        APP_COPY_STR(bt_device_name);                            \
+        APP_COPY_STR(mqtt_backend);                              \
+        APP_COPY_STR(mqtt_host);                                 \
+        APP_COPY_STR(mqtt_token);                                \
+    } while (0)
+
+#define APP_MIGRATE_FIXED_FRAME()                                \
+    do {                                                         \
+        config->uart_data_bits = 8;                              \
+        config->uart_stop_bits = 1;                              \
+    } while (0)
 
 static void app_config_init_wifi_profiles(app_wifi_profiles_blob_t *blob)
 {
@@ -229,10 +264,10 @@ void app_config_set_defaults(app_config_t *config)
     config->uart_data_bits = 8;
     config->uart_stop_bits = 1;
     config->uart_baudrate = 9600;
-    app_config_copy_string(config->ap_ssid, sizeof(config->ap_ssid), "iothub");
-    app_config_copy_string(config->bt_device_name, sizeof(config->bt_device_name), "iothub-bt");
-    app_config_copy_string(config->mqtt_backend, sizeof(config->mqtt_backend), "tb_cloud");
-    app_config_copy_string(config->mqtt_host, sizeof(config->mqtt_host), "demo.thingsboard.io");
+    app_copy_string(config->ap_ssid, sizeof(config->ap_ssid), "iothub");
+    app_copy_string(config->bt_device_name, sizeof(config->bt_device_name), "iothub-bt");
+    app_copy_string(config->mqtt_backend, sizeof(config->mqtt_backend), "tb_cloud");
+    app_copy_string(config->mqtt_host, sizeof(config->mqtt_host), "demo.thingsboard.io");
 }
 
 esp_err_t app_config_save(const app_config_t *config)
@@ -257,82 +292,54 @@ esp_err_t app_config_save(const app_config_t *config)
     return err;
 }
 
+static inline void app_config_migrate_set_strings_from_ptr(app_config_t *config,
+                                                           const char *ap_ssid,
+                                                           const char *ap_password,
+                                                           const char *sta_ssid,
+                                                           const char *sta_password,
+                                                           const char *bt_device_name,
+                                                           const char *mqtt_backend,
+                                                           const char *mqtt_host,
+                                                           const char *mqtt_token)
+{
+    app_copy_string(config->ap_ssid,        sizeof(config->ap_ssid),        ap_ssid);
+    app_copy_string(config->ap_password,    sizeof(config->ap_password),    ap_password);
+    app_copy_string(config->sta_ssid,       sizeof(config->sta_ssid),       sta_ssid);
+    app_copy_string(config->sta_password,   sizeof(config->sta_password),   sta_password);
+    app_copy_string(config->bt_device_name, sizeof(config->bt_device_name), bt_device_name);
+    app_copy_string(config->mqtt_backend,   sizeof(config->mqtt_backend),   mqtt_backend);
+    app_copy_string(config->mqtt_host,      sizeof(config->mqtt_host),      mqtt_host);
+    app_copy_string(config->mqtt_token,     sizeof(config->mqtt_token),     mqtt_token);
+}
+
 static void app_config_migrate_v3(app_config_t *config, const app_config_v3_t *legacy)
 {
     app_config_set_defaults(config);
-    config->relay_active_high = legacy->relay_active_high;
-    config->led_active_high = legacy->led_active_high;
-    config->input_active_low = legacy->input_active_low;
-    config->relay_on = legacy->relay_on;
-    config->led_on = legacy->led_on;
-    config->bt_mode = legacy->bt_mode;
-    config->net_mode = legacy->net_mode;
-    config->mqtt_use_tls = legacy->mqtt_use_tls;
-    config->uart_parity_mode = legacy->uart_parity_mode;
-    config->uart_data_bits = 8;
-    config->uart_stop_bits = 1;
-    config->mqtt_port = legacy->mqtt_port;
-    config->uart_baudrate = legacy->uart_baudrate;
-    app_config_copy_string(config->ap_ssid, sizeof(config->ap_ssid), legacy->ap_ssid);
-    app_config_copy_string(config->ap_password, sizeof(config->ap_password), legacy->ap_password);
-    app_config_copy_string(config->sta_ssid, sizeof(config->sta_ssid), legacy->sta_ssid);
-    app_config_copy_string(config->sta_password, sizeof(config->sta_password), legacy->sta_password);
-    app_config_copy_string(config->bt_device_name, sizeof(config->bt_device_name), legacy->bt_device_name);
-    app_config_copy_string(config->mqtt_backend, sizeof(config->mqtt_backend), legacy->mqtt_backend);
-    app_config_copy_string(config->mqtt_host, sizeof(config->mqtt_host), legacy->mqtt_host);
-    app_config_copy_string(config->mqtt_token, sizeof(config->mqtt_token), legacy->mqtt_token);
+    APP_MIGRATE_COMMON_PREFIX();
+    APP_MIGRATE_FIXED_FRAME();
+    app_config_migrate_set_strings_from_ptr(config,
+        legacy->ap_ssid, legacy->ap_password, legacy->sta_ssid, legacy->sta_password,
+        legacy->bt_device_name, legacy->mqtt_backend, legacy->mqtt_host, legacy->mqtt_token);
 }
 
 static void app_config_migrate_v4(app_config_t *config, const app_config_v4_t *legacy)
 {
     app_config_set_defaults(config);
-    config->relay_active_high = legacy->relay_active_high;
-    config->led_active_high = legacy->led_active_high;
-    config->input_active_low = legacy->input_active_low;
-    config->relay_on = legacy->relay_on;
-    config->led_on = legacy->led_on;
-    config->bt_mode = legacy->bt_mode;
-    config->net_mode = legacy->net_mode;
-    config->mqtt_use_tls = legacy->mqtt_use_tls;
-    config->uart_parity_mode = legacy->uart_parity_mode;
-    config->uart_data_bits = 8;
-    config->uart_stop_bits = 1;
-    config->mqtt_port = legacy->mqtt_port;
-    config->uart_baudrate = legacy->uart_baudrate;
-    app_config_copy_string(config->ap_ssid, sizeof(config->ap_ssid), legacy->ap_ssid);
-    app_config_copy_string(config->ap_password, sizeof(config->ap_password), legacy->ap_password);
-    app_config_copy_string(config->sta_ssid, sizeof(config->sta_ssid), legacy->sta_ssid);
-    app_config_copy_string(config->sta_password, sizeof(config->sta_password), legacy->sta_password);
-    app_config_copy_string(config->bt_device_name, sizeof(config->bt_device_name), legacy->bt_device_name);
-    app_config_copy_string(config->mqtt_backend, sizeof(config->mqtt_backend), legacy->mqtt_backend);
-    app_config_copy_string(config->mqtt_host, sizeof(config->mqtt_host), legacy->mqtt_host);
-    app_config_copy_string(config->mqtt_token, sizeof(config->mqtt_token), legacy->mqtt_token);
+    APP_MIGRATE_COMMON_PREFIX();
+    APP_MIGRATE_FIXED_FRAME();
+    app_config_migrate_set_strings_from_ptr(config,
+        legacy->ap_ssid, legacy->ap_password, legacy->sta_ssid, legacy->sta_password,
+        legacy->bt_device_name, legacy->mqtt_backend, legacy->mqtt_host, legacy->mqtt_token);
 }
 
 static void app_config_migrate_v5(app_config_t *config, const app_config_v5_t *legacy)
 {
     app_config_set_defaults(config);
-    config->relay_active_high = legacy->relay_active_high;
-    config->led_active_high = legacy->led_active_high;
-    config->input_active_low = legacy->input_active_low;
-    config->relay_on = legacy->relay_on;
-    config->led_on = legacy->led_on;
-    config->bt_mode = legacy->bt_mode;
-    config->net_mode = legacy->net_mode;
-    config->mqtt_use_tls = legacy->mqtt_use_tls;
-    config->uart_parity_mode = legacy->uart_parity_mode;
-    config->uart_data_bits = 8;
-    config->uart_stop_bits = 1;
-    config->mqtt_port = legacy->mqtt_port;
-    config->uart_baudrate = legacy->uart_baudrate;
-    app_config_copy_string(config->ap_ssid, sizeof(config->ap_ssid), legacy->ap_ssid);
-    app_config_copy_string(config->ap_password, sizeof(config->ap_password), legacy->ap_password);
-    app_config_copy_string(config->sta_ssid, sizeof(config->sta_ssid), legacy->sta_ssid);
-    app_config_copy_string(config->sta_password, sizeof(config->sta_password), legacy->sta_password);
-    app_config_copy_string(config->bt_device_name, sizeof(config->bt_device_name), legacy->bt_device_name);
-    app_config_copy_string(config->mqtt_backend, sizeof(config->mqtt_backend), legacy->mqtt_backend);
-    app_config_copy_string(config->mqtt_host, sizeof(config->mqtt_host), legacy->mqtt_host);
-    app_config_copy_string(config->mqtt_token, sizeof(config->mqtt_token), legacy->mqtt_token);
+    APP_MIGRATE_COMMON_PREFIX();
+    APP_MIGRATE_FIXED_FRAME();
+    app_config_migrate_set_strings_from_ptr(config,
+        legacy->ap_ssid, legacy->ap_password, legacy->sta_ssid, legacy->sta_password,
+        legacy->bt_device_name, legacy->mqtt_backend, legacy->mqtt_host, legacy->mqtt_token);
 }
 
 void app_config_load(app_config_t *config)
@@ -462,8 +469,8 @@ esp_err_t app_config_save_wifi_profile(const char *ssid, const char *password)
         return ESP_ERR_INVALID_ARG;
     }
 
-    app_config_copy_string(profile.ssid, sizeof(profile.ssid), ssid);
-    app_config_copy_string(profile.password, sizeof(profile.password), password);
+    app_copy_string(profile.ssid, sizeof(profile.ssid), ssid);
+    app_copy_string(profile.password, sizeof(profile.password), password);
 
     ESP_RETURN_ON_ERROR(nvs_open(APP_NAMESPACE, NVS_READWRITE, &nvs_handle), TAG,
                         "open nvs for wifi profiles failed");
@@ -493,6 +500,9 @@ esp_err_t app_config_save_wifi_profile(const char *ssid, const char *password)
     {
         esp_err_t err = app_config_store_wifi_profiles_blob(nvs_handle, &blob);
         nvs_close(nvs_handle);
+        if (err == ESP_OK) {
+            app_wifi_mark_profiles_dirty();
+        }
         return err;
     }
 }
@@ -525,6 +535,9 @@ esp_err_t app_config_delete_wifi_profile(const char *ssid)
     {
         esp_err_t err = app_config_store_wifi_profiles_blob(nvs_handle, &blob);
         nvs_close(nvs_handle);
+        if (err == ESP_OK) {
+            app_wifi_mark_profiles_dirty();
+        }
         return err;
     }
 }

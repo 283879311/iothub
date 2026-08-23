@@ -174,6 +174,9 @@
       flex-wrap: wrap;
       margin-top: 8px;
     }
+    .actions.nowrap {
+      flex-wrap: nowrap;
+    }
     .scan-list {
       margin-top: 12px;
       display: grid;
@@ -241,6 +244,11 @@
       margin: 0 0 12px;
       line-height: 1.5;
     }
+    .modal-card.large {
+      width: min(640px, 100%);
+      max-height: min(80vh, 720px);
+      overflow: auto;
+    }
   </style>
 </head>
 <body>
@@ -266,6 +274,43 @@
       </article>
 
       <article class="card">
+        <h2 data-i18n="section.network">网络配置</h2>
+        <label for="netMode" data-i18n="network.mode">网络模式</label>
+        <select id="netMode">
+          <option value="ap" data-i18n="mode.ap">AP</option>
+          <option value="sta" data-i18n="mode.sta">STA</option>
+          <option value="apsta" data-i18n="mode.apsta">AP + STA</option>
+        </select>
+        <div class="subgrid">
+          <div>
+            <label for="ssid" data-i18n="network.apSsid">AP 名称</label>
+            <input id="ssid" type="text" maxlength="32">
+          </div>
+          <div>
+            <label for="password" data-i18n="network.apPassword">AP 密码</label>
+            <input id="password" type="password" maxlength="64" data-i18n-placeholder="placeholder.apPassword" placeholder="留空表示开放网络">
+          </div>
+        </div>
+        <div class="subgrid">
+          <div>
+            <label for="staSsid" data-i18n="network.staSsid">STA 名称</label>
+            <input id="staSsid" type="text" maxlength="32" data-i18n-placeholder="placeholder.staSsid" placeholder="上游路由器 SSID">
+          </div>
+          <div>
+            <label for="staPassword" data-i18n="network.staPassword">STA 密码</label>
+            <input id="staPassword" type="password" maxlength="64" data-i18n-placeholder="placeholder.staPassword" placeholder="至少 8 位或留空">
+          </div>
+        </div>
+        <div class="actions nowrap">
+          <button id="saveNetwork" data-i18n="button.saveNetwork">保存</button>
+          <button id="scanWifi" class="secondary" data-i18n="button.scanWifi">扫描 Wi-Fi</button>
+          <button id="showSavedWifi" class="secondary" data-i18n="button.savedWifi">已保存WiFi</button>
+        </div>
+        <div class="hint" data-i18n="hint.network">设备默认 AP 地址为 `192.168.8.1`。STA 模式下可连接上游网络，MQTT 会在 STA 获取 IP 后再尝试连出。</div>
+        <div id="networkStatus" class="status" data-i18n="status.networkLoading">等待加载网络配置...</div>
+      </article>
+
+      <article class="card">
         <h2 data-i18n="section.mqtt">MQTT / ThingsBoard</h2>
         <label for="mqttBackend" data-i18n="mqtt.backend">后端类型</label>
         <select id="mqttBackend">
@@ -284,7 +329,7 @@
           </div>
         </div>
         <label for="mqttToken" data-i18n="mqtt.token">Token / 密钥</label>
-        <input id="mqttToken" type="text" maxlength="127">
+        <input id="mqttToken" type="password" maxlength="127">
         <label class="checkbox">
           <input id="mqttTls" type="checkbox">
           <span data-i18n="mqtt.tls">启用 TLS</span>
@@ -292,6 +337,39 @@
         <button id="saveMqtt" data-i18n="button.saveMqtt">保存 MQTT 配置</button>
         <div class="hint" data-i18n="hint.mqtt">当前阶段会实际发起 MQTT 连接，并周期上报基础遥测。若仍未连接，请确认网络可达和 Broker 配置正确。</div>
         <div id="mqttStatus" class="status" data-i18n="status.mqttLoading">等待加载 MQTT 配置...</div>
+      </article>
+
+      <article class="card">
+        <h2 data-i18n="section.ota">OTA 升级</h2>
+        <div class="stack">
+          <div>
+            <label for="storageFile" data-i18n="ota.storageFile">选择网页资源 `storage.bin`</label>
+            <input id="storageFile" type="file" accept=".bin,application/octet-stream">
+            <button id="uploadStorage" data-i18n="button.uploadStorage">上传网页资源并升级</button>
+          </div>
+          <div>
+            <label for="otaFile" data-i18n="ota.file">选择固件 `iothub.bin` 文件</label>
+            <input id="otaFile" type="file" accept=".bin,application/octet-stream">
+            <button id="uploadOta" data-i18n="button.uploadOta">上传固件并升级</button>
+          </div>
+        </div>
+        <div class="hint" data-i18n="hint.ota">建议先升级 `storage.bin`，再升级 `iothub.bin`；也可以两者都升级。每次上传成功后设备都会自动重启，页面会提示你刷新并重新连接。</div>
+        <div id="otaStatus" class="status" data-i18n="status.otaWaiting">等待选择 `storage.bin` 或 `iothub.bin`</div>
+      </article>
+
+      <article class="card">
+        <h2 data-i18n="section.bluetooth">蓝牙配置</h2>
+        <label for="btMode" data-i18n="bluetooth.mode">蓝牙模式</label>
+        <select id="btMode">
+          <option value="off" data-i18n="bt.off">关闭蓝牙</option>
+          <option value="ble" data-i18n="bt.ble">低功耗蓝牙</option>
+          <option value="spp" data-i18n="bt.spp">经典蓝牙</option>
+        </select>
+        <label for="btName" data-i18n="bluetooth.name">蓝牙名称</label>
+        <input id="btName" type="text" maxlength="32">
+        <button id="saveBluetooth" data-i18n="button.saveBluetooth">保存蓝牙配置</button>
+        <div class="hint" data-i18n="hint.bluetooth">低功耗蓝牙模式下设备会广播名称；经典蓝牙模式下会以从机服务方式等待连接。</div>
+        <div id="bluetoothStatus" class="status" data-i18n="status.bluetoothLoading">等待加载蓝牙配置...</div>
       </article>
 
       <article class="card">
@@ -325,76 +403,6 @@
         </div>
         <div class="hint" data-i18n="hint.gpio">引脚已固定在固件中。如需调整，请修改源码宏定义后重新编译烧录。GPIO34/35/36/39 仅支持输入且需要外部上下拉。</div>
         <div id="gpioInfo" class="status" data-i18n="status.gpioLoading">等待加载 GPIO 状态...</div>
-      </article>
-
-      <article class="card">
-        <h2 data-i18n="section.bluetooth">蓝牙配置</h2>
-        <label for="btMode" data-i18n="bluetooth.mode">蓝牙模式</label>
-        <select id="btMode">
-          <option value="off" data-i18n="bt.off">关闭蓝牙</option>
-          <option value="ble" data-i18n="bt.ble">低功耗蓝牙</option>
-          <option value="spp" data-i18n="bt.spp">经典蓝牙</option>
-        </select>
-        <label for="btName" data-i18n="bluetooth.name">蓝牙名称</label>
-        <input id="btName" type="text" maxlength="32">
-        <button id="saveBluetooth" data-i18n="button.saveBluetooth">保存蓝牙配置</button>
-        <div class="hint" data-i18n="hint.bluetooth">低功耗蓝牙模式下设备会广播名称；经典蓝牙模式下会以从机服务方式等待连接。</div>
-        <div id="bluetoothStatus" class="status" data-i18n="status.bluetoothLoading">等待加载蓝牙配置...</div>
-      </article>
-
-      <article class="card">
-        <h2 data-i18n="section.ota">OTA 升级</h2>
-        <div class="stack">
-          <div>
-            <label for="storageFile" data-i18n="ota.storageFile">选择网页资源 `storage.bin`</label>
-            <input id="storageFile" type="file" accept=".bin,application/octet-stream">
-            <button id="uploadStorage" data-i18n="button.uploadStorage">上传网页资源并升级</button>
-          </div>
-          <div>
-            <label for="otaFile" data-i18n="ota.file">选择固件 `iothub.bin` 文件</label>
-            <input id="otaFile" type="file" accept=".bin,application/octet-stream">
-            <button id="uploadOta" data-i18n="button.uploadOta">上传固件并升级</button>
-          </div>
-        </div>
-        <div class="hint" data-i18n="hint.ota">建议先升级 `storage.bin`，再升级 `iothub.bin`；也可以两者都升级。每次上传成功后设备都会自动重启，页面会提示你刷新并重新连接。</div>
-        <div id="otaStatus" class="status" data-i18n="status.otaWaiting">等待选择 `storage.bin` 或 `iothub.bin`</div>
-      </article>
-
-      <article class="card">
-        <h2 data-i18n="section.network">网络配置</h2>
-        <label for="netMode" data-i18n="network.mode">网络模式</label>
-        <select id="netMode">
-          <option value="ap" data-i18n="mode.ap">AP</option>
-          <option value="sta" data-i18n="mode.sta">STA</option>
-          <option value="apsta" data-i18n="mode.apsta">AP + STA</option>
-        </select>
-        <div class="subgrid">
-          <div>
-            <label for="ssid" data-i18n="network.apSsid">AP 名称</label>
-            <input id="ssid" type="text" maxlength="32">
-          </div>
-          <div>
-            <label for="password" data-i18n="network.apPassword">AP 密码</label>
-            <input id="password" type="password" maxlength="64" data-i18n-placeholder="placeholder.apPassword" placeholder="留空表示开放网络">
-          </div>
-        </div>
-        <div class="subgrid">
-          <div>
-            <label for="staSsid" data-i18n="network.staSsid">STA 名称</label>
-            <input id="staSsid" type="text" maxlength="32" data-i18n-placeholder="placeholder.staSsid" placeholder="上游路由器 SSID">
-          </div>
-          <div>
-            <label for="staPassword" data-i18n="network.staPassword">STA 密码</label>
-            <input id="staPassword" type="password" maxlength="64" data-i18n-placeholder="placeholder.staPassword" placeholder="至少 8 位或留空">
-          </div>
-        </div>
-        <div class="actions">
-          <button id="saveNetwork" data-i18n="button.saveNetwork">保存网络配置</button>
-          <button id="scanWifi" class="secondary" data-i18n="button.scanWifi">扫描 Wi-Fi</button>
-        </div>
-        <div class="hint" data-i18n="hint.network">设备默认 AP 地址为 `192.168.8.1`。STA 模式下可连接上游网络，MQTT 会在 STA 获取 IP 后再尝试连出。</div>
-        <div id="networkStatus" class="status" data-i18n="status.networkLoading">等待加载网络配置...</div>
-        <div id="wifiScanList" class="scan-list"></div>
       </article>
 
       <article class="card">
@@ -439,7 +447,6 @@
         </div>
         <div class="row">
           <button id="saveUart" data-i18n="button.saveUart">保存 UART 配置</button>
-          <button id="probeUart" class="secondary" data-i18n="button.probeUart">手动轮询</button>
         </div>
         <div class="subgrid">
           <div>
@@ -459,26 +466,36 @@
         </div>
         <label for="uartRxConsole" data-i18n="uart.rxWindow">接收数据</label>
         <textarea id="uartRxConsole" class="mono uart-console" rows="4" readonly></textarea>
+        <div class="actions">
+          <button id="clearUartConsole" class="secondary" data-i18n="button.clearUartConsole">清空</button>
+        </div>
         <label for="uartTxData" data-i18n="uart.txWindow">发送数据</label>
         <div class="actions">
           <input id="uartTxData" class="mono uart-send" type="text" maxlength="255" data-i18n-placeholder="placeholder.uartTx" placeholder="输入待发送数据，hex 模式可用空格分隔">
           <button id="sendUart" class="secondary" data-i18n="button.sendUart">发送</button>
         </div>
-        <div class="hint" data-i18n="hint.uart">RX/TX 引脚已固定在固件中。点击“手动轮询”后，页面会按常用波特率与校验方式逐个试跑，请在看到正确样本后确认保存。</div>
+        <div class="hint" data-i18n="hint.uart">RX/TX 引脚已固定在固件中。请直接设置波特率、数据位、停止位和奇偶校验后保存，并在下方观察接收样本是否正确。</div>
         <div id="uartStatus" class="status" data-i18n="status.uartLoading">等待加载 UART 配置...</div>
-        <label for="uartProbeDetails" data-i18n="uart.probeDetails">探测明细</label>
-        <textarea id="uartProbeDetails" class="mono uart-console" rows="6" readonly></textarea>
       </article>
     </section>
   </main>
-  <div id="uartProbeModal" class="modal-overlay" hidden>
-    <div class="modal-card">
-      <h3 data-i18n="dialog.probeTitle">串口检测确认</h3>
-      <p id="uartProbeModalMessage"></p>
+  <div id="wifiScanModal" class="modal-overlay" hidden>
+    <div class="modal-card large">
+      <h3 data-i18n="dialog.wifiScanTitle">扫描到的 Wi-Fi</h3>
+      <p data-i18n="scan.modalHint">点击“使用”可将 SSID 与密码回填到 STA 配置中，随后再保存网络配置。</p>
+      <div id="wifiScanList" class="scan-list"></div>
       <div class="actions">
-        <button id="uartProbeConfirm" data-i18n="button.probeConfirm">正确，保存</button>
-        <button id="uartProbeReject" class="secondary" data-i18n="button.probeRejectNext">不对，下一个参数</button>
-        <button id="uartProbeStop" class="secondary" data-i18n="button.probeStop">停止检测</button>
+        <button id="closeWifiScanModal" class="secondary" data-i18n="button.close">关闭</button>
+      </div>
+    </div>
+  </div>
+  <div id="savedWifiModal" class="modal-overlay" hidden>
+    <div class="modal-card large">
+      <h3 data-i18n="dialog.savedWifiTitle">已保存WiFi</h3>
+      <p data-i18n="network.savedWifiHint">点击“使用”可切换到该组已保存的 Wi‑Fi 参数；如果已连接当前 Wi‑Fi，则只提示无需切换。</p>
+      <div id="savedWifiList" class="scan-list"></div>
+      <div class="actions">
+        <button id="closeSavedWifiModal" class="secondary" data-i18n="button.close">关闭</button>
       </div>
     </div>
   </div>
@@ -491,18 +508,20 @@
       gpioConfig: null,
       statusPollTimer: null,
       statusPollBusy: false,
-      uartProbeBusy: false,
       uartConfig: null,
       uartConsolePlain: "",
       uartConsoleHex: "",
       uartRxFormat: "plain",
       uartTxFormat: "plain",
+      savedWifiProfiles: [],
+      wifiScanResults: [],
+      networkConfig: null,
       uartPollTimer: null,
-      uartPollBusy: false,
-      uartProbeMode: "idle",
-      uartProbePending: false,
-      uartProbeManualHasMore: false
+      uartPollBusy: false
     };
+
+    const FETCH_RETRY_MAX = 1;
+    const FETCH_RETRY_DELAY_MS = 250;
 
     const translations = {
       "zh-CN": {
@@ -530,8 +549,9 @@
         "mode.ap": "AP",
         "mode.sta": "STA",
         "mode.apsta": "AP + STA",
-        "button.saveNetwork": "保存网络配置",
+        "button.saveNetwork": "保存",
         "button.scanWifi": "扫描 Wi-Fi",
+        "button.savedWifi": "已保存WiFi",
         "button.toggle": "切换",
         "button.saveGpio": "保存 GPIO 配置",
         "button.saveBluetooth": "保存蓝牙配置",
@@ -539,15 +559,13 @@
         "button.uploadStorage": "上传网页资源并升级",
         "button.saveMqtt": "保存 MQTT 配置",
         "button.saveUart": "保存 UART 配置",
-        "button.probeUart": "手动轮询",
-        "button.probeUartBusyAuto": "串口探测中...",
-        "button.probeUartBusyManual": "手动轮询中...",
-        "button.probeConfirm": "正确，保存",
-        "button.probeRejectNext": "不对，下一个参数",
-        "button.probeStop": "停止检测",
-        "dialog.probeTitle": "串口检测确认",
+        "dialog.wifiScanTitle": "扫描到的 Wi-Fi",
+        "dialog.savedWifiTitle": "已保存WiFi",
         "button.sendUart": "发送",
+        "button.clearUartConsole": "清空",
         "button.use": "使用",
+        "button.delete": "删除",
+        "button.close": "关闭",
         "bt.off": "关闭蓝牙",
         "bt.ble": "低功耗蓝牙",
         "bt.spp": "经典蓝牙",
@@ -556,7 +574,7 @@
         "hint.bluetooth": "低功耗蓝牙模式下设备会广播名称；经典蓝牙模式下会以从机服务方式等待连接。",
         "hint.ota": "建议先升级 `storage.bin`，再升级 `iothub.bin`；也可以两者都升级。每次上传成功后设备都会自动重启，页面会提示你刷新并重新连接。",
         "hint.mqtt": "当前阶段会实际发起 MQTT 连接，并周期上报基础遥测。若仍未连接，请确认网络可达和 Broker 配置正确。",
-        "hint.uart": "RX/TX 引脚已固定在固件中。点击“手动轮询”后，页面会按常用波特率与校验方式逐个试跑，请在看到正确样本后确认保存。",
+        "hint.uart": "RX/TX 引脚已固定在固件中。请直接设置波特率、数据位、停止位和奇偶校验后保存，并在下方接收窗口中观察串口数据是否正确。",
         "gpio.relay": "继电器输出",
         "gpio.led": "状态灯",
         "gpio.input": "开关量输入",
@@ -597,7 +615,10 @@
         "status.uartLoading": "等待加载 UART 配置...",
         "scan.emptyTitle": "尚无扫描结果",
         "scan.emptyHint": "点击“扫描 Wi-Fi”获取附近热点",
+        "scan.savedEmptyTitle": "暂无已保存的 WiFi",
+        "scan.savedEmptyHint": "先保存一次 STA 配置后，这里会显示常用 Wi‑Fi。",
         "scan.hidden": "(隐藏 SSID)",
+        "scan.modalHint": "点击“使用”可将 SSID 与密码回填到 STA 配置中，随后再保存网络配置。",
         "device.project": "项目",
         "device.target": "目标",
         "device.idf_version": "IDF 版本",
@@ -627,6 +648,11 @@
         "network.summary": "模式={mode}，AP={ap}，STA={sta}，联网={staIp}，最近断开={lastDisconnect}",
         "network.noIp": "未获取 IP",
         "network.none": "-",
+        "network.savedProfiles": "已保存 Wi-Fi",
+        "network.savedWifiHint": "点击“使用”可切换到该组已保存的 Wi‑Fi 参数；如果已连接当前 Wi‑Fi，则只提示无需切换。",
+        "network.profileApplied": "已回填 Wi-Fi：{ssid}",
+        "network.profileDeleted": "已删除保存的 Wi-Fi：{ssid}",
+        "network.profileAlreadyConnected": "已连接该 Wi‑Fi：{ssid}，无需切换",
         "network.savedNeedsRestart": "网络配置已保存。新的访问地址：{address}。是否现在重启网络以应用配置？",
         "network.savedStaOnly": "网络配置已保存。当前为纯 STA 模式，重启后请到路由器 DHCP 列表查看新 IP。是否现在重启网络以应用配置？",
         "network.restartStarted": "网络正在重启。若 AP 可用，请使用 http://{address} 重新连接。",
@@ -636,18 +662,9 @@
         "bluetooth.summaryWithError": "配置模式={mode}，当前运行模式={runtimeMode}，名称={name}，错误={error}",
         "bluetooth.saving": "蓝牙配置已保存，正在重启蓝牙并刷新状态...",
         "mqtt.summary": "后端={backend}，主机={host}，端口={port}，连接状态={connected}，错误={error}",
-        "uart.summary": "当前={frame} @ {baudrate}bps，协议提示={protocolHint}，样本={sample}",
-        "uart.probeDetails": "探测明细",
-        "uart.probeAttemptsEmpty": "暂无探测明细",
-        "uart.probeConfirmSummary": "二次确认={confirmed}，确认分={confirmScore}，初选最高分={bestScore}",
-        "uart.probeAttemptLine": "#{index} {frame} @ {baudrate}bps，分数={score}，字节={sampleBytes}，ASCII={asciiRatio}% ，协议={protocolHint}，样本={sample}",
-        "uart.probeRunningAlert": "UART 正在手动轮询，请等待当前检测完成。",
-        "uart.probeStartConfirm": "开始串口手动轮询前，请确认数据线已经接好，并且上位机/设备已经开始发送数据。现在开始轮询吗？",
-        "uart.manualReady": "手动轮询 {index}/{count}：{frame} @ {baudrate}bps，样本={sample}。请确认是否正确。",
-        "uart.probeSaved": "已保存 UART 参数：{frame} @ {baudrate}bps。",
-        "uart.probeStopped": "已停止本次 UART 探测，并恢复到已保存参数。",
-        "uart.manualExhausted": "常用参数已经轮询完，请检查接线、发送内容或补充新的候选参数。",
+        "uart.summary": "当前={frame} @ {baudrate}bps",
         "uart.sent": "已发送 {bytes} 字节，编码={encoding}",
+        "uart.cleared": "接收区已清空",
         "ota.uploading": "正在上传固件 {name} ({size} bytes)...",
         "ota.storageUploading": "正在上传网页资源 {name} ({size} bytes)...",
         "ota.done": "{message}",
@@ -663,7 +680,8 @@
         "error.expectedFirmwareName": "文件名不匹配：固件升级只允许上传 `iothub.bin`，当前选择的是 `{actual}`",
         "error.expectedStorageName": "文件名不匹配：网页资源升级只允许上传 `storage.bin`，当前选择的是 `{actual}`",
         "error.emptyResponse": "接口返回空响应",
-        "error.invalidResponse": "接口返回了非 JSON 内容"
+        "error.invalidResponse": "接口返回了非 JSON 内容",
+        "error.transientFetch": "设备连接暂时中断，请稍后重试"
       },
       "en": {
         "page.title": "iothub Configuration",
@@ -690,8 +708,9 @@
         "mode.ap": "AP",
         "mode.sta": "STA",
         "mode.apsta": "AP + STA",
-        "button.saveNetwork": "Save Network",
+        "button.saveNetwork": "Save",
         "button.scanWifi": "Scan Wi-Fi",
+        "button.savedWifi": "Saved Wi-Fi",
         "button.toggle": "Toggle",
         "button.saveGpio": "Save GPIO",
         "button.saveBluetooth": "Save Bluetooth Settings",
@@ -699,15 +718,13 @@
         "button.uploadStorage": "Upload Web Assets",
         "button.saveMqtt": "Save MQTT",
         "button.saveUart": "Save UART",
-        "button.probeUart": "Manual Scan",
-        "button.probeUartBusyAuto": "UART Probing...",
-        "button.probeUartBusyManual": "Manual Scanning...",
-        "button.probeConfirm": "Correct, Save",
-        "button.probeRejectNext": "Incorrect, Next",
-        "button.probeStop": "Stop Probe",
-        "dialog.probeTitle": "UART Probe Confirmation",
+        "dialog.wifiScanTitle": "Scanned Wi-Fi Networks",
+        "dialog.savedWifiTitle": "Saved Wi-Fi",
         "button.sendUart": "Send",
+        "button.clearUartConsole": "Clear",
         "button.use": "Use",
+        "button.delete": "Delete",
+        "button.close": "Close",
         "bt.off": "BT OFF",
         "bt.ble": "BLE",
         "bt.spp": "SPP",
@@ -716,7 +733,7 @@
         "hint.bluetooth": "In BLE mode, the device advertises its name. In SPP mode, it waits for incoming connections as a Classic Bluetooth slave service.",
         "hint.ota": "Upgrade `storage.bin` first, then `iothub.bin`; or upload both in sequence. After each successful upload, the device reboots automatically and the page prompts you to refresh and reconnect.",
         "hint.mqtt": "This phase starts a real MQTT connection and publishes basic telemetry periodically. If it is still disconnected, verify network reachability and broker settings.",
-        "hint.uart": "RX/TX pins are fixed in firmware. Click Manual Scan to try common baud/parity combinations one by one, then confirm and save when the sample looks correct.",
+        "hint.uart": "RX/TX pins are fixed in firmware. Set baud rate, data bits, stop bits, and parity directly, save them, then verify the data in the receive console below.",
         "gpio.relay": "Relay Output",
         "gpio.led": "Status LED",
         "gpio.input": "Digital Input",
@@ -757,7 +774,10 @@
         "status.uartLoading": "Loading UART configuration...",
         "scan.emptyTitle": "No scan results yet",
         "scan.emptyHint": "Click \"Scan Wi-Fi\" to discover nearby networks",
+        "scan.savedEmptyTitle": "No saved Wi-Fi yet",
+        "scan.savedEmptyHint": "Save STA settings once and common Wi‑Fi profiles appear here.",
         "scan.hidden": "(hidden SSID)",
+        "scan.modalHint": "Click \"Use\" to fill the STA SSID and password, then save the network settings.",
         "device.project": "Project",
         "device.target": "Target",
         "device.idf_version": "IDF Version",
@@ -787,6 +807,11 @@
         "network.summary": "Mode={mode}, AP={ap}, STA={sta}, Online={staIp}, Last disconnect={lastDisconnect}",
         "network.noIp": "no IP",
         "network.none": "-",
+        "network.savedProfiles": "Saved Wi-Fi",
+        "network.savedWifiHint": "Click \"Use\" to switch the form to a saved Wi‑Fi profile. If this Wi‑Fi is already connected, the page only shows a reminder.",
+        "network.profileApplied": "Filled Wi-Fi profile: {ssid}",
+        "network.profileDeleted": "Deleted saved Wi-Fi: {ssid}",
+        "network.profileAlreadyConnected": "This Wi‑Fi is already connected: {ssid}",
         "network.savedNeedsRestart": "Network settings were saved. New access address: {address}. Restart networking now to apply the changes?",
         "network.savedStaOnly": "Network settings were saved. STA-only mode cannot predict the next IP. After restart, check your router DHCP list for the new address. Restart networking now?",
         "network.restartStarted": "Network restart started. If AP is enabled, reconnect using http://{address}.",
@@ -796,18 +821,9 @@
         "bluetooth.summaryWithError": "Configured mode={mode}, active mode={runtimeMode}, device name={name}, error={error}",
         "bluetooth.saving": "Bluetooth settings saved. Restarting Bluetooth services and refreshing status...",
         "mqtt.summary": "Backend={backend}, host={host}, port={port}, status={connected}, error={error}",
-        "uart.summary": "Current={frame} @ {baudrate}bps, protocol={protocolHint}, sample={sample}",
-        "uart.probeDetails": "Probe Details",
-        "uart.probeAttemptsEmpty": "No probe details yet",
-        "uart.probeConfirmSummary": "Confirmed={confirmed}, confirm score={confirmScore}, best initial score={bestScore}",
-        "uart.probeAttemptLine": "#{index} {frame} @ {baudrate}bps, score={score}, bytes={sampleBytes}, ASCII={asciiRatio}%, protocol={protocolHint}, sample={sample}",
-        "uart.probeRunningAlert": "UART manual scan is already running. Please wait for it to finish.",
-        "uart.probeStartConfirm": "Before starting UART manual scan, confirm the wiring is connected and the upstream device has started sending data. Start scanning now?",
-        "uart.manualReady": "Manual scan {index}/{count}: {frame} @ {baudrate}bps, sample={sample}. Please confirm whether it is correct.",
-        "uart.probeSaved": "UART parameters saved: {frame} @ {baudrate}bps.",
-        "uart.probeStopped": "UART probe stopped and the saved parameters have been restored.",
-        "uart.manualExhausted": "The common parameter list has been exhausted. Check wiring, transmitted data, or add more candidates.",
+        "uart.summary": "Current={frame} @ {baudrate}bps",
         "uart.sent": "Sent {bytes} bytes, encoding={encoding}",
+        "uart.cleared": "Receive console cleared",
         "ota.uploading": "Uploading firmware {name} ({size} bytes)...",
         "ota.storageUploading": "Uploading web assets {name} ({size} bytes)...",
         "ota.done": "{message}",
@@ -823,7 +839,8 @@
         "error.expectedFirmwareName": "File name mismatch: firmware upload only accepts `iothub.bin`, current selection is `{actual}`",
         "error.expectedStorageName": "File name mismatch: web assets upload only accepts `storage.bin`, current selection is `{actual}`",
         "error.emptyResponse": "The API returned an empty response",
-        "error.invalidResponse": "The API returned non-JSON content"
+        "error.invalidResponse": "The API returned non-JSON content",
+        "error.transientFetch": "The device connection was interrupted temporarily. Please try again shortly."
       }
     };
 
@@ -893,35 +910,11 @@
       element.className = "status" + (tone ? ` ${tone}` : "");
     }
 
-    function setProbeButtonBusy(busy, manualMode = false) {
-      const button = document.getElementById("probeUart");
-      const confirmButton = document.getElementById("uartProbeConfirm");
-      const rejectButton = document.getElementById("uartProbeReject");
-      const stopButton = document.getElementById("uartProbeStop");
-      if (!button) {
-        return;
-      }
-      state.uartProbeBusy = busy;
-      button.classList.toggle("probing", busy);
-      button.setAttribute("aria-busy", busy ? "true" : "false");
-      if (confirmButton) {
-        confirmButton.disabled = busy;
-      }
-      if (rejectButton) {
-        rejectButton.disabled = busy || (state.uartProbeMode === "manual" && !state.uartProbeManualHasMore);
-      }
-      if (stopButton) {
-        stopButton.disabled = busy;
-      }
-      button.textContent = busy
-        ? t(manualMode ? "button.probeUartBusyManual" : "button.probeUartBusyAuto")
-        : t("button.probeUart");
-    }
-
     function renderUartConsole() {
       const rxFormat = document.getElementById("uartRxFormat");
       const txFormat = document.getElementById("uartTxFormat");
       const consoleBox = document.getElementById("uartRxConsole");
+      let renderedValue = "";
       if (!consoleBox) {
         return;
       }
@@ -933,92 +926,20 @@
         txFormat.value = state.uartTxFormat;
       }
 
-      consoleBox.value = state.uartRxFormat === "hex"
+      renderedValue = state.uartRxFormat === "hex"
         ? (state.uartConsoleHex || "")
         : (state.uartConsolePlain || "");
+      consoleBox.value = renderedValue;
       consoleBox.scrollTop = consoleBox.scrollHeight;
-    }
-
-    function renderUartProbeDetails(data) {
-      const detailBox = document.getElementById("uartProbeDetails");
-      const attempts = Array.isArray(data?.probe_attempts) ? data.probe_attempts : [];
-      if (!detailBox) {
-        return;
-      }
-      if (attempts.length === 0) {
-        detailBox.value = t("uart.probeAttemptsEmpty");
-        return;
-      }
-      const lines = [
-        t("uart.probeConfirmSummary", {
-          confirmed: data.probe_confirmed ? t("state.yes") : t("state.no"),
-          confirmScore: data.probe_confirm_score ?? -1,
-          bestScore: data.probe_best_score ?? -1
-        })
-      ];
-      attempts.forEach((item, index) => {
-        lines.push(t("uart.probeAttemptLine", {
-          index: index + 1,
-          frame: item.frame || "8N1",
-          baudrate: item.baudrate || 0,
-          score: item.score ?? -1,
-          sampleBytes: item.sample_bytes ?? 0,
-          asciiRatio: item.ascii_ratio_pct ?? 0,
-          protocolHint: item.protocol_hint || t("network.none"),
-          sample: item.sample || t("network.none")
-        }));
+      // #region debug-point D:uart-console-render
+      reportUartDebugEvent("D", "renderUartConsole", "UART console rendered", {
+        rxFormat: state.uartRxFormat,
+        renderedLength: renderedValue.length,
+        plainLength: (state.uartConsolePlain || "").length,
+        hexLength: (state.uartConsoleHex || "").length,
+        renderedPreview: renderedValue.slice(0, 64)
       });
-      detailBox.value = lines.join("\n");
-      detailBox.scrollTop = 0;
-    }
-
-    function renderUartProbeActions(data) {
-      const modal = document.getElementById("uartProbeModal");
-      const modalMessage = document.getElementById("uartProbeModalMessage");
-      const confirmButton = document.getElementById("uartProbeConfirm");
-      const rejectButton = document.getElementById("uartProbeReject");
-      const stopButton = document.getElementById("uartProbeStop");
-      const pending = Boolean(data?.probe_pending_confirmation);
-
-      state.uartProbePending = pending;
-      state.uartProbeMode = data?.probe_mode || "idle";
-      state.uartProbeManualHasMore = Boolean(data?.manual_has_more);
-
-      if (!modal || !modalMessage || !confirmButton || !rejectButton || !stopButton) {
-        return;
-      }
-
-      modal.hidden = !pending;
-      if (!pending) {
-        return;
-      }
-
-      modalMessage.textContent = buildUartProbeStatus(data);
-      confirmButton.textContent = t("button.probeConfirm");
-      stopButton.textContent = t("button.probeStop");
-      rejectButton.textContent = t("button.probeRejectNext");
-      rejectButton.disabled = !state.uartProbeManualHasMore;
-    }
-
-    function buildUartProbeStatus(data) {
-      const frame = data?.pending_frame || data?.frame || "8N1";
-      const baudrate = data?.pending_baudrate || data?.detected_baudrate || 0;
-      const sample = data?.sample || t("network.none");
-
-      // 错误状态：把后端的 message + detail 暴露给用户。
-      if (data?.status === "error" || data?.message) {
-        const msg = data?.message || t("network.error");
-        const detail = data?.detail ? ` (${data.detail})` : "";
-        return `${msg}${detail}`;
-      }
-
-      return t("uart.manualReady", {
-        index: data?.manual_candidate_index || 0,
-        count: data?.manual_candidate_count || 0,
-        frame,
-        baudrate,
-        sample
-      });
+      // #endregion
     }
 
     function renderKeyValues(targetId, data) {
@@ -1036,8 +957,22 @@
       if (error?.message === "invalid_response") {
         return `${statusPrefix}${t("error.invalidResponse")}`;
       }
+      if (isTransientFetchError(error)) {
+        return t("error.transientFetch");
+      }
       const message = error?.message || String(error) || t("network.none");
       return `${statusPrefix}${message}`;
+    }
+
+    function sleep(ms) {
+      return new Promise((resolve) => setTimeout(resolve, ms));
+    }
+
+    function isTransientFetchError(error) {
+      const message = String(error?.message || error || "");
+      return message === "Failed to fetch" ||
+             message === "Load failed" ||
+             message === "NetworkError when attempting to fetch resource.";
     }
 
     function renderDeviceError(message) {
@@ -1090,6 +1025,15 @@
       return Number.isFinite(Number(gpio)) ? `GPIO${gpio}` : "GPIO-";
     }
 
+    function escapeHtml(value) {
+      return String(value ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+    }
+
     function renderUartBaudList() {
       const select = document.getElementById("uartBaudSelect");
       if (!select) {
@@ -1106,7 +1050,7 @@
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          sessionId: "uart-rx-stall",
+          sessionId: "uart-console-blank",
           runId: "pre-fix",
           hypothesisId,
           location,
@@ -1118,27 +1062,150 @@
     }
     // #endregion
 
-    function renderScanResults(aps) {
-      const target = document.getElementById("wifiScanList");
-      if (!aps || aps.length === 0) {
-        target.innerHTML = `<div class="scan-item"><span>${t("scan.emptyTitle")}</span><span class="hint">${t("scan.emptyHint")}</span></div>`;
+    function openWifiScanModal() {
+      document.getElementById("wifiScanModal").hidden = false;
+    }
+
+    function closeWifiScanModal() {
+      document.getElementById("wifiScanModal").hidden = true;
+    }
+
+    function openSavedWifiModal() {
+      document.getElementById("savedWifiModal").hidden = false;
+    }
+
+    function closeSavedWifiModal() {
+      document.getElementById("savedWifiModal").hidden = true;
+    }
+
+    function applySavedWifiProfile(index) {
+      const profile = state.savedWifiProfiles[index];
+      if (!profile) {
         return;
       }
-      target.innerHTML = aps.map((ap) => {
-        const ssid = ap.ssid || t("scan.hidden");
-        return `<div class="scan-item">
+      const current = state.networkConfig || {};
+      if (current.sta_connected && current.sta_ssid === profile.ssid) {
+        setStatus("networkStatus", t("network.profileAlreadyConnected", {
+          ssid: profile.ssid || t("scan.hidden")
+        }), "ok");
+        return;
+      }
+      document.getElementById("staSsid").value = profile.ssid || "";
+      document.getElementById("staPassword").value = profile.password || "";
+      closeSavedWifiModal();
+      setStatus("networkStatus", t("network.profileApplied", {
+        ssid: profile.ssid || t("scan.hidden")
+      }), "ok");
+    }
+
+    function applyScannedWifi(index) {
+      const profile = state.wifiScanResults[index];
+      if (!profile) {
+        return;
+      }
+      document.getElementById("staSsid").value = profile.ssid || "";
+      const remembered = state.savedWifiProfiles.find((item) => item.ssid === profile.ssid);
+      document.getElementById("staPassword").value = remembered?.password || "";
+      closeWifiScanModal();
+      setStatus("networkStatus", t("network.profileApplied", {
+        ssid: profile.ssid || t("scan.hidden")
+      }), "ok");
+    }
+
+    function mergeSavedWifiProfiles(profiles, current) {
+      const merged = [];
+      const source = Array.isArray(profiles) ? profiles : [];
+      const currentProfile = current?.sta_ssid
+        ? { ssid: current.sta_ssid, password: current.sta_password || "" }
+        : null;
+
+      if (currentProfile) {
+        merged.push(currentProfile);
+      }
+      source.forEach((profile) => {
+        if (!profile?.ssid) {
+          return;
+        }
+        const existing = merged.find((item) => item.ssid === profile.ssid);
+        if (existing) {
+          if (!existing.password && profile.password) {
+            existing.password = profile.password;
+          }
+          return;
+        }
+        merged.push({
+          ssid: profile.ssid,
+          password: profile.password || ""
+        });
+      });
+      return merged;
+    }
+
+    function renderSavedWifiProfiles(profiles) {
+      const target = document.getElementById("savedWifiList");
+      const current = state.networkConfig || {};
+      const items = mergeSavedWifiProfiles(profiles, current);
+
+      state.savedWifiProfiles = items;
+      if (!items.length) {
+        target.innerHTML = `<div class="scan-item"><span>${t("scan.savedEmptyTitle")}</span><span class="hint">${t("scan.savedEmptyHint")}</span></div>`;
+        return;
+      }
+      target.innerHTML = items.map((profile, index) => {
+        const maskedPassword = profile.password ? "********" : t("network.none");
+        const hintText = current.sta_connected && current.sta_ssid === profile.ssid
+          ? `${t("state.connected")} / ${maskedPassword}`
+          : maskedPassword;
+        return `
+        <div class="scan-item">
           <div>
-            <strong>${ssid}</strong>
-            <div class="hint">RSSI ${ap.rssi} dBm / ${ap.auth}</div>
+            <strong>${escapeHtml(profile.ssid || t("scan.hidden"))}</strong>
+            <div class="hint">${hintText}</div>
           </div>
-          <button class="secondary" data-ssid="${ssid}">${t("button.use")}</button>
+          <div class="actions">
+            <button class="secondary" data-saved-use="${index}">${t("button.use")}</button>
+            <button class="secondary" data-saved-delete="${index}">${t("button.delete")}</button>
+          </div>
         </div>`;
       }).join("");
 
-      target.querySelectorAll("button[data-ssid]").forEach((button) => {
-        button.addEventListener("click", () => {
-          document.getElementById("staSsid").value = button.dataset.ssid === t("scan.hidden") ? "" : button.dataset.ssid;
+      target.querySelectorAll("button[data-saved-use]").forEach((button) => {
+        button.addEventListener("click", () => applySavedWifiProfile(Number(button.dataset.savedUse)));
+      });
+      target.querySelectorAll("button[data-saved-delete]").forEach((button) => {
+        button.addEventListener("click", async () => {
+          const profile = state.savedWifiProfiles[Number(button.dataset.savedDelete)];
+          if (!profile) {
+            return;
+          }
+          await deleteSavedWifiProfile(profile.ssid);
         });
+      });
+    }
+
+    function renderScanResults(aps) {
+      const target = document.getElementById("wifiScanList");
+      const items = Array.isArray(aps) ? aps : [];
+
+      state.wifiScanResults = items;
+      if (!items.length) {
+        target.innerHTML = `<div class="scan-item"><span>${t("scan.emptyTitle")}</span><span class="hint">${t("scan.emptyHint")}</span></div>`;
+        return;
+      }
+      target.innerHTML = items.map((ap, index) => {
+        const ssid = ap.ssid || "";
+        const label = ssid || t("scan.hidden");
+        return `<div class="scan-item">
+          <div>
+            <strong>${escapeHtml(label)}</strong>
+            <div class="hint">RSSI ${ap.rssi} dBm / ${ap.auth}</div>
+          </div>
+          <button class="secondary" data-scan-use="${index}" ${ssid ? "" : "disabled"}>${t("button.use")}</button>
+        </div>`;
+      }).join("");
+
+      target.querySelectorAll("button[data-scan-use]").forEach((button) => {
+        button.addEventListener("click", () => applyScannedWifi(Number(button.dataset.scanUse)));
       });
     }
 
@@ -1188,56 +1255,72 @@
     }
 
     async function getJson(url, options) {
+      const method = String(options?.method || "GET").toUpperCase();
+      const maxRetries = method === "GET" ? FETCH_RETRY_MAX : 0;
+
       // #region debug-point A-E:getJson-request
       if (url.startsWith("/api/v1/uart") || url === "/api/v1/config/uart") {
         reportUartDebugEvent("E", "getJson:request", "UART request dispatched", {
           url,
-          method: options?.method || "GET",
+          method,
           hasBody: Boolean(options?.body)
         });
       }
       // #endregion
-      const response = await fetch(url, options);
-      const text = await response.text();
-      const { body, parseError } = tryParseJson(text);
+      for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        try {
+          const response = await fetch(url, options);
+          const text = await response.text();
+          const { body, parseError } = tryParseJson(text);
 
-      // #region debug-point A-E:getJson-response
-      if (url.startsWith("/api/v1/uart") || url === "/api/v1/config/uart") {
-        reportUartDebugEvent(response.ok ? "A" : "B", "getJson:response", "UART response received", {
-          url,
-          method: options?.method || "GET",
-          status: response.status,
-          ok: response.ok,
-          textLength: text.length,
-          parseError: Boolean(parseError),
-          bodyMessage: body?.message || "",
-          bodyKeys: body && typeof body === "object" ? Object.keys(body).slice(0, 12) : []
-        });
+          // #region debug-point A-E:getJson-response
+          if (url.startsWith("/api/v1/uart") || url === "/api/v1/config/uart") {
+            reportUartDebugEvent(response.ok ? "A" : "B", "getJson:response", "UART response received", {
+              url,
+              method,
+              status: response.status,
+              ok: response.ok,
+              textLength: text.length,
+              textPreview: text.slice(0, 96),
+              textSuffix: text.slice(-96),
+              parseError: Boolean(parseError),
+              bodyMessage: body?.message || "",
+              bodyKeys: body && typeof body === "object" ? Object.keys(body).slice(0, 12) : []
+            });
+          }
+          // #endregion
+
+          if (!response.ok) {
+            const err = new Error(body.message || body.error || text || `HTTP ${response.status}`);
+            err.body = body;
+            err.status = response.status;
+            throw err;
+          }
+
+          if (!text) {
+            const err = new Error("empty_response");
+            err.status = response.status;
+            throw err;
+          }
+
+          if (parseError) {
+            const err = new Error(body.message || "invalid_response");
+            err.status = response.status;
+            err.body = body;
+            throw err;
+          }
+
+          return body;
+        } catch (error) {
+          const canRetry = attempt < maxRetries &&
+                           !error?.status &&
+                           isTransientFetchError(error);
+          if (!canRetry) {
+            throw error;
+          }
+          await sleep(FETCH_RETRY_DELAY_MS * (attempt + 1));
+        }
       }
-      // #endregion
-
-      if (!response.ok) {
-        // 把 body 一起附到 Error 上，方便调用方拿到 detail 等字段。
-        const err = new Error(body.message || body.error || text || `HTTP ${response.status}`);
-        err.body = body;
-        err.status = response.status;
-        throw err;
-      }
-
-      if (!text) {
-        const err = new Error("empty_response");
-        err.status = response.status;
-        throw err;
-      }
-
-      if (parseError) {
-        const err = new Error(body.message || "invalid_response");
-        err.status = response.status;
-        err.body = body;
-        throw err;
-      }
-
-      return body;
     }
 
     async function loadDevice() {
@@ -1273,11 +1356,13 @@
     async function loadNetwork() {
       const data = await getJson("/api/v1/config/network");
       const network = data || {};
+      state.networkConfig = network;
       document.getElementById("netMode").value = network.mode || "ap";
       document.getElementById("ssid").value = network.ap_ssid || "";
       document.getElementById("password").value = network.ap_password || "";
       document.getElementById("staSsid").value = network.sta_ssid || "";
       document.getElementById("staPassword").value = network.sta_password || "";
+      renderSavedWifiProfiles(network.saved_sta_profiles || []);
       renderScanResults([]);
       renderNetworkStatus(network);
     }
@@ -1385,11 +1470,7 @@
         dataBits: data?.data_bits,
         stopBits: data?.stop_bits,
         parity: data?.parity,
-        frame: data?.frame,
-        probePending: Boolean(data?.probe_pending_confirmation),
-        manualSessionActive: Boolean(data?.manual_session_active),
-        protocolHint: data?.protocol_hint,
-        sample: data?.sample || ""
+        frame: data?.frame
       });
       // #endregion
       state.uartConfig = data;
@@ -1400,18 +1481,10 @@
       document.getElementById("uartDataBits").value = String(data.data_bits || 8);
       document.getElementById("uartStopBits").value = String(data.stop_bits || 1);
       document.getElementById("uartParity").value = data.parity || "none";
-      renderUartProbeDetails(data);
-      renderUartProbeActions(data);
-      if (data.probe_pending_confirmation) {
-        setStatus("uartStatus", buildUartProbeStatus(data), "warn");
-      } else {
-        setStatus("uartStatus", t("uart.summary", {
-          frame: data.frame,
-          baudrate: data.baudrate,
-          protocolHint: data.protocol_hint,
-          sample: data.sample || t("network.none")
-        }), "warn");
-      }
+      setStatus("uartStatus", t("uart.summary", {
+        frame: data.frame,
+        baudrate: data.baudrate
+      }), "warn");
     }
 
     async function loadUartConsole() {
@@ -1421,7 +1494,11 @@
         rxSequence: data?.rx_sequence || 0,
         plainLength: (data?.plain || "").length,
         hexLength: (data?.hex || "").length,
-        preview: (data?.plain || data?.hex || "").slice(0, 48)
+        preview: (data?.plain || data?.hex || "").slice(0, 48),
+        driverInstalled: Boolean(data?.driver_installed),
+        debugAvailable: data?.debug_available ?? null,
+        debugReadLen: data?.debug_read_len ?? null,
+        debugPollCount: data?.debug_poll_count ?? null
       });
       // #endregion
       state.uartConsolePlain = data.plain || "";
@@ -1441,12 +1518,26 @@
       }
     }
 
+    async function clearUartConsole() {
+      await getJson("/api/v1/uart/console/clear", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{}"
+      });
+      state.uartConsolePlain = "";
+      state.uartConsoleHex = "";
+      renderUartConsole();
+      setStatus("uartStatus", t("uart.cleared"), "ok");
+    }
+
     function startUartConsolePolling() {
       if (state.uartPollTimer) {
         clearInterval(state.uartPollTimer);
       }
       state.uartPollTimer = setInterval(() => {
-        refreshUartConsole().catch(() => {});
+        refreshUartConsole().catch((error) => {
+          setStatus("uartStatus", getErrorMessage(error), "bad");
+        });
       }, 1000);
     }
 
@@ -1463,6 +1554,7 @@
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
       });
+      await loadNetwork();
       const address = data.next_access_ip ? `http://${data.next_access_ip}` : "";
       const confirmMessage = data.ap_enabled
         ? t("network.savedNeedsRestart", { address })
@@ -1482,10 +1574,21 @@
       }
     }
 
+    async function deleteSavedWifiProfile(ssid) {
+      await getJson("/api/v1/config/network/profile", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ssid })
+      });
+      await loadNetwork();
+      setStatus("networkStatus", t("network.profileDeleted", { ssid }), "ok");
+    }
+
     async function scanNetwork() {
       setStatus("networkStatus", t("network.scanning"), "warn");
       const data = await getJson("/api/v1/network/scan");
       renderScanResults(data.aps || []);
+      openWifiScanModal();
       setStatus("networkStatus", t("network.scanDone", { count: data.count || 0 }), "ok");
     }
 
@@ -1547,78 +1650,6 @@
       });
       await loadUart();
       await loadGpio();
-    }
-
-    async function runUartProbeRequest(endpoint, payload, manualMode) {
-      setProbeButtonBusy(true, manualMode);
-      try {
-        const data = await getJson(endpoint, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload || {})
-        });
-        renderUartProbeDetails(data);
-        renderUartProbeActions(data);
-        setStatus("uartStatus", buildUartProbeStatus(data), manualMode ? "warn" : "ok");
-        await refreshUartConsole();
-        return data;
-      } catch (error) {
-        // 错误处理：error.body 包含后端返回的完整 JSON {message, detail, ...}
-        const body = error.body || {};
-        const detail = body.detail ? ` (${body.detail})` : "";
-        setStatus("uartStatus", `${body.message || error.message}${detail}`, "bad");
-        // 仍然尝试把 detail 渲染到 probe details 区域，方便调试
-        if (body.message || body.detail) {
-          renderUartProbeDetails({ ...body, probe_mode: "idle" });
-        }
-        throw error;
-      } finally {
-        setProbeButtonBusy(false);
-      }
-    }
-
-    async function probeUart() {
-      if (!confirm(t("uart.probeStartConfirm"))) {
-        return;
-      }
-      await runUartProbeRequest("/api/v1/uart/probe/manual_detect", { action: "start" }, true);
-    }
-
-    async function rejectUartProbe() {
-      if (!state.uartProbeManualHasMore) {
-        setStatus("uartStatus", t("uart.manualExhausted"), "warn");
-        return;
-      }
-      await runUartProbeRequest("/api/v1/uart/probe/manual_detect", { action: "next" }, true);
-    }
-
-    async function confirmUartProbe() {
-      const data = await getJson("/api/v1/uart/probe/confirm", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: "{}"
-      });
-      renderUartProbeDetails(data);
-      renderUartProbeActions(data);
-      setStatus("uartStatus", t("uart.probeSaved", {
-        frame: data.frame,
-        baudrate: data.baudrate
-      }), "ok");
-      await loadUart();
-      await refreshUartConsole();
-    }
-
-    async function stopUartProbe() {
-      const data = await getJson("/api/v1/uart/probe/stop", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: "{}"
-      });
-      renderUartProbeDetails(data);
-      renderUartProbeActions(data);
-      setStatus("uartStatus", t("uart.probeStopped"), "warn");
-      await loadUart();
-      await refreshUartConsole();
     }
 
     async function sendUart() {
@@ -1758,14 +1789,12 @@
     async function boot() {
       renderUartConsole();
       applyTranslations();
-      await Promise.allSettled([
-        runWithPanelError(loadDevice, (message) => renderDeviceError(message)),
-        runWithPanelError(loadNetwork, (message) => setStatus("networkStatus", message, "bad")),
-        runWithPanelError(loadGpio, (message) => setStatus("gpioInfo", message, "bad")),
-        runWithPanelError(loadBluetooth, (message) => setStatus("bluetoothStatus", message, "bad")),
-        runWithPanelError(loadMqtt, (message) => setStatus("mqttStatus", message, "bad")),
-        runWithPanelError(loadUart, (message) => setStatus("uartStatus", message, "bad"))
-      ]);
+      await runWithPanelError(loadDevice, (message) => renderDeviceError(message));
+      await runWithPanelError(loadNetwork, (message) => setStatus("networkStatus", message, "bad"));
+      await runWithPanelError(loadGpio, (message) => setStatus("gpioInfo", message, "bad"));
+      await runWithPanelError(loadBluetooth, (message) => setStatus("bluetoothStatus", message, "bad"));
+      await runWithPanelError(loadMqtt, (message) => setStatus("mqttStatus", message, "bad"));
+      await runWithPanelError(loadUart, (message) => setStatus("uartStatus", message, "bad"));
       await runWithPanelError(refreshUartConsole, (message) => setStatus("uartStatus", message, "bad"));
       startStatusPolling();
       startUartConsolePolling();
@@ -1790,6 +1819,31 @@
         await scanNetwork();
       } catch (error) {
         setStatus("networkStatus", error.message, "bad");
+      }
+    });
+
+    document.getElementById("showSavedWifi").addEventListener("click", () => {
+      renderSavedWifiProfiles(state.savedWifiProfiles);
+      openSavedWifiModal();
+    });
+
+    document.getElementById("closeWifiScanModal").addEventListener("click", () => {
+      closeWifiScanModal();
+    });
+
+    document.getElementById("wifiScanModal").addEventListener("click", (event) => {
+      if (event.target.id === "wifiScanModal") {
+        closeWifiScanModal();
+      }
+    });
+
+    document.getElementById("closeSavedWifiModal").addEventListener("click", () => {
+      closeSavedWifiModal();
+    });
+
+    document.getElementById("savedWifiModal").addEventListener("click", (event) => {
+      if (event.target.id === "savedWifiModal") {
+        closeSavedWifiModal();
       }
     });
 
@@ -1849,59 +1903,6 @@
       }
     });
 
-    document.getElementById("probeUart").addEventListener("click", async () => {
-      if (state.uartProbeBusy) {
-        alert(t("uart.probeRunningAlert"));
-        return;
-      }
-      try {
-        await probeUart();
-      } catch (error) {
-        // runUartProbeRequest 已经把 detail 显示到 uartStatus 并 throw 出来。
-        // 这里只需要兜底（防止 runUartProbeRequest 之前自己抛错）。
-        if (error && error.body) {
-          const body = error.body;
-          const detail = body.detail ? ` (${body.detail})` : "";
-          setStatus("uartStatus", `${body.message || error.message}${detail}`, "bad");
-        } else {
-          setStatus("uartStatus", error.message, "bad");
-        }
-      }
-    });
-
-    document.getElementById("uartProbeConfirm").addEventListener("click", async () => {
-      try {
-        await confirmUartProbe();
-      } catch (error) {
-        setStatus("uartStatus", error.message, "bad");
-      }
-    });
-
-    document.getElementById("uartProbeReject").addEventListener("click", async () => {
-      if (state.uartProbeBusy) {
-        alert(t("uart.probeRunningAlert"));
-        return;
-      }
-      try {
-        await rejectUartProbe();
-      } catch (error) {
-        if (error.message === "all_candidates_exhausted") {
-          setStatus("uartStatus", t("uart.manualExhausted"), "warn");
-          await loadUart();
-          return;
-        }
-        setStatus("uartStatus", error.message, "bad");
-      }
-    });
-
-    document.getElementById("uartProbeStop").addEventListener("click", async () => {
-      try {
-        await stopUartProbe();
-      } catch (error) {
-        setStatus("uartStatus", error.message, "bad");
-      }
-    });
-
     document.getElementById("uartRxFormat").addEventListener("change", (event) => {
       state.uartRxFormat = event.target.value;
       renderUartConsole();
@@ -1915,6 +1916,14 @@
     document.getElementById("sendUart").addEventListener("click", async () => {
       try {
         await sendUart();
+      } catch (error) {
+        setStatus("uartStatus", error.message, "bad");
+      }
+    });
+
+    document.getElementById("clearUartConsole").addEventListener("click", async () => {
+      try {
+        await clearUartConsole();
       } catch (error) {
         setStatus("uartStatus", error.message, "bad");
       }
