@@ -192,46 +192,42 @@ static esp_err_t app_uart_send_console_json_body(httpd_req_t *req,
                                              const char *hex_json,
                                              unsigned rx_sequence)
 {
-    char trailer[160];
-    int trailer_len;
+    char *response = NULL;
+    int resp_len;
+    size_t response_size;
     esp_err_t err;
+
+    response_size = UART_CONSOLE_PLAIN_SIZE * 2 + UART_CONSOLE_HEX_SIZE * 2 + 256;
+    response = malloc(response_size);
+    if (response == NULL) {
+        return app_http_send_json_text(req, "500 Internal Server Error",
+                                   "{\"status\":\"error\",\"message\":\"out_of_memory\"}");
+    }
+
+    resp_len = snprintf(response, response_size,
+                        "{\"plain\":\"%s\",\"hex\":\"%s\","
+                        "\"rx_sequence\":%u,\"driver_installed\":%s,"
+                        "\"debug_available\":%u,\"debug_read_len\":%d,\"debug_poll_count\":%u,"
+                        "\"debug_rx_level\":%d,\"debug_tx_level\":%d}",
+                        plain_json, hex_json, rx_sequence,
+                        s_uart.driver_installed ? "true" : "false",
+                        (unsigned)s_uart_last_available,
+                        s_uart_last_read_len,
+                        (unsigned)s_uart_poll_count,
+                        s_uart_last_rx_level,
+                        s_uart_last_tx_level);
+    if (resp_len < 0 || (size_t)resp_len >= response_size) {
+        free(response);
+        return app_http_send_json_text(req, "500 Internal Server Error",
+                                   "{\"status\":\"error\",\"message\":\"response_too_large\"}");
+    }
 
     httpd_resp_set_type(req, "application/json");
     httpd_resp_set_hdr(req, "Cache-Control", "no-store");
     httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
-
-    err = httpd_resp_send_chunk(req, "{\"plain\":\"", strlen("{\"plain\":\""));
-    if (err != ESP_OK) {
-        return err;
-    }
-    err = httpd_resp_send_chunk(req, plain_json, strlen(plain_json));
-    if (err != ESP_OK) {
-        return err;
-    }
-    err = httpd_resp_send_chunk(req, "\",\"hex\":\"", strlen("\",\"hex\":\""));
-    if (err != ESP_OK) {
-        return err;
-    }
-    err = httpd_resp_send_chunk(req, hex_json, strlen(hex_json));
-    if (err != ESP_OK) {
-        return err;
-    }
-    trailer_len = snprintf(trailer, sizeof(trailer),
-                           "\",\"rx_sequence\":%u,\"driver_installed\":%s,"
-                           "\"debug_available\":%u,\"debug_read_len\":%d,\"debug_poll_count\":%u,"
-                           "\"debug_rx_level\":%d,\"debug_tx_level\":%d}",
-                           rx_sequence,
-                           s_uart.driver_installed ? "true" : "false",
-                           (unsigned)s_uart_last_available,
-                           s_uart_last_read_len,
-                           (unsigned)s_uart_poll_count,
-                           s_uart_last_rx_level,
-                           s_uart_last_tx_level);
-    err = httpd_resp_send_chunk(req, trailer, trailer_len);
-    if (err != ESP_OK) {
-        return err;
-    }
-    return httpd_resp_send_chunk(req, NULL, 0);
+    err = httpd_resp_sendstr(req, response);
+    free(response);
+    return err;
 }
 
 void app_uart_console_init(void)
@@ -290,7 +286,8 @@ esp_err_t app_uart_send_console_json(httpd_req_t *req)
     char *plain_json = NULL;
     char *hex_json = NULL;
     esp_err_t err;
-    bool locked = false;
+    bool uart_locked = false;
+    bool console_locked = false;
     unsigned rx_sequence;
 
     plain_json = malloc(UART_CONSOLE_PLAIN_SIZE * 2 + 1);
@@ -308,21 +305,32 @@ esp_err_t app_uart_send_console_json(httpd_req_t *req)
         return app_http_send_json_text(req, "503 Service Unavailable",
                                    "{\"status\":\"error\",\"message\":\"uart_mutex_not_ready\"}");
     }
-    if (xSemaphoreTakeRecursive(s_uart_console_mutex, pdMS_TO_TICKS(200)) != pdTRUE) {
+    if (!app_uart_lock(pdMS_TO_TICKS(300))) {
+        free(plain_json);
+        free(hex_json);
+        return app_http_send_json_text(req, "503 Service Unavailable",
+                                   "{\"status\":\"error\",\"message\":\"uart_port_busy\"}");
+    }
+    uart_locked = true;
+    if (xSemaphoreTakeRecursive(s_uart_console_mutex, pdMS_TO_TICKS(300)) != pdTRUE) {
+        app_uart_unlock();
         free(plain_json);
         free(hex_json);
         return app_http_send_json_text(req, "503 Service Unavailable",
                                    "{\"status\":\"error\",\"message\":\"uart_console_busy\"}");
     }
-    locked = true;
+    console_locked = true;
     app_uart_poll_console(0);
     app_json_escape_string(plain_json, UART_CONSOLE_PLAIN_SIZE * 2 + 1, s_uart.rx_plain);
     app_json_escape_string(hex_json, UART_CONSOLE_HEX_SIZE * 2 + 1, s_uart.rx_hex);
     rx_sequence = (unsigned)s_uart.rx_sequence;
 
     err = app_uart_send_console_json_body(req, plain_json, hex_json, rx_sequence);
-    if (locked) {
+    if (console_locked) {
         xSemaphoreGiveRecursive(s_uart_console_mutex);
+    }
+    if (uart_locked) {
+        app_uart_unlock();
     }
     free(plain_json);
     free(hex_json);
@@ -331,16 +339,31 @@ esp_err_t app_uart_send_console_json(httpd_req_t *req)
 
 esp_err_t app_uart_handle_clear_console_request(httpd_req_t *req)
 {
+    bool uart_locked = false;
+    bool console_locked = false;
+
     if (s_uart_console_mutex == NULL) {
         return app_http_send_json_text(req, "503 Service Unavailable",
                                    "{\"status\":\"error\",\"message\":\"uart_mutex_not_ready\"}");
     }
-    if (xSemaphoreTakeRecursive(s_uart_console_mutex, pdMS_TO_TICKS(200)) != pdTRUE) {
+    if (!app_uart_lock(pdMS_TO_TICKS(300))) {
+        return app_http_send_json_text(req, "503 Service Unavailable",
+                                   "{\"status\":\"error\",\"message\":\"uart_port_busy\"}");
+    }
+    uart_locked = true;
+    if (xSemaphoreTakeRecursive(s_uart_console_mutex, pdMS_TO_TICKS(300)) != pdTRUE) {
+        app_uart_unlock();
         return app_http_send_json_text(req, "503 Service Unavailable",
                                    "{\"status\":\"error\",\"message\":\"uart_console_busy\"}");
     }
+    console_locked = true;
     app_uart_console_reset();
-    xSemaphoreGiveRecursive(s_uart_console_mutex);
+    if (console_locked) {
+        xSemaphoreGiveRecursive(s_uart_console_mutex);
+    }
+    if (uart_locked) {
+        app_uart_unlock();
+    }
 
     return app_http_send_json_text(req, NULL,
                                "{\"status\":\"ok\",\"message\":\"uart_console_cleared\"}");

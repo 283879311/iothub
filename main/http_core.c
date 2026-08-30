@@ -64,9 +64,7 @@ esp_err_t app_http_ignore_client_disconnect(esp_err_t err, const char *context)
     return ESP_OK;
 }
 
-#define APP_HTTP_MAX_REGISTERED_ROUTES 32
-
-static app_http_route_t s_registered_routes[APP_HTTP_MAX_REGISTERED_ROUTES];
+static app_http_route_t s_registered_routes[APP_HTTP_MAX_HANDLERS];
 static size_t s_registered_count = 0;
 
 static bool route_already_seen(const char *uri, httpd_method_t method)
@@ -89,7 +87,23 @@ esp_err_t app_http_register_uri_handler(httpd_handle_t server,
     if (route_already_seen(uri, method)) {
         return ESP_OK;
     }
-    if (s_registered_count >= APP_HTTP_MAX_REGISTERED_ROUTES) {
+    httpd_uri_t cfg = {
+        .uri = uri,
+        .method = method,
+        .handler = handler,
+    };
+    esp_err_t err = httpd_register_uri_handler(server, &cfg);
+    if (err == ESP_OK || err == ESP_ERR_HTTPD_HANDLER_EXISTS) {
+        if (!route_already_seen(uri, method) &&
+            s_registered_count < APP_HTTP_MAX_HANDLERS) {
+            s_registered_routes[s_registered_count].uri = uri;
+            s_registered_routes[s_registered_count].method = method;
+            s_registered_routes[s_registered_count].handler = handler;
+            s_registered_count++;
+        }
+        return ESP_OK;
+    }
+    if (s_registered_count >= APP_HTTP_MAX_HANDLERS) {
         const char *mstr = method == HTTP_GET ? "GET" :
                           method == HTTP_POST ? "POST" :
                           method == HTTP_PUT ? "PUT" :
@@ -98,21 +112,7 @@ esp_err_t app_http_register_uri_handler(httpd_handle_t server,
                  (unsigned)s_registered_count, mstr, uri);
         return ESP_ERR_NO_MEM;
     }
-    s_registered_routes[s_registered_count].uri = uri;
-    s_registered_routes[s_registered_count].method = method;
-    s_registered_routes[s_registered_count].handler = handler;
-    s_registered_count++;
-
-    httpd_uri_t cfg = {
-        .uri = uri,
-        .method = method,
-        .handler = handler,
-    };
-    esp_err_t err = httpd_register_uri_handler(server, &cfg);
-    if (err == ESP_ERR_HTTPD_HANDLER_EXISTS) {
-        return ESP_OK;
-    }
-    if (err != ESP_OK) {
+    {
         const char *mstr = method == HTTP_GET ? "GET" :
                           method == HTTP_POST ? "POST" :
                           method == HTTP_PUT ? "PUT" :
@@ -276,7 +276,7 @@ void app_http_start_webserver(void)
 
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     config.uri_match_fn = httpd_uri_match_wildcard;
-    config.max_uri_handlers = 30;
+    config.max_uri_handlers = APP_HTTP_MAX_HANDLERS;
     ESP_ERROR_CHECK(httpd_start(&s_web.server, &config));
     {
         size_t index;

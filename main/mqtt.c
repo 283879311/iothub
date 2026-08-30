@@ -10,7 +10,7 @@
 #include "esp_event.h"
 #include "esp_log.h"
 #include "esp_mac.h"
-#include "esp_system.h"
+#include "esp_ota_ops.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/event_groups.h"
 #include "freertos/semphr.h"
@@ -27,6 +27,8 @@
 
 static const char *TAG = "mqtt";
 #define MQTT_STOP_EVENT_TELEMETRY BIT0
+#define MQTT_STOP_EVENT_BOOST     BIT1
+#define MQTT_STOP_EVENT_RESTART   BIT2
 
 extern app_config_t s_config;
 mqtt_runtime_t s_mqtt = {0};
@@ -35,26 +37,32 @@ _Static_assert(sizeof(esp_mqtt_client_handle_t) == sizeof(((mqtt_runtime_t *)0)-
                "esp_mqtt_client_handle_t must be same size as opaque client pointer");
 _Static_assert(sizeof(TaskHandle_t) == sizeof(((mqtt_runtime_t *)0)->telemetry_task),
                "TaskHandle_t must be same size as telemetry_task pointer");
+_Static_assert(sizeof(TaskHandle_t) == sizeof(((mqtt_runtime_t *)0)->boost_task),
+               "TaskHandle_t must be same size as boost_task pointer");
+_Static_assert(sizeof(TaskHandle_t) == sizeof(((mqtt_runtime_t *)0)->restart_task),
+               "TaskHandle_t must be same size as restart_task pointer");
 
 static void app_mqtt_ensure_runtime_init(void)
 {
     if (s_mqtt.lock == NULL) {
-        s_mqtt.lock = xSemaphoreCreateMutex();
+        s_mqtt.lock = xSemaphoreCreateRecursiveMutex();
     }
     if (s_mqtt.stop_events == NULL) {
         s_mqtt.stop_events = xEventGroupCreate();
     }
 }
 
-static void app_mqtt_lock(void)
+void app_mqtt_lock(void)
 {
     app_mqtt_ensure_runtime_init();
-    xSemaphoreTake(s_mqtt.lock, portMAX_DELAY);
+    xSemaphoreTakeRecursive(s_mqtt.lock, portMAX_DELAY);
 }
 
-static void app_mqtt_unlock(void)
+void app_mqtt_unlock(void)
 {
-    xSemaphoreGive(s_mqtt.lock);
+    if (s_mqtt.lock != NULL) {
+        xSemaphoreGiveRecursive(s_mqtt.lock);
+    }
 }
 
 static esp_mqtt_client_handle_t app_mqtt_client_safe(void)
@@ -83,9 +91,15 @@ static void app_mqtt_build_uri(void)
              s_config.mqtt_port);
 }
 
+static bool app_mqtt_is_thingsboard_backend(void)
+{
+    return strcmp(s_config.mqtt_backend, "tb_cloud") == 0 ||
+           strcmp(s_config.mqtt_backend, "tb_selfhost") == 0;
+}
+
 static const char *app_mqtt_telemetry_topic(void)
 {
-    if (strcmp(s_config.mqtt_backend, "tb_cloud") == 0 || strcmp(s_config.mqtt_backend, "tb_selfhost") == 0) {
+    if (app_mqtt_is_thingsboard_backend()) {
         return "v1/devices/me/telemetry";
     }
     return "iothub/telemetry";
@@ -93,7 +107,7 @@ static const char *app_mqtt_telemetry_topic(void)
 
 static const char *app_mqtt_rpc_topic(void)
 {
-    if (strcmp(s_config.mqtt_backend, "tb_cloud") == 0 || strcmp(s_config.mqtt_backend, "tb_selfhost") == 0) {
+    if (app_mqtt_is_thingsboard_backend()) {
         return "v1/devices/me/rpc/request/+";
     }
     return "iothub/rpc";
@@ -101,7 +115,7 @@ static const char *app_mqtt_rpc_topic(void)
 
 static const char *app_mqtt_attributes_topic(void)
 {
-    if (strcmp(s_config.mqtt_backend, "tb_cloud") == 0 || strcmp(s_config.mqtt_backend, "tb_selfhost") == 0) {
+    if (app_mqtt_is_thingsboard_backend()) {
         return "v1/devices/me/attributes";
     }
     return "iothub/attributes";
@@ -109,10 +123,67 @@ static const char *app_mqtt_attributes_topic(void)
 
 static const char *app_mqtt_shared_attr_response_topic(void)
 {
-    if (strcmp(s_config.mqtt_backend, "tb_cloud") == 0 || strcmp(s_config.mqtt_backend, "tb_selfhost") == 0) {
+    if (app_mqtt_is_thingsboard_backend()) {
         return "v1/devices/me/attributes/response/+";
     }
     return "iothub/attributes/response/+";
+}
+
+static int app_mqtt_publish_json(const char *topic, cJSON *root, bool is_telemetry)
+{
+    esp_mqtt_client_handle_t client;
+    char *body;
+    int msg_id = -1;
+
+    if (root == NULL || topic == NULL) {
+        return -1;
+    }
+    body = cJSON_PrintUnformatted(root);
+    if (body == NULL) {
+        ESP_LOGE(TAG, "cJSON_PrintUnformatted returned NULL");
+        return -1;
+    }
+    client = app_mqtt_client_safe();
+    if (client == NULL) {
+        cJSON_free(body);
+        return -1;
+    }
+    app_mqtt_lock();
+    msg_id = esp_mqtt_client_publish(client, topic, body, 0, 1, 0);
+    if (msg_id >= 0) {
+        s_mqtt.last_msg_id = msg_id;
+        if (is_telemetry) {
+            s_mqtt.publish_count++;
+        }
+        ESP_LOGD(TAG, "Published %s msg_id=%d len=%u count=%u",
+                 is_telemetry ? "telemetry" : "attributes",
+                 msg_id, (unsigned)strlen(body),
+                 (unsigned)s_mqtt.publish_count);
+    } else if (is_telemetry) {
+        ESP_LOGW(TAG, "Publish telemetry FAILED, msg_id=%d", msg_id);
+    }
+    app_mqtt_unlock();
+    cJSON_free(body);
+    return msg_id;
+}
+
+static void app_mqtt_add_common_active_online(cJSON *root)
+{
+    cJSON_AddBoolToObject(root, "active", true);
+    cJSON_AddBoolToObject(root, "online", true);
+}
+
+static void app_mqtt_build_uart_frame_str(char *out, size_t out_size)
+{
+    if (out == NULL || out_size == 0) {
+        return;
+    }
+    char frame[8];
+    app_uart_build_frame(frame, sizeof(frame),
+                         s_config.uart_data_bits,
+                         (uart_parity_t)s_config.uart_parity_mode,
+                         s_config.uart_stop_bits);
+    app_copy_string(out, out_size, frame);
 }
 
 static void app_mqtt_build_client_id(void)
@@ -133,12 +204,9 @@ static void app_mqtt_request_initial_attributes(void)
     if (!app_mqtt_connected_safe()) {
         return;
     }
-
-    if (strcmp(s_config.mqtt_backend, "tb_cloud") != 0 &&
-        strcmp(s_config.mqtt_backend, "tb_selfhost") != 0) {
+    if (!app_mqtt_is_thingsboard_backend()) {
         return;
     }
-
     snprintf(topic, sizeof(topic), "v1/devices/me/attributes/request/%u",
              (unsigned)(xTaskGetTickCount() & 0xFFFFU));
     client = app_mqtt_client_safe();
@@ -150,89 +218,65 @@ static void app_mqtt_request_initial_attributes(void)
 
 static void app_mqtt_publish_attributes(void)
 {
-    char payload[512];
-    char frame[8];
-    esp_mqtt_client_handle_t client;
+    cJSON *root;
+    char uart_frame[8];
+    const esp_app_desc_t *app_desc;
+    const char *fw_version;
 
     if (!app_mqtt_connected_safe()) {
         return;
     }
+    app_mqtt_build_uart_frame_str(uart_frame, sizeof(uart_frame));
 
-    app_uart_build_frame(frame, sizeof(frame),
-                         s_config.uart_data_bits,
-                         (uart_parity_t)s_config.uart_parity_mode,
-                         s_config.uart_stop_bits);
-    snprintf(payload, sizeof(payload),
-             "{\"fw_version\":\"phase4\",\"net_mode\":\"%s\",\"ap_ssid\":\"%s\","
-             "\"sta_ssid\":\"%s\",\"sta_ip\":\"%s\",\"bt_mode\":\"%s\","
-             "\"uart_frame\":\"%s\",\"uart_baudrate\":%u,"
-             "\"active\":true,\"online\":true}",
-             app_network_mode_to_string(s_config.net_mode),
-             s_config.ap_ssid,
-             s_config.sta_ssid,
-             s_wifi.sta_ip,
-             app_bt_mode_to_string(s_config.bt_mode),
-             frame,
-             (unsigned)s_config.uart_baudrate);
+    app_desc = esp_app_get_description();
+    fw_version = (app_desc != NULL && app_desc->version[0] != '\0')
+                    ? app_desc->version : "unknown";
 
-    client = app_mqtt_client_safe();
-    if (client != NULL) {
-        app_mqtt_lock();
-        s_mqtt.last_msg_id = esp_mqtt_client_publish(client, app_mqtt_attributes_topic(),
-                                                     payload, 0, 1, 0);
-        if (s_mqtt.last_msg_id >= 0) {
-            ESP_LOGD(TAG, "Published attributes msg_id=%d len=%u",
-                     s_mqtt.last_msg_id, (unsigned)strlen(payload));
-        }
-        app_mqtt_unlock();
+    root = cJSON_CreateObject();
+    if (root == NULL) {
+        return;
     }
+    cJSON_AddStringToObject(root, "fw_version",  fw_version);
+    cJSON_AddStringToObject(root, "net_mode",    app_network_mode_to_string(s_config.net_mode));
+    cJSON_AddStringToObject(root, "ap_ssid",     s_config.ap_ssid);
+    cJSON_AddStringToObject(root, "sta_ssid",    s_config.sta_ssid);
+    cJSON_AddStringToObject(root, "sta_ip",      s_wifi.sta_ip);
+    cJSON_AddStringToObject(root, "bt_mode",     app_bt_mode_to_string(s_config.bt_mode));
+    cJSON_AddStringToObject(root, "uart_frame",  uart_frame);
+    cJSON_AddNumberToObject(root, "uart_baudrate", (double)s_config.uart_baudrate);
+    app_mqtt_add_common_active_online(root);
+
+    app_mqtt_publish_json(app_mqtt_attributes_topic(), root, false);
+    cJSON_Delete(root);
 }
 
 static void app_mqtt_publish_state(void)
 {
-    char payload[512];
-    char frame[8];
-    esp_mqtt_client_handle_t client;
+    cJSON *root;
+    char uart_frame[8];
 
     if (!app_mqtt_connected_safe()) {
         return;
     }
+    app_mqtt_build_uart_frame_str(uart_frame, sizeof(uart_frame));
 
-    app_uart_build_frame(frame, sizeof(frame),
-                         s_config.uart_data_bits,
-                         (uart_parity_t)s_config.uart_parity_mode,
-                         s_config.uart_stop_bits);
-    snprintf(payload, sizeof(payload),
-             "{\"relay_on\":%s,\"led_on\":%s,\"input_active\":%s,"
-             "\"bt_mode\":\"%s\",\"net_mode\":\"%s\",\"sta_has_ip\":%s,"
-             "\"free_heap\":%u,\"uart_baudrate\":%u,\"uart_frame\":\"%s\","
-             "\"active\":true,\"online\":true}",
-             s_config.relay_on ? "true" : "false",
-             s_config.led_on ? "true" : "false",
-             app_get_input_state() ? "true" : "false",
-             app_bt_mode_to_string(s_config.bt_mode),
-             app_network_mode_to_string(s_config.net_mode),
-             s_wifi.sta_has_ip ? "true" : "false",
-             (unsigned)esp_get_free_heap_size(),
-             (unsigned)s_config.uart_baudrate,
-             frame);
-
-    client = app_mqtt_client_safe();
-    if (client == NULL) {
+    root = cJSON_CreateObject();
+    if (root == NULL) {
         return;
     }
-    app_mqtt_lock();
-    s_mqtt.last_msg_id = esp_mqtt_client_publish(client, app_mqtt_telemetry_topic(),
-                                                 payload, 0, 1, 0);
-    if (s_mqtt.last_msg_id >= 0) {
-        s_mqtt.publish_count++;
-        ESP_LOGD(TAG, "Published telemetry msg_id=%d count=%u len=%u",
-                 s_mqtt.last_msg_id, (unsigned)s_mqtt.publish_count,
-                 (unsigned)strlen(payload));
-    } else {
-        ESP_LOGW(TAG, "Publish telemetry FAILED, last_msg_id=%d", s_mqtt.last_msg_id);
-    }
-    app_mqtt_unlock();
+    cJSON_AddBoolToObject  (root, "relay_on",      s_config.relay_on);
+    cJSON_AddBoolToObject  (root, "led_on",        s_config.led_on);
+    cJSON_AddBoolToObject  (root, "input_active",  app_get_input_state());
+    cJSON_AddStringToObject(root, "bt_mode",       app_bt_mode_to_string(s_config.bt_mode));
+    cJSON_AddStringToObject(root, "net_mode",      app_network_mode_to_string(s_config.net_mode));
+    cJSON_AddBoolToObject  (root, "sta_has_ip",    s_wifi.sta_has_ip);
+    cJSON_AddNumberToObject(root, "free_heap",     (double)esp_get_free_heap_size());
+    cJSON_AddNumberToObject(root, "uart_baudrate", (double)s_config.uart_baudrate);
+    cJSON_AddStringToObject(root, "uart_frame",    uart_frame);
+    app_mqtt_add_common_active_online(root);
+
+    app_mqtt_publish_json(app_mqtt_telemetry_topic(), root, true);
+    cJSON_Delete(root);
 }
 
 static bool app_mqtt_parse_bool_param(const cJSON *params, bool fallback)
@@ -262,7 +306,6 @@ static void app_mqtt_apply_command(const char *topic, const char *payload, int d
     bool handled = false;
     bool request_status = false;
     char response_topic[128];
-    char response_payload[256];
     const char *request_id = NULL;
     const char *rpc_prefix = "v1/devices/me/rpc/request/";
     cJSON *root = cJSON_ParseWithLength(payload, data_len < 0 ? (payload ? strlen(payload) : 0) : (size_t)data_len);
@@ -368,32 +411,39 @@ static void app_mqtt_apply_command(const char *topic, const char *payload, int d
 
     if (handled && topic != NULL &&
         strncmp(topic, rpc_prefix, strlen(rpc_prefix)) == 0) {
-        esp_mqtt_client_handle_t client;
+        cJSON *resp = cJSON_CreateObject();
+        if (resp == NULL) {
+            goto publish_attributes_and_state;
+        }
         request_id = topic + strlen(rpc_prefix);
         snprintf(response_topic, sizeof(response_topic),
                  "v1/devices/me/rpc/response/%s", request_id);
         if (request_status) {
-            snprintf(response_payload, sizeof(response_payload),
-                     "{\"relay_on\":%s,\"led_on\":%s,\"input_active\":%s,"
-                     "\"net_mode\":\"%s\",\"sta_has_ip\":%s,\"sta_ip\":\"%s\"}",
-                     s_config.relay_on ? "true" : "false",
-                     s_config.led_on ? "true" : "false",
-                     app_get_input_state() ? "true" : "false",
-                     app_network_mode_to_string(s_config.net_mode),
-                     s_wifi.sta_has_ip ? "true" : "false",
-                     s_wifi.sta_ip);
+            cJSON_AddBoolToObject  (resp, "relay_on",     s_config.relay_on);
+            cJSON_AddBoolToObject  (resp, "led_on",       s_config.led_on);
+            cJSON_AddBoolToObject  (resp, "input_active", app_get_input_state());
+            cJSON_AddStringToObject(resp, "net_mode",     app_network_mode_to_string(s_config.net_mode));
+            cJSON_AddBoolToObject  (resp, "sta_has_ip",   s_wifi.sta_has_ip);
+            cJSON_AddStringToObject(resp, "sta_ip",       s_wifi.sta_ip);
         } else {
-            snprintf(response_payload, sizeof(response_payload),
-                     "{\"success\":true,\"relay_on\":%s,\"led_on\":%s}",
-                     s_config.relay_on ? "true" : "false",
-                     s_config.led_on ? "true" : "false");
+            cJSON_AddBoolToObject(resp, "success",  true);
+            cJSON_AddBoolToObject(resp, "relay_on", s_config.relay_on);
+            cJSON_AddBoolToObject(resp, "led_on",   s_config.led_on);
         }
-        client = app_mqtt_client_safe();
-        if (client != NULL) {
-            esp_mqtt_client_publish(client, response_topic, response_payload, 0, 1, 0);
+        {
+            esp_mqtt_client_handle_t client = app_mqtt_client_safe();
+            if (client != NULL) {
+                char *resp_body = cJSON_PrintUnformatted(resp);
+                if (resp_body != NULL) {
+                    esp_mqtt_client_publish(client, response_topic, resp_body, 0, 1, 0);
+                    cJSON_free(resp_body);
+                }
+            }
         }
+        cJSON_Delete(resp);
     }
 
+publish_attributes_and_state:
     if (handled) {
         app_mqtt_publish_attributes();
     }
@@ -403,13 +453,86 @@ static void app_mqtt_apply_command(const char *topic, const char *payload, int d
 static void app_mqtt_republish_boost_task(void *arg)
 {
     (void)arg;
-    vTaskDelay(pdMS_TO_TICKS(3000));
-    if (app_mqtt_connected_safe()) {
-        ESP_LOGI(TAG, "3s boost: re-publish attributes + state to ensure liveness");
-        app_mqtt_publish_attributes();
-        app_mqtt_publish_state();
+    for (;;) {
+        BaseType_t notified;
+        TickType_t deadline;
+        EventBits_t stop_bits;
+
+        notified = xTaskNotifyWaitIndexed(0, 0, ULONG_MAX, NULL, portMAX_DELAY);
+        if (notified == pdPASS) {
+            deadline = xTaskGetTickCount() + pdMS_TO_TICKS(3000);
+        } else {
+            continue;
+        }
+
+        for (;;) {
+            TickType_t now = xTaskGetTickCount();
+            TickType_t remaining;
+            stop_bits = xEventGroupGetBits(s_mqtt.stop_events);
+            if ((stop_bits & MQTT_STOP_EVENT_BOOST) != 0) {
+                ESP_LOGI(TAG, "Boost task exiting on stop event");
+                xEventGroupClearBits(s_mqtt.stop_events, MQTT_STOP_EVENT_BOOST);
+                app_mqtt_lock();
+                s_mqtt.boost_task = NULL;
+                app_mqtt_unlock();
+                vTaskDelete(NULL);
+                return;
+            }
+            if (now >= deadline) {
+                break;
+            }
+            remaining = deadline - now;
+            notified = xTaskNotifyWaitIndexed(0, 0, ULONG_MAX, NULL, remaining);
+            if (notified == pdPASS) {
+                deadline = xTaskGetTickCount() + pdMS_TO_TICKS(3000);
+            }
+        }
+
+        stop_bits = xEventGroupGetBits(s_mqtt.stop_events);
+        if ((stop_bits & MQTT_STOP_EVENT_BOOST) != 0) {
+            ESP_LOGI(TAG, "Boost task exiting on stop event");
+            xEventGroupClearBits(s_mqtt.stop_events, MQTT_STOP_EVENT_BOOST);
+            app_mqtt_lock();
+            s_mqtt.boost_task = NULL;
+            app_mqtt_unlock();
+            vTaskDelete(NULL);
+            return;
+        }
+        if (app_mqtt_connected_safe()) {
+            ESP_LOGI(TAG, "3s boost: re-publish attributes + state to ensure liveness");
+            app_mqtt_publish_attributes();
+            app_mqtt_publish_state();
+        }
     }
-    vTaskDelete(NULL);
+}
+
+static bool app_mqtt_schedule_boost(void)
+{
+    TaskHandle_t h;
+    BaseType_t rt;
+    app_mqtt_ensure_runtime_init();
+    app_mqtt_lock();
+    h = (TaskHandle_t)s_mqtt.boost_task;
+    if (h != NULL) {
+        app_mqtt_unlock();
+        xTaskNotifyGive(h);
+        return true;
+    }
+    app_mqtt_unlock();
+    xEventGroupClearBits(s_mqtt.stop_events, MQTT_STOP_EVENT_BOOST);
+    rt = xTaskCreate(app_mqtt_republish_boost_task, "mqtt_boost", 3072, NULL, 4, &h);
+    if (rt != pdPASS) {
+        ESP_LOGW(TAG, "Failed to create mqtt_boost task");
+        app_copy_string(s_mqtt.last_error, sizeof(s_mqtt.last_error), "boost_task_failed");
+        return false;
+    }
+    app_mqtt_lock();
+    if (s_mqtt.boost_task == NULL) {
+        s_mqtt.boost_task = h;
+    }
+    app_mqtt_unlock();
+    xTaskNotifyGive(h);
+    return true;
 }
 
 static void app_mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_t event_id, void *event_data)
@@ -434,9 +557,7 @@ static void app_mqtt_event_handler(void *handler_args, esp_event_base_t base, in
         app_mqtt_publish_state();
         app_mqtt_request_initial_attributes();
         ESP_LOGI(TAG, "MQTT connected: subscribed RPC + shared attrs, requested initial attrs");
-        if (xTaskCreate(app_mqtt_republish_boost_task, "mqtt_boost", 3072, NULL, 4, NULL) != pdPASS) {
-            ESP_LOGW(TAG, "Failed to create mqtt_boost task");
-        }
+        app_mqtt_schedule_boost();
         break;
     case MQTT_EVENT_DISCONNECTED:
         app_mqtt_lock();
@@ -496,6 +617,8 @@ static void app_mqtt_event_handler(void *handler_args, esp_event_base_t base, in
 void app_mqtt_stop(void)
 {
     esp_mqtt_client_handle_t client_to_destroy = NULL;
+    TaskHandle_t boost_task_to_notify = NULL;
+    TaskHandle_t restart_task_to_notify = NULL;
 
     app_mqtt_ensure_runtime_init();
 
@@ -503,10 +626,25 @@ void app_mqtt_stop(void)
     if (s_mqtt.telemetry_task != NULL) {
         xEventGroupSetBits(s_mqtt.stop_events, MQTT_STOP_EVENT_TELEMETRY);
     }
+    if (s_mqtt.boost_task != NULL) {
+        boost_task_to_notify = (TaskHandle_t)s_mqtt.boost_task;
+        xEventGroupSetBits(s_mqtt.stop_events, MQTT_STOP_EVENT_BOOST);
+    }
+    if (s_mqtt.restart_task != NULL) {
+        restart_task_to_notify = (TaskHandle_t)s_mqtt.restart_task;
+        xEventGroupSetBits(s_mqtt.stop_events, MQTT_STOP_EVENT_RESTART);
+    }
     client_to_destroy = s_mqtt.client;
     s_mqtt.client = NULL;
     s_mqtt.connected = false;
     app_mqtt_unlock();
+
+    if (boost_task_to_notify != NULL) {
+        xTaskNotifyGive(boost_task_to_notify);
+    }
+    if (restart_task_to_notify != NULL) {
+        xTaskNotifyGive(restart_task_to_notify);
+    }
 
     if (s_mqtt.telemetry_task != NULL) {
         EventBits_t bits;
@@ -517,6 +655,30 @@ void app_mqtt_stop(void)
         }
         app_mqtt_lock();
         s_mqtt.telemetry_task = NULL;
+        app_mqtt_unlock();
+    }
+
+    if (boost_task_to_notify != NULL) {
+        EventBits_t bits;
+        bits = xEventGroupWaitBits(s_mqtt.stop_events, MQTT_STOP_EVENT_BOOST,
+                                   pdFALSE, pdTRUE, pdMS_TO_TICKS(4000));
+        if ((bits & MQTT_STOP_EVENT_BOOST) == 0) {
+            ESP_LOGW(TAG, "Boost task did not exit within timeout, forcing NULL handle");
+        }
+        app_mqtt_lock();
+        s_mqtt.boost_task = NULL;
+        app_mqtt_unlock();
+    }
+
+    if (restart_task_to_notify != NULL) {
+        EventBits_t bits;
+        bits = xEventGroupWaitBits(s_mqtt.stop_events, MQTT_STOP_EVENT_RESTART,
+                                   pdFALSE, pdTRUE, pdMS_TO_TICKS(4000));
+        if ((bits & MQTT_STOP_EVENT_RESTART) == 0) {
+            ESP_LOGW(TAG, "Restart task did not exit within timeout, forcing NULL handle");
+        }
+        app_mqtt_lock();
+        s_mqtt.restart_task = NULL;
         app_mqtt_unlock();
     }
 
@@ -606,13 +768,76 @@ esp_err_t app_mqtt_apply_config(void)
     return ESP_OK;
 }
 
+static void app_mqtt_restart_task_fn(void *arg)
+{
+    (void)arg;
+    for (;;) {
+        BaseType_t notified;
+        EventBits_t stop_bits;
+        notified = xTaskNotifyWaitIndexed(0, 0, ULONG_MAX, NULL, portMAX_DELAY);
+        if (notified != pdPASS) {
+            continue;
+        }
+        stop_bits = xEventGroupGetBits(s_mqtt.stop_events);
+        if ((stop_bits & MQTT_STOP_EVENT_RESTART) != 0) {
+            ESP_LOGI(TAG, "Restart task exiting on stop event");
+            xEventGroupClearBits(s_mqtt.stop_events, MQTT_STOP_EVENT_RESTART);
+            app_mqtt_lock();
+            s_mqtt.restart_task = NULL;
+            app_mqtt_unlock();
+            vTaskDelete(NULL);
+            return;
+        }
+        vTaskDelay(pdMS_TO_TICKS(200));
+        stop_bits = xEventGroupGetBits(s_mqtt.stop_events);
+        if ((stop_bits & MQTT_STOP_EVENT_RESTART) != 0) {
+            ESP_LOGI(TAG, "Restart task exiting on stop event");
+            xEventGroupClearBits(s_mqtt.stop_events, MQTT_STOP_EVENT_RESTART);
+            app_mqtt_lock();
+            s_mqtt.restart_task = NULL;
+            app_mqtt_unlock();
+            vTaskDelete(NULL);
+            return;
+        }
+        if (app_mqtt_apply_config() != ESP_OK) {
+            ESP_LOGE(TAG, "MQTT apply config failed");
+        }
+    }
+}
+
+bool app_mqtt_schedule_restart(void)
+{
+    TaskHandle_t h;
+    BaseType_t rt;
+    app_mqtt_ensure_runtime_init();
+    app_mqtt_lock();
+    h = (TaskHandle_t)s_mqtt.restart_task;
+    if (h != NULL) {
+        app_mqtt_unlock();
+        xTaskNotifyGive(h);
+        return true;
+    }
+    app_mqtt_unlock();
+    xEventGroupClearBits(s_mqtt.stop_events, MQTT_STOP_EVENT_RESTART);
+    rt = xTaskCreate(app_mqtt_restart_task_fn, "mqtt_restart", 4096, NULL, 5, &h);
+    if (rt != pdPASS) {
+        ESP_LOGE(TAG, "Failed to create mqtt_restart task");
+        app_copy_string(s_mqtt.last_error, sizeof(s_mqtt.last_error), "restart_task_failed");
+        return false;
+    }
+    app_mqtt_lock();
+    if (s_mqtt.restart_task == NULL) {
+        s_mqtt.restart_task = h;
+    }
+    app_mqtt_unlock();
+    xTaskNotifyGive(h);
+    return true;
+}
+
 void app_mqtt_restart_task(void *arg)
 {
-    vTaskDelay(pdMS_TO_TICKS(200));
-    if (app_mqtt_apply_config() != ESP_OK) {
-        ESP_LOGE(TAG, "MQTT apply config failed");
-    }
-    vTaskDelete(NULL);
+    (void)arg;
+    app_mqtt_schedule_restart();
 }
 
 static void app_mqtt_telemetry_task(void *arg)

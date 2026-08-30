@@ -24,6 +24,35 @@ typedef struct {
     app_wifi_profile_t profiles[APP_WIFI_PROFILE_MAX];
 } app_wifi_profiles_blob_t;
 
+/*
+ * Legacy config structs — field layout by version:
+ *
+ *   v3 (struct layout size = sizeof(app_config_v3_t)):
+ *     + contains legacy uart_rx_gpio / uart_tx_gpio (int32)
+ *     + no GPIO pin fields for relay/led/input (pins were fixed-constant in v3 era)
+ *     + all configs below have the common prefix (relay_active_high..uart_baudrate)
+ *       and the common 8 strings (ap_ssid..mqtt_token) — see common macros below
+ *
+ *   v4 (sizeof(app_config_v4_t)):
+ *     + keeps uart_rx_gpio / uart_tx_gpio from v3
+ *     + ADDS three more legacy GPIO fields: relay_gpio, led_gpio, input_gpio (int32)
+ *       — these were later removed because GPIO pinout became a compile-time constant
+ *       handled by app_relay_gpio()/app_led_gpio()/app_input_gpio() (see state.c)
+ *
+ *   v5 (sizeof(app_config_v5_t)):
+ *     + REMOVES all five legacy GPIO fields (uart_rx/tx_gpio AND relay/led/input_gpio)
+ *       because every pin was validated against a compile-time fixed layout via
+ *       app_validate_fixed_gpio_config() (later removed entirely to eliminate dead code)
+ *     + matches field order of the current v6 except for the two uart frame bytes
+ *       added in v6: uart_data_bits and uart_stop_bits — restored by the
+ *       APP_MIGRATE_FIXED_FRAME() macro during migration
+ *
+ *   v6 (current APP_CONFIG_VERSION = 6 — app_config_t):
+ *     + current layout; no legacy GPIO pin fields at all (pins are compile-time fixed)
+ *     + adds uart_data_bits (uint8) and uart_stop_bits (uint8) so the UART frame is
+ *       fully described inside config without the hard-coded 8N1 assumption
+ */
+
 typedef struct {
     uint32_t magic;
     uint16_t version;
@@ -80,9 +109,9 @@ typedef struct {
     uint8_t relay_active_high;
     uint8_t led_active_high;
     uint8_t input_active_low;
-    int32_t relay_gpio;
-    int32_t led_gpio;
-    int32_t input_gpio;
+    int32_t relay_gpio;          /* v4-only: legacy compile-relay pin, now fixed-constant */
+    int32_t led_gpio;            /* v4-only: legacy compile-led pin, now fixed-constant */
+    int32_t input_gpio;          /* v4-only: legacy compile-input pin, now fixed-constant */
     uint8_t relay_on;
     uint8_t led_on;
     uint8_t bt_mode;
@@ -104,6 +133,61 @@ typedef struct {
 } app_config_v4_t;
 
 static const char *TAG = "iothub";
+
+static SemaphoreHandle_t s_config_lock = NULL;
+static SemaphoreHandle_t s_wifi_runtime_lock = NULL;
+static SemaphoreHandle_t s_wifi_profiles_lock = NULL;
+
+void app_config_lock(void)
+{
+    if (s_config_lock == NULL) {
+        s_config_lock = xSemaphoreCreateRecursiveMutex();
+    }
+    if (s_config_lock != NULL) {
+        xSemaphoreTakeRecursive(s_config_lock, portMAX_DELAY);
+    }
+}
+
+void app_config_unlock(void)
+{
+    if (s_config_lock != NULL) {
+        xSemaphoreGiveRecursive(s_config_lock);
+    }
+}
+
+void app_wifi_runtime_lock(void)
+{
+    if (s_wifi_runtime_lock == NULL) {
+        s_wifi_runtime_lock = xSemaphoreCreateRecursiveMutex();
+    }
+    if (s_wifi_runtime_lock != NULL) {
+        xSemaphoreTakeRecursive(s_wifi_runtime_lock, portMAX_DELAY);
+    }
+}
+
+void app_wifi_runtime_unlock(void)
+{
+    if (s_wifi_runtime_lock != NULL) {
+        xSemaphoreGiveRecursive(s_wifi_runtime_lock);
+    }
+}
+
+void app_wifi_profiles_lock(void)
+{
+    if (s_wifi_profiles_lock == NULL) {
+        s_wifi_profiles_lock = xSemaphoreCreateRecursiveMutex();
+    }
+    if (s_wifi_profiles_lock != NULL) {
+        xSemaphoreTakeRecursive(s_wifi_profiles_lock, portMAX_DELAY);
+    }
+}
+
+void app_wifi_profiles_unlock(void)
+{
+    if (s_wifi_profiles_lock != NULL) {
+        xSemaphoreGiveRecursive(s_wifi_profiles_lock);
+    }
+}
 
 #define APP_COPY_STR(field_name) \
     app_copy_string(config->field_name, sizeof(config->field_name), legacy->field_name)
@@ -253,7 +337,10 @@ void app_config_set_defaults(app_config_t *config)
 
     memset(config, 0, sizeof(*config));
     config->magic = APP_CONFIG_MAGIC;
-    config->version = APP_CONFIG_VERSION;
+    /* NOTE: config->version intentionally NOT assigned here — the single
+     * assignment point is app_config_mark_current_version() below. This way a
+     * future APP_CONFIG_VERSION bump requires exactly one edit instead of
+     * having to sync the defaults value and every migrate call-site. */
     config->relay_active_high = 1;
     config->led_active_high = 1;
     config->input_active_low = 1;
@@ -270,18 +357,41 @@ void app_config_set_defaults(app_config_t *config)
     app_copy_string(config->mqtt_host, sizeof(config->mqtt_host), "demo.thingsboard.io");
 }
 
+static inline void app_config_mark_current_version(app_config_t *config)
+{
+    if (config != NULL) {
+        config->version = APP_CONFIG_VERSION;
+    }
+}
+
 esp_err_t app_config_save(const app_config_t *config)
 {
+    static app_config_t s_existing;
     nvs_handle_t nvs_handle;
     esp_err_t err;
+    size_t existing_size;
 
     if (config == NULL) {
         return ESP_ERR_INVALID_ARG;
     }
 
+    app_config_lock();
     err = nvs_open(APP_NAMESPACE, NVS_READWRITE, &nvs_handle);
     if (err != ESP_OK) {
+        app_config_unlock();
         return err;
+    }
+
+    existing_size = sizeof(s_existing);
+    memset(&s_existing, 0, sizeof(s_existing));
+    if (nvs_get_blob(nvs_handle, APP_CONFIG_KEY, &s_existing, &existing_size) == ESP_OK &&
+        existing_size == sizeof(s_existing) &&
+        s_existing.magic == APP_CONFIG_MAGIC &&
+        s_existing.version == APP_CONFIG_VERSION &&
+        memcmp(&s_existing, config, sizeof(s_existing)) == 0) {
+        nvs_close(nvs_handle);
+        app_config_unlock();
+        return ESP_OK;
     }
 
     err = nvs_set_blob(nvs_handle, APP_CONFIG_KEY, config, sizeof(*config));
@@ -289,6 +399,7 @@ esp_err_t app_config_save(const app_config_t *config)
         err = nvs_commit(nvs_handle);
     }
     nvs_close(nvs_handle);
+    app_config_unlock();
     return err;
 }
 
@@ -312,34 +423,46 @@ static inline void app_config_migrate_set_strings_from_ptr(app_config_t *config,
     app_copy_string(config->mqtt_token,     sizeof(config->mqtt_token),     mqtt_token);
 }
 
-static void app_config_migrate_v3(app_config_t *config, const app_config_v3_t *legacy)
+static inline void app_config_migrate_apply_common(app_config_t *config,
+                                                   const char *ap_ssid,
+                                                   const char *ap_password,
+                                                   const char *sta_ssid,
+                                                   const char *sta_password,
+                                                   const char *bt_device_name,
+                                                   const char *mqtt_backend,
+                                                   const char *mqtt_host,
+                                                   const char *mqtt_token)
 {
     app_config_set_defaults(config);
-    APP_MIGRATE_COMMON_PREFIX();
     APP_MIGRATE_FIXED_FRAME();
     app_config_migrate_set_strings_from_ptr(config,
+        ap_ssid, ap_password, sta_ssid, sta_password,
+        bt_device_name, mqtt_backend, mqtt_host, mqtt_token);
+    app_config_mark_current_version(config);
+}
+
+static void app_config_migrate_v3(app_config_t *config, const app_config_v3_t *legacy)
+{
+    app_config_migrate_apply_common(config,
         legacy->ap_ssid, legacy->ap_password, legacy->sta_ssid, legacy->sta_password,
         legacy->bt_device_name, legacy->mqtt_backend, legacy->mqtt_host, legacy->mqtt_token);
+    APP_MIGRATE_COMMON_PREFIX();
 }
 
 static void app_config_migrate_v4(app_config_t *config, const app_config_v4_t *legacy)
 {
-    app_config_set_defaults(config);
-    APP_MIGRATE_COMMON_PREFIX();
-    APP_MIGRATE_FIXED_FRAME();
-    app_config_migrate_set_strings_from_ptr(config,
+    app_config_migrate_apply_common(config,
         legacy->ap_ssid, legacy->ap_password, legacy->sta_ssid, legacy->sta_password,
         legacy->bt_device_name, legacy->mqtt_backend, legacy->mqtt_host, legacy->mqtt_token);
+    APP_MIGRATE_COMMON_PREFIX();
 }
 
 static void app_config_migrate_v5(app_config_t *config, const app_config_v5_t *legacy)
 {
-    app_config_set_defaults(config);
-    APP_MIGRATE_COMMON_PREFIX();
-    APP_MIGRATE_FIXED_FRAME();
-    app_config_migrate_set_strings_from_ptr(config,
+    app_config_migrate_apply_common(config,
         legacy->ap_ssid, legacy->ap_password, legacy->sta_ssid, legacy->sta_password,
         legacy->bt_device_name, legacy->mqtt_backend, legacy->mqtt_host, legacy->mqtt_token);
+    APP_MIGRATE_COMMON_PREFIX();
 }
 
 void app_config_load(app_config_t *config)
@@ -352,6 +475,7 @@ void app_config_load(app_config_t *config)
     }
 
     app_config_set_defaults(config);
+    app_config_mark_current_version(config);
 
     if (nvs_open(APP_NAMESPACE, NVS_READWRITE, &nvs_handle) != ESP_OK) {
         ESP_LOGW(TAG, "Open NVS failed, using defaults");
@@ -361,6 +485,7 @@ void app_config_load(app_config_t *config)
     if (nvs_get_blob(nvs_handle, APP_CONFIG_KEY, NULL, &size) != ESP_OK) {
         ESP_LOGI(TAG, "No compatible saved config found, storing defaults");
         app_config_set_defaults(config);
+        app_config_mark_current_version(config);
         nvs_set_blob(nvs_handle, APP_CONFIG_KEY, config, sizeof(*config));
         nvs_commit(nvs_handle);
         nvs_close(nvs_handle);
@@ -421,6 +546,7 @@ void app_config_load(app_config_t *config)
 
     ESP_LOGI(TAG, "No compatible saved config found, storing defaults");
     app_config_set_defaults(config);
+    app_config_mark_current_version(config);
     nvs_set_blob(nvs_handle, APP_CONFIG_KEY, config, sizeof(*config));
     nvs_commit(nvs_handle);
     nvs_close(nvs_handle);
@@ -428,8 +554,8 @@ void app_config_load(app_config_t *config)
 
 esp_err_t app_config_load_wifi_profiles(app_wifi_profile_t *profiles, size_t max_profiles, size_t *profile_count)
 {
+    static app_wifi_profiles_blob_t s_blob;
     nvs_handle_t nvs_handle;
-    app_wifi_profiles_blob_t blob;
     size_t index;
     size_t copy_count = 0;
 
@@ -442,75 +568,106 @@ esp_err_t app_config_load_wifi_profiles(app_wifi_profile_t *profiles, size_t max
         max_profiles = APP_WIFI_PROFILE_MAX;
     }
 
+    app_wifi_profiles_lock();
     if (nvs_open(APP_NAMESPACE, NVS_READWRITE, &nvs_handle) != ESP_OK) {
+        app_wifi_profiles_unlock();
         return ESP_FAIL;
     }
-    app_config_load_wifi_profiles_blob(nvs_handle, &blob);
+    app_config_load_wifi_profiles_blob(nvs_handle, &s_blob);
     nvs_close(nvs_handle);
 
-    copy_count = blob.count < max_profiles ? blob.count : max_profiles;
+    copy_count = s_blob.count < max_profiles ? s_blob.count : max_profiles;
     for (index = 0; index < copy_count; index++) {
-        profiles[index] = blob.profiles[index];
+        profiles[index] = s_blob.profiles[index];
     }
-    *profile_count = blob.count;
+    *profile_count = s_blob.count;
+    app_wifi_profiles_unlock();
     return ESP_OK;
 }
 
 esp_err_t app_config_save_wifi_profile(const char *ssid, const char *password)
 {
+    static app_wifi_profiles_blob_t s_blob;
+    static app_wifi_profiles_blob_t s_old_blob;
+    static app_wifi_profile_t s_existing[APP_WIFI_PROFILE_MAX - 1];
+    static app_wifi_profile_t s_profile;
     nvs_handle_t nvs_handle;
-    app_wifi_profiles_blob_t blob;
     size_t index;
     size_t existing_count = 0;
-    app_wifi_profile_t profile = {0};
-    app_wifi_profile_t existing[APP_WIFI_PROFILE_MAX - 1];
+    bool changed;
+    esp_err_t open_err;
 
     if (ssid == NULL || ssid[0] == '\0' || password == NULL) {
         return ESP_ERR_INVALID_ARG;
     }
 
-    app_copy_string(profile.ssid, sizeof(profile.ssid), ssid);
-    app_copy_string(profile.password, sizeof(profile.password), password);
+    app_wifi_profiles_lock();
+    memset(&s_profile, 0, sizeof(s_profile));
+    app_copy_string(s_profile.ssid, sizeof(s_profile.ssid), ssid);
+    app_copy_string(s_profile.password, sizeof(s_profile.password), password);
 
-    ESP_RETURN_ON_ERROR(nvs_open(APP_NAMESPACE, NVS_READWRITE, &nvs_handle), TAG,
-                        "open nvs for wifi profiles failed");
-    app_config_load_wifi_profiles_blob(nvs_handle, &blob);
+    open_err = nvs_open(APP_NAMESPACE, NVS_READWRITE, &nvs_handle);
+    if (open_err != ESP_OK) {
+        app_wifi_profiles_unlock();
+        return open_err;
+    }
+    app_config_load_wifi_profiles_blob(nvs_handle, &s_blob);
 
+    memset(s_existing, 0, sizeof(s_existing));
+    existing_count = 0;
     for (index = 0; index < APP_WIFI_PROFILE_MAX; index++) {
-        if (blob.profiles[index].ssid[0] == '\0') {
+        if (s_blob.profiles[index].ssid[0] == '\0') {
             continue;
         }
-        if (strcmp(blob.profiles[index].ssid, profile.ssid) == 0) {
+        if (strcmp(s_blob.profiles[index].ssid, s_profile.ssid) == 0) {
             continue;
         }
         if (existing_count >= APP_WIFI_PROFILE_MAX - 1) {
             break;
         }
-        existing[existing_count++] = blob.profiles[index];
+        s_existing[existing_count++] = s_blob.profiles[index];
     }
 
-    blob.profiles[0] = profile;
+    s_blob.profiles[0] = s_profile;
     for (index = 0; index < existing_count; index++) {
-        blob.profiles[index + 1] = existing[index];
+        s_blob.profiles[index + 1] = s_existing[index];
     }
     for (index = existing_count + 1; index < APP_WIFI_PROFILE_MAX; index++) {
-        memset(&blob.profiles[index], 0, sizeof(blob.profiles[index]));
+        memset(&s_blob.profiles[index], 0, sizeof(s_blob.profiles[index]));
     }
-    app_config_normalize_wifi_profiles(&blob);
+    app_config_normalize_wifi_profiles(&s_blob);
+
     {
-        esp_err_t err = app_config_store_wifi_profiles_blob(nvs_handle, &blob);
+        size_t old_size = sizeof(s_old_blob);
+        changed = true;
+        app_config_init_wifi_profiles(&s_old_blob);
+        if (nvs_get_blob(nvs_handle, APP_WIFI_PROFILES_KEY, &s_old_blob, &old_size) == ESP_OK &&
+            old_size == sizeof(s_old_blob) &&
+            app_config_wifi_profiles_blob_valid(&s_old_blob)) {
+            if (s_old_blob.count == s_blob.count && memcmp(s_old_blob.profiles, s_blob.profiles, sizeof(s_blob.profiles)) == 0) {
+                changed = false;
+            }
+        }
+    }
+
+    if (changed) {
+        esp_err_t err = app_config_store_wifi_profiles_blob(nvs_handle, &s_blob);
         nvs_close(nvs_handle);
         if (err == ESP_OK) {
             app_wifi_mark_profiles_dirty();
         }
+        app_wifi_profiles_unlock();
         return err;
     }
+    nvs_close(nvs_handle);
+    app_wifi_profiles_unlock();
+    return ESP_OK;
 }
 
 esp_err_t app_config_delete_wifi_profile(const char *ssid)
 {
+    static app_wifi_profiles_blob_t s_blob;
     nvs_handle_t nvs_handle;
-    app_wifi_profiles_blob_t blob;
     size_t index;
     bool removed = false;
 
@@ -518,26 +675,31 @@ esp_err_t app_config_delete_wifi_profile(const char *ssid)
         return ESP_ERR_INVALID_ARG;
     }
 
-    ESP_RETURN_ON_ERROR(nvs_open(APP_NAMESPACE, NVS_READWRITE, &nvs_handle), TAG,
-                        "open nvs for wifi profile delete failed");
-    app_config_load_wifi_profiles_blob(nvs_handle, &blob);
+    app_wifi_profiles_lock();
+    if (nvs_open(APP_NAMESPACE, NVS_READWRITE, &nvs_handle) != ESP_OK) {
+        app_wifi_profiles_unlock();
+        return ESP_FAIL;
+    }
+    app_config_load_wifi_profiles_blob(nvs_handle, &s_blob);
     for (index = 0; index < APP_WIFI_PROFILE_MAX; index++) {
-        if (strcmp(blob.profiles[index].ssid, ssid) == 0) {
-            memset(&blob.profiles[index], 0, sizeof(blob.profiles[index]));
+        if (strcmp(s_blob.profiles[index].ssid, ssid) == 0) {
+            memset(&s_blob.profiles[index], 0, sizeof(s_blob.profiles[index]));
             removed = true;
         }
     }
     if (!removed) {
         nvs_close(nvs_handle);
+        app_wifi_profiles_unlock();
         return ESP_ERR_NOT_FOUND;
     }
-    app_config_normalize_wifi_profiles(&blob);
+    app_config_normalize_wifi_profiles(&s_blob);
     {
-        esp_err_t err = app_config_store_wifi_profiles_blob(nvs_handle, &blob);
+        esp_err_t err = app_config_store_wifi_profiles_blob(nvs_handle, &s_blob);
         nvs_close(nvs_handle);
         if (err == ESP_OK) {
             app_wifi_mark_profiles_dirty();
         }
+        app_wifi_profiles_unlock();
         return err;
     }
 }

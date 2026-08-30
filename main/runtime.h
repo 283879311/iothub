@@ -14,6 +14,8 @@ typedef struct {
     SemaphoreHandle_t lock;
     EventGroupHandle_t stop_events;
     void *telemetry_task;
+    void *boost_task;
+    void *restart_task;
     void *client;
     bool connected;
     bool started;
@@ -38,4 +40,5 @@ typedef struct {
     char sta_netmask[16];
     char last_disconnect[32];
     char startup_fallback_reason[32];
+    void *restart_task;
 } wifi_runtime_t;

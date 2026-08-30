@@ -27,10 +27,6 @@ bool      app_http_require_auth(httpd_req_t *req);
 esp_err_t http_read_body(httpd_req_t *req, char *buf, size_t buf_len);
 esp_err_t http_serve_html(httpd_req_t *req, const char *file_name);
 
-void app_http_build_wifi_profiles_json(char *dst, size_t dst_size,
-                                       const app_wifi_profile_t *profiles,
-                                       size_t profile_count);
-
 typedef struct {
     const char *uri;
     httpd_method_t method;

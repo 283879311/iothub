@@ -18,27 +18,40 @@ static esp_err_t gpio_get_handler(httpd_req_t *req)
     if (!app_http_require_auth(req)) {
         return ESP_OK;
     }
-    return app_http_send_jsonf(req, NULL,
-                           "{\"relay_gpio\":%ld,\"relay_active_high\":%s,\"relay_on\":%s,"
-                           "\"led_gpio\":%ld,\"led_active_high\":%s,\"led_on\":%s,"
-                           "\"input_gpio\":%ld,\"input_active_low\":%s,\"input_active\":%s,"
-                           "\"uart_rx_gpio\":%ld,\"uart_tx_gpio\":%ld}",
-                           (long)app_relay_gpio(),
-                           s_config.relay_active_high ? "true" : "false",
-                           s_config.relay_on ? "true" : "false",
-                           (long)app_led_gpio(),
-                           s_config.led_active_high ? "true" : "false",
-                           s_config.led_on ? "true" : "false",
-                           (long)app_input_gpio(),
-                           s_config.input_active_low ? "true" : "false",
-                           app_get_input_state() ? "true" : "false",
-                           (long)app_uart_rx_gpio(),
-                           (long)app_uart_tx_gpio());
+    {
+        esp_err_t rv;
+        uint8_t relay_active_high, relay_on, led_active_high, led_on, input_active_low;
+        app_config_lock();
+        relay_active_high = s_config.relay_active_high;
+        relay_on = s_config.relay_on;
+        led_active_high = s_config.led_active_high;
+        led_on = s_config.led_on;
+        input_active_low = s_config.input_active_low;
+        app_config_unlock();
+        rv = app_http_send_jsonf(req, NULL,
+                               "{\"relay_gpio\":%ld,\"relay_active_high\":%s,\"relay_on\":%s,"
+                               "\"led_gpio\":%ld,\"led_active_high\":%s,\"led_on\":%s,"
+                               "\"input_gpio\":%ld,\"input_active_low\":%s,\"input_active\":%s,"
+                               "\"uart_rx_gpio\":%ld,\"uart_tx_gpio\":%ld}",
+                               (long)app_relay_gpio(),
+                               relay_active_high ? "true" : "false",
+                               relay_on ? "true" : "false",
+                               (long)app_led_gpio(),
+                               led_active_high ? "true" : "false",
+                               led_on ? "true" : "false",
+                               (long)app_input_gpio(),
+                               input_active_low ? "true" : "false",
+                               app_get_input_state() ? "true" : "false",
+                               (long)app_uart_rx_gpio(),
+                               (long)app_uart_tx_gpio());
+        return rv;
+    }
 }
 
 static esp_err_t gpio_put_handler(httpd_req_t *req)
 {
     bool value;
+    esp_err_t save_err;
 
     if (!app_http_require_auth(req)) {
         return ESP_OK;
@@ -50,6 +63,7 @@ static esp_err_t gpio_put_handler(httpd_req_t *req)
         }
     }
 
+    app_config_lock();
     if (app_json_find_bool(app_http_scratch_buf(), "relay_on", &value)) {
         s_config.relay_on = value ? 1 : 0;
         app_apply_output(app_relay_gpio(), s_config.relay_active_high, s_config.relay_on);
@@ -59,7 +73,10 @@ static esp_err_t gpio_put_handler(httpd_req_t *req)
         app_apply_output(app_led_gpio(), s_config.led_active_high, s_config.led_on);
     }
 
-    if (app_config_save(&s_config) != ESP_OK) {
+    save_err = app_config_save(&s_config);
+    app_config_unlock();
+
+    if (save_err != ESP_OK) {
         return app_http_send_json_text(req, "500 Internal Server Error",
                                    "{\"status\":\"error\",\"message\":\"config_save_failed\"}");
     }

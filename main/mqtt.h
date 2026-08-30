@@ -10,3 +10,6 @@ esp_err_t app_mqtt_start(void);
 esp_err_t app_mqtt_apply_config(void);
 void app_mqtt_stop(void);
 void app_mqtt_restart_task(void *arg);
+bool app_mqtt_schedule_restart(void);
+void app_mqtt_lock(void);
+void app_mqtt_unlock(void);

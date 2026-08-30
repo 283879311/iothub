@@ -110,6 +110,29 @@ static uint32_t app_sim_frame_count_from_duration(double duration_ms, uint32_t i
     return frames > minimum ? frames : minimum;
 }
 
+static uint32_t app_sim_max_total_frames(uint32_t interval_ms)
+{
+    /* Keep 200 ms mode responsive without letting the planned frame buffers
+     * grow large enough to starve the rest of the system. */
+    if (interval_ms <= 200) {
+        return 64;
+    }
+    if (interval_ms <= 500) {
+        return 96;
+    }
+    return 128;
+}
+
+static uint32_t app_sim_cap_total_frames(uint32_t frames, uint32_t interval_ms, uint32_t minimum)
+{
+    uint32_t max_frames = app_sim_max_total_frames(interval_ms);
+
+    if (max_frames < minimum) {
+        max_frames = minimum;
+    }
+    return frames < max_frames ? frames : max_frames;
+}
+
 static bool app_sim_is_valid_target_weight_text(const char *value, uint32_t expected_weight)
 {
     char *end = NULL;
@@ -246,8 +269,8 @@ static bool app_sim_build_vehicle_frames(const app_sim_request_t *request,
     uint32_t oscillation_frames = minimum_oscillation;
     uint32_t settle_frames = minimum_settle;
     uint32_t hold_frames = minimum_hold;
-    uint32_t minimum_total = front_frames + ramp_frames + oscillation_frames + settle_frames + hold_frames;
-    uint32_t extra_frames = total_frames > minimum_total ? total_frames - minimum_total : 0;
+      uint32_t minimum_total = front_frames + ramp_frames + oscillation_frames + settle_frames + hold_frames;
+      uint32_t extra_frames;
     size_t count = 0;
     size_t exit_count = 0;
     size_t capacity;
@@ -258,6 +281,9 @@ static bool app_sim_build_vehicle_frames(const app_sim_request_t *request,
     double front_weight = request->target_weight * front_ratio;
     double approach_weight = request->target_weight * app_sim_random_between(0.95, 0.985);
     uint32_t index;
+
+      total_frames = app_sim_cap_total_frames(total_frames, request->interval_ms, minimum_total);
+      extra_frames = total_frames > minimum_total ? total_frames - minimum_total : 0;
 
     front_frames += extra_frames * 3 / 73;
     ramp_frames += extra_frames * 32 / 73;
@@ -270,9 +296,12 @@ static bool app_sim_build_vehicle_frames(const app_sim_request_t *request,
 
     capacity = front_frames + ramp_frames + oscillation_frames + settle_frames + hold_frames;
     frames = calloc(capacity, sizeof(app_sim_frame_t));
-    if (frames == NULL) {
-        return false;
-    }
+      if (frames == NULL) {
+          ESP_LOGE(TAG, "sim main frame alloc failed: cap=%u interval=%u free_heap=%u",
+                   (unsigned)capacity, (unsigned)request->interval_ms,
+                   (unsigned)esp_get_free_heap_size());
+          return false;
+      }
 
     for (index = 0; index < front_frames; index++) {
         double micro_shift = index == 0 ? 0.0 : app_sim_random_between(-request->target_weight * 0.002,
@@ -329,11 +358,14 @@ static bool app_sim_build_vehicle_frames(const app_sim_request_t *request,
     {
         uint32_t exit_total_frames = app_sim_frame_count_from_duration(
             app_sim_random_between(20000.0, 50000.0), request->interval_ms, 20);
-        uint32_t zero_hold_frames = exit_total_frames * 15 / 100;
+          uint32_t zero_hold_frames;
         uint32_t move_frames;
         uint32_t exit_front_frames;
         uint32_t exit_ramp_frames;
         size_t exit_capacity;
+
+          exit_total_frames = app_sim_cap_total_frames(exit_total_frames, request->interval_ms, 20);
+          zero_hold_frames = exit_total_frames * 15 / 100;
 
         if (zero_hold_frames < 3) {
             zero_hold_frames = 3;
@@ -346,10 +378,13 @@ static bool app_sim_build_vehicle_frames(const app_sim_request_t *request,
         exit_ramp_frames = move_frames > exit_front_frames ? move_frames - exit_front_frames : 1;
         exit_capacity = exit_ramp_frames + exit_front_frames + zero_hold_frames;
         exit_frames = calloc(exit_capacity, sizeof(app_sim_frame_t));
-        if (exit_frames == NULL) {
-            free(frames);
-            return false;
-        }
+          if (exit_frames == NULL) {
+              ESP_LOGE(TAG, "sim exit frame alloc failed: cap=%u interval=%u free_heap=%u",
+                       (unsigned)exit_capacity, (unsigned)request->interval_ms,
+                       (unsigned)esp_get_free_heap_size());
+              free(frames);
+              return false;
+          }
 
         for (index = 1; index <= exit_ramp_frames; index++) {
             double progress = (double)index / (double)exit_ramp_frames;
@@ -442,6 +477,14 @@ static void app_sim_set_countdown_locked(int64_t ends_at_ms)
     s_sim.countdown_ends_at_ms = ends_at_ms > 0 ? ends_at_ms : 0;
 }
 
+static void app_sim_mark_final_stable_locked(void)
+{
+    s_sim.target_weight = 0;
+    s_sim.target_weight_text[0] = '\0';
+    app_sim_set_countdown_locked(0);
+    app_sim_free_frames_locked();
+}
+
 static void app_sim_send_one_frame(const app_sim_request_t *request, const char *phase, const char *status, double weight)
 {
     char encoding[8];
@@ -532,9 +575,7 @@ static void app_sim_task_main(void *arg)
                     app_sim_send_one_frame(&request, frame.phase, frame.status, frame.weight);
 
                     if (exit_done && app_sim_lock(pdMS_TO_TICKS(50))) {
-                        s_sim.target_weight = 0;
-                        s_sim.target_weight_text[0] = '\0';
-                        app_sim_set_countdown_locked(0);
+                        app_sim_mark_final_stable_locked();
                         app_sim_unlock();
                     }
                     next_wait = pdMS_TO_TICKS(request.interval_ms);
@@ -560,9 +601,7 @@ static void app_sim_task_main(void *arg)
             app_sim_send_one_frame(&request, frame.phase, frame.status, frame.weight);
 
             if (exit_done && app_sim_lock(pdMS_TO_TICKS(50))) {
-                s_sim.target_weight = 0;
-                s_sim.target_weight_text[0] = '\0';
-                app_sim_set_countdown_locked(0);
+                app_sim_mark_final_stable_locked();
                 app_sim_unlock();
             }
             next_wait = pdMS_TO_TICKS(request.interval_ms);

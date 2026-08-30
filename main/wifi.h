@@ -17,6 +17,7 @@ bool app_network_mode_has_sta(uint8_t mode);
 bool app_network_mode_has_ap(uint8_t mode);
 esp_err_t app_wifi_perform_scan(void);
 void app_wifi_restart_task(void *arg);
+bool app_wifi_schedule_restart(void);
 void app_start_wifi(void);
 
 bool app_wifi_scan_record_at(uint16_t index,

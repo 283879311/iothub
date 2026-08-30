@@ -43,3 +43,10 @@ void app_config_load(app_config_t *config);
 esp_err_t app_config_load_wifi_profiles(app_wifi_profile_t *profiles, size_t max_profiles, size_t *profile_count);
 esp_err_t app_config_save_wifi_profile(const char *ssid, const char *password);
 esp_err_t app_config_delete_wifi_profile(const char *ssid);
+
+void app_config_lock(void);
+void app_config_unlock(void);
+void app_wifi_runtime_lock(void);
+void app_wifi_runtime_unlock(void);
+void app_wifi_profiles_lock(void);
+void app_wifi_profiles_unlock(void);

@@ -25,46 +25,6 @@
 
 const char *HTTP_TAG = "iothub";
 
-void app_http_build_wifi_profiles_json(char *dst, size_t dst_size,
-                                       const app_wifi_profile_t *profiles,
-                                       size_t profile_count)
-{
-    size_t index;
-    size_t used = 0;
-
-    if (dst == NULL || dst_size == 0) {
-        return;
-    }
-
-    used += snprintf(dst + used, dst_size - used, "[");
-    for (index = 0; index < profile_count && used + 1 < dst_size; index++) {
-        char ssid_json[65];
-        char password_json[129];
-        int written;
-
-        app_json_escape_string(ssid_json, sizeof(ssid_json), profiles[index].ssid);
-        app_json_escape_string(password_json, sizeof(password_json), profiles[index].password);
-        written = snprintf(dst + used, dst_size - used,
-                           "%s{\"ssid\":\"%s\",\"password\":\"%s\"}",
-                           index == 0 ? "" : ",",
-                           ssid_json,
-                           password_json);
-        if (written < 0) {
-            break;
-        }
-        if ((size_t)written >= dst_size - used) {
-            used = dst_size - 1;
-            break;
-        }
-        used += (size_t)written;
-    }
-    if (used + 2 <= dst_size) {
-        snprintf(dst + used, dst_size - used, "]");
-    } else {
-        dst[dst_size - 1] = '\0';
-    }
-}
-
 static esp_err_t network_get_handler(httpd_req_t *req)
 {
     char ip[16];
@@ -76,15 +36,50 @@ static esp_err_t network_get_handler(httpd_req_t *req)
     app_wifi_profile_t profiles[APP_WIFI_PROFILE_MAX] = {0};
     size_t profile_count = 0;
     esp_err_t err;
+    uint8_t net_mode;
+    char ap_ssid[sizeof(s_config.ap_ssid)];
+    char ap_password[sizeof(s_config.ap_password)];
+    char sta_ssid[sizeof(s_config.sta_ssid)];
+    char sta_password[sizeof(s_config.sta_password)];
+    bool sta_connected, sta_has_ip, startup_connect_active, startup_fallback_to_ap;
+    char sta_ip[16];
+    char sta_gateway[16];
+    char sta_netmask[16];
+    char last_disconnect[32];
+    char startup_fallback_reason[32];
+    int64_t startup_connect_deadline_ms;
 
     if (!app_http_require_auth(req)) {
         return ESP_OK;
     }
 
-    app_status_get_ap_network_strings(ip, sizeof(ip), gateway, sizeof(gateway), netmask, sizeof(netmask));
+    app_copy_string(ip, sizeof(ip), "192.168.8.1");
+    app_copy_string(gateway, sizeof(gateway), "192.168.8.1");
+    app_copy_string(netmask, sizeof(netmask), "255.255.255.0");
     if (app_config_load_wifi_profiles(profiles, APP_WIFI_PROFILE_MAX, &profile_count) != ESP_OK) {
         profile_count = 0;
     }
+
+    app_config_lock();
+    net_mode = s_config.net_mode;
+    memcpy(ap_ssid, s_config.ap_ssid, sizeof(ap_ssid));
+    memcpy(ap_password, s_config.ap_password, sizeof(ap_password));
+    memcpy(sta_ssid, s_config.sta_ssid, sizeof(sta_ssid));
+    memcpy(sta_password, s_config.sta_password, sizeof(sta_password));
+    app_config_unlock();
+
+    app_wifi_runtime_lock();
+    sta_connected = s_wifi.sta_connected;
+    sta_has_ip = s_wifi.sta_has_ip;
+    startup_connect_active = s_wifi.startup_connect_active;
+    startup_connect_deadline_ms = s_wifi.startup_connect_deadline_ms;
+    startup_fallback_to_ap = s_wifi.startup_fallback_to_ap;
+    memcpy(sta_ip, s_wifi.sta_ip, sizeof(sta_ip));
+    memcpy(sta_gateway, s_wifi.sta_gateway, sizeof(sta_gateway));
+    memcpy(sta_netmask, s_wifi.sta_netmask, sizeof(sta_netmask));
+    memcpy(last_disconnect, s_wifi.last_disconnect, sizeof(last_disconnect));
+    memcpy(startup_fallback_reason, s_wifi.startup_fallback_reason, sizeof(startup_fallback_reason));
+    app_wifi_runtime_unlock();
 
     root = cJSON_CreateObject();
     if (root == NULL) {
@@ -92,25 +87,25 @@ static esp_err_t network_get_handler(httpd_req_t *req)
                                    "{\"status\":\"error\",\"message\":\"out_of_memory\"}");
     }
 
-    cJSON_AddStringToObject(root, "mode", app_network_mode_to_string(s_config.net_mode));
-    cJSON_AddStringToObject(root, "ap_ssid", s_config.ap_ssid);
-    cJSON_AddStringToObject(root, "ap_password", s_config.ap_password);
+    cJSON_AddStringToObject(root, "mode", app_network_mode_to_string(net_mode));
+    cJSON_AddStringToObject(root, "ap_ssid", ap_ssid);
+    cJSON_AddStringToObject(root, "ap_password", ap_password);
     cJSON_AddStringToObject(root, "ap_ip", ip);
     cJSON_AddStringToObject(root, "gateway", gateway);
     cJSON_AddStringToObject(root, "netmask", netmask);
-    cJSON_AddBoolToObject(root, "password_enabled", strlen(s_config.ap_password) > 0);
-    cJSON_AddStringToObject(root, "sta_ssid", s_config.sta_ssid);
-    cJSON_AddStringToObject(root, "sta_password", s_config.sta_password);
-    cJSON_AddBoolToObject(root, "sta_connected", s_wifi.sta_connected);
-    cJSON_AddBoolToObject(root, "sta_has_ip", s_wifi.sta_has_ip);
-    cJSON_AddStringToObject(root, "sta_ip", s_wifi.sta_ip);
-    cJSON_AddStringToObject(root, "sta_gateway", s_wifi.sta_gateway);
-    cJSON_AddStringToObject(root, "sta_netmask", s_wifi.sta_netmask);
-    cJSON_AddStringToObject(root, "last_disconnect", s_wifi.last_disconnect);
-    cJSON_AddBoolToObject(root, "startup_connect_active", s_wifi.startup_connect_active);
-    cJSON_AddNumberToObject(root, "startup_connect_deadline_ms", (double)s_wifi.startup_connect_deadline_ms);
-    cJSON_AddBoolToObject(root, "startup_fallback_to_ap", s_wifi.startup_fallback_to_ap);
-    cJSON_AddStringToObject(root, "startup_fallback_reason", s_wifi.startup_fallback_reason);
+    cJSON_AddBoolToObject(root, "password_enabled", strlen(ap_password) > 0);
+    cJSON_AddStringToObject(root, "sta_ssid", sta_ssid);
+    cJSON_AddStringToObject(root, "sta_password", sta_password);
+    cJSON_AddBoolToObject(root, "sta_connected", sta_connected);
+    cJSON_AddBoolToObject(root, "sta_has_ip", sta_has_ip);
+    cJSON_AddStringToObject(root, "sta_ip", sta_ip);
+    cJSON_AddStringToObject(root, "sta_gateway", sta_gateway);
+    cJSON_AddStringToObject(root, "sta_netmask", sta_netmask);
+    cJSON_AddStringToObject(root, "last_disconnect", last_disconnect);
+    cJSON_AddBoolToObject(root, "startup_connect_active", startup_connect_active);
+    cJSON_AddNumberToObject(root, "startup_connect_deadline_ms", (double)startup_connect_deadline_ms);
+    cJSON_AddBoolToObject(root, "startup_fallback_to_ap", startup_fallback_to_ap);
+    cJSON_AddStringToObject(root, "startup_fallback_reason", startup_fallback_reason);
 
     profiles_json_root = cJSON_AddArrayToObject(root, "saved_sta_profiles");
     if (profiles_json_root != NULL) {
@@ -140,10 +135,15 @@ static esp_err_t network_get_handler(httpd_req_t *req)
 static esp_err_t network_put_handler(httpd_req_t *req)
 {
     char value[65];
-    const bool ap_enabled_before = app_network_mode_has_ap(s_config.net_mode);
+    bool ap_enabled_before;
     char current_ap_ip[16];
     char current_ap_gw[16];
     char current_ap_mask[16];
+    esp_err_t save_err;
+    esp_err_t profile_err = ESP_OK;
+    bool sta_ssid_set = false;
+    uint8_t net_mode_snapshot;
+    char sta_ssid_snapshot[sizeof(s_config.sta_ssid)];
 
     if (!app_http_require_auth(req)) {
         return ESP_OK;
@@ -160,6 +160,8 @@ static esp_err_t network_put_handler(httpd_req_t *req)
         }
     }
 
+    app_config_lock();
+    ap_enabled_before = app_network_mode_has_ap(s_config.net_mode);
     if (app_json_find_string(app_http_scratch_buf(), "ap_ssid", value, sizeof(s_config.ap_ssid)) && strlen(value) > 0) {
         app_copy_string(s_config.ap_ssid, sizeof(s_config.ap_ssid), value);
     }
@@ -168,6 +170,7 @@ static esp_err_t network_put_handler(httpd_req_t *req)
     }
     if (app_json_find_string(app_http_scratch_buf(), "ap_password", value, sizeof(s_config.ap_password))) {
         if (strlen(value) > 0 && strlen(value) < 8) {
+            app_config_unlock();
             return app_http_send_json_text(req, "400 Bad Request",
                                        "{\"status\":\"error\",\"message\":\"password_too_short\"}");
         }
@@ -175,21 +178,30 @@ static esp_err_t network_put_handler(httpd_req_t *req)
     }
     if (app_json_find_string(app_http_scratch_buf(), "sta_ssid", value, sizeof(s_config.sta_ssid))) {
         app_copy_string(s_config.sta_ssid, sizeof(s_config.sta_ssid), value);
+        sta_ssid_set = true;
     }
     if (app_json_find_string(app_http_scratch_buf(), "sta_password", value, sizeof(s_config.sta_password))) {
         if (strlen(value) > 0 && strlen(value) < 8) {
+            app_config_unlock();
             return app_http_send_json_text(req, "400 Bad Request",
                                        "{\"status\":\"error\",\"message\":\"sta_password_too_short\"}");
         }
         app_copy_string(s_config.sta_password, sizeof(s_config.sta_password), value);
     }
 
-    if (app_config_save(&s_config) != ESP_OK) {
+    save_err = app_config_save(&s_config);
+    if (save_err == ESP_OK && sta_ssid_set && strlen(s_config.sta_ssid) > 0) {
+        profile_err = app_config_save_wifi_profile(s_config.sta_ssid, s_config.sta_password);
+    }
+    net_mode_snapshot = s_config.net_mode;
+    memcpy(sta_ssid_snapshot, s_config.sta_ssid, sizeof(sta_ssid_snapshot));
+    app_config_unlock();
+
+    if (save_err != ESP_OK) {
         return app_http_send_json_text(req, "500 Internal Server Error",
                                    "{\"status\":\"error\",\"message\":\"config_save_failed\"}");
     }
-    if (strlen(s_config.sta_ssid) > 0 &&
-        app_config_save_wifi_profile(s_config.sta_ssid, s_config.sta_password) != ESP_OK) {
+    if (profile_err != ESP_OK) {
         return app_http_send_json_text(req, "500 Internal Server Error",
                                    "{\"status\":\"error\",\"message\":\"wifi_profile_save_failed\"}");
     }
@@ -199,11 +211,11 @@ static esp_err_t network_put_handler(httpd_req_t *req)
                            "\"restart_required\":true,\"ap_enabled\":%s,"
                            "\"next_access_ip\":\"%s\",\"current_ap_ip\":\"%s\","
                            "\"mode\":\"%s\",\"sta_ssid\":\"%s\"}",
-                           app_network_mode_has_ap(s_config.net_mode) ? "true" : "false",
-                           app_network_mode_has_ap(s_config.net_mode) ? "192.168.8.1" : "",
+                           app_network_mode_has_ap(net_mode_snapshot) ? "true" : "false",
+                           app_network_mode_has_ap(net_mode_snapshot) ? "192.168.8.1" : "",
                            ap_enabled_before ? current_ap_ip : "",
-                           app_network_mode_to_string(s_config.net_mode),
-                           s_config.sta_ssid);
+                           app_network_mode_to_string(net_mode_snapshot),
+                           sta_ssid_snapshot);
 }
 
 static esp_err_t network_profile_delete_handler(httpd_req_t *req)
@@ -244,7 +256,9 @@ static esp_err_t network_restart_handler(httpd_req_t *req)
     }
     app_http_send_json_text(req, NULL,
                         "{\"status\":\"restarting\",\"message\":\"network restart started\"}");
-    xTaskCreate(app_wifi_restart_task, "wifi_restart", 4096, NULL, 5, NULL);
+    if (!app_wifi_schedule_restart()) {
+        ESP_LOGE(HTTP_TAG, "Failed to schedule Wi-Fi restart");
+    }
     return ESP_OK;
 }
 
@@ -255,6 +269,7 @@ static esp_err_t network_scan_handler(httpd_req_t *req)
     uint16_t index;
     char *serialized;
     esp_err_t err;
+    uint16_t scan_count;
 
     if (!app_http_require_auth(req)) {
         return ESP_OK;
@@ -265,16 +280,20 @@ static esp_err_t network_scan_handler(httpd_req_t *req)
                                    "{\"status\":\"error\",\"message\":\"wifi_scan_failed\"}");
     }
 
+    app_wifi_runtime_lock();
+    scan_count = s_wifi.scan_count;
+    app_wifi_runtime_unlock();
+
     root = cJSON_CreateObject();
     if (root == NULL) {
         return app_http_send_json_text(req, "500 Internal Server Error",
                                    "{\"status\":\"error\",\"message\":\"out_of_memory\"}");
     }
     cJSON_AddStringToObject(root, "status", "ok");
-    cJSON_AddNumberToObject(root, "count", (double)s_wifi.scan_count);
+    cJSON_AddNumberToObject(root, "count", (double)scan_count);
     aps_array = cJSON_AddArrayToObject(root, "aps");
     if (aps_array != NULL) {
-        for (index = 0; index < s_wifi.scan_count; index++) {
+        for (index = 0; index < scan_count; index++) {
             cJSON *ap = cJSON_CreateObject();
             const char *ssid = "";
             int8_t rssi = 0;
@@ -309,20 +328,31 @@ static esp_err_t bluetooth_get_handler(httpd_req_t *req)
     if (!app_http_require_auth(req)) {
         return ESP_OK;
     }
-    return app_http_send_jsonf(req, NULL,
-                           "{\"mode\":\"%s\",\"device_name\":\"%s\",\"runtime_mode\":\"%s\",\"last_error\":\"%s\"}",
-                           app_bt_mode_to_string(s_config.bt_mode),
-                           s_config.bt_device_name,
-                           app_bt_mode_to_string(s_bt_runtime_mode),
-                           s_bt_last_error);
+    {
+        esp_err_t rv;
+        uint8_t bt_mode;
+        char bt_device_name[sizeof(s_config.bt_device_name)];
+        app_config_lock();
+        bt_mode = s_config.bt_mode;
+        memcpy(bt_device_name, s_config.bt_device_name, sizeof(bt_device_name));
+        app_config_unlock();
+        rv = app_http_send_jsonf(req, NULL,
+                               "{\"mode\":\"%s\",\"device_name\":\"%s\",\"runtime_mode\":\"%s\",\"last_error\":\"%s\"}",
+                               app_bt_mode_to_string(bt_mode),
+                               bt_device_name,
+                               app_bt_mode_to_string(s_bt_runtime_mode),
+                               s_bt_last_error);
+        return rv;
+    }
 }
 
 static esp_err_t bluetooth_put_handler(httpd_req_t *req)
 {
     char value[64];
-    uint8_t previous_mode = s_config.bt_mode;
-    bool managed_name_before = app_bt_device_name_is_managed(s_config.bt_device_name);
+    uint8_t previous_mode;
+    bool managed_name_before;
     bool has_device_name = false;
+    esp_err_t save_err;
 
     if (!app_http_require_auth(req)) {
         return ESP_OK;
@@ -334,6 +364,9 @@ static esp_err_t bluetooth_put_handler(httpd_req_t *req)
         }
     }
 
+    app_config_lock();
+    previous_mode = s_config.bt_mode;
+    managed_name_before = app_bt_device_name_is_managed(s_config.bt_device_name);
     if (app_json_find_string(app_http_scratch_buf(), "mode", value, sizeof(value))) {
         s_config.bt_mode = app_bt_mode_from_string(value);
     }
@@ -347,7 +380,10 @@ static esp_err_t bluetooth_put_handler(httpd_req_t *req)
         (managed_name_before && previous_mode != s_config.bt_mode)) {
         app_set_managed_bt_device_name(s_config.bt_mode);
     }
-    if (app_config_save(&s_config) != ESP_OK) {
+    save_err = app_config_save(&s_config);
+    app_config_unlock();
+
+    if (save_err != ESP_OK) {
         return app_http_send_json_text(req, "500 Internal Server Error",
                                    "{\"status\":\"error\",\"message\":\"config_save_failed\"}");
     }
