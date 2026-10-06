@@ -6,9 +6,8 @@
 #define APP_BASE_PATH "/web"
 #define APP_STORAGE_PARTITION_LABEL "storage"
 #define APP_WEB_CONFIG_PATH "/config"
-#define APP_WEB_AUTH_USERNAME "admin"
-#define APP_WEB_AUTH_PASSWORD "123456"
-#define APP_WEB_AUTH_BASIC "Basic YWRtaW46MTIzNDU2"
+/* 登录凭据在 NVS(v7 起随配置 blob 存盐+SHA-256 哈希),出厂默认口令经
+ * Kconfig 的 CONFIG_WEB_DEFAULT_PASSWORD 配置,不再硬编码 */
 #define APP_WEB_AUTH_REALM "iothub-config"
 #define APP_SCRATCH_SIZE 4096
 #define APP_JSON_BUFFER_SIZE 4096

@@ -43,9 +43,11 @@ static esp_err_t mqtt_get_handler(httpd_req_t *req)
         memcpy(last_error, s_mqtt.last_error, sizeof(last_error));
         app_mqtt_unlock();
         rv = app_http_send_jsonf(req, NULL,
-                               "{\"backend\":\"%s\",\"host\":\"%s\",\"port\":%u,\"token\":\"%s\","
+                               "{\"backend\":\"%s\",\"host\":\"%s\",\"port\":%u,"
+                               "\"token\":\"\",\"token_set\":%s,"
                                "\"use_tls\":%s,\"connected\":%s,\"last_error\":\"%s\",\"publish_count\":%u}",
-                               mqtt_backend, mqtt_host, mqtt_port, mqtt_token,
+                               mqtt_backend, mqtt_host, mqtt_port,
+                               mqtt_token[0] != '\0' ? "true" : "false",
                                mqtt_use_tls ? "true" : "false",
                                mqtt_connected ? "true" : "false",
                                last_error, publish_count);
@@ -81,7 +83,11 @@ static esp_err_t mqtt_put_handler(httpd_req_t *req)
         app_copy_string(s_config.mqtt_host, sizeof(s_config.mqtt_host), value);
         need_restart = true;
     }
-    if (app_json_find_string(app_http_scratch_buf(), "token", value, sizeof(s_config.mqtt_token))) {
+    /* token 留空 = 保持已存值;需要清除时用 token_clear 显式指定 */
+    if (app_json_find_bool(app_http_scratch_buf(), "token_clear", &bool_value) && bool_value) {
+        app_copy_string(s_config.mqtt_token, sizeof(s_config.mqtt_token), "");
+        need_restart = true;
+    } else if (app_json_find_string(app_http_scratch_buf(), "token", value, sizeof(s_config.mqtt_token)) && strlen(value) > 0) {
         app_copy_string(s_config.mqtt_token, sizeof(s_config.mqtt_token), value);
         need_restart = true;
     }

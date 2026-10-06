@@ -274,6 +274,21 @@
       </article>
 
       <article class="card">
+        <h2 data-i18n="section.webAuth">管理员账号</h2>
+        <label for="webUsername" data-i18n="web.username">用户名</label>
+        <input id="webUsername" type="text" maxlength="32" data-i18n-placeholder="placeholder.webUsername" placeholder="留空保持不变">
+        <label for="webOldPassword" data-i18n="web.oldPassword">当前口令</label>
+        <input id="webOldPassword" type="password" maxlength="64">
+        <label for="webNewPassword" data-i18n="web.newPassword">新口令</label>
+        <input id="webNewPassword" type="password" maxlength="64" data-i18n-placeholder="placeholder.webNewPassword" placeholder="至少 8 位">
+        <label for="webNewPassword2" data-i18n="web.confirmPassword">确认新口令</label>
+        <input id="webNewPassword2" type="password" maxlength="64">
+        <button id="saveWebAuth" data-i18n="button.saveWebAuth">保存登录凭据</button>
+        <div class="hint" data-i18n="hint.webAuth">保存后浏览器会要求用新凭据重新登录;口令以加盐哈希保存在设备中。</div>
+        <div id="webAuthStatus" class="status" data-i18n="status.webAuthWaiting">等待修改登录凭据...</div>
+      </article>
+
+      <article class="card">
         <h2 data-i18n="section.network">网络配置</h2>
         <label for="netMode" data-i18n="network.mode">网络模式</label>
         <select id="netMode">
@@ -288,7 +303,11 @@
           </div>
           <div>
             <label for="password" data-i18n="network.apPassword">AP 密码</label>
-            <input id="password" type="password" maxlength="64" data-i18n-placeholder="placeholder.apPassword" placeholder="留空表示开放网络">
+            <input id="password" type="password" maxlength="64" data-i18n-placeholder="placeholder.apPassword" placeholder="已保存;输入则修改,留空保持不变">
+            <label class="checkbox">
+              <input id="apPasswordClear" type="checkbox">
+              <span data-i18n="network.openAp">设为开放网络(清除已存密码)</span>
+            </label>
           </div>
         </div>
         <div class="subgrid">
@@ -298,7 +317,11 @@
           </div>
           <div>
             <label for="staPassword" data-i18n="network.staPassword">STA 密码</label>
-            <input id="staPassword" type="password" maxlength="64" data-i18n-placeholder="placeholder.staPassword" placeholder="至少 8 位或留空">
+            <input id="staPassword" type="password" maxlength="64" data-i18n-placeholder="placeholder.staPassword" placeholder="至少 8 位;留空保持已存密码">
+            <label class="checkbox">
+              <input id="staPasswordClear" type="checkbox">
+              <span data-i18n="network.openSta">开放网络(清除已存密码)</span>
+            </label>
           </div>
         </div>
         <div class="actions nowrap">
@@ -329,7 +352,11 @@
           </div>
         </div>
         <label for="mqttToken" data-i18n="mqtt.token">Token / 密钥</label>
-        <input id="mqttToken" type="password" maxlength="127">
+        <input id="mqttToken" type="password" maxlength="127" data-i18n-placeholder="placeholder.mqttToken" placeholder="已保存;输入则修改,留空保持不变">
+        <label class="checkbox">
+          <input id="mqttTokenClear" type="checkbox">
+          <span data-i18n="mqtt.clearToken">清除已存 Token</span>
+        </label>
         <label class="checkbox">
           <input id="mqttTls" type="checkbox">
           <span data-i18n="mqtt.tls">启用 TLS</span>
@@ -350,6 +377,10 @@
           <div>
             <label for="otaFile" data-i18n="ota.file">选择固件 `iothub.bin` 文件</label>
             <input id="otaFile" type="file" accept=".bin,application/octet-stream">
+            <label class="checkbox">
+              <input id="otaAllowDowngrade" type="checkbox">
+              <span data-i18n="ota.allowDowngrade">允许降级(跳过版本比较)</span>
+            </label>
             <button id="uploadOta" data-i18n="button.uploadOta">上传固件并升级</button>
           </div>
         </div>
@@ -365,6 +396,7 @@
           <option value="ble" data-i18n="bt.ble">低功耗蓝牙</option>
           <option value="spp" data-i18n="bt.spp">经典蓝牙</option>
         </select>
+        <div class="hint" data-i18n="bluetooth.modeSwitchHint">切换蓝牙模式会使设备重启</div>
         <label for="btName" data-i18n="bluetooth.name">蓝牙名称</label>
         <input id="btName" type="text" maxlength="32">
         <button id="saveBluetooth" data-i18n="button.saveBluetooth">保存蓝牙配置</button>
@@ -531,6 +563,19 @@
         "language.zh": "中文",
         "language.en": "English",
         "section.device": "设备信息",
+        "section.webAuth": "管理员账号",
+        "web.username": "用户名",
+        "web.oldPassword": "当前口令",
+        "web.newPassword": "新口令",
+        "web.confirmPassword": "确认新口令",
+        "web.tooShort": "新口令至少 8 位",
+        "web.confirmMismatch": "两次输入的新口令不一致",
+        "web.saved": "登录凭据已更新，正在重新登录...",
+        "button.saveWebAuth": "保存登录凭据",
+        "hint.webAuth": "保存后浏览器会要求用新凭据重新登录；口令以加盐哈希保存在设备中。",
+        "status.webAuthWaiting": "等待修改登录凭据...",
+        "placeholder.webUsername": "留空保持不变",
+        "placeholder.webNewPassword": "至少 8 位",
         "section.network": "网络配置",
         "section.gpio": "GPIO 控制",
         "section.bluetooth": "蓝牙配置",
@@ -540,11 +585,14 @@
         "network.mode": "网络模式",
         "network.apSsid": "AP 名称",
         "network.apPassword": "AP 密码",
+        "network.openAp": "设为开放网络(清除已存密码)",
         "network.staSsid": "STA 名称",
         "network.staPassword": "STA 密码",
-        "placeholder.apPassword": "留空表示开放网络",
+        "network.openSta": "开放网络(清除已存密码)",
+        "placeholder.apPassword": "已保存;输入则修改,留空保持不变",
         "placeholder.staSsid": "上游路由器 SSID",
-        "placeholder.staPassword": "至少 8 位或留空",
+        "placeholder.staPassword": "至少 8 位;留空保持已存密码",
+        "placeholder.mqttToken": "已保存;输入则修改,留空保持不变",
         "placeholder.uartTx": "输入待发送数据，hex 模式可用空格分隔",
         "mode.ap": "AP",
         "mode.sta": "STA",
@@ -582,8 +630,11 @@
         "gpio.ledPin": "状态灯引脚",
         "gpio.inputPin": "输入引脚",
         "bluetooth.mode": "蓝牙模式",
+        "bluetooth.modeSwitchHint": "切换蓝牙模式会使设备重启",
+        "bluetooth.savedNeedsReboot": "蓝牙模式已保存，设备正在重启，请稍候...",
         "bluetooth.name": "蓝牙名称",
         "ota.file": "选择固件 `iothub.bin` 文件",
+        "ota.allowDowngrade": "允许降级(跳过版本比较)",
         "ota.storageFile": "选择网页资源 `storage.bin`",
         "mqtt.backend": "后端类型",
         "mqtt.tbCloud": "ThingsBoard Cloud",
@@ -592,6 +643,7 @@
         "mqtt.host": "主机地址",
         "mqtt.port": "端口",
         "mqtt.token": "Token / 密钥",
+        "mqtt.clearToken": "清除已存 Token",
         "mqtt.tls": "启用 TLS",
         "uart.rx": "接收引脚",
         "uart.tx": "发送引脚",
@@ -690,6 +742,19 @@
         "language.zh": "中文",
         "language.en": "English",
         "section.device": "Device Info",
+        "section.webAuth": "Admin Account",
+        "web.username": "Username",
+        "web.oldPassword": "Current Password",
+        "web.newPassword": "New Password",
+        "web.confirmPassword": "Confirm New Password",
+        "web.tooShort": "New password must be at least 8 characters",
+        "web.confirmMismatch": "New passwords do not match",
+        "web.saved": "Credentials updated. Re-authenticating...",
+        "button.saveWebAuth": "Save Credentials",
+        "hint.webAuth": "The browser will ask you to sign in again; the password is stored on the device as a salted SHA-256 hash.",
+        "status.webAuthWaiting": "Waiting for credential change...",
+        "placeholder.webUsername": "Leave empty to keep",
+        "placeholder.webNewPassword": "At least 8 characters",
         "section.network": "Network",
         "section.gpio": "GPIO Control",
         "section.bluetooth": "Bluetooth Settings",
@@ -699,11 +764,14 @@
         "network.mode": "Network Mode",
         "network.apSsid": "AP SSID",
         "network.apPassword": "AP Password",
+        "network.openAp": "Open network (clear saved password)",
         "network.staSsid": "STA SSID",
         "network.staPassword": "STA Password",
-        "placeholder.apPassword": "Leave empty for open network",
+        "network.openSta": "Open network (clear saved password)",
+        "placeholder.apPassword": "Saved; type to change, leave empty to keep",
         "placeholder.staSsid": "Upstream router SSID",
-        "placeholder.staPassword": "At least 8 characters or empty",
+        "placeholder.staPassword": "At least 8 chars; leave empty to keep saved",
+        "placeholder.mqttToken": "Saved; type to change, leave empty to keep",
         "placeholder.uartTx": "Enter data to send; hex mode accepts space-separated bytes",
         "mode.ap": "AP",
         "mode.sta": "STA",
@@ -741,8 +809,11 @@
         "gpio.ledPin": "LED Pin",
         "gpio.inputPin": "Input Pin",
         "bluetooth.mode": "Bluetooth Mode",
+        "bluetooth.modeSwitchHint": "Switching the Bluetooth mode reboots the device",
+        "bluetooth.savedNeedsReboot": "Bluetooth mode saved. Device is rebooting, please wait...",
         "bluetooth.name": "Device Name",
         "ota.file": "Select Firmware `iothub.bin`",
+        "ota.allowDowngrade": "Allow downgrade (skip version check)",
         "ota.storageFile": "Select Web Assets `storage.bin`",
         "mqtt.backend": "Backend Type",
         "mqtt.tbCloud": "ThingsBoard Cloud",
@@ -751,6 +822,7 @@
         "mqtt.host": "Host",
         "mqtt.port": "Port",
         "mqtt.token": "Token / Secret",
+        "mqtt.clearToken": "Clear saved token",
         "mqtt.tls": "Enable TLS",
         "uart.rx": "RX Pin",
         "uart.tx": "TX Pin",
@@ -931,15 +1003,6 @@
         : (state.uartConsolePlain || "");
       consoleBox.value = renderedValue;
       consoleBox.scrollTop = consoleBox.scrollHeight;
-      // #region debug-point D:uart-console-render
-      reportUartDebugEvent("D", "renderUartConsole", "UART console rendered", {
-        rxFormat: state.uartRxFormat,
-        renderedLength: renderedValue.length,
-        plainLength: (state.uartConsolePlain || "").length,
-        hexLength: (state.uartConsoleHex || "").length,
-        renderedPreview: renderedValue.slice(0, 64)
-      });
-      // #endregion
     }
 
     function renderKeyValues(targetId, data) {
@@ -1044,24 +1107,6 @@
         `<option value="${baudrate}">${baudrate}</option>`).join("");
     }
 
-    // #region debug-point A-E:uart-debug-reporter
-    function reportUartDebugEvent(hypothesisId, location, msg, data = {}) {
-      fetch("http://127.0.0.1:7777/event", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          sessionId: "uart-console-blank",
-          runId: "pre-fix",
-          hypothesisId,
-          location,
-          msg: `[DEBUG] ${msg}`,
-          data,
-          ts: Date.now()
-        })
-      }).catch(() => {});
-    }
-    // #endregion
-
     function openWifiScanModal() {
       document.getElementById("wifiScanModal").hidden = false;
     }
@@ -1091,7 +1136,7 @@
         return;
       }
       document.getElementById("staSsid").value = profile.ssid || "";
-      document.getElementById("staPassword").value = profile.password || "";
+      document.getElementById("staPassword").value = "";
       closeSavedWifiModal();
       setStatus("networkStatus", t("network.profileApplied", {
         ssid: profile.ssid || t("scan.hidden")
@@ -1104,8 +1149,7 @@
         return;
       }
       document.getElementById("staSsid").value = profile.ssid || "";
-      const remembered = state.savedWifiProfiles.find((item) => item.ssid === profile.ssid);
-      document.getElementById("staPassword").value = remembered?.password || "";
+      document.getElementById("staPassword").value = "";
       closeWifiScanModal();
       setStatus("networkStatus", t("network.profileApplied", {
         ssid: profile.ssid || t("scan.hidden")
@@ -1116,7 +1160,7 @@
       const merged = [];
       const source = Array.isArray(profiles) ? profiles : [];
       const currentProfile = current?.sta_ssid
-        ? { ssid: current.sta_ssid, password: current.sta_password || "" }
+        ? { ssid: current.sta_ssid, password_set: Boolean(current.sta_password_set) }
         : null;
 
       if (currentProfile) {
@@ -1128,14 +1172,14 @@
         }
         const existing = merged.find((item) => item.ssid === profile.ssid);
         if (existing) {
-          if (!existing.password && profile.password) {
-            existing.password = profile.password;
+          if (!existing.password_set && profile.password_set) {
+            existing.password_set = true;
           }
           return;
         }
         merged.push({
           ssid: profile.ssid,
-          password: profile.password || ""
+          password_set: Boolean(profile.password_set)
         });
       });
       return merged;
@@ -1152,7 +1196,7 @@
         return;
       }
       target.innerHTML = items.map((profile, index) => {
-        const maskedPassword = profile.password ? "********" : t("network.none");
+        const maskedPassword = profile.password_set ? "********" : t("network.none");
         const hintText = current.sta_connected && current.sta_ssid === profile.ssid
           ? `${t("state.connected")} / ${maskedPassword}`
           : maskedPassword;
@@ -1258,37 +1302,11 @@
       const method = String(options?.method || "GET").toUpperCase();
       const maxRetries = method === "GET" ? FETCH_RETRY_MAX : 0;
 
-      // #region debug-point A-E:getJson-request
-      if (url.startsWith("/api/v1/uart") || url === "/api/v1/config/uart") {
-        reportUartDebugEvent("E", "getJson:request", "UART request dispatched", {
-          url,
-          method,
-          hasBody: Boolean(options?.body)
-        });
-      }
-      // #endregion
       for (let attempt = 0; attempt <= maxRetries; attempt++) {
         try {
           const response = await fetch(url, options);
           const text = await response.text();
           const { body, parseError } = tryParseJson(text);
-
-          // #region debug-point A-E:getJson-response
-          if (url.startsWith("/api/v1/uart") || url === "/api/v1/config/uart") {
-            reportUartDebugEvent(response.ok ? "A" : "B", "getJson:response", "UART response received", {
-              url,
-              method,
-              status: response.status,
-              ok: response.ok,
-              textLength: text.length,
-              textPreview: text.slice(0, 96),
-              textSuffix: text.slice(-96),
-              parseError: Boolean(parseError),
-              bodyMessage: body?.message || "",
-              bodyKeys: body && typeof body === "object" ? Object.keys(body).slice(0, 12) : []
-            });
-          }
-          // #endregion
 
           if (!response.ok) {
             const err = new Error(body.message || body.error || text || `HTTP ${response.status}`);
@@ -1359,9 +1377,12 @@
       state.networkConfig = network;
       document.getElementById("netMode").value = network.mode || "ap";
       document.getElementById("ssid").value = network.ap_ssid || "";
-      document.getElementById("password").value = network.ap_password || "";
+      /* 凭据不回传明文:输入框留空 = 保持已存值 */
+      document.getElementById("password").value = "";
+      document.getElementById("apPasswordClear").checked = false;
       document.getElementById("staSsid").value = network.sta_ssid || "";
-      document.getElementById("staPassword").value = network.sta_password || "";
+      document.getElementById("staPassword").value = "";
+      document.getElementById("staPasswordClear").checked = false;
       renderSavedWifiProfiles(network.saved_sta_profiles || []);
       renderScanResults([]);
       renderNetworkStatus(network);
@@ -1420,7 +1441,8 @@
       document.getElementById("mqttBackend").value = data.backend || "tb_cloud";
       document.getElementById("mqttHost").value = data.host || "";
       document.getElementById("mqttPort").value = data.port || 1883;
-      document.getElementById("mqttToken").value = data.token || "";
+      document.getElementById("mqttToken").value = "";
+      document.getElementById("mqttTokenClear").checked = false;
       document.getElementById("mqttTls").checked = Boolean(data.use_tls);
       renderMqttStatus(data);
     }
@@ -1464,15 +1486,6 @@
 
     async function loadUart() {
       const data = await getJson("/api/v1/config/uart");
-      // #region debug-point B-D:load-uart-config
-      reportUartDebugEvent("B", "loadUart", "UART config snapshot loaded", {
-        baudrate: data?.baudrate,
-        dataBits: data?.data_bits,
-        stopBits: data?.stop_bits,
-        parity: data?.parity,
-        frame: data?.frame
-      });
-      // #endregion
       state.uartConfig = data;
       document.getElementById("uartRxDisplay").textContent = formatGpioLabel(data.rx_gpio);
       document.getElementById("uartTxDisplay").textContent = formatGpioLabel(data.tx_gpio);
@@ -1489,18 +1502,6 @@
 
     async function loadUartConsole() {
       const data = await getJson("/api/v1/uart/console");
-      // #region debug-point C-D:uart-console-poll
-      reportUartDebugEvent("C", "loadUartConsole", "UART console polled", {
-        rxSequence: data?.rx_sequence || 0,
-        plainLength: (data?.plain || "").length,
-        hexLength: (data?.hex || "").length,
-        preview: (data?.plain || data?.hex || "").slice(0, 48),
-        driverInstalled: Boolean(data?.driver_installed),
-        debugAvailable: data?.debug_available ?? null,
-        debugReadLen: data?.debug_read_len ?? null,
-        debugPollCount: data?.debug_poll_count ?? null
-      });
-      // #endregion
       state.uartConsolePlain = data.plain || "";
       state.uartConsoleHex = data.hex || "";
       renderUartConsole();
@@ -1545,10 +1546,22 @@
       const payload = {
         mode: document.getElementById("netMode").value,
         ap_ssid: document.getElementById("ssid").value.trim(),
-        ap_password: document.getElementById("password").value,
-        sta_ssid: document.getElementById("staSsid").value.trim(),
-        sta_password: document.getElementById("staPassword").value
+        sta_ssid: document.getElementById("staSsid").value.trim()
       };
+      const apPassword = document.getElementById("password").value;
+      if (apPassword) {
+        payload.ap_password = apPassword;
+      }
+      if (document.getElementById("apPasswordClear").checked) {
+        payload.ap_password_clear = true;
+      }
+      const staPassword = document.getElementById("staPassword").value;
+      if (staPassword) {
+        payload.sta_password = staPassword;
+      }
+      if (document.getElementById("staPasswordClear").checked) {
+        payload.sta_password_clear = true;
+      }
       const data = await getJson("/api/v1/config/network", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -1609,14 +1622,61 @@
         mode: document.getElementById("btMode").value,
         device_name: document.getElementById("btName").value.trim()
       };
-      await getJson("/api/v1/config/bluetooth", {
+      const data = await getJson("/api/v1/config/bluetooth", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
       });
+      if (data.restart_required) {
+        /* 跨模式切换:设备将整机重启以释放/重选蓝牙栈内存 */
+        setStatus("bluetoothStatus", t("bluetooth.savedNeedsReboot"), "warn");
+        await waitForDeviceRestart();
+        await loadBluetooth();
+        return;
+      }
       setStatus("bluetoothStatus", t("bluetooth.saving"), "warn");
       await new Promise((resolve) => setTimeout(resolve, 800));
       await loadBluetooth();
+    }
+
+    async function saveWebAuth() {
+      const new_password = document.getElementById("webNewPassword").value;
+      if (new_password.length < 8) {
+        setStatus("webAuthStatus", t("web.tooShort"), "bad");
+        return;
+      }
+      if (new_password !== document.getElementById("webNewPassword2").value) {
+        setStatus("webAuthStatus", t("web.confirmMismatch"), "bad");
+        return;
+      }
+      const payload = {
+        old_password: document.getElementById("webOldPassword").value,
+        new_password
+      };
+      const username = document.getElementById("webUsername").value.trim();
+      if (username) {
+        payload.new_username = username;
+      }
+      await getJson("/api/v1/config/web", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      setStatus("webAuthStatus", t("web.saved"), "warn");
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+      location.reload();
+    }
+
+    async function waitForDeviceRestart() {
+      for (let waited = 0; waited < 20000; waited += 2000) {
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+        try {
+          await getJson("/api/v1/device/info");
+          return;
+        } catch (error) {
+          /* 设备重启中,继续等待 */
+        }
+      }
     }
 
     async function saveMqtt() {
@@ -1624,9 +1684,15 @@
         backend: document.getElementById("mqttBackend").value,
         host: document.getElementById("mqttHost").value.trim(),
         port: Number(document.getElementById("mqttPort").value),
-        token: document.getElementById("mqttToken").value.trim(),
         use_tls: document.getElementById("mqttTls").checked
       };
+      const token = document.getElementById("mqttToken").value.trim();
+      if (token) {
+        payload.token = token;
+      }
+      if (document.getElementById("mqttTokenClear").checked) {
+        payload.token_clear = true;
+      }
       const data = await getJson("/api/v1/config/mqtt", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -1657,25 +1723,11 @@
         encoding: state.uartTxFormat,
         data: document.getElementById("uartTxData").value
       };
-      // #region debug-point A-B:uart-send-request
-      reportUartDebugEvent("A", "sendUart:request", "UART send requested", {
-        encoding: payload.encoding,
-        dataLength: payload.data.length,
-        preview: payload.data.slice(0, 48)
-      });
-      // #endregion
       const data = await getJson("/api/v1/uart/send", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
       });
-      // #region debug-point A-B:uart-send-response
-      reportUartDebugEvent("A", "sendUart:response", "UART send completed", {
-        encoding: payload.encoding,
-        bytesSent: data.bytes_sent || 0,
-        responseMessage: data.message || ""
-      });
-      // #endregion
       setStatus("uartStatus", t("uart.sent", {
         bytes: data.bytes_sent || 0,
         encoding: state.uartTxFormat
@@ -1779,7 +1831,9 @@
     }
 
     async function uploadOta() {
-      await uploadBinary("otaFile", "/api/v1/ota/upload", "error.selectFirmware", "error.expectedFirmwareName", "iothub.bin", "ota.uploading");
+      const allowDowngrade = document.getElementById("otaAllowDowngrade").checked;
+      const endpoint = allowDowngrade ? "/api/v1/ota/upload?allow_downgrade=1" : "/api/v1/ota/upload";
+      await uploadBinary("otaFile", endpoint, "error.selectFirmware", "error.expectedFirmwareName", "iothub.bin", "ota.uploading");
     }
 
     async function uploadStorage() {
@@ -1860,6 +1914,14 @@
         await saveGpio({ led_on: !state.ledOn });
       } catch (error) {
         setStatus("gpioInfo", error.message, "bad");
+      }
+    });
+
+    document.getElementById("saveWebAuth").addEventListener("click", async () => {
+      try {
+        await saveWebAuth();
+      } catch (error) {
+        setStatus("webAuthStatus", getErrorMessage(error), "bad");
       }
     });
 

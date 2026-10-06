@@ -2,13 +2,10 @@
 #include <stdint.h>
 
 #include "driver/gpio.h"
-#include "esp_log.h"
 
 #include "config.h"
 #include "constants.h"
 #include "state.h"
-
-static const char *TAG = "state";
 
 extern app_config_t s_config;
 

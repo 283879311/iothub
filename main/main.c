@@ -45,6 +45,8 @@ void app_main(void)
 
     ESP_LOGI(TAG, "[boot-4] app_bootstrap_load_config");
     app_bootstrap_load_config();
+    ESP_LOGI(TAG, "[boot-4b] app_bt_release_unused_memory");
+    app_bt_release_unused_memory();
     ESP_LOGI(TAG, "[boot-5] app_configure_gpio");
     app_configure_gpio();
     ESP_LOGI(TAG, "[boot-6] app_ota_mount_fs");

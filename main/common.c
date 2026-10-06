@@ -1,8 +1,74 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "psa/crypto.h"
+
 #include "constants.h"
 #include "common.h"
+
+void app_web_hash_password(const uint8_t *salt, size_t salt_len,
+                           const char *password, uint8_t *out_hash)
+{
+    psa_hash_operation_t op = PSA_HASH_OPERATION_INIT;
+    psa_status_t status;
+    size_t hash_len = 0;
+
+    /* PSA 初始化幂等,可重复调用;首次调用开销可接受(仅发生在认证/改密路径) */
+    status = psa_crypto_init();
+    if (status != PSA_SUCCESS) {
+        memset(out_hash, 0, 32);
+        return;
+    }
+
+    status = psa_hash_setup(&op, PSA_ALG_SHA_256);
+    if (status == PSA_SUCCESS && salt != NULL && salt_len > 0) {
+        status = psa_hash_update(&op, salt, salt_len);
+    }
+    if (status == PSA_SUCCESS) {
+        status = psa_hash_update(&op, (const unsigned char *)(password ? password : ""),
+                                 password ? strlen(password) : 0);
+    }
+    if (status == PSA_SUCCESS) {
+        status = psa_hash_finish(&op, out_hash, 32, &hash_len);
+    }
+    if (status != PSA_SUCCESS) {
+        memset(out_hash, 0, 32);
+    }
+}
+
+SemaphoreHandle_t app_mutex_ensure(SemaphoreHandle_t *handle,
+                                   StaticSemaphore_t *buffer,
+                                   portMUX_TYPE *mux,
+                                   bool recursive)
+{
+    SemaphoreHandle_t h;
+
+    portENTER_CRITICAL(mux);
+    h = *handle;
+    if (h == NULL) {
+        h = recursive ? xSemaphoreCreateRecursiveMutexStatic(buffer)
+                      : xSemaphoreCreateMutexStatic(buffer);
+        *handle = h;
+    }
+    portEXIT_CRITICAL(mux);
+    return h;
+}
+
+EventGroupHandle_t app_event_group_ensure(EventGroupHandle_t *handle,
+                                          StaticEventGroup_t *buffer,
+                                          portMUX_TYPE *mux)
+{
+    EventGroupHandle_t h;
+
+    portENTER_CRITICAL(mux);
+    h = *handle;
+    if (h == NULL) {
+        h = xEventGroupCreateStatic(buffer);
+        *handle = h;
+    }
+    portEXIT_CRITICAL(mux);
+    return h;
+}
 
 void app_copy_string(char *dst, size_t dst_size, const char *src)
 {
@@ -49,6 +115,7 @@ void app_json_escape_string(char *dst, size_t dst_size, const char *src)
 
     while (*src != '\0' && index + 1 < dst_size) {
         const char *replacement = NULL;
+        char unicode_escape[8];
         char ch = *src++;
 
         switch (ch) {
@@ -57,6 +124,15 @@ void app_json_escape_string(char *dst, size_t dst_size, const char *src)
             break;
         case '"':
             replacement = "\\\"";
+            break;
+        case '/':
+            replacement = "\\/";
+            break;
+        case '\b':
+            replacement = "\\b";
+            break;
+        case '\f':
+            replacement = "\\f";
             break;
         case '\n':
             replacement = "\\n";
@@ -68,6 +144,12 @@ void app_json_escape_string(char *dst, size_t dst_size, const char *src)
             replacement = "\\t";
             break;
         default:
+            /* 其余 C0 控制字符按 RFC 8259 用 \uXXXX 转义,不再丢字替换为 '?' */
+            if ((unsigned char)ch < 0x20) {
+                snprintf(unicode_escape, sizeof(unicode_escape),
+                         "\\u%04X", (unsigned)(unsigned char)ch);
+                replacement = unicode_escape;
+            }
             break;
         }
 
@@ -75,11 +157,6 @@ void app_json_escape_string(char *dst, size_t dst_size, const char *src)
             while (*replacement != '\0' && index + 1 < dst_size) {
                 dst[index++] = *replacement++;
             }
-            continue;
-        }
-
-        if ((unsigned char)ch < 32) {
-            dst[index++] = '?';
             continue;
         }
 

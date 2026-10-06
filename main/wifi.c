@@ -15,11 +15,12 @@
 #include "common.h"
 #include "config.h"
 #include "identity.h"
-#include "mqtt.h"
 #include "wifi.h"
 
 static const char *TAG = "wifi";
-static const uint8_t APP_WIFI_STA_RETRY_LIMIT = 1;
+/* 同一 profile 断线后先直连重试的次数,超过才拉黑换下一个 profile。
+ * 取 3 避免边缘 AP 一次抖动就永久跳走;总时长仍受 90s 启动窗口约束。 */
+static const uint8_t APP_WIFI_STA_RETRY_LIMIT = 3;
 static const int64_t APP_WIFI_STA_STARTUP_TIMEOUT_MS = 90000;
 static const int64_t APP_WIFI_STA_STARTUP_RETRY_INTERVAL_MS = 1000;
 
@@ -42,6 +43,8 @@ static int64_t s_sta_connected_at_ms = 0;
 static bool s_wifi_sta_connecting = false;
 static bool s_wifi_fast_path_pending = false;
 static SemaphoreHandle_t s_wifi_restart_lock = NULL;
+static StaticSemaphore_t s_wifi_restart_lock_buf;
+static portMUX_TYPE s_wifi_restart_lock_mux = portMUX_INITIALIZER_UNLOCKED;
 
 _Static_assert(sizeof(s_wifi.scan_records_storage) >=
                    sizeof(wifi_ap_record_t) * WIFI_SCAN_LIST_SIZE,
@@ -52,12 +55,9 @@ _Static_assert(sizeof(TaskHandle_t) == sizeof(((wifi_runtime_t *)0)->restart_tas
 
 static void app_wifi_restart_lock(void)
 {
-    if (s_wifi_restart_lock == NULL) {
-        s_wifi_restart_lock = xSemaphoreCreateRecursiveMutex();
-    }
-    if (s_wifi_restart_lock != NULL) {
-        xSemaphoreTakeRecursive(s_wifi_restart_lock, portMAX_DELAY);
-    }
+    SemaphoreHandle_t lock = app_mutex_ensure(&s_wifi_restart_lock, &s_wifi_restart_lock_buf,
+                                              &s_wifi_restart_lock_mux, true);
+    xSemaphoreTakeRecursive(lock, portMAX_DELAY);
 }
 
 static void app_wifi_restart_unlock(void)
@@ -741,7 +741,6 @@ static void app_wifi_event_handler(void *arg, esp_event_base_t event_base, int32
             app_wifi_runtime_lock();
             snprintf(s_wifi.last_disconnect, sizeof(s_wifi.last_disconnect), "reason_%d", disconnected->reason);
             app_wifi_runtime_unlock();
-            app_mqtt_stop();
 
             app_config_lock();
             net_mode_snapshot = s_config.net_mode;
@@ -821,9 +820,6 @@ static void app_wifi_event_handler(void *arg, esp_event_base_t event_base, int32
             app_config_save_wifi_profile(profile_ssid, profile_password);
             app_wifi_load_saved_profiles();
         }
-        if (!app_mqtt_schedule_restart()) {
-            ESP_LOGE(TAG, "IP_EVENT_STA_GOT_IP: failed to schedule MQTT restart");
-        }
     }
 }
 
@@ -865,8 +861,6 @@ static esp_err_t app_apply_wifi_config(void)
              net_mode_snapshot,
              app_network_mode_has_ap(net_mode_snapshot) ? (const char *)ap_cfg.ap.ssid : "<disabled>",
              app_network_mode_has_sta(net_mode_snapshot) ? (const char *)sta_cfg.sta.ssid : "<disabled>");
-    app_mqtt_stop();
-    app_copy_string(s_mqtt.last_error, sizeof(s_mqtt.last_error), "waiting_sta_ip");
 
     err = esp_wifi_stop();
     if (err != ESP_OK && err != ESP_ERR_WIFI_NOT_STARTED && err != ESP_ERR_WIFI_NOT_INIT) {
@@ -1051,8 +1045,17 @@ void app_start_wifi(void)
     s_ap_netif = esp_netif_create_default_wifi_ap();
     s_sta_netif = esp_netif_create_default_wifi_sta();
 
-    ESP_ERROR_CHECK(esp_netif_set_hostname(s_ap_netif, hostname));
-    ESP_ERROR_CHECK(esp_netif_set_hostname(s_sta_netif, hostname));
+    /* hostname 与 storage 属非致命配置,失败降级告警,不中止启动 */
+    {
+        esp_err_t hostname_err = esp_netif_set_hostname(s_ap_netif, hostname);
+        if (hostname_err != ESP_OK) {
+            ESP_LOGW(TAG, "set ap hostname failed: %s", esp_err_to_name(hostname_err));
+        }
+        hostname_err = esp_netif_set_hostname(s_sta_netif, hostname);
+        if (hostname_err != ESP_OK) {
+            ESP_LOGW(TAG, "set sta hostname failed: %s", esp_err_to_name(hostname_err));
+        }
+    }
 
     app_config_lock();
     net_mode_snapshot = s_config.net_mode;
@@ -1064,13 +1067,22 @@ void app_start_wifi(void)
         }
     }
     ESP_ERROR_CHECK(esp_wifi_init(&cfg));
-    ESP_ERROR_CHECK(esp_wifi_set_storage(WIFI_STORAGE_RAM));
+    {
+        esp_err_t storage_err = esp_wifi_set_storage(WIFI_STORAGE_RAM);
+        if (storage_err != ESP_OK) {
+            ESP_LOGW(TAG, "set wifi storage RAM failed: %s", esp_err_to_name(storage_err));
+        }
+    }
     ESP_ERROR_CHECK(esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &app_wifi_event_handler, NULL));
     ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &app_wifi_event_handler, NULL));
     app_wifi_mark_profiles_dirty();
     if (s_wifi_boot_monitor_task == NULL) {
-        ESP_ERROR_CHECK(xTaskCreate(app_wifi_boot_monitor_task_fn, "wifi_boot_monitor", 4096,
-                                    NULL, 5, &s_wifi_boot_monitor_task) == pdPASS ? ESP_OK : ESP_FAIL);
+        if (xTaskCreate(app_wifi_boot_monitor_task_fn, "wifi_boot_monitor", 4096,
+                        NULL, 5, &s_wifi_boot_monitor_task) != pdPASS) {
+            s_wifi_boot_monitor_task = NULL;
+            ESP_LOGE(TAG, "Failed to create wifi_boot_monitor task "
+                          "(startup STA-failure AP fallback will be unavailable)");
+        }
     }
     ESP_ERROR_CHECK(app_apply_wifi_config());
 }

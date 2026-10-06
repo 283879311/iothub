@@ -16,10 +16,12 @@
 #include "esp_mac.h"
 #include "esp_ota_ops.h"
 #include "esp_partition.h"
+#include "esp_random.h"
 #include "esp_system.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "lwip/ip4_addr.h"
+#include "mbedtls/base64.h"
 
 #include "common.h"
 #include "config.h"
@@ -122,10 +124,32 @@ esp_err_t app_http_register_uri_handler(httpd_handle_t server,
     return err;
 }
 
+/* 校验口令:SHA-256(盐||口令) 与配置中的哈希比较。明文口令不落在固件或 NVS。 */
+static bool app_http_verify_password(const char *password)
+{
+    uint8_t salt[16];
+    uint8_t stored[32];
+    uint8_t calc[32];
+
+    app_config_lock();
+    memcpy(salt, s_config.web_pass_salt, sizeof(salt));
+    memcpy(stored, s_config.web_pass_hash, sizeof(stored));
+    app_config_unlock();
+
+    app_web_hash_password(salt, sizeof(salt), password, calc);
+    return memcmp(calc, stored, sizeof(calc)) == 0;
+}
+
 static bool app_http_is_authorized(httpd_req_t *req)
 {
     size_t header_len = httpd_req_get_hdr_value_len(req, "Authorization");
     char auth_header[80];
+    unsigned char decoded[128];
+    size_t decoded_len = 0;
+    const char *separator;
+    char username[33];
+    char stored_username[sizeof(username)];
+    size_t user_len;
 
     if (header_len == 0 || header_len >= sizeof(auth_header)) {
         return false;
@@ -133,7 +157,34 @@ static bool app_http_is_authorized(httpd_req_t *req)
     if (httpd_req_get_hdr_value_str(req, "Authorization", auth_header, sizeof(auth_header)) != ESP_OK) {
         return false;
     }
-    return strcmp(auth_header, APP_WEB_AUTH_BASIC) == 0;
+    if (strncmp(auth_header, "Basic ", 6) != 0) {
+        return false;
+    }
+    if (mbedtls_base64_decode(decoded, sizeof(decoded) - 1, &decoded_len,
+                              (const unsigned char *)auth_header + 6,
+                              strlen(auth_header) - 6) != 0 ||
+        decoded_len == 0 || decoded_len >= sizeof(decoded)) {
+        return false;
+    }
+    decoded[decoded_len] = '\0';
+    separator = memchr(decoded, ':', decoded_len);
+    if (separator == NULL) {
+        return false;
+    }
+    user_len = (size_t)(separator - (const char *)decoded);
+    if (user_len == 0 || user_len >= sizeof(username)) {
+        return false;
+    }
+    memcpy(username, decoded, user_len);
+    username[user_len] = '\0';
+
+    app_config_lock();
+    app_copy_string(stored_username, sizeof(stored_username), s_config.web_username);
+    app_config_unlock();
+    if (stored_username[0] == '\0' || strcmp(username, stored_username) != 0) {
+        return false;
+    }
+    return app_http_verify_password(separator + 1);
 }
 
 esp_err_t app_http_send_auth_challenge(httpd_req_t *req)
@@ -202,6 +253,11 @@ esp_err_t http_serve_html(httpd_req_t *req, const char *file_name)
     char chunk[256];
     size_t read_bytes = 0;
 
+    /* 管理页认证按文件级统一控制,新增路由只要经此函数出 config.html 就自动覆盖 */
+    if (strcmp(file_name, "config.html") == 0 && !app_http_require_auth(req)) {
+        return ESP_OK;
+    }
+
     snprintf(path, sizeof(path), "%s/%s", APP_BASE_PATH, file_name);
     file = fopen(path, "rb");
     if (file == NULL) {
@@ -245,23 +301,80 @@ static esp_err_t device_status_get_handler(httpd_req_t *req)
 static esp_err_t index_handler(httpd_req_t *req)
 {
     const char *file_name = NULL;
-    bool requires_auth = false;
 
     if (strcmp(req->uri, "/") == 0 || strcmp(req->uri, "/index.html") == 0) {
         file_name = "index.html";
     } else if (strcmp(req->uri, APP_WEB_CONFIG_PATH) == 0 ||
                strcmp(req->uri, APP_WEB_CONFIG_PATH "/") == 0 ||
                strcmp(req->uri, "/config.html") == 0) {
+        /* config.html 的认证在 http_serve_html 内按文件名统一控制 */
         file_name = "config.html";
-        requires_auth = true;
     } else {
         return app_http_send_json_text(req, "404 Not Found",
                                    "{\"status\":\"error\",\"message\":\"not_found\"}");
     }
-    if (requires_auth && !app_http_require_auth(req)) {
+    return http_serve_html(req, file_name);
+}
+
+/* 修改 Web 登录凭据:验旧口令 → 可选改用户名 → 新盐+新口令哈希写入配置。
+ * 成功后浏览器缓存的旧 Basic 凭据会 401,由页面提示重新登录。 */
+static esp_err_t web_auth_put_handler(httpd_req_t *req)
+{
+    char old_password[65];
+    char new_password[65];
+    char new_username[33];
+    uint8_t salt[16];
+    esp_err_t save_err;
+
+    if (!app_http_require_auth(req)) {
         return ESP_OK;
     }
-    return http_serve_html(req, file_name);
+    {
+        esp_err_t err = http_read_body(req, app_http_scratch_buf(), app_http_scratch_size());
+        if (err != ESP_OK) {
+            return app_http_body_read_finished(err) ? ESP_OK : ESP_FAIL;
+        }
+    }
+
+    if (!app_json_find_string(app_http_scratch_buf(), "old_password", old_password, sizeof(old_password)) ||
+        strlen(old_password) == 0) {
+        return app_http_send_json_text(req, "400 Bad Request",
+                                   "{\"status\":\"error\",\"message\":\"old_password_required\"}");
+    }
+    if (!app_http_verify_password(old_password)) {
+        return app_http_send_json_text(req, "403 Forbidden",
+                                   "{\"status\":\"error\",\"message\":\"invalid_old_password\"}");
+    }
+    if (!app_json_find_string(app_http_scratch_buf(), "new_password", new_password, sizeof(new_password)) ||
+        strlen(new_password) < 8) {
+        return app_http_send_json_text(req, "400 Bad Request",
+                                   "{\"status\":\"error\",\"message\":\"password_too_short\"}");
+    }
+    if (app_json_find_string(app_http_scratch_buf(), "new_username", new_username, sizeof(new_username)) &&
+        strlen(new_username) > 0 &&
+        strchr(new_username, ':') != NULL) {
+        return app_http_send_json_text(req, "400 Bad Request",
+                                   "{\"status\":\"error\",\"message\":\"invalid_username\"}");
+    }
+
+    esp_fill_random(salt, sizeof(salt));
+    app_config_lock();
+    if (app_json_find_string(app_http_scratch_buf(), "new_username", new_username, sizeof(new_username)) &&
+        strlen(new_username) > 0) {
+        app_copy_string(s_config.web_username, sizeof(s_config.web_username), new_username);
+    }
+    memcpy(s_config.web_pass_salt, salt, sizeof(salt));
+    app_web_hash_password(salt, sizeof(salt), new_password, s_config.web_pass_hash);
+    save_err = app_config_save(&s_config);
+    app_config_unlock();
+
+    if (save_err != ESP_OK) {
+        return app_http_send_json_text(req, "500 Internal Server Error",
+                                   "{\"status\":\"error\",\"message\":\"config_save_failed\"}");
+    }
+    ESP_LOGI(TAG, "Web credentials updated via config page");
+    return app_http_send_json_text(req, NULL,
+                               "{\"status\":\"saved\",\"message\":\"web credentials updated, please re-login\"}");
 }
 
 void app_http_start_webserver(void)
@@ -277,29 +390,58 @@ void app_http_start_webserver(void)
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     config.uri_match_fn = httpd_uri_match_wildcard;
     config.max_uri_handlers = APP_HTTP_MAX_HANDLERS;
+    /* httpd 起不来等于无管理面,保留 abort 重启重试;路由注册失败只降级对应功能组,
+     * 不再 abort 整机(无人值守设备缺一组 API 好过无限重启) */
     ESP_ERROR_CHECK(httpd_start(&s_web.server, &config));
     {
         size_t index;
         const app_http_route_t core_routes[] = {
             {.uri = "/api/v1/device/info",   .method = HTTP_GET, .handler = device_info_get_handler},
             {.uri = "/api/v1/device/status", .method = HTTP_GET, .handler = device_status_get_handler},
+            {.uri = "/api/v1/config/web",    .method = HTTP_PUT, .handler = web_auth_put_handler},
         };
         for (index = 0; index < sizeof(core_routes) / sizeof(core_routes[0]); index++) {
-            ESP_ERROR_CHECK(app_http_register_uri_handler(s_web.server,
+            esp_err_t err = app_http_register_uri_handler(s_web.server,
                                                           core_routes[index].uri,
                                                           core_routes[index].method,
-                                                          core_routes[index].handler));
+                                                          core_routes[index].handler);
+            if (err != ESP_OK) {
+                ESP_LOGE(TAG, "register %s failed: %s (route unavailable)",
+                         core_routes[index].uri, esp_err_to_name(err));
+            }
         }
     }
 
-    ESP_ERROR_CHECK(http_network_register_routes(s_web.server));
-    ESP_ERROR_CHECK(http_io_register_routes(s_web.server));
-    ESP_ERROR_CHECK(http_mqtt_register_routes(s_web.server));
-    ESP_ERROR_CHECK(http_uart_register_routes(s_web.server));
-    ESP_ERROR_CHECK(http_ota_register_routes(s_web.server));
+    {
+        size_t index;
+        static const struct {
+            const char *name;
+            esp_err_t (*register_fn)(httpd_handle_t);
+        } route_groups[] = {
+            {"network", http_network_register_routes},
+            {"io",      http_io_register_routes},
+            {"mqtt",    http_mqtt_register_routes},
+            {"uart",    http_uart_register_routes},
+            {"sim",     http_sim_register_routes},
+            {"ota",     http_ota_register_routes},
+        };
+        for (index = 0; index < sizeof(route_groups) / sizeof(route_groups[0]); index++) {
+            esp_err_t err = route_groups[index].register_fn(s_web.server);
+            if (err != ESP_OK) {
+                ESP_LOGE(TAG, "register %s routes failed: %s (group unavailable)",
+                         route_groups[index].name, esp_err_to_name(err));
+            }
+        }
+    }
 
-    ESP_ERROR_CHECK(app_http_register_uri_handler(s_web.server,
-                                                  "/*",
-                                                  HTTP_GET,
-                                                  index_handler));
+    {
+        esp_err_t err = app_http_register_uri_handler(s_web.server,
+                                                      "/*",
+                                                      HTTP_GET,
+                                                      index_handler);
+        if (err != ESP_OK) {
+            ESP_LOGE(TAG, "register catch-all route failed: %s (web pages unavailable)",
+                     esp_err_to_name(err));
+        }
+    }
 }

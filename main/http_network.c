@@ -20,6 +20,7 @@
 #include "http_priv.h"
 #include "http_utils.h"
 #include "identity.h"
+#include "ota.h"
 #include "status.h"
 #include "wifi.h"
 
@@ -89,13 +90,15 @@ static esp_err_t network_get_handler(httpd_req_t *req)
 
     cJSON_AddStringToObject(root, "mode", app_network_mode_to_string(net_mode));
     cJSON_AddStringToObject(root, "ap_ssid", ap_ssid);
-    cJSON_AddStringToObject(root, "ap_password", ap_password);
+    /* 凭据不回传明文,只给是否已设置的布尔位,避免 Basic 认证接口泄漏 WiFi 密码 */
+    cJSON_AddStringToObject(root, "ap_password", "");
     cJSON_AddStringToObject(root, "ap_ip", ip);
     cJSON_AddStringToObject(root, "gateway", gateway);
     cJSON_AddStringToObject(root, "netmask", netmask);
     cJSON_AddBoolToObject(root, "password_enabled", strlen(ap_password) > 0);
     cJSON_AddStringToObject(root, "sta_ssid", sta_ssid);
-    cJSON_AddStringToObject(root, "sta_password", sta_password);
+    cJSON_AddStringToObject(root, "sta_password", "");
+    cJSON_AddBoolToObject(root, "sta_password_set", strlen(sta_password) > 0);
     cJSON_AddBoolToObject(root, "sta_connected", sta_connected);
     cJSON_AddBoolToObject(root, "sta_has_ip", sta_has_ip);
     cJSON_AddStringToObject(root, "sta_ip", sta_ip);
@@ -116,7 +119,7 @@ static esp_err_t network_get_handler(httpd_req_t *req)
                 continue;
             }
             cJSON_AddStringToObject(profile, "ssid", profiles[i].ssid);
-            cJSON_AddStringToObject(profile, "password", profiles[i].password);
+            cJSON_AddBoolToObject(profile, "password_set", strlen(profiles[i].password) > 0);
             cJSON_AddItemToArray(profiles_json_root, profile);
         }
     }
@@ -136,6 +139,7 @@ static esp_err_t network_put_handler(httpd_req_t *req)
 {
     char value[65];
     bool ap_enabled_before;
+    bool bool_value;
     char current_ap_ip[16];
     char current_ap_gw[16];
     char current_ap_mask[16];
@@ -168,8 +172,12 @@ static esp_err_t network_put_handler(httpd_req_t *req)
     if (app_json_find_string(app_http_scratch_buf(), "mode", value, sizeof(value))) {
         s_config.net_mode = app_network_mode_from_string(value);
     }
-    if (app_json_find_string(app_http_scratch_buf(), "ap_password", value, sizeof(s_config.ap_password))) {
-        if (strlen(value) > 0 && strlen(value) < 8) {
+    /* 密码缺省/留空 = 保持已存值不回传明文后前端不再持有旧密码;
+     * 需要开放网络时用 *_clear 显式清除 */
+    if (app_json_find_bool(app_http_scratch_buf(), "ap_password_clear", &bool_value) && bool_value) {
+        app_copy_string(s_config.ap_password, sizeof(s_config.ap_password), "");
+    } else if (app_json_find_string(app_http_scratch_buf(), "ap_password", value, sizeof(s_config.ap_password)) && strlen(value) > 0) {
+        if (strlen(value) < 8) {
             app_config_unlock();
             return app_http_send_json_text(req, "400 Bad Request",
                                        "{\"status\":\"error\",\"message\":\"password_too_short\"}");
@@ -180,8 +188,10 @@ static esp_err_t network_put_handler(httpd_req_t *req)
         app_copy_string(s_config.sta_ssid, sizeof(s_config.sta_ssid), value);
         sta_ssid_set = true;
     }
-    if (app_json_find_string(app_http_scratch_buf(), "sta_password", value, sizeof(s_config.sta_password))) {
-        if (strlen(value) > 0 && strlen(value) < 8) {
+    if (app_json_find_bool(app_http_scratch_buf(), "sta_password_clear", &bool_value) && bool_value) {
+        app_copy_string(s_config.sta_password, sizeof(s_config.sta_password), "");
+    } else if (app_json_find_string(app_http_scratch_buf(), "sta_password", value, sizeof(s_config.sta_password)) && strlen(value) > 0) {
+        if (strlen(value) < 8) {
             app_config_unlock();
             return app_http_send_json_text(req, "400 Bad Request",
                                        "{\"status\":\"error\",\"message\":\"sta_password_too_short\"}");
@@ -331,17 +341,20 @@ static esp_err_t bluetooth_get_handler(httpd_req_t *req)
     {
         esp_err_t rv;
         uint8_t bt_mode;
+        uint8_t bt_runtime_mode;
         char bt_device_name[sizeof(s_config.bt_device_name)];
+        char bt_last_error[64];
         app_config_lock();
         bt_mode = s_config.bt_mode;
         memcpy(bt_device_name, s_config.bt_device_name, sizeof(bt_device_name));
         app_config_unlock();
+        app_bt_get_status(&bt_runtime_mode, bt_last_error, sizeof(bt_last_error));
         rv = app_http_send_jsonf(req, NULL,
                                "{\"mode\":\"%s\",\"device_name\":\"%s\",\"runtime_mode\":\"%s\",\"last_error\":\"%s\"}",
                                app_bt_mode_to_string(bt_mode),
                                bt_device_name,
-                               app_bt_mode_to_string(s_bt_runtime_mode),
-                               s_bt_last_error);
+                               app_bt_mode_to_string(bt_runtime_mode),
+                               bt_last_error);
         return rv;
     }
 }
@@ -386,6 +399,17 @@ static esp_err_t bluetooth_put_handler(httpd_req_t *req)
     if (save_err != ESP_OK) {
         return app_http_send_json_text(req, "500 Internal Server Error",
                                    "{\"status\":\"error\",\"message\":\"config_save_failed\"}");
+    }
+    /* 跨模式切换:未选模式的栈内存已在开机时释放,热切换不可行,保存后整机重启;
+     * 同模式修改(如设备名)保持原有热重配路径 */
+    if (app_bt_mode_switch_requires_reboot(previous_mode)) {
+        app_http_send_json_text(req, NULL,
+                            "{\"status\":\"saved\",\"message\":\"bluetooth mode changed, device will reboot\","
+                            "\"restart_required\":true}");
+        if (xTaskCreate(app_reboot_task, "bt_mode_reboot", 2048, NULL, 5, NULL) != pdPASS) {
+            ESP_LOGE(HTTP_TAG, "Failed to schedule reboot after bluetooth mode switch");
+        }
+        return ESP_OK;
     }
     if (xTaskCreate(app_bt_restart_task, "bt_restart", 4096, NULL, 5, NULL) != pdPASS) {
         return app_http_send_json_text(req, "500 Internal Server Error",

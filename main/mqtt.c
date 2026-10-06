@@ -10,7 +10,9 @@
 #include "esp_event.h"
 #include "esp_log.h"
 #include "esp_mac.h"
+#include "esp_netif.h"
 #include "esp_ota_ops.h"
+#include "esp_wifi.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/event_groups.h"
 #include "freertos/semphr.h"
@@ -32,6 +34,9 @@ static const char *TAG = "mqtt";
 
 extern app_config_t s_config;
 mqtt_runtime_t s_mqtt = {0};
+static StaticSemaphore_t s_mqtt_lock_buf;
+static StaticEventGroup_t s_mqtt_stop_events_buf;
+static portMUX_TYPE s_mqtt_init_mux = portMUX_INITIALIZER_UNLOCKED;
 
 _Static_assert(sizeof(esp_mqtt_client_handle_t) == sizeof(((mqtt_runtime_t *)0)->client),
                "esp_mqtt_client_handle_t must be same size as opaque client pointer");
@@ -44,12 +49,8 @@ _Static_assert(sizeof(TaskHandle_t) == sizeof(((mqtt_runtime_t *)0)->restart_tas
 
 static void app_mqtt_ensure_runtime_init(void)
 {
-    if (s_mqtt.lock == NULL) {
-        s_mqtt.lock = xSemaphoreCreateRecursiveMutex();
-    }
-    if (s_mqtt.stop_events == NULL) {
-        s_mqtt.stop_events = xEventGroupCreate();
-    }
+    app_mutex_ensure(&s_mqtt.lock, &s_mqtt_lock_buf, &s_mqtt_init_mux, true);
+    app_event_group_ensure(&s_mqtt.stop_events, &s_mqtt_stop_events_buf, &s_mqtt_init_mux);
 }
 
 void app_mqtt_lock(void)
@@ -305,10 +306,22 @@ static void app_mqtt_apply_command(const char *topic, const char *payload, int d
     bool changed = false;
     bool handled = false;
     bool request_status = false;
+    uint8_t relay_on;
+    uint8_t led_on;
+    uint8_t new_relay_on;
+    uint8_t new_led_on;
+    uint8_t net_mode;
     char response_topic[128];
     const char *request_id = NULL;
     const char *rpc_prefix = "v1/devices/me/rpc/request/";
     cJSON *root = cJSON_ParseWithLength(payload, data_len < 0 ? (payload ? strlen(payload) : 0) : (size_t)data_len);
+
+    app_config_lock();
+    relay_on = s_config.relay_on;
+    led_on = s_config.led_on;
+    app_config_unlock();
+    new_relay_on = relay_on;
+    new_led_on = led_on;
 
     if (root == NULL) {
         int preview_len;
@@ -333,15 +346,15 @@ static void app_mqtt_apply_command(const char *topic, const char *payload, int d
         item = cJSON_GetObjectItemCaseSensitive(root, "relay_on");
         if (cJSON_IsBool(item)) {
             bool v = cJSON_IsTrue(item);
-            if (s_config.relay_on != v) {
-                s_config.relay_on = v;
+            if (relay_on != v) {
+                new_relay_on = v;
                 changed = true;
             }
             handled = true;
         } else if (cJSON_IsNumber(item)) {
             bool v = item->valueint != 0;
-            if (s_config.relay_on != v) {
-                s_config.relay_on = v;
+            if (relay_on != v) {
+                new_relay_on = v;
                 changed = true;
             }
             handled = true;
@@ -350,15 +363,15 @@ static void app_mqtt_apply_command(const char *topic, const char *payload, int d
         item = cJSON_GetObjectItemCaseSensitive(root, "led_on");
         if (cJSON_IsBool(item)) {
             bool v = cJSON_IsTrue(item);
-            if (s_config.led_on != v) {
-                s_config.led_on = v;
+            if (led_on != v) {
+                new_led_on = v;
                 changed = true;
             }
             handled = true;
         } else if (cJSON_IsNumber(item)) {
             bool v = item->valueint != 0;
-            if (s_config.led_on != v) {
-                s_config.led_on = v;
+            if (led_on != v) {
+                new_led_on = v;
                 changed = true;
             }
             handled = true;
@@ -369,16 +382,16 @@ static void app_mqtt_apply_command(const char *topic, const char *payload, int d
         if (cJSON_IsString(method)) {
             const char *m = method->valuestring;
             if (strcmp(m, "setRelay") == 0) {
-                bool v = app_mqtt_parse_bool_param(params, !s_config.relay_on);
-                if (s_config.relay_on != v) {
-                    s_config.relay_on = v;
+                bool v = app_mqtt_parse_bool_param(params, !relay_on);
+                if (relay_on != v) {
+                    new_relay_on = v;
                     changed = true;
                 }
                 handled = true;
             } else if (strcmp(m, "setLed") == 0) {
-                bool v = app_mqtt_parse_bool_param(params, !s_config.led_on);
-                if (s_config.led_on != v) {
-                    s_config.led_on = v;
+                bool v = app_mqtt_parse_bool_param(params, !led_on);
+                if (led_on != v) {
+                    new_led_on = v;
                     changed = true;
                 }
                 handled = true;
@@ -390,11 +403,11 @@ static void app_mqtt_apply_command(const char *topic, const char *payload, int d
                 cJSON *led = cJSON_IsObject(params) ? cJSON_GetObjectItemCaseSensitive(params, "led_on") : NULL;
                 if (cJSON_IsBool(rel) || cJSON_IsNumber(rel)) {
                     bool v = cJSON_IsBool(rel) ? cJSON_IsTrue(rel) : (rel->valueint != 0);
-                    if (s_config.relay_on != v) { s_config.relay_on = v; changed = true; }
+                    if (relay_on != v) { new_relay_on = v; changed = true; }
                 }
                 if (cJSON_IsBool(led) || cJSON_IsNumber(led)) {
                     bool v = cJSON_IsBool(led) ? cJSON_IsTrue(led) : (led->valueint != 0);
-                    if (s_config.led_on != v) { s_config.led_on = v; changed = true; }
+                    if (led_on != v) { new_led_on = v; changed = true; }
                 }
                 handled = true;
             }
@@ -404,10 +417,20 @@ static void app_mqtt_apply_command(const char *topic, const char *payload, int d
     cJSON_Delete(root);
 
     if (changed) {
+        app_config_lock();
+        s_config.relay_on = new_relay_on;
+        s_config.led_on = new_led_on;
         app_apply_output(app_relay_gpio(), s_config.relay_active_high, s_config.relay_on);
         app_apply_output(app_led_gpio(), s_config.led_active_high, s_config.led_on);
         app_config_save(&s_config);
+        app_config_unlock();
+        relay_on = new_relay_on;
+        led_on = new_led_on;
     }
+
+    app_config_lock();
+    net_mode = s_config.net_mode;
+    app_config_unlock();
 
     if (handled && topic != NULL &&
         strncmp(topic, rpc_prefix, strlen(rpc_prefix)) == 0) {
@@ -419,16 +442,16 @@ static void app_mqtt_apply_command(const char *topic, const char *payload, int d
         snprintf(response_topic, sizeof(response_topic),
                  "v1/devices/me/rpc/response/%s", request_id);
         if (request_status) {
-            cJSON_AddBoolToObject  (resp, "relay_on",     s_config.relay_on);
-            cJSON_AddBoolToObject  (resp, "led_on",       s_config.led_on);
+            cJSON_AddBoolToObject  (resp, "relay_on",     relay_on);
+            cJSON_AddBoolToObject  (resp, "led_on",       led_on);
             cJSON_AddBoolToObject  (resp, "input_active", app_get_input_state());
-            cJSON_AddStringToObject(resp, "net_mode",     app_network_mode_to_string(s_config.net_mode));
+            cJSON_AddStringToObject(resp, "net_mode",     app_network_mode_to_string(net_mode));
             cJSON_AddBoolToObject  (resp, "sta_has_ip",   s_wifi.sta_has_ip);
             cJSON_AddStringToObject(resp, "sta_ip",       s_wifi.sta_ip);
         } else {
             cJSON_AddBoolToObject(resp, "success",  true);
-            cJSON_AddBoolToObject(resp, "relay_on", s_config.relay_on);
-            cJSON_AddBoolToObject(resp, "led_on",   s_config.led_on);
+            cJSON_AddBoolToObject(resp, "relay_on", relay_on);
+            cJSON_AddBoolToObject(resp, "led_on",   led_on);
         }
         {
             esp_mqtt_client_handle_t client = app_mqtt_client_safe();
@@ -614,25 +637,43 @@ static void app_mqtt_event_handler(void *handler_args, esp_event_base_t base, in
     }
 }
 
-void app_mqtt_stop(void)
+/* 等待任务确认退出:任务收到停止位后会清位、自清句柄再删除自己,
+ * 这里轮询停止位被清即认为该任务已不再触碰 client。 */
+static bool app_mqtt_wait_task_exit(EventBits_t stop_bit, TickType_t timeout_ticks)
+{
+    TickType_t deadline = xTaskGetTickCount() + timeout_ticks;
+
+    while ((xEventGroupGetBits(s_mqtt.stop_events) & stop_bit) != 0) {
+        if ((int32_t)(xTaskGetTickCount() - deadline) >= 0) {
+            return false;
+        }
+        vTaskDelay(pdMS_TO_TICKS(20));
+    }
+    return true;
+}
+
+/* 停止客户端并回收 telemetry/boost 任务(不含 restart 任务,供 apply_config 重建流程使用,
+ * 避免重启流程等待自己)。所有任务确认退出后才销毁 client;若任务超时未退出,
+ * 则只停不销毁(有界泄漏一个 client),避免其仍持有 client 指针造成悬空引用。 */
+static void app_mqtt_stop_clients(void)
 {
     esp_mqtt_client_handle_t client_to_destroy = NULL;
     TaskHandle_t boost_task_to_notify = NULL;
-    TaskHandle_t restart_task_to_notify = NULL;
+    bool has_telemetry;
+    bool has_boost;
+    bool tasks_exited = true;
 
     app_mqtt_ensure_runtime_init();
 
     app_mqtt_lock();
-    if (s_mqtt.telemetry_task != NULL) {
+    has_telemetry = (s_mqtt.telemetry_task != NULL);
+    has_boost = (s_mqtt.boost_task != NULL);
+    if (has_telemetry) {
         xEventGroupSetBits(s_mqtt.stop_events, MQTT_STOP_EVENT_TELEMETRY);
     }
-    if (s_mqtt.boost_task != NULL) {
+    if (has_boost) {
         boost_task_to_notify = (TaskHandle_t)s_mqtt.boost_task;
         xEventGroupSetBits(s_mqtt.stop_events, MQTT_STOP_EVENT_BOOST);
-    }
-    if (s_mqtt.restart_task != NULL) {
-        restart_task_to_notify = (TaskHandle_t)s_mqtt.restart_task;
-        xEventGroupSetBits(s_mqtt.stop_events, MQTT_STOP_EVENT_RESTART);
     }
     client_to_destroy = s_mqtt.client;
     s_mqtt.client = NULL;
@@ -642,50 +683,77 @@ void app_mqtt_stop(void)
     if (boost_task_to_notify != NULL) {
         xTaskNotifyGive(boost_task_to_notify);
     }
+    if (has_telemetry) {
+        tasks_exited &= app_mqtt_wait_task_exit(MQTT_STOP_EVENT_TELEMETRY, pdMS_TO_TICKS(12000));
+    }
+    if (has_boost) {
+        tasks_exited &= app_mqtt_wait_task_exit(MQTT_STOP_EVENT_BOOST, pdMS_TO_TICKS(4000));
+    }
+
+    if (client_to_destroy == NULL) {
+        return;
+    }
+    if (!tasks_exited) {
+        ESP_LOGE(TAG, "mqtt tasks did not exit in time, skip client destroy (one client leaked)");
+        esp_mqtt_client_stop(client_to_destroy);
+        return;
+    }
+    esp_mqtt_client_stop(client_to_destroy);
+    esp_mqtt_client_destroy(client_to_destroy);
+}
+
+void app_mqtt_stop(void)
+{
+    TaskHandle_t restart_task_to_notify = NULL;
+    bool has_restart;
+
+    app_mqtt_ensure_runtime_init();
+
+    app_mqtt_lock();
+    has_restart = (s_mqtt.restart_task != NULL);
+    if (has_restart) {
+        restart_task_to_notify = (TaskHandle_t)s_mqtt.restart_task;
+        xEventGroupSetBits(s_mqtt.stop_events, MQTT_STOP_EVENT_RESTART);
+    }
+    app_mqtt_unlock();
     if (restart_task_to_notify != NULL) {
         xTaskNotifyGive(restart_task_to_notify);
+        app_mqtt_wait_task_exit(MQTT_STOP_EVENT_RESTART, pdMS_TO_TICKS(4000));
     }
 
+    app_mqtt_stop_clients();
+}
+
+static void app_mqtt_telemetry_task(void *arg);
+
+/* telemetry 任务是常驻单例,被 stop 流程退出后由本函数补建:
+ * 启动时和每次 apply_config 成功后调用,保证断线重连后周期遥测不消失。 */
+static bool app_mqtt_ensure_telemetry_task(void)
+{
+    BaseType_t rt;
+    TaskHandle_t handle = NULL;
+
+    app_mqtt_ensure_runtime_init();
+    app_mqtt_lock();
     if (s_mqtt.telemetry_task != NULL) {
-        EventBits_t bits;
-        bits = xEventGroupWaitBits(s_mqtt.stop_events, MQTT_STOP_EVENT_TELEMETRY,
-                                   pdFALSE, pdTRUE, pdMS_TO_TICKS(12000));
-        if ((bits & MQTT_STOP_EVENT_TELEMETRY) == 0) {
-            ESP_LOGW(TAG, "Telemetry task did not exit within timeout, forcing NULL handle");
-        }
-        app_mqtt_lock();
-        s_mqtt.telemetry_task = NULL;
         app_mqtt_unlock();
+        return true;
     }
+    app_mqtt_unlock();
 
-    if (boost_task_to_notify != NULL) {
-        EventBits_t bits;
-        bits = xEventGroupWaitBits(s_mqtt.stop_events, MQTT_STOP_EVENT_BOOST,
-                                   pdFALSE, pdTRUE, pdMS_TO_TICKS(4000));
-        if ((bits & MQTT_STOP_EVENT_BOOST) == 0) {
-            ESP_LOGW(TAG, "Boost task did not exit within timeout, forcing NULL handle");
-        }
-        app_mqtt_lock();
-        s_mqtt.boost_task = NULL;
-        app_mqtt_unlock();
+    xEventGroupClearBits(s_mqtt.stop_events, MQTT_STOP_EVENT_TELEMETRY);
+    rt = xTaskCreate(app_mqtt_telemetry_task, "mqtt_telemetry", 4096, NULL, 5, &handle);
+    if (rt != pdPASS) {
+        ESP_LOGW(TAG, "Failed to create mqtt_telemetry task");
+        app_copy_string(s_mqtt.last_error, sizeof(s_mqtt.last_error), "telemetry_task_failed");
+        return false;
     }
-
-    if (restart_task_to_notify != NULL) {
-        EventBits_t bits;
-        bits = xEventGroupWaitBits(s_mqtt.stop_events, MQTT_STOP_EVENT_RESTART,
-                                   pdFALSE, pdTRUE, pdMS_TO_TICKS(4000));
-        if ((bits & MQTT_STOP_EVENT_RESTART) == 0) {
-            ESP_LOGW(TAG, "Restart task did not exit within timeout, forcing NULL handle");
-        }
-        app_mqtt_lock();
-        s_mqtt.restart_task = NULL;
-        app_mqtt_unlock();
+    app_mqtt_lock();
+    if (s_mqtt.telemetry_task == NULL) {
+        s_mqtt.telemetry_task = handle;
     }
-
-    if (client_to_destroy != NULL) {
-        esp_mqtt_client_stop(client_to_destroy);
-        esp_mqtt_client_destroy(client_to_destroy);
-    }
+    app_mqtt_unlock();
+    return true;
 }
 
 esp_err_t app_mqtt_apply_config(void)
@@ -697,7 +765,7 @@ esp_err_t app_mqtt_apply_config(void)
     esp_err_t err;
 
     app_mqtt_ensure_runtime_init();
-    app_mqtt_stop();
+    app_mqtt_stop_clients();
 
     if (strlen(s_config.mqtt_host) == 0 || s_config.mqtt_port == 0) {
         app_copy_string(s_mqtt.last_error, sizeof(s_mqtt.last_error), "mqtt_not_configured");
@@ -765,6 +833,7 @@ esp_err_t app_mqtt_apply_config(void)
         return err;
     }
     app_copy_string(s_mqtt.last_error, sizeof(s_mqtt.last_error), "connecting");
+    app_mqtt_ensure_telemetry_task();
     return ESP_OK;
 }
 
@@ -862,34 +931,60 @@ static void app_mqtt_telemetry_task(void *arg)
     }
 }
 
+/* mqtt.c 自己监听系统网络事件并在 STA 断连/拿到 IP 时启停客户端,
+ * wifi.c 不再反向调用 mqtt,两条模块之间只保留 mqtt→wifi 的单向状态读取。 */
+static void app_mqtt_network_event_handler(void *handler_args, esp_event_base_t event_base,
+                                           int32_t event_id, void *event_data)
+{
+    (void)handler_args;
+    (void)event_data;
+
+    if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED) {
+        ESP_LOGI(TAG, "STA disconnected, stopping MQTT client");
+        app_copy_string(s_mqtt.last_error, sizeof(s_mqtt.last_error), "waiting_sta_ip");
+        app_mqtt_stop();
+    } else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
+        if (!app_mqtt_schedule_restart()) {
+            ESP_LOGE(TAG, "STA got IP: failed to schedule MQTT restart");
+        }
+    }
+}
+
+static void app_mqtt_register_network_events(void)
+{
+    static bool s_network_events_registered = false;
+    esp_err_t err;
+
+    if (s_network_events_registered) {
+        return;
+    }
+    err = esp_event_handler_register(WIFI_EVENT, WIFI_EVENT_STA_DISCONNECTED,
+                                     app_mqtt_network_event_handler, NULL);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "register WIFI_EVENT_STA_DISCONNECTED handler failed: %s", esp_err_to_name(err));
+        return;
+    }
+    err = esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP,
+                                     app_mqtt_network_event_handler, NULL);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "register IP_EVENT_STA_GOT_IP handler failed: %s", esp_err_to_name(err));
+        esp_event_handler_unregister(WIFI_EVENT, WIFI_EVENT_STA_DISCONNECTED,
+                                     app_mqtt_network_event_handler);
+        return;
+    }
+    s_network_events_registered = true;
+}
+
 esp_err_t app_mqtt_start(void)
 {
-    esp_err_t err;
-    BaseType_t rt;
-    TaskHandle_t existing = NULL;
-
     app_mqtt_ensure_runtime_init();
+    app_mqtt_register_network_events();
 
     app_mqtt_lock();
-    existing = s_mqtt.telemetry_task;
     s_mqtt.started = true;
     app_mqtt_unlock();
 
-    if (existing != NULL) {
-        ESP_LOGW(TAG, "Telemetry task already running, skipping create");
-    } else {
-        xEventGroupClearBits(s_mqtt.stop_events, MQTT_STOP_EVENT_TELEMETRY);
-        rt = xTaskCreate(app_mqtt_telemetry_task, "mqtt_telemetry", 4096, NULL, 5, &existing);
-        if (rt != pdPASS) {
-            app_copy_string(s_mqtt.last_error, sizeof(s_mqtt.last_error), "telemetry_task_failed");
-            err = app_mqtt_apply_config();
-            return (err == ESP_OK) ? ESP_FAIL : err;
-        }
-        app_mqtt_lock();
-        s_mqtt.telemetry_task = existing;
-        app_mqtt_unlock();
-    }
-
-    err = app_mqtt_apply_config();
-    return err;
+    /* telemetry 任务不再在此创建:apply_config 的停止流程会先退掉旧任务,
+     * 成功路径统一由 app_mqtt_ensure_telemetry_task() 补建。 */
+    return app_mqtt_apply_config();
 }

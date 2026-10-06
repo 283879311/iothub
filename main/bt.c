@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdarg.h>
 #include <string.h>
 
 #include "esp_bt.h"
@@ -9,6 +10,7 @@
 #include "esp_gap_bt_api.h"
 #include "esp_log.h"
 #include "esp_spp_api.h"
+#include "esp_system.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
@@ -21,8 +23,113 @@ static const char *SPP_SERVER_NAME = "IOTHUB_SPP";
 
 extern app_config_t s_config;
 
-uint8_t s_bt_runtime_mode = BT_MODE_OFF;
-char s_bt_last_error[64] = "";
+/* 运行态由自旋锁保护:写入方包括 BT 栈回调线程,读取方包括 Web 线程,
+ * 临界区内只有定长拷贝,任意上下文均安全。 */
+static uint8_t s_bt_runtime_mode = BT_MODE_OFF;
+static char s_bt_last_error[64] = "";
+static portMUX_TYPE s_bt_status_mux = portMUX_INITIALIZER_UNLOCKED;
+
+static void app_bt_status_set_mode(uint8_t mode)
+{
+    portENTER_CRITICAL(&s_bt_status_mux);
+    s_bt_runtime_mode = mode;
+    portEXIT_CRITICAL(&s_bt_status_mux);
+}
+
+static void app_bt_status_set_error(const char *error)
+{
+    portENTER_CRITICAL(&s_bt_status_mux);
+    app_copy_string(s_bt_last_error, sizeof(s_bt_last_error), error ? error : "");
+    portEXIT_CRITICAL(&s_bt_status_mux);
+}
+
+static void app_bt_status_set_errorf(const char *fmt, ...)
+{
+    char buf[sizeof(s_bt_last_error)];
+    va_list args;
+
+    va_start(args, fmt);
+    vsnprintf(buf, sizeof(buf), fmt, args);
+    va_end(args);
+    app_bt_status_set_error(buf);
+}
+
+static uint8_t app_bt_status_get_mode(void)
+{
+    uint8_t mode;
+    portENTER_CRITICAL(&s_bt_status_mux);
+    mode = s_bt_runtime_mode;
+    portEXIT_CRITICAL(&s_bt_status_mux);
+    return mode;
+}
+
+void app_bt_get_status(uint8_t *runtime_mode, char *last_error_buf, size_t last_error_buf_size)
+{
+    portENTER_CRITICAL(&s_bt_status_mux);
+    if (runtime_mode != NULL) {
+        *runtime_mode = s_bt_runtime_mode;
+    }
+    if (last_error_buf != NULL && last_error_buf_size > 0) {
+        app_copy_string(last_error_buf, last_error_buf_size, s_bt_last_error);
+    }
+    portEXIT_CRITICAL(&s_bt_status_mux);
+}
+
+/* 开机一次性:按配置的蓝牙模式释放“永不使用”的那套栈内存。
+ * OFF 释放 BTDM 全部;BLE 释放 Classic;SPP 释放 BLE。
+ * 被释放的模式在本上电周期内不可再启用,跨模式切换必须整机重启(见
+ * app_bt_mode_switch_requires_reboot),同模式内的 stop/start 不受影响。 */
+void app_bt_release_unused_memory(void)
+{
+    static bool s_released = false;
+    uint8_t bt_mode;
+    size_t free_before;
+    size_t free_after;
+    esp_err_t err;
+
+    if (s_released) {
+        return;
+    }
+    s_released = true;
+
+    app_config_lock();
+    bt_mode = s_config.bt_mode;
+    app_config_unlock();
+
+    free_before = (size_t)esp_get_free_heap_size();
+    switch (bt_mode) {
+    case BT_MODE_BLE:
+        err = esp_bt_mem_release(ESP_BT_MODE_CLASSIC_BT);
+        break;
+    case BT_MODE_SPP:
+        err = esp_bt_mem_release(ESP_BT_MODE_BLE);
+        break;
+    case BT_MODE_OFF:
+    default:
+        err = esp_bt_mem_release(ESP_BT_MODE_BTDM);
+        break;
+    }
+    free_after = (size_t)esp_get_free_heap_size();
+
+    if (err == ESP_OK) {
+        ESP_LOGI(TAG, "BT unused-mode memory released (mode=%s, heap +%u bytes)",
+                 app_bt_mode_to_string(bt_mode),
+                 (unsigned)(free_after - free_before));
+    } else {
+        ESP_LOGW(TAG, "BT mem release skipped (mode=%s): %s",
+                 app_bt_mode_to_string(bt_mode), esp_err_to_name(err));
+    }
+}
+
+bool app_bt_mode_switch_requires_reboot(uint8_t new_mode)
+{
+    bool requires;
+
+    app_config_lock();
+    requires = (s_config.bt_mode != new_mode);
+    app_config_unlock();
+    return requires;
+}
 
 static bool s_ble_adv_configured = false;
 static bool s_spp_ready = false;
@@ -70,11 +177,11 @@ static void app_ble_gap_cb(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t 
     case ESP_GAP_BLE_ADV_START_COMPLETE_EVT:
         if (param->adv_start_cmpl.status == ESP_BT_STATUS_SUCCESS) {
             ESP_LOGI(TAG, "BLE advertising started");
-            app_copy_string(s_bt_last_error, sizeof(s_bt_last_error), "");
+            app_bt_status_set_error("");
         } else {
             ESP_LOGE(TAG, "BLE advertising start failed: %d", param->adv_start_cmpl.status);
-            snprintf(s_bt_last_error, sizeof(s_bt_last_error), "adv_start:%d", param->adv_start_cmpl.status);
-            s_bt_runtime_mode = BT_MODE_OFF;
+            app_bt_status_set_errorf("adv_start:%d", param->adv_start_cmpl.status);
+            app_bt_status_set_mode(BT_MODE_OFF);
         }
         break;
     default:
@@ -111,7 +218,7 @@ static void app_spp_cb(esp_spp_cb_event_t event, esp_spp_cb_param_t *param)
     }
 }
 
-static esp_err_t app_bt_init_stack(void)
+static esp_err_t app_bt_init_stack(esp_bt_mode_t bt_mode)
 {
     esp_bt_controller_config_t bt_cfg = BT_CONTROLLER_INIT_CONFIG_DEFAULT();
     esp_bluedroid_config_t bluedroid_cfg = BT_BLUEDROID_INIT_CONFIG_DEFAULT();
@@ -128,7 +235,7 @@ static esp_err_t app_bt_init_stack(void)
         ctrl_status = esp_bt_controller_get_status();
     }
     if (ctrl_status != ESP_BT_CONTROLLER_STATUS_ENABLED) {
-        err = esp_bt_controller_enable(ESP_BT_MODE_BTDM);
+        err = esp_bt_controller_enable(bt_mode);
         if (err != ESP_OK) {
             esp_bt_controller_deinit();
             return err;
@@ -178,51 +285,53 @@ static void app_bt_cleanup_stack(void)
 
 static void app_bt_stop(void)
 {
-    if (s_bt_runtime_mode == BT_MODE_SPP && s_spp_ready) {
+    uint8_t runtime_mode = app_bt_status_get_mode();
+
+    if (runtime_mode == BT_MODE_SPP && s_spp_ready) {
         esp_spp_deinit();
         s_spp_ready = false;
     }
-    if (s_bt_runtime_mode == BT_MODE_BLE && s_ble_adv_configured) {
+    if (runtime_mode == BT_MODE_BLE && s_ble_adv_configured) {
         esp_ble_gap_stop_advertising();
         s_ble_adv_configured = false;
     }
 
     app_bt_cleanup_stack();
 
-    s_bt_runtime_mode = BT_MODE_OFF;
-    app_copy_string(s_bt_last_error, sizeof(s_bt_last_error), "");
+    app_bt_status_set_mode(BT_MODE_OFF);
+    app_bt_status_set_error("");
 }
 
 static esp_err_t app_bt_start_ble(void)
 {
     esp_err_t err;
 
-    err = app_bt_init_stack();
+    err = app_bt_init_stack(ESP_BT_MODE_BLE);
     if (err != ESP_OK) {
-        snprintf(s_bt_last_error, sizeof(s_bt_last_error), "bt_stack:%s", esp_err_to_name(err));
+        app_bt_status_set_errorf("bt_stack:%s", esp_err_to_name(err));
         app_bt_stop();
         return err;
     }
     err = esp_ble_gap_register_callback(app_ble_gap_cb);
     if (err != ESP_OK) {
-        snprintf(s_bt_last_error, sizeof(s_bt_last_error), "gap_callback:%s", esp_err_to_name(err));
+        app_bt_status_set_errorf("gap_callback:%s", esp_err_to_name(err));
         app_bt_stop();
         return err;
     }
     err = esp_ble_gap_set_device_name(s_config.bt_device_name);
     if (err != ESP_OK) {
-        snprintf(s_bt_last_error, sizeof(s_bt_last_error), "set_name:%s", esp_err_to_name(err));
+        app_bt_status_set_errorf("set_name:%s", esp_err_to_name(err));
         app_bt_stop();
         return err;
     }
     err = esp_ble_gap_config_adv_data(&s_ble_adv_data);
     if (err != ESP_OK) {
-        snprintf(s_bt_last_error, sizeof(s_bt_last_error), "adv_config:%s", esp_err_to_name(err));
+        app_bt_status_set_errorf("adv_config:%s", esp_err_to_name(err));
         app_bt_stop();
         return err;
     }
-    s_bt_runtime_mode = BT_MODE_BLE;
-    app_copy_string(s_bt_last_error, sizeof(s_bt_last_error), "ble_starting");
+    app_bt_status_set_mode(BT_MODE_BLE);
+    app_bt_status_set_error("ble_starting");
     return ESP_OK;
 }
 
@@ -237,33 +346,33 @@ static esp_err_t app_bt_start_spp(void)
     esp_bt_pin_code_t pin_code = {0};
     esp_err_t err;
 
-    err = app_bt_init_stack();
+    err = app_bt_init_stack(ESP_BT_MODE_CLASSIC_BT);
     if (err != ESP_OK) {
-        snprintf(s_bt_last_error, sizeof(s_bt_last_error), "bt_stack:%s", esp_err_to_name(err));
+        app_bt_status_set_errorf("bt_stack:%s", esp_err_to_name(err));
         app_bt_stop();
         return err;
     }
     err = esp_bt_gap_register_callback(app_bt_gap_cb);
     if (err != ESP_OK) {
-        snprintf(s_bt_last_error, sizeof(s_bt_last_error), "bt_gap_register:%s", esp_err_to_name(err));
+        app_bt_status_set_errorf("bt_gap_register:%s", esp_err_to_name(err));
         app_bt_stop();
         return err;
     }
     err = esp_spp_register_callback(app_spp_cb);
     if (err != ESP_OK) {
-        snprintf(s_bt_last_error, sizeof(s_bt_last_error), "spp_callback:%s", esp_err_to_name(err));
+        app_bt_status_set_errorf("spp_callback:%s", esp_err_to_name(err));
         app_bt_stop();
         return err;
     }
     err = esp_spp_enhanced_init(&spp_cfg);
     if (err != ESP_OK) {
-        snprintf(s_bt_last_error, sizeof(s_bt_last_error), "spp_init:%s", esp_err_to_name(err));
+        app_bt_status_set_errorf("spp_init:%s", esp_err_to_name(err));
         app_bt_stop();
         return err;
     }
     esp_bt_gap_set_pin(pin_type, 0, pin_code);
-    s_bt_runtime_mode = BT_MODE_SPP;
-    app_copy_string(s_bt_last_error, sizeof(s_bt_last_error), "");
+    app_bt_status_set_mode(BT_MODE_SPP);
+    app_bt_status_set_error("");
     return ESP_OK;
 }
 

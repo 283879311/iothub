@@ -177,8 +177,7 @@ esp_err_t app_status_send_device_status(httpd_req_t *req)
     memcpy(m_last_error, s_mqtt.last_error, sizeof(m_last_error));
     app_mqtt_unlock();
 
-    s_bt_runtime_snapshot = s_bt_runtime_mode;
-    memcpy(s_bt_last_error_snapshot, s_bt_last_error, sizeof(s_bt_last_error_snapshot));
+    app_bt_get_status(&s_bt_runtime_snapshot, s_bt_last_error_snapshot, sizeof(s_bt_last_error_snapshot));
 
     app_uart_build_frame(frame, sizeof(frame),
                          s_uart_data_bits,

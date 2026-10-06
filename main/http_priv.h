@@ -37,6 +37,7 @@ esp_err_t http_network_register_routes(httpd_handle_t server);
 esp_err_t http_io_register_routes(httpd_handle_t server);
 esp_err_t http_mqtt_register_routes(httpd_handle_t server);
 esp_err_t http_uart_register_routes(httpd_handle_t server);
+esp_err_t http_sim_register_routes(httpd_handle_t server);
 esp_err_t http_ota_register_routes(httpd_handle_t server);
 
 esp_err_t app_http_register_uri_handler(httpd_handle_t server,

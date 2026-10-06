@@ -21,11 +21,7 @@ static const char *TAG = "uart";
 
 static SemaphoreHandle_t s_uart_console_mutex = NULL;
 static TaskHandle_t s_uart_console_task = NULL;
-static size_t s_uart_last_available = 0;
-static int s_uart_last_read_len = -1;
-static uint32_t s_uart_poll_count = 0;
-static int s_uart_last_rx_level = -1;
-static int s_uart_last_tx_level = -1;
+static StaticSemaphore_t s_uart_console_mutex_buf;
 
 static void app_uart_poll_console(TickType_t wait_ticks);
 
@@ -152,28 +148,19 @@ static void app_uart_append_console(const uint8_t *raw, size_t raw_len)
 static int app_uart_read_raw(uint8_t *raw, size_t raw_size, TickType_t wait_ticks)
 {
     size_t available = 0;
+    int read_len;
 
     if (!s_uart.driver_installed || raw_size == 0) {
-        s_uart_last_available = 0;
-        s_uart_last_read_len = -1;
-        s_uart_last_rx_level = gpio_get_level(app_uart_rx_gpio());
-        s_uart_last_tx_level = gpio_get_level(app_uart_tx_gpio());
         return -1;
     }
 
-    s_uart_last_rx_level = gpio_get_level(app_uart_rx_gpio());
-    s_uart_last_tx_level = gpio_get_level(app_uart_tx_gpio());
     uart_get_buffered_data_len(UART_PORT, &available);
     if (available == 0 && wait_ticks > 0) {
         vTaskDelay(wait_ticks);
-        s_uart_last_rx_level = gpio_get_level(app_uart_rx_gpio());
-        s_uart_last_tx_level = gpio_get_level(app_uart_tx_gpio());
         uart_get_buffered_data_len(UART_PORT, &available);
     }
 
     if (available == 0) {
-        s_uart_last_available = 0;
-        s_uart_last_read_len = 0;
         return 0;
     }
 
@@ -181,10 +168,9 @@ static int app_uart_read_raw(uint8_t *raw, size_t raw_size, TickType_t wait_tick
         available = raw_size;
     }
 
-    s_uart_last_available = available;
-    s_uart_last_read_len = uart_read_bytes(UART_PORT, raw, available, pdMS_TO_TICKS(50));
-    ESP_LOGD(TAG, "uart_read: available=%u read=%d", (unsigned)available, s_uart_last_read_len);
-    return s_uart_last_read_len;
+    read_len = uart_read_bytes(UART_PORT, raw, available, pdMS_TO_TICKS(50));
+    ESP_LOGD(TAG, "uart_read: available=%u read=%d", (unsigned)available, read_len);
+    return read_len;
 }
 
 static esp_err_t app_uart_send_console_json_body(httpd_req_t *req,
@@ -206,16 +192,9 @@ static esp_err_t app_uart_send_console_json_body(httpd_req_t *req,
 
     resp_len = snprintf(response, response_size,
                         "{\"plain\":\"%s\",\"hex\":\"%s\","
-                        "\"rx_sequence\":%u,\"driver_installed\":%s,"
-                        "\"debug_available\":%u,\"debug_read_len\":%d,\"debug_poll_count\":%u,"
-                        "\"debug_rx_level\":%d,\"debug_tx_level\":%d}",
+                        "\"rx_sequence\":%u,\"driver_installed\":%s}",
                         plain_json, hex_json, rx_sequence,
-                        s_uart.driver_installed ? "true" : "false",
-                        (unsigned)s_uart_last_available,
-                        s_uart_last_read_len,
-                        (unsigned)s_uart_poll_count,
-                        s_uart_last_rx_level,
-                        s_uart_last_tx_level);
+                        s_uart.driver_installed ? "true" : "false");
     if (resp_len < 0 || (size_t)resp_len >= response_size) {
         free(response);
         return app_http_send_json_text(req, "500 Internal Server Error",
@@ -232,10 +211,7 @@ static esp_err_t app_uart_send_console_json_body(httpd_req_t *req,
 
 void app_uart_console_init(void)
 {
-    s_uart_console_mutex = xSemaphoreCreateRecursiveMutex();
-    if (s_uart_console_mutex == NULL) {
-        ESP_LOGE(TAG, "Failed to create uart console mutex");
-    }
+    s_uart_console_mutex = xSemaphoreCreateRecursiveMutexStatic(&s_uart_console_mutex_buf);
     if (s_uart_console_task == NULL &&
         xTaskCreate(app_uart_console_task_fn, "uart_console", 3072, NULL, 5, &s_uart_console_task) != pdPASS) {
         s_uart_console_task = NULL;
@@ -255,7 +231,6 @@ static void app_uart_poll_console(TickType_t wait_ticks)
     uint8_t raw[UART_SAMPLE_BUFFER_SIZE];
     int read_len;
 
-    s_uart_poll_count++;
     if (!app_uart_lock(pdMS_TO_TICKS(100))) {
         return;
     }

@@ -35,6 +35,10 @@ typedef struct {
     char mqtt_backend[16];
     char mqtt_host[64];
     char mqtt_token[128];
+    /* v7 新增,追加在末尾:v6 blob 是 v7 的字节前缀,迁移按前缀保留 */
+    char web_username[33];
+    uint8_t web_pass_salt[16];
+    uint8_t web_pass_hash[32];
 } app_config_t;
 
 void app_config_set_defaults(app_config_t *config);

@@ -3,6 +3,7 @@
 #include "driver/uart.h"
 #include "esp_check.h"
 #include "esp_log.h"
+#include "esp_random.h"
 #include "nvs.h"
 
 #include "common.h"
@@ -13,7 +14,7 @@
 #define APP_CONFIG_KEY "runtime_cfg"
 #define APP_WIFI_PROFILES_KEY "wifi_profiles"
 #define APP_CONFIG_MAGIC 0x494f5448UL
-#define APP_CONFIG_VERSION 6
+#define APP_CONFIG_VERSION 7
 #define APP_WIFI_PROFILES_MAGIC 0x57494649UL
 #define APP_WIFI_PROFILES_VERSION 1
 
@@ -47,10 +48,15 @@ typedef struct {
  *       added in v6: uart_data_bits and uart_stop_bits — restored by the
  *       APP_MIGRATE_FIXED_FRAME() macro during migration
  *
- *   v6 (current APP_CONFIG_VERSION = 6 — app_config_t):
- *     + current layout; no legacy GPIO pin fields at all (pins are compile-time fixed)
+ *   v6 (sizeof(app_config_v6_t)):
+ *     + no legacy GPIO pin fields at all (pins are compile-time fixed)
  *     + adds uart_data_bits (uint8) and uart_stop_bits (uint8) so the UART frame is
  *       fully described inside config without the hard-coded 8N1 assumption
+ *
+ *   v7 (current APP_CONFIG_VERSION = 7 — app_config_t):
+ *     + appends web 登录凭据(web_username/web_pass_salt/web_pass_hash)到结构体末尾;
+ *       全部为 1 字节对齐成员,因此 v6 blob 是 v7 的字节前缀——迁移时读入前缀、
+ *       保留 set_defaults 生成的默认凭据即可
  */
 
 typedef struct {
@@ -132,20 +138,49 @@ typedef struct {
     char mqtt_token[128];
 } app_config_v4_t;
 
+/* v6 镜像:与 v7(app_config_t)的前缀字节完全一致,仅无 web 凭据字段 */
+typedef struct {
+    uint32_t magic;
+    uint16_t version;
+    uint8_t relay_active_high;
+    uint8_t led_active_high;
+    uint8_t input_active_low;
+    uint8_t relay_on;
+    uint8_t led_on;
+    uint8_t bt_mode;
+    uint8_t net_mode;
+    uint8_t mqtt_use_tls;
+    uint8_t uart_parity_mode;
+    uint8_t uart_data_bits;
+    uint8_t uart_stop_bits;
+    uint16_t mqtt_port;
+    uint32_t uart_baudrate;
+    char ap_ssid[33];
+    char ap_password[65];
+    char sta_ssid[33];
+    char sta_password[65];
+    char bt_device_name[33];
+    char mqtt_backend[16];
+    char mqtt_host[64];
+    char mqtt_token[128];
+} app_config_v6_t;
+
 static const char *TAG = "iothub";
 
 static SemaphoreHandle_t s_config_lock = NULL;
 static SemaphoreHandle_t s_wifi_runtime_lock = NULL;
 static SemaphoreHandle_t s_wifi_profiles_lock = NULL;
+/* 静态创建所需缓冲与创建保护:消除首次并发调用双创建的竞态 */
+static StaticSemaphore_t s_config_lock_buf;
+static StaticSemaphore_t s_wifi_runtime_lock_buf;
+static StaticSemaphore_t s_wifi_profiles_lock_buf;
+static portMUX_TYPE s_config_locks_mux = portMUX_INITIALIZER_UNLOCKED;
 
 void app_config_lock(void)
 {
-    if (s_config_lock == NULL) {
-        s_config_lock = xSemaphoreCreateRecursiveMutex();
-    }
-    if (s_config_lock != NULL) {
-        xSemaphoreTakeRecursive(s_config_lock, portMAX_DELAY);
-    }
+    SemaphoreHandle_t lock = app_mutex_ensure(&s_config_lock, &s_config_lock_buf,
+                                              &s_config_locks_mux, true);
+    xSemaphoreTakeRecursive(lock, portMAX_DELAY);
 }
 
 void app_config_unlock(void)
@@ -157,12 +192,9 @@ void app_config_unlock(void)
 
 void app_wifi_runtime_lock(void)
 {
-    if (s_wifi_runtime_lock == NULL) {
-        s_wifi_runtime_lock = xSemaphoreCreateRecursiveMutex();
-    }
-    if (s_wifi_runtime_lock != NULL) {
-        xSemaphoreTakeRecursive(s_wifi_runtime_lock, portMAX_DELAY);
-    }
+    SemaphoreHandle_t lock = app_mutex_ensure(&s_wifi_runtime_lock, &s_wifi_runtime_lock_buf,
+                                              &s_config_locks_mux, true);
+    xSemaphoreTakeRecursive(lock, portMAX_DELAY);
 }
 
 void app_wifi_runtime_unlock(void)
@@ -174,12 +206,9 @@ void app_wifi_runtime_unlock(void)
 
 void app_wifi_profiles_lock(void)
 {
-    if (s_wifi_profiles_lock == NULL) {
-        s_wifi_profiles_lock = xSemaphoreCreateRecursiveMutex();
-    }
-    if (s_wifi_profiles_lock != NULL) {
-        xSemaphoreTakeRecursive(s_wifi_profiles_lock, portMAX_DELAY);
-    }
+    SemaphoreHandle_t lock = app_mutex_ensure(&s_wifi_profiles_lock, &s_wifi_profiles_lock_buf,
+                                              &s_config_locks_mux, true);
+    xSemaphoreTakeRecursive(lock, portMAX_DELAY);
 }
 
 void app_wifi_profiles_unlock(void)
@@ -355,6 +384,12 @@ void app_config_set_defaults(app_config_t *config)
     app_copy_string(config->bt_device_name, sizeof(config->bt_device_name), "iothub-bt");
     app_copy_string(config->mqtt_backend, sizeof(config->mqtt_backend), "tb_cloud");
     app_copy_string(config->mqtt_host, sizeof(config->mqtt_host), "demo.thingsboard.io");
+    /* Web 登录凭据:每台设备随机盐 + 出厂默认用户名/口令(可按部署批次经
+     * Kconfig 配置)的哈希,明文口令不落在 NVS 或固件编译产物之外 */
+    app_copy_string(config->web_username, sizeof(config->web_username), CONFIG_WEB_DEFAULT_USERNAME);
+    esp_fill_random(config->web_pass_salt, sizeof(config->web_pass_salt));
+    app_web_hash_password(config->web_pass_salt, sizeof(config->web_pass_salt),
+                          CONFIG_WEB_DEFAULT_PASSWORD, config->web_pass_hash);
 }
 
 static inline void app_config_mark_current_version(app_config_t *config)
@@ -497,6 +532,20 @@ void app_config_load(app_config_t *config)
         if (nvs_get_blob(nvs_handle, APP_CONFIG_KEY, config, &current_size) == ESP_OK &&
             config->magic == APP_CONFIG_MAGIC &&
             config->version == APP_CONFIG_VERSION) {
+            nvs_close(nvs_handle);
+            return;
+        }
+    } else if (size == sizeof(app_config_v6_t)) {
+        /* v6 → v7:web 凭据字段追加在结构体末尾且 1 字节对齐,v6 blob 是 v7 的
+         * 字节前缀——读入前缀,保留函数开头 set_defaults 生成的默认凭据 */
+        size_t read_size = size;
+        if (nvs_get_blob(nvs_handle, APP_CONFIG_KEY, config, &read_size) == ESP_OK &&
+            config->magic == APP_CONFIG_MAGIC &&
+            config->version == 6) {
+            ESP_LOGI(TAG, "Migrating saved config from v6 to v7");
+            app_config_mark_current_version(config);
+            nvs_set_blob(nvs_handle, APP_CONFIG_KEY, config, sizeof(*config));
+            nvs_commit(nvs_handle);
             nvs_close(nvs_handle);
             return;
         }

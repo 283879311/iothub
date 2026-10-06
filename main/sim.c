@@ -73,6 +73,7 @@ static const char *TAG = "sim";
 
 static app_sim_runtime_t s_sim = {0};
 static SemaphoreHandle_t s_sim_mutex = NULL;
+static StaticSemaphore_t s_sim_mutex_buf;
 static TaskHandle_t s_sim_task = NULL;
 
 static double app_sim_clamp(double value, double min_value, double max_value)
@@ -619,11 +620,7 @@ static void app_sim_task_main(void *arg)
 
 void app_sim_init(void)
 {
-    s_sim_mutex = xSemaphoreCreateMutex();
-    if (s_sim_mutex == NULL) {
-        ESP_LOGE(TAG, "Failed to create sim mutex");
-        return;
-    }
+    s_sim_mutex = xSemaphoreCreateMutexStatic(&s_sim_mutex_buf);
     if (xTaskCreate(app_sim_task_main, "sim_task", 6144, NULL, 5, &s_sim_task) != pdPASS) {
         ESP_LOGE(TAG, "Failed to create sim task");
         s_sim_task = NULL;

@@ -25,6 +25,8 @@ extern app_config_t s_config;
 uart_runtime_t s_uart = {0};
 static SemaphoreHandle_t s_uart_op_mutex = NULL;
 static SemaphoreHandle_t s_json_mutex = NULL;
+static StaticSemaphore_t s_uart_op_mutex_buf;
+static StaticSemaphore_t s_json_mutex_buf;
 static TaskHandle_t s_uart_keepalive_task = NULL;
 
 static char s_escaped_tx_data[UART_TX_BUFFER_SIZE * 2];
@@ -356,14 +358,9 @@ void app_uart_stop_keepalive(void)
 
 void app_uart_init(void)
 {
-    s_uart_op_mutex = xSemaphoreCreateRecursiveMutex();
-    if (s_uart_op_mutex == NULL) {
-        ESP_LOGE(TAG, "Failed to create uart op mutex");
-    }
-    s_json_mutex = xSemaphoreCreateMutex();
-    if (s_json_mutex == NULL) {
-        ESP_LOGE(TAG, "Failed to create json buffer mutex");
-    }
+    /* 静态创建不会失败,锁在启动单线程期就绪 */
+    s_uart_op_mutex = xSemaphoreCreateRecursiveMutexStatic(&s_uart_op_mutex_buf);
+    s_json_mutex = xSemaphoreCreateMutexStatic(&s_json_mutex_buf);
     if (xTaskCreate(app_uart_keepalive_task, "uart_keepalive", 4096, NULL, 5, &s_uart_keepalive_task) != pdPASS) {
         ESP_LOGE(TAG, "Failed to create uart keepalive task");
         s_uart_keepalive_task = NULL;
@@ -609,19 +606,31 @@ esp_err_t app_uart_apply_config(void)
 
 esp_err_t app_uart_handle_config_request(httpd_req_t *req, const char *body)
 {
-    const uint32_t old_baudrate = s_config.uart_baudrate;
-    const uint8_t old_parity_mode = s_config.uart_parity_mode;
-    const uint8_t old_data_bits = s_config.uart_data_bits;
-    const uint8_t old_stop_bits = s_config.uart_stop_bits;
-    uint32_t new_baudrate = old_baudrate;
-    uint8_t new_parity_mode = old_parity_mode;
-    uint8_t new_data_bits = old_data_bits;
-    uint8_t new_stop_bits = old_stop_bits;
+    uint32_t old_baudrate;
+    uint8_t old_parity_mode;
+    uint8_t old_data_bits;
+    uint8_t old_stop_bits;
+    uint32_t new_baudrate;
+    uint8_t new_parity_mode;
+    uint8_t new_data_bits;
+    uint8_t new_stop_bits;
 
     char apply_error[48];
     char value[64];
     uint32_t baudrate;
     uint16_t short_value;
+    bool save_ok;
+
+    app_config_lock();
+    old_baudrate = s_config.uart_baudrate;
+    old_parity_mode = s_config.uart_parity_mode;
+    old_data_bits = s_config.uart_data_bits;
+    old_stop_bits = s_config.uart_stop_bits;
+    app_config_unlock();
+    new_baudrate = old_baudrate;
+    new_parity_mode = old_parity_mode;
+    new_data_bits = old_data_bits;
+    new_stop_bits = old_stop_bits;
 
     if (app_json_find_u32(body, "baudrate", &baudrate) && baudrate > 0) {
         new_baudrate = baudrate;
@@ -659,12 +668,24 @@ esp_err_t app_uart_handle_config_request(httpd_req_t *req, const char *body)
                                "{\"status\":\"error\",\"message\":\"%s\"}",
                                apply_error);
     }
-    app_config_t snapshot = s_config;
-    snapshot.uart_baudrate = new_baudrate;
-    snapshot.uart_parity_mode = new_parity_mode;
-    snapshot.uart_data_bits = new_data_bits;
-    snapshot.uart_stop_bits = new_stop_bits;
-    if (app_config_save(&snapshot) != ESP_OK) {
+    app_config_lock();
+    {
+        app_config_t snapshot = s_config;
+        snapshot.uart_baudrate = new_baudrate;
+        snapshot.uart_parity_mode = new_parity_mode;
+        snapshot.uart_data_bits = new_data_bits;
+        snapshot.uart_stop_bits = new_stop_bits;
+        save_ok = (app_config_save(&snapshot) == ESP_OK);
+        if (save_ok) {
+            s_config.uart_baudrate = new_baudrate;
+            s_config.uart_parity_mode = new_parity_mode;
+            s_config.uart_data_bits = new_data_bits;
+            s_config.uart_stop_bits = new_stop_bits;
+        }
+    }
+    app_config_unlock();
+
+    if (!save_ok) {
         if (app_uart_apply_config_values(old_baudrate, old_data_bits,
                                          (uart_parity_t)old_parity_mode,
                                          old_stop_bits) != ESP_OK) {
@@ -674,11 +695,6 @@ esp_err_t app_uart_handle_config_request(httpd_req_t *req, const char *body)
         return app_http_send_json_text(req, "500 Internal Server Error",
                                    "{\"status\":\"error\",\"message\":\"config_save_failed\"}");
     }
-
-    s_config.uart_baudrate = new_baudrate;
-    s_config.uart_parity_mode = new_parity_mode;
-    s_config.uart_data_bits = new_data_bits;
-    s_config.uart_stop_bits = new_stop_bits;
     return app_uart_send_runtime_json(req, "uart_runtime");
 }
 
