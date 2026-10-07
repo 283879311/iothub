@@ -81,6 +81,7 @@ static int captive_dns_decode_name(const uint8_t *buf, int len, int offset,
     while (offset < len) {
         uint8_t label_len = buf[offset];
         if (label_len == 0) {
+            out[j] = '\0';
             return offset;
         }
         if ((label_len & 0xC0) != 0 || offset + 1 + label_len > len ||
