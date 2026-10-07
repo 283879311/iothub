@@ -55,7 +55,9 @@ void app_main(void)
     app_mdns_start();
     ESP_LOGI(TAG, "[boot-8] app_bt_apply_config");
     if (app_bt_apply_config() != ESP_OK) {
-        ESP_LOGW(TAG, "Bluetooth init skipped");
+        char bt_last_error[64];
+        app_bt_get_status(NULL, bt_last_error, sizeof(bt_last_error));
+        ESP_LOGW(TAG, "Bluetooth init skipped (last_error=%s)", bt_last_error);
     }
     ESP_LOGI(TAG, "[boot-9] app_uart_apply_config");
     if (app_uart_apply_config() != ESP_OK) {
