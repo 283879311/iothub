@@ -71,6 +71,32 @@ static int captive_dns_build_reply(uint8_t *buf, int len)
     return out;
 }
 
+/* 解码 QNAME(仅支持查询报文的无压缩标签),返回终止符偏移(qtype 所在位置-1),
+ * 失败返回 -1 */
+static int captive_dns_decode_name(const uint8_t *buf, int len, int offset,
+                                   char *out, size_t out_size)
+{
+    size_t j = 0;
+
+    while (offset < len) {
+        uint8_t label_len = buf[offset];
+        if (label_len == 0) {
+            return offset;
+        }
+        if ((label_len & 0xC0) != 0 || offset + 1 + label_len > len ||
+            j + label_len + 2 > out_size) {
+            return -1;
+        }
+        if (j > 0) {
+            out[j++] = '.';
+        }
+        memcpy(out + j, &buf[offset + 1], label_len);
+        j += label_len;
+        offset += 1 + label_len;
+    }
+    return -1;
+}
+
 static void captive_dns_task(void *arg)
 {
     uint8_t buf[1500];
@@ -100,7 +126,17 @@ static void captive_dns_task(void *arg)
         if (len <= 0) {
             break;                                  /* AP_STOP shutdown 唤醒 */
         }
+        char qname[128];
+        int qname_end = captive_dns_decode_name(buf, len, 12, qname, sizeof(qname));
+        uint16_t qtype = 0;
+        if (qname_end >= 0 && qname_end + 5 <= len) {
+            qtype = (uint16_t)((buf[qname_end + 1] << 8) | buf[qname_end + 2]);
+        }
         int reply_len = captive_dns_build_reply(buf, len);
+        ESP_LOGI(TAG, "dns query %s type=%u from %s -> %s",
+                 qname_end >= 0 ? qname : "?", qtype,
+                 inet_ntoa(((struct sockaddr_in *)&client_addr)->sin_addr),
+                 reply_len > 0 ? "answered" : "ignored");
         if (reply_len > 0) {
             sendto(sock, buf, reply_len, 0,
                    (struct sockaddr *)&client_addr, addr_len);
