@@ -83,8 +83,9 @@ void app_bt_get_status(uint8_t *runtime_mode, char *last_error_buf, size_t last_
 
 /* 开机一次性:按配置的蓝牙模式释放“永不使用”的那套栈内存。
  * OFF 释放 BTDM 全部;BLE 释放 Classic;SPP 释放 BLE。
- * 被释放的模式在本上电周期内不可再启用,跨模式切换必须整机重启(见
- * app_bt_mode_switch_requires_reboot),同模式内的 stop/start 不受影响。 */
+ * 被释放的模式在本上电周期内不可再启用。SPP 长时间运行后堆碎片化会使栈
+ * 热重配(反复 deinit/init)初始化失败(问题.md 第 21 项),因此任何蓝牙
+ * 配置修改一律保存后整机重启,不做运行期热重配。 */
 void app_bt_release_unused_memory(void)
 {
     static bool s_released = false;
@@ -125,16 +126,6 @@ void app_bt_release_unused_memory(void)
         ESP_LOGW(TAG, "BT mem release skipped (mode=%s): %s",
                  app_bt_mode_to_string(bt_mode), esp_err_to_name(err));
     }
-}
-
-bool app_bt_mode_switch_requires_reboot(uint8_t new_mode)
-{
-    bool requires;
-
-    app_config_lock();
-    requires = (s_config.bt_mode != new_mode);
-    app_config_unlock();
-    return requires;
 }
 
 static bool s_ble_adv_configured = false;
@@ -406,13 +397,4 @@ esp_err_t app_bt_apply_config(void)
         return app_bt_start_spp();
     }
     return ESP_ERR_INVALID_ARG;
-}
-
-void app_bt_restart_task(void *arg)
-{
-    vTaskDelay(pdMS_TO_TICKS(200));
-    if (app_bt_apply_config() != ESP_OK) {
-        ESP_LOGE(TAG, "Bluetooth apply config failed");
-    }
-    vTaskDelete(NULL);
 }

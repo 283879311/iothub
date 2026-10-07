@@ -400,24 +400,14 @@ static esp_err_t bluetooth_put_handler(httpd_req_t *req)
         return app_http_send_json_text(req, "500 Internal Server Error",
                                    "{\"status\":\"error\",\"message\":\"config_save_failed\"}");
     }
-    /* 跨模式切换:未选模式的栈内存已在开机时释放,热切换不可行,保存后整机重启;
-     * 同模式修改(如设备名)保持原有热重配路径 */
-    if (app_bt_mode_switch_requires_reboot(previous_mode)) {
-        app_http_send_json_text(req, NULL,
-                            "{\"status\":\"saved\",\"message\":\"bluetooth mode changed, device will reboot\","
-                            "\"restart_required\":true}");
-        if (xTaskCreate(app_reboot_task, "bt_mode_reboot", 2048, NULL, 5, NULL) != pdPASS) {
-            ESP_LOGE(HTTP_TAG, "Failed to schedule reboot after bluetooth mode switch");
-        }
-        return ESP_OK;
-    }
-    if (xTaskCreate(app_bt_restart_task, "bt_restart", 4096, NULL, 5, NULL) != pdPASS) {
-        return app_http_send_json_text(req, "500 Internal Server Error",
-                                   "{\"status\":\"error\",\"message\":\"bt_restart_failed\"}");
-    }
-
+    /* 蓝牙配置修改统一保存后整机重启:SPP 长时间运行后堆碎片化,热重配的
+     * 反复 deinit/init 实测会初始化失败(问题.md 第 21 项),前端已适配重启提示 */
     app_http_send_json_text(req, NULL,
-                        "{\"status\":\"saved\",\"message\":\"bluetooth config saved\"}");
+                        "{\"status\":\"saved\",\"message\":\"bluetooth config saved, device will reboot\","
+                        "\"restart_required\":true}");
+    if (xTaskCreate(app_reboot_task, "bt_config_reboot", 2048, NULL, 5, NULL) != pdPASS) {
+        ESP_LOGE(HTTP_TAG, "Failed to schedule reboot after bluetooth config change");
+    }
     return ESP_OK;
 }
 

@@ -9,12 +9,10 @@
 #include "config.h"
 
 esp_err_t app_bt_apply_config(void);
-void app_bt_restart_task(void *arg);
 
-/* 开机在配置加载后、app_bt_apply_config 前调用一次:释放未选模式的栈内存 */
+/* 开机在配置加载后、app_bt_apply_config 前调用一次:释放未选模式的栈内存。
+ * 任何蓝牙配置修改均整机重启生效——栈不支持运行期热重配(问题.md 第 21 项)。 */
 void app_bt_release_unused_memory(void);
-/* 跨模式切换需要整机重启(未选模式内存已释放);同模式修改可热重配 */
-bool app_bt_mode_switch_requires_reboot(uint8_t new_mode);
 
 /* 读取蓝牙运行态快照(BT 栈回调线程与 Web 线程并发访问,内部加锁)。
  * runtime_mode/last_error_buf 任一可为 NULL 表示不取该项。 */
