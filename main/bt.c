@@ -29,6 +29,12 @@ static uint8_t s_bt_runtime_mode = BT_MODE_OFF;
 static char s_bt_last_error[64] = "";
 static portMUX_TYPE s_bt_status_mux = portMUX_INITIALIZER_UNLOCKED;
 
+/* 蓝牙协议栈是否真实启动过。mode=off 时 app_bt_release_unused_memory() 已把
+ * 整个 _bt_bss 段(含 libbt 的全部状态变量,如 bluedroid 的 s_bt_host_state)
+ * 还给堆,此后任何 libbt/controller 的状态查询读到的都是垃圾值,
+ * 必须以本标记为准决定是否触碰栈 API,否则会在 OFF 首配时崩溃(见 问题.md 第 19 项)。 */
+static bool s_stack_started = false;
+
 static void app_bt_status_set_mode(uint8_t mode)
 {
     portENTER_CRITICAL(&s_bt_status_mux);
@@ -261,13 +267,23 @@ static esp_err_t app_bt_init_stack(esp_bt_mode_t bt_mode)
             return err;
         }
     }
+    s_stack_started = true;
     return ESP_OK;
 }
 
 static void app_bt_cleanup_stack(void)
 {
-    esp_bluedroid_status_t bluedroid_status = esp_bluedroid_get_status();
-    esp_bt_controller_status_t controller_status = esp_bt_controller_get_status();
+    esp_bluedroid_status_t bluedroid_status;
+    esp_bt_controller_status_t controller_status;
+
+    /* 栈从未启动(OFF 首配):_bt_bss 已被释放,状态查询与任何栈 API 都不可触碰 */
+    if (!s_stack_started) {
+        return;
+    }
+    s_stack_started = false;
+
+    bluedroid_status = esp_bluedroid_get_status();
+    controller_status = esp_bt_controller_get_status();
 
     if (bluedroid_status == ESP_BLUEDROID_STATUS_ENABLED) {
         esp_bluedroid_disable();
