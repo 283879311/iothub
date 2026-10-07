@@ -1309,20 +1309,20 @@
           const { body, parseError } = tryParseJson(text);
 
           if (!response.ok) {
-            const err = new Error(body.message || body.error || text || `HTTP ${response.status}`);
+            const err = new Error(body?.message || body?.error || text || `HTTP ${response.status}`);
             err.body = body;
             err.status = response.status;
             throw err;
           }
 
-          if (!text) {
+          if (!text || body === null) {
             const err = new Error("empty_response");
             err.status = response.status;
             throw err;
           }
 
           if (parseError) {
-            const err = new Error(body.message || "invalid_response");
+            const err = new Error(body?.message || "invalid_response");
             err.status = response.status;
             err.body = body;
             throw err;
