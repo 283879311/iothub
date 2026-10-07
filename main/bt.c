@@ -223,6 +223,11 @@ static esp_err_t app_bt_init_stack(esp_bt_mode_t bt_mode)
     esp_bluedroid_status_t bluedroid_status;
     esp_err_t err;
 
+    /* esp_bt_controller_enable(mode) 要求 mode 与 init 时的 cfg->mode 一致
+     * (IDF bt.c 历史约束);BTDM 构建的默认模板是 ESP_BT_MODE_BTDM,
+     * 不按目标模式覆写则 enable 恒返回 ESP_ERR_INVALID_ARG(问题.md 第 23 项) */
+    bt_cfg.mode = bt_mode;
+
     ctrl_status = esp_bt_controller_get_status();
     if (ctrl_status == ESP_BT_CONTROLLER_STATUS_IDLE) {
         err = esp_bt_controller_init(&bt_cfg);
@@ -306,7 +311,7 @@ static void app_bt_stop(void)
     app_bt_cleanup_stack();
 
     app_bt_status_set_mode(BT_MODE_OFF);
-    app_bt_status_set_error("");
+    /* 不在此处清空 last_error:启动失败路径的错误信息靠它带出(问题.md 第 23 项) */
 }
 
 static esp_err_t app_bt_start_ble(void)
@@ -388,6 +393,7 @@ esp_err_t app_bt_apply_config(void)
     app_bt_stop();
 
     if (s_config.bt_mode == BT_MODE_OFF) {
+        app_bt_status_set_error("");
         return ESP_OK;
     }
     if (s_config.bt_mode == BT_MODE_BLE) {
