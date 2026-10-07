@@ -2,6 +2,7 @@
 #include "esp_wifi.h"
 #include "nvs_flash.h"
 
+#include "app_mdns.h"
 #include "bootstrap.h"
 #include "bt.h"
 #include "config.h"
@@ -50,6 +51,8 @@ void app_main(void)
     ESP_ERROR_CHECK(app_ota_mount_fs(true));
     ESP_LOGI(TAG, "[boot-7] app_start_wifi");
     app_start_wifi();
+    ESP_LOGI(TAG, "[boot-7b] app_mdns_start");
+    app_mdns_start();
     ESP_LOGI(TAG, "[boot-8] app_bt_apply_config");
     if (app_bt_apply_config() != ESP_OK) {
         ESP_LOGW(TAG, "Bluetooth init skipped");
