@@ -1,4 +1,9 @@
 # 与 IDF 默认不同的关键配置;fullclean 或删除 sdkconfig 重新生成时以此兜底
+# 注意:sdkconfig 其余非默认项(约百余项)不在本文件,重新生成后应从 git 恢复 sdkconfig
+# 自定义分区表(ota_0/ota_1/storage/coredump,见 partitions.csv);不开此项,开启 coredump 后
+# IDF 会自动改用官方 partitions_singleapp_coredump.csv(1M factory,无 storage),littlefs 打包即失败
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
 # littlefs 官方要求:flash 写/擦期间 cache 禁用,UART ISR 驻留 flash 会 cache miss 崩溃
 CONFIG_UART_ISR_IN_IRAM=y
 # OTA 健康确认依赖的回滚机制,见 问题.md 第 4 项
