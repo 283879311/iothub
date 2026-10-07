@@ -3,3 +3,5 @@
 CONFIG_UART_ISR_IN_IRAM=y
 # OTA 健康确认依赖的回滚机制,见 问题.md 第 4 项
 CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE=y
+# 崩溃转储写入专用 coredump 分区,配合 OTA 回滚可定位 mark-valid 前的崩溃,见 问题.md 第 15 项
+CONFIG_ESP_COREDUMP_ENABLE_TO_FLASH=y
