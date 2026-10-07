@@ -27,12 +27,10 @@ static SemaphoreHandle_t s_uart_op_mutex = NULL;
 static SemaphoreHandle_t s_json_mutex = NULL;
 static StaticSemaphore_t s_uart_op_mutex_buf;
 static StaticSemaphore_t s_json_mutex_buf;
-static TaskHandle_t s_uart_keepalive_task = NULL;
 
 static char s_escaped_tx_data[UART_TX_BUFFER_SIZE * 2];
 static char s_escaped_tx_preview[UART_TX_PREVIEW_SIZE * 2];
 static char s_escaped_tx_hex[UART_TX_HEX_TEXT_SIZE * 2];
-static char s_escaped_keepalive_data[UART_TX_BUFFER_SIZE * 2];
 
 static void app_uart_set_apply_error(const char *error_key)
 {
@@ -245,126 +243,11 @@ static esp_err_t app_uart_send_payload(const char *encoding, const char *data,
     return ESP_OK;
 }
 
-static void app_uart_keepalive_task(void *arg)
-{
-    TickType_t next_wait = portMAX_DELAY;
-    char encoding[8];
-    char data[UART_TX_BUFFER_SIZE];
-    uint8_t payload[UART_TX_BUFFER_SIZE];
-    size_t payload_len = 0;
-    uint32_t interval_ms = 1000;
-
-    (void)arg;
-
-    while (true) {
-        if (ulTaskNotifyTake(pdTRUE, next_wait) > 0) {
-            next_wait = 0;
-            continue;
-        }
-
-        if (!app_uart_lock(pdMS_TO_TICKS(50))) {
-            next_wait = pdMS_TO_TICKS(50);
-            continue;
-        }
-
-        if (!s_uart.keepalive_active) {
-            app_uart_unlock();
-            next_wait = portMAX_DELAY;
-            continue;
-        }
-
-        if (s_uart.keepalive_payload_len == 0) {
-            app_uart_unlock();
-            next_wait = pdMS_TO_TICKS(100);
-            continue;
-        }
-
-        app_copy_string(encoding, sizeof(encoding), s_uart.keepalive_encoding);
-        app_copy_string(data, sizeof(data), s_uart.keepalive_data);
-        payload_len = s_uart.keepalive_payload_len;
-        if (payload_len > sizeof(payload)) {
-            payload_len = sizeof(payload);
-        }
-        memcpy(payload, s_uart.keepalive_payload, payload_len);
-        interval_ms = s_uart.keepalive_interval_ms > 0 ? s_uart.keepalive_interval_ms : 1000;
-        app_uart_unlock();
-
-        {
-            unsigned ignored = 0;
-            esp_err_t err = app_uart_send_payload(encoding,
-                                                  data,
-                                                  payload,
-                                                  payload_len,
-                                                  &ignored);
-            if (err != ESP_OK && err != ESP_ERR_INVALID_STATE && err != ESP_ERR_TIMEOUT) {
-                ESP_LOGW(TAG, "keepalive send failed: %s", esp_err_to_name(err));
-            }
-        }
-
-        next_wait = pdMS_TO_TICKS(interval_ms);
-    }
-}
-
-static void app_uart_notify_keepalive_task(void)
-{
-    if (s_uart_keepalive_task != NULL) {
-        xTaskNotifyGive(s_uart_keepalive_task);
-    }
-}
-
-static esp_err_t app_uart_send_keepalive_json(httpd_req_t *req, const char *message)
-{
-    bool keepalive_active = false;
-    uint32_t keepalive_interval_ms = 0;
-    uint32_t tx_sequence = 0;
-    int64_t keepalive_started_at_ms = 0;
-
-    if (app_uart_lock(pdMS_TO_TICKS(100))) {
-        keepalive_active = s_uart.keepalive_active;
-        keepalive_interval_ms = s_uart.keepalive_interval_ms;
-        tx_sequence = s_uart.tx_sequence;
-        keepalive_started_at_ms = s_uart.keepalive_started_at_ms;
-        app_uart_unlock();
-    }
-
-    return app_http_send_jsonf(req, NULL,
-                           "{\"status\":\"ok\",\"message\":\"%s\","
-                           "\"keepalive_active\":%s,\"keepalive_interval_ms\":%u,"
-                           "\"keepalive_started_at_ms\":%lld,\"tx_sequence\":%u}",
-                           message != NULL ? message : "",
-                           keepalive_active ? "true" : "false",
-                           (unsigned)keepalive_interval_ms,
-                           (long long)keepalive_started_at_ms,
-                           (unsigned)tx_sequence);
-}
-
-void app_uart_stop_keepalive(void)
-{
-    if (!app_uart_lock(pdMS_TO_TICKS(200))) {
-        s_uart.keepalive_active = false;
-        app_uart_notify_keepalive_task();
-        return;
-    }
-    s_uart.keepalive_active = false;
-    s_uart.keepalive_interval_ms = 0;
-    s_uart.keepalive_started_at_ms = 0;
-    s_uart.keepalive_payload_len = 0;
-    s_uart.keepalive_encoding[0] = '\0';
-    s_uart.keepalive_data[0] = '\0';
-    memset(s_uart.keepalive_payload, 0, sizeof(s_uart.keepalive_payload));
-    app_uart_unlock();
-    app_uart_notify_keepalive_task();
-}
-
 void app_uart_init(void)
 {
     /* 静态创建不会失败,锁在启动单线程期就绪 */
     s_uart_op_mutex = xSemaphoreCreateRecursiveMutexStatic(&s_uart_op_mutex_buf);
     s_json_mutex = xSemaphoreCreateMutexStatic(&s_json_mutex_buf);
-    if (xTaskCreate(app_uart_keepalive_task, "uart_keepalive", 4096, NULL, 5, &s_uart_keepalive_task) != pdPASS) {
-        ESP_LOGE(TAG, "Failed to create uart keepalive task");
-        s_uart_keepalive_task = NULL;
-    }
     app_uart_console_init();
 }
 
@@ -418,10 +301,6 @@ esp_err_t app_uart_send_runtime_json(httpd_req_t *req, const char *message)
     unsigned last_bytes_sent = 0;
     int64_t last_send_at_ms = 0;
     char last_tx_encoding[16];
-    char keepalive_encoding[16];
-    bool keepalive_active = false;
-    uint32_t keepalive_interval_ms = 0;
-    int64_t keepalive_started_at_ms = 0;
     bool driver_installed = false;
     esp_err_t result;
     bool json_locked = false;
@@ -442,9 +321,7 @@ esp_err_t app_uart_send_runtime_json(httpd_req_t *req, const char *message)
     s_escaped_tx_data[0] = '\0';
     s_escaped_tx_preview[0] = '\0';
     s_escaped_tx_hex[0] = '\0';
-    s_escaped_keepalive_data[0] = '\0';
     last_tx_encoding[0] = '\0';
-    keepalive_encoding[0] = '\0';
 
     if (!app_uart_lock(pdMS_TO_TICKS(200))) {
         if (json_locked && s_json_mutex != NULL) {
@@ -456,7 +333,6 @@ esp_err_t app_uart_send_runtime_json(httpd_req_t *req, const char *message)
     app_json_escape_string(s_escaped_tx_data, sizeof(s_escaped_tx_data), s_uart.last_tx_data);
     app_json_escape_string(s_escaped_tx_preview, sizeof(s_escaped_tx_preview), s_uart.last_tx_preview);
     app_json_escape_string(s_escaped_tx_hex, sizeof(s_escaped_tx_hex), s_uart.last_tx_hex);
-    app_json_escape_string(s_escaped_keepalive_data, sizeof(s_escaped_keepalive_data), s_uart.keepalive_data);
     if (s_uart.last_send_at_ms > 0) {
         int64_t now_ms = esp_timer_get_time() / 1000;
         last_send_age_ms = now_ms > s_uart.last_send_at_ms ? (now_ms - s_uart.last_send_at_ms) : 0;
@@ -465,13 +341,8 @@ esp_err_t app_uart_send_runtime_json(httpd_req_t *req, const char *message)
     last_bytes_sent = s_uart.last_bytes_sent;
     last_send_at_ms = s_uart.last_send_at_ms;
     driver_installed = s_uart.driver_installed;
-    keepalive_active = s_uart.keepalive_active;
-    keepalive_interval_ms = s_uart.keepalive_interval_ms;
-    keepalive_started_at_ms = s_uart.keepalive_started_at_ms;
     app_copy_string(last_tx_encoding, sizeof(last_tx_encoding),
                     s_uart.last_tx_encoding[0] != '\0' ? s_uart.last_tx_encoding : "");
-    app_copy_string(keepalive_encoding, sizeof(keepalive_encoding),
-                    s_uart.keepalive_encoding[0] != '\0' ? s_uart.keepalive_encoding : "");
     app_uart_unlock();
 
     result = app_http_send_jsonf(req, NULL,
@@ -482,10 +353,7 @@ esp_err_t app_uart_send_runtime_json(httpd_req_t *req, const char *message)
                             "\"tx_sequence\":%u,\"last_bytes_sent\":%u,"
                             "\"last_send_at_ms\":%lld,\"last_send_age_ms\":%lld,"
                             "\"last_payload_encoding\":\"%s\",\"last_payload_data\":\"%s\","
-                              "\"last_payload_preview\":\"%s\",\"last_payload_hex\":\"%s\","
-                              "\"keepalive_active\":%s,\"keepalive_interval_ms\":%u,"
-                              "\"keepalive_started_at_ms\":%lld,"
-                              "\"keepalive_encoding\":\"%s\",\"keepalive_data\":\"%s\"}",
+                              "\"last_payload_preview\":\"%s\",\"last_payload_hex\":\"%s\"}",
                            message != NULL ? message : "",
                            (long)app_uart_rx_gpio(),
                            (long)app_uart_tx_gpio(),
@@ -502,12 +370,7 @@ esp_err_t app_uart_send_runtime_json(httpd_req_t *req, const char *message)
                             last_tx_encoding,
                             s_escaped_tx_data,
                             s_escaped_tx_preview,
-                              s_escaped_tx_hex,
-                              keepalive_active ? "true" : "false",
-                              (unsigned)keepalive_interval_ms,
-                              (long long)keepalive_started_at_ms,
-                              keepalive_encoding,
-                              s_escaped_keepalive_data);
+                              s_escaped_tx_hex);
 
     if (json_locked && s_json_mutex != NULL) {
         xSemaphoreGive(s_json_mutex);
@@ -747,59 +610,4 @@ esp_err_t app_uart_send_data(const char *encoding, const char *data, unsigned *b
     return app_uart_send_payload(encoding != NULL ? encoding : "plain",
                                  data != NULL ? data : "",
                                  payload, payload_len, bytes_sent);
-}
-
-esp_err_t app_uart_handle_keepalive_start_request(httpd_req_t *req, const char *body)
-{
-    char data[UART_TX_BUFFER_SIZE];
-    char encoding[8] = "plain";
-    uint8_t tx_bytes[UART_TX_BUFFER_SIZE / 2];
-    const uint8_t *payload = NULL;
-    size_t payload_len = 0;
-    uint32_t interval_ms = 1000;
-
-    if (!s_uart.driver_installed) {
-        return app_http_send_json_text(req, "503 Service Unavailable",
-                                   "{\"status\":\"error\",\"message\":\"uart_not_ready\"}");
-    }
-    if (!app_json_find_string(body, "data", data, sizeof(data))) {
-        return app_http_send_json_text(req, "400 Bad Request",
-                                   "{\"status\":\"error\",\"message\":\"uart_data_required\"}");
-    }
-    app_json_find_string(body, "encoding", encoding, sizeof(encoding));
-    if (app_json_find_u32(body, "interval_ms", &interval_ms)) {
-        if (!(interval_ms == 200 || interval_ms == 500 || interval_ms == 1000)) {
-            return app_http_send_json_text(req, "400 Bad Request",
-                                       "{\"status\":\"error\",\"message\":\"invalid_interval_ms\"}");
-        }
-    }
-
-    if (!app_uart_prepare_payload(data, encoding, tx_bytes, sizeof(tx_bytes), &payload, &payload_len)) {
-        return app_http_send_json_text(req, "400 Bad Request",
-                                   strcmp(encoding, "hex") == 0
-                                       ? "{\"status\":\"error\",\"message\":\"uart_hex_invalid\"}"
-                                       : "{\"status\":\"error\",\"message\":\"uart_data_required\"}");
-    }
-
-    if (!app_uart_lock(pdMS_TO_TICKS(200))) {
-        return app_http_send_json_text(req, "503 Service Unavailable",
-                                   "{\"status\":\"error\",\"message\":\"uart_busy\"}");
-    }
-    app_copy_string(s_uart.keepalive_encoding, sizeof(s_uart.keepalive_encoding), encoding);
-    app_copy_string(s_uart.keepalive_data, sizeof(s_uart.keepalive_data), data);
-    memcpy(s_uart.keepalive_payload, payload, payload_len);
-    s_uart.keepalive_payload_len = payload_len;
-    s_uart.keepalive_interval_ms = interval_ms;
-    s_uart.keepalive_started_at_ms = esp_timer_get_time() / 1000;
-    s_uart.keepalive_active = true;
-    app_uart_unlock();
-    app_uart_notify_keepalive_task();
-
-    return app_uart_send_keepalive_json(req, "uart_keepalive_started");
-}
-
-esp_err_t app_uart_handle_keepalive_stop_request(httpd_req_t *req)
-{
-    app_uart_stop_keepalive();
-    return app_uart_send_keepalive_json(req, "uart_keepalive_stopped");
 }

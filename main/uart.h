@@ -21,6 +21,3 @@ esp_err_t app_uart_send_console_json(httpd_req_t *req);
 esp_err_t app_uart_handle_clear_console_request(httpd_req_t *req);
 esp_err_t app_uart_handle_send_request(httpd_req_t *req, const char *body);
 esp_err_t app_uart_send_data(const char *encoding, const char *data, unsigned *bytes_sent);
-esp_err_t app_uart_handle_keepalive_start_request(httpd_req_t *req, const char *body);
-esp_err_t app_uart_handle_keepalive_stop_request(httpd_req_t *req);
-void app_uart_stop_keepalive(void);

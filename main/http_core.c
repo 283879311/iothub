@@ -32,7 +32,6 @@
 #include "identity.h"
 #include "mqtt.h"
 #include "ota.h"
-#include "sim.h"
 #include "state.h"
 #include "status.h"
 #include "uart.h"
@@ -302,12 +301,12 @@ static esp_err_t index_handler(httpd_req_t *req)
 {
     const char *file_name = NULL;
 
-    if (strcmp(req->uri, "/") == 0 || strcmp(req->uri, "/index.html") == 0) {
-        file_name = "index.html";
-    } else if (strcmp(req->uri, APP_WEB_CONFIG_PATH) == 0 ||
-               strcmp(req->uri, APP_WEB_CONFIG_PATH "/") == 0 ||
-               strcmp(req->uri, "/config.html") == 0) {
-        /* config.html 的认证在 http_serve_html 内按文件名统一控制 */
+    /* 单页形态:所有页面入口(含根路径)都出配置页,
+     * config.html 的认证在 http_serve_html 内按文件名统一控制 */
+    if (strcmp(req->uri, "/") == 0 || strcmp(req->uri, "/index.html") == 0 ||
+        strcmp(req->uri, APP_WEB_CONFIG_PATH) == 0 ||
+        strcmp(req->uri, APP_WEB_CONFIG_PATH "/") == 0 ||
+        strcmp(req->uri, "/config.html") == 0) {
         file_name = "config.html";
     } else {
         return app_http_send_json_text(req, "404 Not Found",
@@ -422,7 +421,6 @@ void app_http_start_webserver(void)
             {"io",      http_io_register_routes},
             {"mqtt",    http_mqtt_register_routes},
             {"uart",    http_uart_register_routes},
-            {"sim",     http_sim_register_routes},
             {"ota",     http_ota_register_routes},
         };
         for (index = 0; index < sizeof(route_groups) / sizeof(route_groups[0]); index++) {

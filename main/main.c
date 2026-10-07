@@ -8,7 +8,6 @@
 #include "http.h"
 #include "mqtt.h"
 #include "ota.h"
-#include "sim.h"
 #include "state.h"
 #include "uart.h"
 #include "wifi.h"
@@ -25,8 +24,6 @@ void app_main(void)
     esp_log_level_set("mqtt", ESP_LOG_DEBUG);
     ESP_LOGI(TAG, "[boot-1] app_uart_init");
     app_uart_init();
-    ESP_LOGI(TAG, "[boot-2] app_sim_init");
-    app_sim_init();
 
     ESP_LOGI(TAG, "[boot-3] nvs_flash_init");
     err = nvs_flash_init();

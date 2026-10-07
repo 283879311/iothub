@@ -1,5 +1,5 @@
 idf_component_register(
-    SRCS "main.c" "bootstrap.c" "bt.c" "common.c" "config.c" "http_core.c" "http_io.c" "http_mqtt.c" "http_network.c" "http_ota.c" "http_sim.c" "http_uart.c" "http_utils.c" "identity.c" "mqtt.c" "ota.c" "sim.c" "state.c" "status.c" "uart.c" "uart_console.c" "wifi.c"
+    SRCS "main.c" "bootstrap.c" "bt.c" "common.c" "config.c" "http_core.c" "http_io.c" "http_mqtt.c" "http_network.c" "http_ota.c" "http_uart.c" "http_utils.c" "identity.c" "mqtt.c" "ota.c" "state.c" "status.c" "uart.c" "uart_console.c" "wifi.c"
     INCLUDE_DIRS "."
     REQUIRES
         app_update
@@ -32,7 +32,6 @@ add_custom_command(
     DEPENDS
         "${CMAKE_CURRENT_LIST_DIR}/../tools/check_web_js.py"
         "${CMAKE_CURRENT_LIST_DIR}/../tools/minify_web.py"
-        "${CMAKE_CURRENT_LIST_DIR}/../web/index.html"
         "${CMAKE_CURRENT_LIST_DIR}/../web/config.html"
     COMMENT "Checking and minifying web assets"
     VERBATIM
