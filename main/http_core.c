@@ -368,6 +368,7 @@ static esp_err_t index_handler(httpd_req_t *req)
     const char *file_name = NULL;
 
     if (app_http_is_captive_probe(req->uri)) {
+        ESP_LOGI(TAG, "captive probe %s -> 302", req->uri);
         httpd_resp_set_status(req, "302 Found");
         httpd_resp_set_hdr(req, "Location", "http://" APP_AP_GATEWAY_IP "/");
         httpd_resp_set_type(req, "text/plain; charset=utf-8");

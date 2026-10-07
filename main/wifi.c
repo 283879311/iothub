@@ -259,6 +259,11 @@ static esp_err_t app_configure_ap_netif_ip(void)
                            &dns_offer, sizeof(dns_offer));
     esp_netif_set_dns_info(s_ap_netif, ESP_NETIF_DNS_MAIN, &dns_info);
 
+    /* DHCP 选项 114(强制门户地址):部分较新系统直接读取 */
+    static const char captive_portal_uri[] = "http://192.168.8.1/";
+    esp_netif_dhcps_option(s_ap_netif, ESP_NETIF_OP_SET, ESP_NETIF_CAPTIVEPORTAL_URI,
+                           (void *)captive_portal_uri, sizeof(captive_portal_uri));
+
     err = esp_netif_dhcps_start(s_ap_netif);
     if (err == ESP_ERR_ESP_NETIF_DHCP_ALREADY_STARTED ||
         err == ESP_ERR_ESP_NETIF_IF_NOT_READY ||
