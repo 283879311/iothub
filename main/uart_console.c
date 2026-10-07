@@ -203,7 +203,6 @@ static esp_err_t app_uart_send_console_json_body(httpd_req_t *req,
 
     httpd_resp_set_type(req, "application/json");
     httpd_resp_set_hdr(req, "Cache-Control", "no-store");
-    httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
     err = httpd_resp_sendstr(req, response);
     free(response);
     return err;

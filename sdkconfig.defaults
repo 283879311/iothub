@@ -1,0 +1,5 @@
+# 与 IDF 默认不同的关键配置;fullclean 或删除 sdkconfig 重新生成时以此兜底
+# littlefs 官方要求:flash 写/擦期间 cache 禁用,UART ISR 驻留 flash 会 cache miss 崩溃
+CONFIG_UART_ISR_IN_IRAM=y
+# OTA 健康确认依赖的回滚机制,见 问题.md 第 4 项
+CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE=y

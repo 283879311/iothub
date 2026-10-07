@@ -30,7 +30,6 @@ esp_err_t app_http_send_json_text(httpd_req_t *req, const char *status, const ch
     }
     httpd_resp_set_type(req, "application/json");
     httpd_resp_set_hdr(req, "Cache-Control", "no-store");
-    httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
     return http_send_or_ignore_disconnect(httpd_resp_sendstr(req, payload), "json response");
 }
 

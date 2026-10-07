@@ -136,7 +136,15 @@ static bool app_http_verify_password(const char *password)
     app_config_unlock();
 
     app_web_hash_password(salt, sizeof(salt), password, calc);
-    return memcmp(calc, stored, sizeof(calc)) == 0;
+    /* 常数时间比较:按字节差值累加,避免 memcmp 前缀短路泄漏时序信息 */
+    {
+        volatile uint8_t diff = 0;
+        size_t i;
+        for (i = 0; i < sizeof(calc); i++) {
+            diff |= (uint8_t)(calc[i] ^ stored[i]);
+        }
+        return diff == 0;
+    }
 }
 
 static bool app_http_is_authorized(httpd_req_t *req)
