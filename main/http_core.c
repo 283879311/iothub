@@ -253,26 +253,62 @@ esp_err_t http_read_body(httpd_req_t *req, char *buf, size_t buf_len)
     return ESP_OK;
 }
 
+/* 页面资产构建期已 gzip 预压缩,按 Accept-Encoding 决定能否出 .gz */
+static bool http_accepts_gzip(httpd_req_t *req)
+{
+    char value[128];
+    size_t len = httpd_req_get_hdr_value_len(req, "Accept-Encoding");
+    size_t i;
+
+    if (len == 0 || len >= sizeof(value)) {
+        return false;
+    }
+    if (httpd_req_get_hdr_value_str(req, "Accept-Encoding", value, sizeof(value)) != ESP_OK) {
+        return false;
+    }
+    for (i = 0; i < len; i++) {
+        value[i] = (char)tolower((unsigned char)value[i]);
+    }
+    return strstr(value, "gzip") != NULL;
+}
+
 esp_err_t http_serve_html(httpd_req_t *req, const char *file_name)
 {
     char path[96];
-    FILE *file;
-    char chunk[256];
+    FILE *file = NULL;
+    char chunk[1024];
     size_t read_bytes = 0;
+    bool accepts_gzip = http_accepts_gzip(req);
+    bool use_gzip = false;
 
     /* 管理页认证按文件级统一控制,新增路由只要经此函数出 config.html 就自动覆盖 */
     if (strcmp(file_name, "config.html") == 0 && !app_http_require_auth(req)) {
         return ESP_OK;
     }
 
-    snprintf(path, sizeof(path), "%s/%s", APP_BASE_PATH, file_name);
-    file = fopen(path, "rb");
+    /* 优先出 .gz;旧布局 storage.bin 只有未压缩文件时自动回落 */
+    if (accepts_gzip) {
+        snprintf(path, sizeof(path), "%s/%s.gz", APP_BASE_PATH, file_name);
+        file = fopen(path, "rb");
+        use_gzip = file != NULL;
+    }
     if (file == NULL) {
+        snprintf(path, sizeof(path), "%s/%s", APP_BASE_PATH, file_name);
+        file = fopen(path, "rb");
+    }
+    if (file == NULL) {
+        if (!accepts_gzip) {
+            return app_http_send_json_text(req, "406 Not Acceptable",
+                                       "{\"status\":\"error\",\"message\":\"gzip_required\"}");
+        }
         return app_http_send_json_text(req, "500 Internal Server Error",
                                    "{\"status\":\"error\",\"message\":\"page_open_failed\"}");
     }
 
     httpd_resp_set_type(req, "text/html; charset=utf-8");
+    if (use_gzip) {
+        httpd_resp_set_hdr(req, "Content-Encoding", "gzip");
+    }
     do {
         read_bytes = fread(chunk, 1, sizeof(chunk), file);
         if (read_bytes > 0) {

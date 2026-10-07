@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import argparse
+import gzip
 import pathlib
 import re
 import shutil
@@ -201,7 +202,11 @@ def process_directory(source_dir: pathlib.Path, output_dir: pathlib.Path) -> Non
         target_path.parent.mkdir(parents=True, exist_ok=True)
         if source_path.suffix.lower() == ".html":
             content = source_path.read_text(encoding="utf-8")
-            target_path.write_text(minify_html(content), encoding="utf-8")
+            minified = minify_html(content)
+            # 构建期直接产出 gzip 资产(mtime=0 保证可重现);littlefs 不再打包未压缩 HTML
+            gz_bytes = gzip.compress(minified.encode("utf-8"), compresslevel=9, mtime=0)
+            target_path.with_name(target_path.name + ".gz").write_bytes(gz_bytes)
+            print(f"{relative_path.name}: {len(minified.encode('utf-8'))} -> {len(gz_bytes)} bytes (gzip)")
         else:
             shutil.copy2(source_path, target_path)
 
