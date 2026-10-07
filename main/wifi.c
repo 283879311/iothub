@@ -12,6 +12,8 @@
 #include "freertos/task.h"
 #include "lwip/ip4_addr.h"
 
+#include "dhcpserver/dhcpserver.h"
+
 #include "common.h"
 #include "config.h"
 #include "identity.h"
@@ -246,6 +248,16 @@ static esp_err_t app_configure_ap_netif_ip(void)
         ESP_LOGE(TAG, "set ap netif ip info failed: %s", esp_err_to_name(err));
         return err;
     }
+
+    /* DHCP 下发 DNS=AP IP:客户端的域名查询才会进 captive dns 劫持
+     * (IDF dhcps 默认不添加 DNS 选项,须同时置位 OFFER_DNS 与地址,问题.md 第 24 项) */
+    dhcps_offer_t dns_offer = OFFER_DNS;
+    esp_netif_dns_info_t dns_info = {0};
+    dns_info.ip.type = ESP_IPADDR_TYPE_V4;
+    IP4_ADDR(&dns_info.ip.u_addr.ip4, 192, 168, 8, 1);
+    esp_netif_dhcps_option(s_ap_netif, ESP_NETIF_OP_SET, ESP_NETIF_DOMAIN_NAME_SERVER,
+                           &dns_offer, sizeof(dns_offer));
+    esp_netif_set_dns_info(s_ap_netif, ESP_NETIF_DNS_MAIN, &dns_info);
 
     err = esp_netif_dhcps_start(s_ap_netif);
     if (err == ESP_ERR_ESP_NETIF_DHCP_ALREADY_STARTED ||

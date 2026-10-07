@@ -7,6 +7,7 @@
 - **串口调试台**:UART 参数配置(5-8 数据位、奇偶校验、1/2 停止位、任意波特率),收发数据查看(文本/hex)、清屏、手动发送。
 - **Web 管理页 `/config`**:网络、MQTT、GPIO、蓝牙、UART 配置,管理员账号修改与固件升级(Basic 认证,可在页面修改口令)。
 - **mDNS**:局域网内 `http://iothub-XXXX.local`(主机名随 AP 名)直接访问,STA 模式免查设备 IP。
+- **强制门户**:AP 模式下手机/电脑接入后自动弹出配置页(本地 DNS 劫持 + OS 连通性探测 302)。
 - **网络**:AP(192.168.8.1)/ STA / APSTA;最多 5 条 STA profile,RSSI 择优自动重连;纯 STA 启动 90s 失败自动降级 AP 并持久化。
 - **MQTT(ThingsBoard)**:10s 周期遥测(继电器/LED/输入/堆内存)+ attributes 上报;下行 RPC `setRelay/setLed/getStatus/setState` 控 GPIO;支持 tb_cloud / tb_selfhost / 自定义 topic,TLS(证书 bundle)与 LWT。
 - **OTA**:Web 上传固件(`iothub.bin`),带应用描述区校验(魔数/项目名/版本降级拒绝);网页资源 `storage.bin` 支持运行时整分区替换;升级后经健康确认窗口(业务可达才 mark valid,超时自动回滚)。

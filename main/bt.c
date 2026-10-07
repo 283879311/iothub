@@ -228,6 +228,11 @@ static esp_err_t app_bt_init_stack(esp_bt_mode_t bt_mode)
      * 不按目标模式覆写则 enable 恒返回 ESP_ERR_INVALID_ARG(问题.md 第 23 项) */
     bt_cfg.mode = bt_mode;
 
+    /* Bluedroid 把连接完成/嗅探切换等正常生命周期事件以 W 级打印,压到 ERROR
+     * 只留真实异常;应用层事件由 app_bt 自身的 INFO 日志覆盖 */
+    esp_log_level_set("BT_HCI", ESP_LOG_ERROR);
+    esp_log_level_set("BT_APPL", ESP_LOG_ERROR);
+
     ctrl_status = esp_bt_controller_get_status();
     if (ctrl_status == ESP_BT_CONTROLLER_STATUS_IDLE) {
         err = esp_bt_controller_init(&bt_cfg);

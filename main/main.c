@@ -2,6 +2,7 @@
 #include "esp_wifi.h"
 #include "nvs_flash.h"
 
+#include "app_captive.h"
 #include "app_mdns.h"
 #include "bootstrap.h"
 #include "bt.h"
@@ -53,6 +54,8 @@ void app_main(void)
     app_start_wifi();
     ESP_LOGI(TAG, "[boot-7b] app_mdns_start");
     app_mdns_start();
+    ESP_LOGI(TAG, "[boot-7c] app_captive_init");
+    app_captive_init();
     ESP_LOGI(TAG, "[boot-8] app_bt_apply_config");
     if (app_bt_apply_config() != ESP_OK) {
         char bt_last_error[64];

@@ -1,5 +1,5 @@
 idf_component_register(
-    SRCS "main.c" "app_mdns.c" "bootstrap.c" "bt.c" "common.c" "config.c" "http_core.c" "http_io.c" "http_mqtt.c" "http_network.c" "http_ota.c" "http_uart.c" "http_utils.c" "identity.c" "mqtt.c" "ota.c" "state.c" "status.c" "uart.c" "uart_console.c" "wifi.c"
+    SRCS "main.c" "app_captive.c" "app_mdns.c" "bootstrap.c" "bt.c" "common.c" "config.c" "http_core.c" "http_io.c" "http_mqtt.c" "http_network.c" "http_ota.c" "http_uart.c" "http_utils.c" "identity.c" "mqtt.c" "ota.c" "state.c" "status.c" "uart.c" "uart_console.c" "wifi.c"
     INCLUDE_DIRS "."
     REQUIRES
         app_update

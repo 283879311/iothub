@@ -341,9 +341,38 @@ static esp_err_t device_status_get_handler(httpd_req_t *req)
     return app_status_send_device_status(req);
 }
 
+/* AP 模式强制门户:各 OS 的连通性探测端点统一 302 到配置页。
+ * 探测发生在登录前,故不要求认证 */
+static bool app_http_is_captive_probe(const char *uri)
+{
+    static const char *const probes[] = {
+        "/generate_204",
+        "/connectivitycheck.gstatic.com/generate_204",
+        "/connectivitycheck.android.com/generate_204",
+        "/hotspot-detect.html",
+        "/connecttest.txt",
+        "/ncsi.txt",
+        "/success.txt",
+    };
+
+    for (size_t i = 0; i < sizeof(probes) / sizeof(probes[0]); i++) {
+        if (strcmp(uri, probes[i]) == 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
 static esp_err_t index_handler(httpd_req_t *req)
 {
     const char *file_name = NULL;
+
+    if (app_http_is_captive_probe(req->uri)) {
+        httpd_resp_set_status(req, "302 Found");
+        httpd_resp_set_hdr(req, "Location", "http://" APP_AP_GATEWAY_IP "/");
+        httpd_resp_set_type(req, "text/plain; charset=utf-8");
+        return httpd_resp_sendstr(req, "Redirect to captive portal");
+    }
 
     /* 单页形态:所有页面入口(含根路径)都出配置页,
      * config.html 的认证在 http_serve_html 内按文件名统一控制 */
