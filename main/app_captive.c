@@ -17,8 +17,11 @@ static bool s_dns_running;
 static int s_dns_sock = -1;
 
 /* 最小 DNS 应答:回显问题段,A 记录指向 AP 网关 IP。
- * 仅对 A/ANY 查询带应答记录,其余类型回空应答,让客户端回落 A 查询。 */
-static int captive_dns_build_reply(uint8_t *buf, int len)
+ * 仅对 A/ANY 查询带应答记录,其余类型回空应答,让客户端回落 A 查询。
+ * cap 为接收缓冲区容量:应答允许比查询长,追加判断必须用 cap 而非 len
+ * (问题.md 第 26 项:误用 len 导致几乎恒发空应答,客户端拿不到 IP 从不探测)。
+ * out_answers 返回实际应答记录数,供日志区分 answered/empty。 */
+static int captive_dns_build_reply(uint8_t *buf, int len, int cap, int *out_answers)
 {
     if (len < 17) {
         return -1;
@@ -40,18 +43,14 @@ static int captive_dns_build_reply(uint8_t *buf, int len)
     buf[2] = 0x85;                                  /* QR=1 AA=1 */
     buf[3] = 0x80;                                  /* RA=1 RCODE=0 */
     buf[6] = 0x00;
-    buf[7] = answers;
+    buf[7] = 0x00;                                  /* ANCOUNT 先置 0,追加成功后置 1 */
     buf[8] = 0x00;
     buf[9] = 0x00;
     buf[10] = 0x00;
     buf[11] = 0x00;
 
     int out = qname_end + 5;
-    if (answers == 1) {
-        if (out + 16 > len) {
-            buf[7] = 0x00;
-            return out;
-        }
+    if (answers == 1 && out + 16 <= cap) {
         uint32_t ip = inet_addr(APP_AP_GATEWAY_IP);
         buf[out++] = 0xC0;
         buf[out++] = 0x0C;                          /* 名字压缩指针指向问题段 */
@@ -67,6 +66,10 @@ static int captive_dns_build_reply(uint8_t *buf, int len)
         buf[out++] = 0x04;                          /* RDLENGTH */
         memcpy(&buf[out], &ip, 4);
         out += 4;
+        buf[7] = 0x01;
+    }
+    if (out_answers != NULL) {
+        *out_answers = buf[7];
     }
     return out;
 }
@@ -133,11 +136,12 @@ static void captive_dns_task(void *arg)
         if (qname_end >= 0 && qname_end + 5 <= len) {
             qtype = (uint16_t)((buf[qname_end + 1] << 8) | buf[qname_end + 2]);
         }
-        int reply_len = captive_dns_build_reply(buf, len);
+        int answers = 0;
+        int reply_len = captive_dns_build_reply(buf, len, (int)sizeof(buf), &answers);
         ESP_LOGI(TAG, "dns query %s type=%u from %s -> %s",
                  qname_end >= 0 ? qname : "?", qtype,
                  inet_ntoa(((struct sockaddr_in *)&client_addr)->sin_addr),
-                 reply_len > 0 ? "answered" : "ignored");
+                 reply_len <= 0 ? "ignored" : (answers > 0 ? "answered" : "empty"));
         if (reply_len > 0) {
             sendto(sock, buf, reply_len, 0,
                    (struct sockaddr *)&client_addr, addr_len);

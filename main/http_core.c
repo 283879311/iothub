@@ -341,22 +341,50 @@ static esp_err_t device_status_get_handler(httpd_req_t *req)
     return app_status_send_device_status(req);
 }
 
-/* AP 模式强制门户:各 OS 的连通性探测端点统一 302 到配置页。
+static bool app_uri_ends_with(const char *uri, size_t uri_len, const char *suffix)
+{
+    size_t suffix_len = strlen(suffix);
+
+    return uri_len >= suffix_len &&
+           memcmp(uri + uri_len - suffix_len, suffix, suffix_len) == 0;
+}
+
+/* AP 模式强制门户:各 OS 的连通性探测端点统一 302 到落地页。
  * 探测发生在登录前,故不要求认证 */
 static bool app_http_is_captive_probe(const char *uri)
 {
+    /* 按后缀匹配:各厂商探测域名繁多(MIUI/华为/vivo 等),路径相同只换域名 */
     static const char *const probes[] = {
-        "/generate_204",
-        "/connectivitycheck.gstatic.com/generate_204",
-        "/connectivitycheck.android.com/generate_204",
-        "/hotspot-detect.html",
-        "/connecttest.txt",
-        "/ncsi.txt",
-        "/success.txt",
+        "generate_204",                 /* 安卓各厂商 */
+        "gen_204",
+        "hotspot-detect.html",          /* iOS/macOS */
+        "library/test/success.html",    /* 老版本 iOS */
+        "connecttest.txt",              /* Windows 10/11 */
+        "ncsi.txt",                     /* 老版本 Windows */
+        "success.txt",                  /* Firefox */
     };
+    const char *path = uri;
+    size_t path_len;
+    size_t i;
 
-    for (size_t i = 0; i < sizeof(probes) / sizeof(probes[0]); i++) {
-        if (strcmp(uri, probes[i]) == 0) {
+    /* 兼容 absolute-form 请求行(GET http://host/path):跳过 scheme+authority */
+    {
+        const char *scheme = strstr(uri, "://");
+        if (scheme != NULL) {
+            const char *slash = strchr(scheme + 3, '/');
+            path = slash != NULL ? slash : "/";
+        }
+    }
+    /* 探测可能带 query string,截断后再匹配 */
+    path_len = strlen(path);
+    {
+        const char *query = memchr(path, '?', path_len);
+        if (query != NULL) {
+            path_len = (size_t)(query - path);
+        }
+    }
+    for (i = 0; i < sizeof(probes) / sizeof(probes[0]); i++) {
+        if (app_uri_ends_with(path, path_len, probes[i])) {
             return true;
         }
     }
@@ -366,11 +394,20 @@ static bool app_http_is_captive_probe(const char *uri)
 static esp_err_t index_handler(httpd_req_t *req)
 {
     const char *file_name = NULL;
+    char host[48];
+
+    /* 全量请求日志:外场定位强制门户问题(此前 401/404 分支静默,手机行为不可见) */
+    if (httpd_req_get_hdr_value_str(req, "Host", host, sizeof(host)) != ESP_OK) {
+        host[0] = '\0';
+    }
+    ESP_LOGI(TAG, "http get %s (host=%s)", req->uri, host[0] != '\0' ? host : "-");
 
     if (app_http_is_captive_probe(req->uri)) {
-        ESP_LOGI(TAG, "captive probe %s -> 302", req->uri);
+        /* 302 目标必须免认证 200:CNA 弹窗无法渲染 Basic 挑战,指到 / 会 401 关窗 */
+        ESP_LOGI(TAG, "captive probe %s -> 302 " APP_WEB_PORTAL_PATH, req->uri);
         httpd_resp_set_status(req, "302 Found");
-        httpd_resp_set_hdr(req, "Location", "http://" APP_AP_GATEWAY_IP "/");
+        httpd_resp_set_hdr(req, "Cache-Control", "no-store");
+        httpd_resp_set_hdr(req, "Location", "http://" APP_AP_GATEWAY_IP APP_WEB_PORTAL_PATH);
         httpd_resp_set_type(req, "text/plain; charset=utf-8");
         return httpd_resp_sendstr(req, "Redirect to captive portal");
     }
@@ -387,6 +424,32 @@ static esp_err_t index_handler(httpd_req_t *req)
                                    "{\"status\":\"error\",\"message\":\"not_found\"}");
     }
     return http_serve_html(req, file_name);
+}
+
+/* 强制门户落地页:免认证 200。CNA 弹窗先打开本页(探测 302 与 DHCP 选项 114 均指向
+ * 这里),再自动(meta refresh)/手动按钮进入 /config,由系统弹 Basic 登录。
+ * 纯静态标记,不读配置不取锁;所有 /api/ 接口认证不变 */
+static esp_err_t portal_landing_handler(httpd_req_t *req)
+{
+    static const char portal_html[] =
+        "<!doctype html><html lang=\"zh-CN\"><head><meta charset=\"utf-8\">"
+        "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">"
+        "<meta http-equiv=\"refresh\" content=\"1;url=" APP_WEB_CONFIG_PATH "\">"
+        "<title>IotHub</title><style>"
+        "body{font-family:sans-serif;margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#f2f4f8;color:#1f2933}"
+        ".card{background:#fff;border-radius:12px;padding:32px 28px;max-width:320px;text-align:center;box-shadow:0 4px 16px rgba(0,0,0,.08)}"
+        "h2{margin:0 0 8px;font-size:20px}p{margin:0 0 4px;color:#6b7280;font-size:14px}"
+        "a.btn{display:inline-block;margin-top:16px;padding:12px 24px;border-radius:8px;background:#2563eb;color:#fff;text-decoration:none;font-size:16px}"
+        "</style></head><body><div class=\"card\">"
+        "<h2>已连接到 IotHub</h2>"
+        "<p>正在打开配置页…</p>"
+        "<a class=\"btn\" href=\"" APP_WEB_CONFIG_PATH "\">打开配置页</a>"
+        "</div></body></html>";
+
+    httpd_resp_set_type(req, "text/html; charset=utf-8");
+    httpd_resp_set_hdr(req, "Cache-Control", "no-store");
+    return app_http_ignore_client_disconnect(
+        httpd_resp_send(req, portal_html, sizeof(portal_html) - 1), "portal page");
 }
 
 /* 修改 Web 登录凭据:验旧口令 → 可选改用户名 → 新盐+新口令哈希写入配置。
@@ -469,6 +532,7 @@ void app_http_start_webserver(void)
     {
         size_t index;
         const app_http_route_t core_routes[] = {
+            {.uri = APP_WEB_PORTAL_PATH,     .method = HTTP_GET, .handler = portal_landing_handler},
             {.uri = "/api/v1/device/info",   .method = HTTP_GET, .handler = device_info_get_handler},
             {.uri = "/api/v1/device/status", .method = HTTP_GET, .handler = device_status_get_handler},
             {.uri = "/api/v1/config/web",    .method = HTTP_PUT, .handler = web_auth_put_handler},
