@@ -25,5 +25,22 @@ bool app_wifi_scan_record_at(uint16_t index,
                              int8_t *rssi_out,
                              uint8_t *authmode_out);
 
+/* 扫描记录里的 BSSID(格式 aa:bb:cc:dd:ee:ff)——用于判定"是不是同一台 AP"(1.3-21) */
+bool app_wifi_scan_record_bssid(uint16_t index, char *out, size_t out_size);
+
 void app_wifi_mark_profiles_dirty(void);
 void app_wifi_sta_config_updated(void);
+
+/* 试连验证(1.3-37):临时换候选 SSID/口令真连一次,出结果后无条件恢复旧配置 */
+typedef enum {
+    APP_WIFI_TRY_OK = 0,          /* STA_CONNECTED:口令正确 */
+    APP_WIFI_TRY_WRONG_PASSWORD,  /* reason 15/202/2:4WAY 握手/认证失败 */
+    APP_WIFI_TRY_AP_NOT_FOUND,    /* 扫描未见该 SSID,或 reason 201/203 */
+    APP_WIFI_TRY_CONNECT_FAILED,  /* 其余失败 */
+    APP_WIFI_TRY_TIMEOUT,         /* 等待超时 */
+    APP_WIFI_TRY_BUSY,            /* 自动重连/试连进行中 */
+    APP_WIFI_TRY_INVALID_ARG,
+} app_wifi_try_result_t;
+
+app_wifi_try_result_t app_wifi_try_connect(const char *ssid, const char *password,
+                                           uint32_t timeout_ms);

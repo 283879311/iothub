@@ -1,6 +1,5 @@
 #include <stdbool.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 
 #include "driver/gpio.h"
@@ -11,6 +10,7 @@
 
 #include "common.h"
 #include "constants.h"
+#include "data_pipe.h"
 #include "http_utils.h"
 #include "state.h"
 #include "uart.h"
@@ -173,46 +173,136 @@ static int app_uart_read_raw(uint8_t *raw, size_t raw_size, TickType_t wait_tick
     return read_len;
 }
 
-static esp_err_t app_uart_send_console_json_body(httpd_req_t *req,
-                                             const char *plain_json,
-                                             const char *hex_json,
-                                             unsigned rx_sequence)
-{
-    char *response = NULL;
-    int resp_len;
-    size_t response_size;
-    esp_err_t err;
+/* ---- /api/v1/uart/console 的流式发送(见 问题与版本优化.md 第 45 项) ----
+ *
+ * 旧实现:一次请求要同时存活 3 块堆内存 —— 2049(plain_json) + 6145(hex_json)
+ *   + 8448(response) = 16642 B,叠加 TCP 发送缓冲(5760 B)后超过稳态可用堆(~19.6 KB),
+ *   必然返回 HTTP 500 out_of_memory。
+ * 新实现:锁内做静态快照(4 KB BSS)+ 锁外 512 B 栈缓冲分片转义发送 => 堆零分配。
+ * 串行化:s_uart_console_mutex 保护快照写入;httpd 为单任务,两个请求不会交错。
+ */
 
-    response_size = UART_CONSOLE_PLAIN_SIZE * 2 + UART_CONSOLE_HEX_SIZE * 2 + 256;
-    response = malloc(response_size);
-    if (response == NULL) {
-        return app_http_send_json_text(req, "500 Internal Server Error",
-                                   "{\"status\":\"error\",\"message\":\"out_of_memory\"}");
+/* 分片输出窗口:httpd 任务栈只有 4096 B(HTTPD_DEFAULT_CONFIG),512 B 输出约 8 个 chunk
+ * 即可发完 4 KB 载荷(每片不会写出半个转义原子,见 app_json_escape_stream_step) */
+#define CONSOLE_STREAM_OUT_BYTES 512
+
+/* 响应快照:+1 保证末尾 NUL(即使 rx_* 恰好填满,stream 也不会越界读到相邻字段) */
+static char s_console_plain_snapshot[UART_CONSOLE_PLAIN_SIZE + 1];
+static char s_console_hex_snapshot[UART_CONSOLE_HEX_SIZE + 1];
+
+static esp_err_t app_uart_send_chunk_text(httpd_req_t *req, const char *text)
+{
+    return httpd_resp_send_chunk(req, text, (ssize_t)strlen(text));
+}
+
+static esp_err_t app_uart_send_escaped_stream(httpd_req_t *req, const char *src)
+{
+    char out[CONSOLE_STREAM_OUT_BYTES];
+    size_t cursor = 0;
+    bool done = false;
+
+    while (!done) {
+        size_t out_len = 0;
+        esp_err_t err;
+
+        done = app_json_escape_stream_step(src, &cursor, out, sizeof(out), &out_len);
+        if (out_len == 0 && !done) {
+            /* 抽不动了(窗口小于最长转义原子 6 B):防御性返回,避免死循环 */
+            return ESP_FAIL;
+        }
+        if (out_len > 0) {
+            err = httpd_resp_send_chunk(req, out, (ssize_t)out_len);
+            if (err != ESP_OK) {
+                return err;
+            }
+        }
+    }
+    return ESP_OK;
+}
+
+esp_err_t app_uart_send_console_json(httpd_req_t *req)
+{
+    char tail[80];
+    esp_err_t err;
+    bool uart_locked = false;
+    bool console_locked = false;
+    bool driver_installed;
+    unsigned rx_sequence;
+    int tail_len;
+
+    if (s_uart_console_mutex == NULL) {
+        return app_http_send_json_text(req, "503 Service Unavailable",
+                                   "{\"status\":\"error\",\"message\":\"uart_mutex_not_ready\"}");
+    }
+    if (!app_uart_lock(pdMS_TO_TICKS(300))) {
+        return app_http_send_json_text(req, "503 Service Unavailable",
+                                   "{\"status\":\"error\",\"message\":\"uart_port_busy\"}");
+    }
+    uart_locked = true;
+    if (xSemaphoreTakeRecursive(s_uart_console_mutex, pdMS_TO_TICKS(300)) != pdTRUE) {
+        app_uart_unlock();
+        return app_http_send_json_text(req, "503 Service Unavailable",
+                                   "{\"status\":\"error\",\"message\":\"uart_console_busy\"}");
+    }
+    console_locked = true;
+
+    /* ① 锁内:补一次轮询 + 快照(只做 memcpy,不做转义/发送) */
+    app_uart_poll_console(0);
+    memcpy(s_console_plain_snapshot, s_uart.rx_plain, UART_CONSOLE_PLAIN_SIZE);
+    s_console_plain_snapshot[UART_CONSOLE_PLAIN_SIZE] = '\0';
+    memcpy(s_console_hex_snapshot, s_uart.rx_hex, UART_CONSOLE_HEX_SIZE);
+    s_console_hex_snapshot[UART_CONSOLE_HEX_SIZE] = '\0';
+    rx_sequence = (unsigned)s_uart.rx_sequence;
+    driver_installed = s_uart.driver_installed;
+
+    /* ② 立即解锁:旧实现持锁跨越整包发送,慢客户端会顶住 UART 后台轮询 */
+    if (console_locked) {
+        xSemaphoreGiveRecursive(s_uart_console_mutex);
+    }
+    if (uart_locked) {
+        app_uart_unlock();
     }
 
-    resp_len = snprintf(response, response_size,
-                        "{\"plain\":\"%s\",\"hex\":\"%s\","
-                        "\"rx_sequence\":%u,\"driver_installed\":%s}",
-                        plain_json, hex_json, rx_sequence,
-                        s_uart.driver_installed ? "true" : "false");
-    if (resp_len < 0 || (size_t)resp_len >= response_size) {
-        free(response);
-        return app_http_send_json_text(req, "500 Internal Server Error",
-                                   "{\"status\":\"error\",\"message\":\"response_too_large\"}");
+    /* ③ 锁外:分片流式发送(堆零分配) */
+    tail_len = snprintf(tail, sizeof(tail),
+                        "\",\"rx_sequence\":%u,\"driver_installed\":%s}",
+                        rx_sequence, driver_installed ? "true" : "false");
+    if (tail_len < 0 || (size_t)tail_len >= sizeof(tail)) {
+        return ESP_FAIL;
     }
 
     httpd_resp_set_type(req, "application/json");
     httpd_resp_set_hdr(req, "Cache-Control", "no-store");
-    err = httpd_resp_sendstr(req, response);
-    free(response);
+
+    err = app_uart_send_chunk_text(req, "{\"plain\":\"");
+    if (err == ESP_OK) {
+        err = app_uart_send_escaped_stream(req, s_console_plain_snapshot);
+    }
+    if (err == ESP_OK) {
+        err = app_uart_send_chunk_text(req, "\",\"hex\":\"");
+    }
+    if (err == ESP_OK) {
+        err = app_uart_send_escaped_stream(req, s_console_hex_snapshot);
+    }
+    if (err == ESP_OK) {
+        err = app_uart_send_chunk_text(req, tail);
+    }
+    if (err == ESP_OK) {
+        err = httpd_resp_send_chunk(req, NULL, 0);   /* 收尾:0 长度块结束响应 */
+    }
     return err;
 }
 
 void app_uart_console_init(void)
 {
+    /* 1.3-44 上机实测栈余量仅 368B(栈高水位报表,原栈 3072):本任务最深路径有
+     * raw(256B)+plain_chunk(1026B)+hex_chunk(770B) ≈ 2KB 栈上转义缓冲,属
+     * 确定性开销 —— 余量虽为正但过薄,任何后续改动都可能顶穿(canary panic)。
+     * 3072→4096 买 1KB 安全边际;成本 = 任务栈由堆分配(xTaskCreate)+1KB,
+     * 由 1.3-46 省出的 ~1.5KB 覆盖,净仍为正。 */
     s_uart_console_mutex = xSemaphoreCreateRecursiveMutexStatic(&s_uart_console_mutex_buf);
     if (s_uart_console_task == NULL &&
-        xTaskCreate(app_uart_console_task_fn, "uart_console", 3072, NULL, 5, &s_uart_console_task) != pdPASS) {
+        xTaskCreate(app_uart_console_task_fn, "uart_console", 4096, NULL, 5, &s_uart_console_task) != pdPASS) {
         s_uart_console_task = NULL;
         ESP_LOGE(TAG, "Failed to create uart console task");
     }
@@ -249,66 +339,12 @@ static void app_uart_poll_console(TickType_t wait_ticks)
     read_len = app_uart_read_raw(raw, sizeof(raw), wait_ticks);
     if (read_len > 0) {
         app_uart_append_console(raw, (size_t)read_len);
+        /* 数据面:同一份字节同时投给 data_pipe(不新增第二个读者,单读者原则) */
+        data_pipe_feed(DATA_PORT_UART1, raw, (size_t)read_len);
     }
 
     xSemaphoreGiveRecursive(s_uart_console_mutex);
     app_uart_unlock();
-}
-
-esp_err_t app_uart_send_console_json(httpd_req_t *req)
-{
-    char *plain_json = NULL;
-    char *hex_json = NULL;
-    esp_err_t err;
-    bool uart_locked = false;
-    bool console_locked = false;
-    unsigned rx_sequence;
-
-    plain_json = malloc(UART_CONSOLE_PLAIN_SIZE * 2 + 1);
-    hex_json = malloc(UART_CONSOLE_HEX_SIZE * 2 + 1);
-    if (plain_json == NULL || hex_json == NULL) {
-        free(plain_json);
-        free(hex_json);
-        return app_http_send_json_text(req, "500 Internal Server Error",
-                                   "{\"status\":\"error\",\"message\":\"out_of_memory\"}");
-    }
-
-    if (s_uart_console_mutex == NULL) {
-        free(plain_json);
-        free(hex_json);
-        return app_http_send_json_text(req, "503 Service Unavailable",
-                                   "{\"status\":\"error\",\"message\":\"uart_mutex_not_ready\"}");
-    }
-    if (!app_uart_lock(pdMS_TO_TICKS(300))) {
-        free(plain_json);
-        free(hex_json);
-        return app_http_send_json_text(req, "503 Service Unavailable",
-                                   "{\"status\":\"error\",\"message\":\"uart_port_busy\"}");
-    }
-    uart_locked = true;
-    if (xSemaphoreTakeRecursive(s_uart_console_mutex, pdMS_TO_TICKS(300)) != pdTRUE) {
-        app_uart_unlock();
-        free(plain_json);
-        free(hex_json);
-        return app_http_send_json_text(req, "503 Service Unavailable",
-                                   "{\"status\":\"error\",\"message\":\"uart_console_busy\"}");
-    }
-    console_locked = true;
-    app_uart_poll_console(0);
-    app_json_escape_string(plain_json, UART_CONSOLE_PLAIN_SIZE * 2 + 1, s_uart.rx_plain);
-    app_json_escape_string(hex_json, UART_CONSOLE_HEX_SIZE * 2 + 1, s_uart.rx_hex);
-    rx_sequence = (unsigned)s_uart.rx_sequence;
-
-    err = app_uart_send_console_json_body(req, plain_json, hex_json, rx_sequence);
-    if (console_locked) {
-        xSemaphoreGiveRecursive(s_uart_console_mutex);
-    }
-    if (uart_locked) {
-        app_uart_unlock();
-    }
-    free(plain_json);
-    free(hex_json);
-    return err;
 }
 
 esp_err_t app_uart_handle_clear_console_request(httpd_req_t *req)

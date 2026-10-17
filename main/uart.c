@@ -440,7 +440,10 @@ static esp_err_t app_uart_apply_config_values(uint32_t baudrate, uint8_t data_bi
         gpio_pullup_en(app_uart_rx_gpio());
         gpio_pulldown_dis(app_uart_rx_gpio());
 
-        err = uart_driver_install(UART_PORT, UART_RX_BUFFER_SIZE * 2, 0, 0, NULL, 0);
+        /* CONFIG_UART_ISR_IN_IRAM=y 时 ISR 必须驻留 IRAM;显式带上 flag,
+         * 否则驱动会打印 "flag not set ... flag updated" 警告(问题与版本优化.md 第 31 项) */
+        err = uart_driver_install(UART_PORT, UART_RX_BUFFER_SIZE * 2, 0, 0, NULL,
+                                  ESP_INTR_FLAG_IRAM);
         if (err != ESP_OK) {
             app_uart_set_apply_error("uart_driver_install_failed");
             ESP_LOGE(TAG, "uart_driver_install failed: %s", esp_err_to_name(err));
@@ -611,3 +614,35 @@ esp_err_t app_uart_send_data(const char *encoding, const char *data, unsigned *b
                                  data != NULL ? data : "",
                                  payload, payload_len, bytes_sent);
 }
+
+/* ---------------------------------------------------------------------------
+ * 数据面:按长度发送原始字节(二进制安全,不经 strlen)
+ * 供 data_pipe 的 UART 端口使用(见 data_pipe.h)
+ * ------------------------------------------------------------------------- */
+esp_err_t app_uart_send_bytes(const uint8_t *data, size_t len, unsigned *bytes_sent)
+{
+    char preview[UART_TX_PREVIEW_SIZE];
+    size_t preview_len;
+
+    if (data == NULL || len == 0) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    /* preview 只用于日志/调试台显示;payload 传原始字节,hex 记录完整 */
+    preview_len = (len < sizeof(preview) - 1) ? len : sizeof(preview) - 1;
+    memcpy(preview, data, preview_len);
+    preview[preview_len] = '\0';
+
+    return app_uart_send_payload("plain", preview, data, len, bytes_sent);
+}
+
+bool app_uart_dataplane_write(const uint8_t *data, size_t len, void *ctx)
+{
+    unsigned sent = 0;
+
+    (void)ctx;
+    if (app_uart_send_bytes(data, len, &sent) != ESP_OK) {
+        return false;
+    }
+    return sent == (unsigned)len;
+}
+

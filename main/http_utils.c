@@ -7,11 +7,26 @@
 #include "cJSON.h"
 #include "esp_log.h"
 #include "esp_http_server.h"
+#include "lwip/sockets.h"
 
+#include "common.h"        /* app_mutex_ensure:可重入互斥懒初始化 */
 #include "constants.h"
 #include "http_utils.h"
+#include "json_escape.h"
 
 static const char *TAG = "iothub_http";
+
+/* 1.3-36:多段/分块响应关掉 Nagle。AP+STA 双模下空口 RTT ~200ms,Nagle 会让
+ * 每个 chunk 都等上一段的 ACK,20KB 页面流式发送被拖到 15s+;直发即可。 */
+void app_http_tcp_nodelay(httpd_req_t *req)
+{
+    int fd = httpd_req_to_sockfd(req);
+    int one = 1;
+
+    if (fd >= 0) {
+        (void)setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &one, sizeof(one));
+    }
+}
 
 static esp_err_t http_send_or_ignore_disconnect(esp_err_t err, const char *context)
 {
@@ -30,18 +45,75 @@ esp_err_t app_http_send_json_text(httpd_req_t *req, const char *status, const ch
     }
     httpd_resp_set_type(req, "application/json");
     httpd_resp_set_hdr(req, "Cache-Control", "no-store");
+    app_http_tcp_nodelay(req);
     return http_send_or_ignore_disconnect(httpd_resp_sendstr(req, payload), "json response");
+}
+
+/* ============================================================================
+ * 零堆 JSON 构建基建(1.3版本优化.md 1.3-12)
+ *
+ * 动机:status/network 两个热接口原走 cJSON"建树 + 序列化"(两份堆),在并发 + 堆
+ * 偏紧(BLE 常驻时 free 仅 ~16KB)时会 500(out_of_memory)或出现秒级延迟尖峰。
+ * 现改为"静态缓冲 + 互斥 + 轮转转义槽":零堆、零栈开销、并发安全。
+ *
+ * 锁语义:一把**可重入**互斥。调用方若需用 app_json_escaped() 取转义串,
+ * 必须在 app_json_build_lock()/unlock() 之间完成"取串 + 拼接 + 发送",
+ * 因为轮转槽是在加锁期间共享的。app_http_send_jsonf() 内部自持同一把锁,
+ * 故未做转义的老调用点也自动获得并发保护(不会互相覆盖 payload)。
+ * ========================================================================== */
+#define APP_JSON_ESC_SLOTS     16
+#define APP_JSON_ESC_SLOT_SIZE 288   /* 覆盖最长字段(mqtt_host[128] 转义 ×2 + 余量) */
+
+static SemaphoreHandle_t s_json_lock = NULL;
+static StaticSemaphore_t s_json_lock_buf;
+static portMUX_TYPE s_json_lock_mux = portMUX_INITIALIZER_UNLOCKED;
+static char s_json_esc_slots[APP_JSON_ESC_SLOTS][APP_JSON_ESC_SLOT_SIZE];
+static unsigned s_json_esc_next = 0;
+
+void app_json_build_lock(void)
+{
+    xSemaphoreTakeRecursive(app_mutex_ensure(&s_json_lock, &s_json_lock_buf,
+                                             &s_json_lock_mux, true), portMAX_DELAY);
+    /* 每次(最外层)加锁都从 0 号槽开始:单次请求内 ≤16 个转义串不会互相覆盖。
+     * 可重入嵌套(调用方持锁 + send 内部再取)只影响游标,不影响已取到的指针。 */
+    s_json_esc_next = 0;
+}
+
+void app_json_build_unlock(void)
+{
+    if (s_json_lock != NULL) {
+        xSemaphoreGiveRecursive(s_json_lock);
+    }
+}
+
+const char *app_json_escaped(const char *src)
+{
+    char *slot = s_json_esc_slots[s_json_esc_next];
+
+    s_json_esc_next = (s_json_esc_next + 1u) % APP_JSON_ESC_SLOTS;
+    app_json_escape_string(slot, APP_JSON_ESC_SLOT_SIZE, (src != NULL) ? src : "");
+    return slot;
 }
 
 esp_err_t app_http_send_jsonf(httpd_req_t *req, const char *status, const char *fmt, ...)
 {
     static char payload[APP_JSON_BUFFER_SIZE];
     va_list args;
+    esp_err_t err;
+    int need;
 
+    app_json_build_lock();
     va_start(args, fmt);
-    vsnprintf(payload, sizeof(payload), fmt, args);
+    need = vsnprintf(payload, sizeof(payload), fmt, args);
     va_end(args);
-    return app_http_send_json_text(req, status, payload);
+    if (need < 0 || (size_t)need >= sizeof(payload)) {
+        /* 截断即响应不完整:必须告警(字节比对/前端解析都会立刻暴露) */
+        ESP_LOGW(TAG, "json response truncated: need=%d cap=%u",
+                 need, (unsigned)sizeof(payload));
+    }
+    err = app_http_send_json_text(req, status, payload);
+    app_json_build_unlock();
+    return err;
 }
 
 static const cJSON *app_json_find_item(const char *json, const char *key)

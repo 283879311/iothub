@@ -105,74 +105,13 @@ void app_copy_fixed_bytes(uint8_t *dst, size_t dst_size, const char *src)
     }
 }
 
-void app_json_escape_string(char *dst, size_t dst_size, const char *src)
-{
-    size_t index = 0;
-
-    if (dst_size == 0) {
-        return;
-    }
-
-    while (*src != '\0' && index + 1 < dst_size) {
-        const char *replacement = NULL;
-        char unicode_escape[8];
-        char ch = *src++;
-
-        switch (ch) {
-        case '\\':
-            replacement = "\\\\";
-            break;
-        case '"':
-            replacement = "\\\"";
-            break;
-        case '/':
-            replacement = "\\/";
-            break;
-        case '\b':
-            replacement = "\\b";
-            break;
-        case '\f':
-            replacement = "\\f";
-            break;
-        case '\n':
-            replacement = "\\n";
-            break;
-        case '\r':
-            replacement = "\\r";
-            break;
-        case '\t':
-            replacement = "\\t";
-            break;
-        default:
-            /* 其余 C0 控制字符按 RFC 8259 用 \uXXXX 转义,不再丢字替换为 '?' */
-            if ((unsigned char)ch < 0x20) {
-                snprintf(unicode_escape, sizeof(unicode_escape),
-                         "\\u%04X", (unsigned)(unsigned char)ch);
-                replacement = unicode_escape;
-            }
-            break;
-        }
-
-        if (replacement != NULL) {
-            while (*replacement != '\0' && index + 1 < dst_size) {
-                dst[index++] = *replacement++;
-            }
-            continue;
-        }
-
-        dst[index++] = ch;
-    }
-
-    dst[index] = '\0';
-}
-
 const char *app_bt_mode_to_string(uint8_t mode)
 {
     switch (mode) {
-    case BT_MODE_BLE:
+    case BT_ROLE_CENTRAL:    /* 2 = 主角色(central) */
+        return "central";
+    case BT_ROLE_PERIPHERAL: /* 1 = 从角色(与旧 bt_mode 的 "ble" 同值) */
         return "ble";
-    case BT_MODE_SPP:
-        return "spp";
     default:
         return "off";
     }
@@ -180,13 +119,16 @@ const char *app_bt_mode_to_string(uint8_t mode)
 
 uint8_t app_bt_mode_from_string(const char *mode)
 {
-    if (strcmp(mode, "ble") == 0) {
-        return BT_MODE_BLE;
+    if (mode == NULL) {
+        return BT_ROLE_OFF;
     }
-    if (strcmp(mode, "spp") == 0) {
-        return BT_MODE_SPP;
+    if (strcmp(mode, "central") == 0) {
+        return BT_ROLE_CENTRAL;
     }
-    return BT_MODE_OFF;
+    if (strcmp(mode, "ble") == 0 || strcmp(mode, "peripheral") == 0) {
+        return BT_ROLE_PERIPHERAL;
+    }
+    return BT_ROLE_OFF;
 }
 
 void app_format_hex_bytes(const uint8_t *bytes, size_t len,

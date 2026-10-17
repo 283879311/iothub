@@ -5,6 +5,12 @@ import pathlib
 import re
 import shutil
 
+# Zopfli 为可选构建依赖:装了则网页资产体积更小(输出仍是标准 gzip),没装自动回落 zlib
+try:
+    import zopfli.gzip as _zopfli_gzip
+except ImportError:
+    _zopfli_gzip = None
+
 
 RAW_TAGS = ("script", "style", "pre", "textarea")
 COMMENT_PATTERN = re.compile(r"<!--(?!\[if\b)[\s\S]*?-->", re.IGNORECASE)
@@ -187,6 +193,26 @@ def minify_html(content: str) -> str:
     return joined + "\n"
 
 
+def compress_gzip(payload: bytes):
+    """返回 (gzip 字节, 编码器名)。Zopfli 可用则用之,否则回落 zlib -9。
+
+    Zopfli 产出的是标准 gzip(RFC 1952),故运行期无需任何改动。
+    gzip 头结构: ID1 ID2 CM FLG MTIME(4B) XFL OS —— MTIME 一律强制清零,
+    与旧实现 gzip.compress(..., mtime=0) 语义一致,保证可重现构建。
+    """
+    if _zopfli_gzip is not None:
+        # numiterations=15 是 py-zopfli 对小文件(几十 KB 级)的推荐值
+        out = _zopfli_gzip.compress(payload, numiterations=15)
+        encoder = "zopfli-15"
+    else:
+        out = gzip.compress(payload, compresslevel=9, mtime=0)
+        encoder = "zlib-9"
+    if len(out) >= 10 and out[4:8] != b"\x00\x00\x00\x00":
+        out = out[:4] + b"\x00\x00\x00\x00" + out[8:]
+    assert len(out) >= 10 and out[4:8] == b"\x00\x00\x00\x00", "gzip MTIME 未清零"
+    return out, encoder
+
+
 def process_directory(source_dir: pathlib.Path, output_dir: pathlib.Path) -> None:
     if output_dir.exists():
         shutil.rmtree(output_dir)
@@ -203,10 +229,10 @@ def process_directory(source_dir: pathlib.Path, output_dir: pathlib.Path) -> Non
         if source_path.suffix.lower() == ".html":
             content = source_path.read_text(encoding="utf-8")
             minified = minify_html(content)
-            # 构建期直接产出 gzip 资产(mtime=0 保证可重现);littlefs 不再打包未压缩 HTML
-            gz_bytes = gzip.compress(minified.encode("utf-8"), compresslevel=9, mtime=0)
+            # 构建期直接产出 gzip 资产(MTIME=0 保证可重现);littlefs 不再打包未压缩 HTML
+            gz_bytes, encoder = compress_gzip(minified.encode("utf-8"))
             target_path.with_name(target_path.name + ".gz").write_bytes(gz_bytes)
-            print(f"{relative_path.name}: {len(minified.encode('utf-8'))} -> {len(gz_bytes)} bytes (gzip)")
+            print(f"{relative_path.name}: {len(minified.encode('utf-8'))} -> {len(gz_bytes)} bytes (gzip/{encoder})")
         else:
             shutil.copy2(source_path, target_path)
 

@@ -1,0 +1,9 @@
+
+
+# Load bootloader symbols
+set confirm off
+    add-symbol-file /home/tc/workspace/iothub/build-bluedroid/bootloader/bootloader.elf
+set confirm on
+
+# Load application symbols
+file /home/tc/workspace/iothub/build-bluedroid/iothub.elf

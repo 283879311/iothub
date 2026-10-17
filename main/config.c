@@ -4,17 +4,19 @@
 #include "esp_check.h"
 #include "esp_log.h"
 #include "esp_random.h"
+#include "esp_timer.h"
 #include "nvs.h"
 
 #include "common.h"
 #include "config.h"
+#include "data_pipe.h"
 #include "wifi.h"
 
 #define APP_NAMESPACE "iothub"
 #define APP_CONFIG_KEY "runtime_cfg"
 #define APP_WIFI_PROFILES_KEY "wifi_profiles"
 #define APP_CONFIG_MAGIC 0x494f5448UL
-#define APP_CONFIG_VERSION 7
+#define APP_CONFIG_VERSION 10
 #define APP_WIFI_PROFILES_MAGIC 0x57494649UL
 #define APP_WIFI_PROFILES_VERSION 1
 
@@ -53,10 +55,19 @@ typedef struct {
  *     + adds uart_data_bits (uint8) and uart_stop_bits (uint8) so the UART frame is
  *       fully described inside config without the hard-coded 8N1 assumption
  *
- *   v7 (current APP_CONFIG_VERSION = 7 — app_config_t):
+ *   v7 (APP_CONFIG_VERSION = 7):
  *     + appends web 登录凭据(web_username/web_pass_salt/web_pass_hash)到结构体末尾;
  *       全部为 1 字节对齐成员,因此 v6 blob 是 v7 的字节前缀——迁移时读入前缀、
  *       保留 set_defaults 生成的默认凭据即可
+ *
+ *   v8 (APP_CONFIG_VERSION = 8):
+ *     + appends bt_role(蓝牙角色:0=off/1=peripheral/2=central)到结构体末尾;
+ *       v7 blob 同样是 v8 的字节前缀——迁移时读入前缀,再由 v7 的 bt_mode 推导:
+ *       bt_mode==1(ble) → peripheral,其余 → off
+ *
+ *   v9 (current APP_CONFIG_VERSION = 9 — app_config_t):
+ *     + appends STA 静态 IP 字段(sta_use_static / sta_static_ip / gateway / netmask / dns1 / dns2);
+ *       v8 blob 是 v9 的字节前缀——迁移时读入前缀,新字段由 set_defaults 初始化为 DHCP。
  */
 
 typedef struct {
@@ -380,6 +391,16 @@ void app_config_set_defaults(app_config_t *config)
     config->uart_data_bits = 8;
     config->uart_stop_bits = 1;
     config->uart_baudrate = 9600;
+    config->sta_use_static = 0;
+    app_copy_string(config->sta_static_ip, sizeof(config->sta_static_ip), "");
+    app_copy_string(config->sta_static_gateway, sizeof(config->sta_static_gateway), "");
+    app_copy_string(config->sta_static_netmask, sizeof(config->sta_static_netmask), "");
+    app_copy_string(config->sta_static_dns1, sizeof(config->sta_static_dns1), "");
+    app_copy_string(config->sta_static_dns2, sizeof(config->sta_static_dns2), "");
+    /* 1.3-07 数据面三边路由默认:UART1→BLE、BLE→UART1|MQTT(上行)、MQTT→BLE(下行) */
+    config->data_route_uart1 = DATA_PORT_MASK(DATA_PORT_BLE);
+    config->data_route_ble = DATA_PORT_MASK(DATA_PORT_UART1) | DATA_PORT_MASK(DATA_PORT_MQTT);
+    config->data_route_mqtt = DATA_PORT_MASK(DATA_PORT_BLE);
     app_copy_string(config->ap_ssid, sizeof(config->ap_ssid), "iothub");
     app_copy_string(config->bt_device_name, sizeof(config->bt_device_name), "iothub-bt");
     app_copy_string(config->mqtt_backend, sizeof(config->mqtt_backend), "tb_cloud");
@@ -405,12 +426,14 @@ esp_err_t app_config_save(const app_config_t *config)
     nvs_handle_t nvs_handle;
     esp_err_t err;
     size_t existing_size;
+    int64_t save_started_ms;
 
     if (config == NULL) {
         return ESP_ERR_INVALID_ARG;
     }
 
     app_config_lock();
+    save_started_ms = esp_timer_get_time() / 1000;
     err = nvs_open(APP_NAMESPACE, NVS_READWRITE, &nvs_handle);
     if (err != ESP_OK) {
         app_config_unlock();
@@ -434,6 +457,17 @@ esp_err_t app_config_save(const app_config_t *config)
         err = nvs_commit(nvs_handle);
     }
     nvs_close(nvs_handle);
+    /* 观测(1.3版本优化.md 1.3-10 ②):NVS 写是在**配置锁内**完成的 —— 这是刻意的,
+     * 用于防"读-改-写"丢更新(若解锁后再写,另一写者的新值可能被本次旧快照覆盖)。
+     * 锁是递归锁,且只有"确有变化"才会走到这里(上面已与 NVS 现值比对),故真实开销
+     * 只发生在**改配置**时。这里把"到底多久"变成可见数字:若频繁 >50ms,再按
+     * "快照 + 独立写锁"方案重构(留给 1.3-13 命令层统一提交时实施),而不是盲改次序。 */
+    {
+        int64_t took_ms = esp_timer_get_time() / 1000 - save_started_ms;
+        if (took_ms > 50) {
+            ESP_LOGW(TAG, "config save took %lld ms (config lock held)", (long long)took_ms);
+        }
+    }
     app_config_unlock();
     return err;
 }
@@ -527,15 +561,39 @@ void app_config_load(app_config_t *config)
         return;
     }
 
-    if (size == sizeof(*config)) {
-        size_t current_size = sizeof(*config);
-        if (nvs_get_blob(nvs_handle, APP_CONFIG_KEY, config, &current_size) == ESP_OK &&
+    /* 前缀链迁移(v7+):v7/v8(544B)、v9(624B)都是当前结构体的字节前缀 ——
+     * set_defaults 已把新增字段填成默认,读入前缀后按 version 补齐即可。
+     * ⚠ 此前 v8→v9 分支写在 size==sizeof(*config) 里是**死代码**(v8 blob 544B
+     * 永远进不了 624B 的分支,导致 v8 设备升级 v9 时被误判"无兼容配置"而重置)——
+     * 这里统一改为按 blob 实际大小的前缀链处理。 */
+    if (size >= offsetof(app_config_t, bt_role) && size <= sizeof(*config)) {
+        size_t read_size = size;
+
+        if (nvs_get_blob(nvs_handle, APP_CONFIG_KEY, config, &read_size) == ESP_OK &&
             config->magic == APP_CONFIG_MAGIC &&
-            config->version == APP_CONFIG_VERSION) {
+            config->version >= 7 && config->version <= APP_CONFIG_VERSION) {
+            if (config->version == APP_CONFIG_VERSION) {
+                nvs_close(nvs_handle);
+                return;
+            }
+            if (config->version == 7) {
+                /* v7 → 当前:bt_role 由 v7 的 bt_mode 推导:1(ble) → peripheral,其余 → off */
+                config->bt_role = (config->bt_mode == BT_MODE_BLE) ? BT_ROLE_PERIPHERAL : BT_ROLE_OFF;
+                ESP_LOGI(TAG, "Migrating saved config from v7 to v%d (bt_role=%u)",
+                         (int)APP_CONFIG_VERSION, (unsigned)config->bt_role);
+            } else {
+                ESP_LOGI(TAG, "Migrating saved config from v%u to v%d (appended fields keep defaults)",
+                         (unsigned)config->version, (int)APP_CONFIG_VERSION);
+            }
+            app_config_mark_current_version(config);
+            nvs_set_blob(nvs_handle, APP_CONFIG_KEY, config, sizeof(*config));
+            nvs_commit(nvs_handle);
             nvs_close(nvs_handle);
             return;
         }
-    } else if (size == sizeof(app_config_v6_t)) {
+    }
+
+    if (size == sizeof(app_config_v6_t)) {
         /* v6 → v7:web 凭据字段追加在结构体末尾且 1 字节对齐,v6 blob 是 v7 的
          * 字节前缀——读入前缀,保留函数开头 set_defaults 生成的默认凭据 */
         size_t read_size = size;
@@ -661,6 +719,23 @@ esp_err_t app_config_save_wifi_profile(const char *ssid, const char *password)
         return open_err;
     }
     app_config_load_wifi_profiles_blob(nvs_handle, &s_blob);
+
+    /* 护栏(1.3版本优化.md 1.3-20):空口令**不得**覆盖已存的非空口令。
+     * 否则一次空写(如某个调用点拿到空 profile 口令)就会永久抹掉可用凭据,
+     * 且会被 IP_EVENT_STA_GOT_IP 的回写路径自我强化。 */
+    if (password[0] == '\0') {
+        for (index = 0; index < APP_WIFI_PROFILE_MAX; index++) {
+            if (s_blob.profiles[index].ssid[0] != '\0' &&
+                strcmp(s_blob.profiles[index].ssid, s_profile.ssid) == 0 &&
+                s_blob.profiles[index].password[0] != '\0') {
+                ESP_LOGW(TAG, "keep stored password for '%s': refuse empty overwrite",
+                         s_profile.ssid);
+                nvs_close(nvs_handle);
+                app_wifi_profiles_unlock();
+                return ESP_OK;
+            }
+        }
+    }
 
     memset(s_existing, 0, sizeof(s_existing));
     existing_count = 0;

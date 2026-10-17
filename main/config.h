@@ -39,6 +39,24 @@ typedef struct {
     char web_username[33];
     uint8_t web_pass_salt[16];
     uint8_t web_pass_hash[32];
+    /* v8 新增,追加在末尾(同上:v7 blob 是 v8 的字节前缀):
+     * 蓝牙角色(权威字段) —— 0=off / 1=peripheral(从) / 2=central(主)。
+     * 旧 v7 的 bt_mode 保留为兼容字段(0=off,1=ble),迁移时用于推导 bt_role。 */
+    uint8_t bt_role;
+
+    /* v9 新增:STA 静态 IP 配置(追加在末尾,v8 blob 是 v9 的字节前缀) */
+    uint8_t sta_use_static;        /* 0=DHCP,1=静态 IP */
+    char sta_static_ip[16];
+    char sta_static_gateway[16];
+    char sta_static_netmask[16];
+    char sta_static_dns1[16];
+    char sta_static_dns2[16];
+
+    /* v10 新增(1.3-07):数据面三边路由位图(每端口的目的掩码,见 data_pipe.h)。
+     * 默认:UART1→BLE、BLE→UART1|MQTT(上行)、MQTT→BLE(下行)。 */
+    uint32_t data_route_uart1;
+    uint32_t data_route_ble;
+    uint32_t data_route_mqtt;
 } app_config_t;
 
 void app_config_set_defaults(app_config_t *config);

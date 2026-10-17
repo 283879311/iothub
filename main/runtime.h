@@ -19,6 +19,7 @@ typedef struct {
     void *client;
     bool connected;
     bool started;
+    bool fatal_error;  /* 认证被拒等致命错误:停止自动重连,等配置变更后重试(1.3-43) */
     uint32_t publish_count;
     int last_msg_id;
     char last_error[96];
@@ -31,6 +32,7 @@ typedef struct {
     bool sta_has_ip;
     bool startup_connect_active;
     bool startup_fallback_to_ap;
+    bool sta_ip_conflict;       /* 静态 IP 冲突检测结果(ARP 探测,见 wifi.c) */
     uint8_t sta_retries;
     int64_t startup_connect_deadline_ms;
     uint8_t scan_records_storage[WIFI_SCAN_LIST_SIZE * 512];

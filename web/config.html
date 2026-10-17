@@ -104,6 +104,12 @@
       margin: 8px 0 12px;
       color: var(--muted);
     }
+    input[type="checkbox"],
+    input[type="radio"] {
+      accent-color: var(--accent);
+      width: 16px;
+      height: 16px;
+    }
     button {
       border: 0;
       border-radius: 10px;
@@ -142,6 +148,11 @@
     .hint {
       font-size: 13px;
       color: var(--muted);
+    }
+    input.input-error,
+    select.input-error {
+      border-color: var(--bad);
+      box-shadow: 0 0 0 2px rgba(248, 113, 113, 0.25);
     }
     .status {
       margin-top: 12px;
@@ -255,7 +266,7 @@
   <main>
     <section class="card">
       <div class="toolbar">
-        <h1><span data-i18n="page.title">iothub 设备配置页</span> <span class="pill">Phase 4</span></h1>
+        <h1><span data-i18n="page.title">设备配置页</span></h1>
         <div class="lang-switch">
           <label for="languageSelect" data-i18n="language.label">语言</label>
           <select id="languageSelect">
@@ -263,8 +274,7 @@
             <option value="en" data-i18n="language.en">English</option>
           </select>
         </div>
-      </div>
-      <p data-i18n="page.subtitle">当前阶段补齐了 AP / STA / APSTA 网络模式、Wi-Fi 扫描、STA 联网状态展示，以及 MQTT 与 STA 上网链路的联动入口。</p>
+      </div>      
     </section>
 
     <section class="grid" style="margin-top:16px;">
@@ -329,7 +339,8 @@
           <button id="scanWifi" class="secondary" data-i18n="button.scanWifi">扫描 Wi-Fi</button>
           <button id="showSavedWifi" class="secondary" data-i18n="button.savedWifi">已保存WiFi</button>
         </div>
-        <div class="hint" data-i18n="hint.network">设备默认 AP 地址为 `192.168.8.1`。STA 模式下可连接上游网络，MQTT 会在 STA 获取 IP 后再尝试连出。</div>
+        <div class="hint" data-i18n="hint.network">设备默认 AP 地址为 `192.168.8.1`。STA 模式下可连接上游网络，MQTT 会在 STA 获取 IP 后再尝试连出。静态 IP 与密码验证在“扫描 Wi-Fi → 连接向导”中设置。</div>
+        <div id="networkValidation" class="status" hidden></div>
         <div id="networkStatus" class="status" data-i18n="status.networkLoading">等待加载网络配置...</div>
       </article>
 
@@ -393,14 +404,14 @@
         <label for="btMode" data-i18n="bluetooth.mode">蓝牙模式</label>
         <select id="btMode">
           <option value="off" data-i18n="bt.off">关闭蓝牙</option>
-          <option value="ble" data-i18n="bt.ble">低功耗蓝牙</option>
-          <option value="spp" data-i18n="bt.spp">经典蓝牙</option>
+          <option value="ble" data-i18n="bt.ble">低功耗蓝牙·从机(广播 NUS)</option>
+          <option value="central" data-i18n="bt.central">低功耗蓝牙·主机(扫描并连接另一台设备)</option>
         </select>
         <div class="hint" data-i18n="bluetooth.modeSwitchHint">切换蓝牙模式会使设备重启</div>
         <label for="btName" data-i18n="bluetooth.name">蓝牙名称</label>
         <input id="btName" type="text" maxlength="32">
         <button id="saveBluetooth" data-i18n="button.saveBluetooth">保存蓝牙配置</button>
-        <div class="hint" data-i18n="hint.bluetooth">低功耗蓝牙模式下设备会广播名称；经典蓝牙模式下会以从机服务方式等待连接。</div>
+        <div class="hint" data-i18n="hint.bluetooth">低功耗蓝牙模式下设备会广播名称，等待手机/电脑连接。</div>
         <div id="bluetoothStatus" class="status" data-i18n="status.bluetoothLoading">等待加载蓝牙配置...</div>
       </article>
 
@@ -514,10 +525,63 @@
   <div id="wifiScanModal" class="modal-overlay" hidden>
     <div class="modal-card large">
       <h3 data-i18n="dialog.wifiScanTitle">扫描到的 Wi-Fi</h3>
-      <p data-i18n="scan.modalHint">点击“使用”可将 SSID 与密码回填到 STA 配置中，随后再保存网络配置。</p>
+      <p data-i18n="scan.modalHint">点击“使用”进入连接向导：填写密码并验证通过后即可保存。</p>
       <div id="wifiScanList" class="scan-list"></div>
       <div class="actions">
-        <button id="closeWifiScanModal" class="secondary" data-i18n="button.close">关闭</button>
+        <button id="closeWifiScanModal" class="secondary" data-i18n="button.cancel">取消</button>
+      </div>
+    </div>
+  </div>
+  <div id="wifiJoinModal" class="modal-overlay" hidden>
+    <div class="modal-card large">
+      <h3 data-i18n="dialog.wifiJoinTitle">连接 Wi-Fi</h3>
+      <div class="subgrid">
+        <div>
+          <label for="joinSsid" data-i18n="wifiJoin.ssid">Wi-Fi 名称</label>
+          <input id="joinSsid" type="text" maxlength="32" data-i18n-placeholder="placeholder.joinSsid" placeholder="已自动填入;可手动修改">
+        </div>
+        <div>
+          <label for="joinPassword" data-i18n="wifiJoin.password">Wi-Fi 密码</label>
+          <input id="joinPassword" type="password" maxlength="64" data-i18n-placeholder="placeholder.joinPassword" placeholder="至少 8 位">
+        </div>
+      </div>
+      <label class="checkbox">
+        <input id="joinIpDhcp" type="radio" name="joinIpMode" value="dhcp" checked>
+        <span data-i18n="wifiJoin.dhcp">DHCP(自动获取)</span>
+      </label>
+      <label class="checkbox">
+        <input id="joinIpStatic" type="radio" name="joinIpMode" value="static">
+        <span data-i18n="wifiJoin.staticIp">静态 IP</span>
+      </label>
+      <div id="joinStaticPanel" class="subgrid" hidden>
+        <div class="hint" style="grid-column: 1 / -1;" data-i18n="wifiJoin.staticHint">留空的字段会自动填入当前 DHCP 获得的地址(未联网时用示例值)</div>
+        <div>
+          <label for="joinStaticIp" data-i18n="network.staStaticIp">IP 地址</label>
+          <input id="joinStaticIp" type="text" maxlength="15" placeholder="192.168.1.213">
+        </div>
+        <div>
+          <label for="joinStaticGateway" data-i18n="network.staStaticGateway">网关</label>
+          <input id="joinStaticGateway" type="text" maxlength="15" placeholder="192.168.1.1">
+        </div>
+        <div>
+          <label for="joinStaticNetmask" data-i18n="network.staStaticNetmask">子网掩码</label>
+          <input id="joinStaticNetmask" type="text" maxlength="15" placeholder="255.255.255.0">
+        </div>
+        <div>
+          <label for="joinStaticDns1" data-i18n="network.staStaticDns1">首选 DNS(可选)</label>
+          <input id="joinStaticDns1" type="text" maxlength="15" placeholder="192.168.1.1">
+        </div>
+        <div>
+          <label for="joinStaticDns2" data-i18n="network.staStaticDns2">备用 DNS(可选)</label>
+          <input id="joinStaticDns2" type="text" maxlength="15" placeholder="8.8.8.8">
+        </div>
+      </div>
+      <p class="hint" data-i18n="wifiJoin.verifyHint">先点“验证密码”：设备会真实试连一次，密码正确后出现“保存”按钮。</p>
+      <div id="joinValidation" class="status" hidden></div>
+      <div class="actions">
+        <button id="joinVerify" class="secondary" data-i18n="wifiJoin.verify">验证密码</button>
+        <button id="joinSave" hidden data-i18n="button.saveNetwork">保存</button>
+        <button id="joinCancel" class="secondary" data-i18n="button.cancel">取消</button>
       </div>
     </div>
   </div>
@@ -528,6 +592,16 @@
       <div id="savedWifiList" class="scan-list"></div>
       <div class="actions">
         <button id="closeSavedWifiModal" class="secondary" data-i18n="button.close">关闭</button>
+      </div>
+    </div>
+  </div>
+  <div id="ipConflictModal" class="modal-overlay" hidden>
+    <div class="modal-card">
+      <h3 data-i18n="network.ipConflictTitle">静态 IP 地址冲突</h3>
+      <p id="ipConflictText"></p>
+      <div class="actions">
+        <button id="ipConflictGoFix" data-i18n="network.ipConflictFix">去修改</button>
+        <button id="ipConflictDismiss" class="secondary" data-i18n="button.close">忽略</button>
       </div>
     </div>
   </div>
@@ -548,12 +622,16 @@
       savedWifiProfiles: [],
       wifiScanResults: [],
       networkConfig: null,
+      ipConflictShown: false,
       uartPollTimer: null,
       uartPollBusy: false
     };
 
-    const FETCH_RETRY_MAX = 1;
+    const FETCH_RETRY_MAX = 2;
     const FETCH_RETRY_DELAY_MS = 250;
+    /* 单请求超时:设备是单任务 httpd,慢客户端会阻塞其它请求 → 没有超时就会
+     * "面板永远加载中"(fetch 永不 settle)。见 1.3版本优化.md 1.3-19 */
+    const FETCH_TIMEOUT_MS = 8000;
 
     const translations = {
       "zh-CN": {
@@ -589,9 +667,51 @@
         "network.staSsid": "STA 名称",
         "network.staPassword": "STA 密码",
         "network.openSta": "开放网络(清除已存密码)",
+        "network.apSsidRequired": "AP 名称不能为空",
+        "network.staSsidRequired": "STA 名称不能为空",
+        "network.passwordTooShort": "密码至少 8 位",
+        "network.passwordRequired": "请输入密码",
+        "network.openNetworkHint": "如需开放网络,请勾选“清除已存密码”",
+        "network.validationOk": "网络配置校验通过",
+        "network.validate": "校验配置",
+        "network.tryConnect": "试连验证",
+        "network.tryConnecting": "正在试连(含扫描,最长约 25 秒)…",
+        "network.tryConnectOk": "试连成功:SSID 与密码正确,可以保存",
+        "network.tryConnectFailed": "试连失败:{reason}",
+        "network.try.password_ok": "密码正确",
+        "network.try.wrong_password": "密码错误",
+        "network.try.ap_not_found": "附近找不到该 AP(隐藏网络请直接保存尝试)",
+        "network.try.connect_timeout": "连接超时,网络不可达",
+        "network.try.wifi_busy": "设备网络正忙,稍后再试",
+        "network.try.connect_failed": "连接失败",
+        "network.try.invalid_ssid": "SSID 无效",
+        "network.try.ssid_required": "SSID 必填",
+        "network.try.tryconnect_requires_ap": "试连会断开当前网络:请先连接设备热点(192.168.8.1)再操作",
+        "network.staUseStatic": "使用静态 IP(关闭则使用 DHCP)",
+        "network.staStaticDefaultHint": "勾选后留空的字段会自动填入当前 DHCP 获得的地址(未联网时用示例值),可直接保存",
+        "network.staStaticIp": "IP 地址",
+        "network.staStaticGateway": "网关",
+        "network.staStaticNetmask": "子网掩码",
+        "network.staStaticDns1": "首选 DNS(可选)",
+        "network.staStaticDns2": "备用 DNS(可选)",
+        "network.staStaticIpRequired": "静态 IP 模式下必须填写 IP 地址",
+        "network.staStaticIpInvalid": "IP 地址格式不正确",
+        "network.staStaticGatewayRequired": "静态 IP 模式下必须填写网关",
+        "network.staStaticGatewayInvalid": "网关格式不正确",
+        "network.staStaticNetmaskRequired": "静态 IP 模式下必须填写子网掩码",
+        "network.staStaticNetmaskInvalid": "子网掩码格式不正确",
+        "network.staStaticDnsInvalid": "DNS 格式不正确",
+        "network.ipConflictTitle": "静态 IP 地址冲突",
+        "network.ipConflictText": "检测到静态 IP {ip} 已被局域网中的其他设备占用。请修改 IP 后重新保存网络配置，否则设备网络可能异常。",
+        "network.ipConflictFix": "去修改",
+        "network.ipConflictSummary": "⚠ 静态 IP {ip} 与局域网内其他设备冲突",
         "placeholder.apPassword": "已保存;输入则修改,留空保持不变",
         "placeholder.staSsid": "上游路由器 SSID",
         "placeholder.staPassword": "至少 8 位;留空保持已存密码",
+        "placeholder.staStaticIp": "192.168.1.213",
+        "placeholder.staStaticGateway": "192.168.1.1",
+        "placeholder.staStaticNetmask": "255.255.255.0",
+        "placeholder.staStaticDns": "192.168.1.1",
         "placeholder.mqttToken": "已保存;输入则修改,留空保持不变",
         "placeholder.uartTx": "输入待发送数据，hex 模式可用空格分隔",
         "mode.ap": "AP",
@@ -600,6 +720,8 @@
         "button.saveNetwork": "保存",
         "button.scanWifi": "扫描 Wi-Fi",
         "button.savedWifi": "已保存WiFi",
+        "network.modeAutoApsta": "已填 STA 名称:网络模式自动切为 AP + STA(否则 STA 不会启用)",
+        "network.staSsidInactive": "注意:已保存 STA 名称,但当前是纯 AP 模式 → STA 不会启用;请把网络模式改为 AP + STA 后保存",
         "button.toggle": "切换",
         "button.saveGpio": "保存 GPIO 配置",
         "button.saveBluetooth": "保存蓝牙配置",
@@ -614,12 +736,25 @@
         "button.use": "使用",
         "button.delete": "删除",
         "button.close": "关闭",
+        "button.cancel": "取消",
+        "dialog.wifiJoinTitle": "连接 Wi-Fi",
+        "wifiJoin.ssid": "Wi-Fi 名称",
+        "wifiJoin.password": "Wi-Fi 密码",
+        "wifiJoin.dhcp": "DHCP(自动获取)",
+        "wifiJoin.staticIp": "静态 IP",
+        "wifiJoin.staticHint": "留空的字段会自动填入当前 DHCP 获得的地址(未联网时用示例值)",
+        "wifiJoin.verify": "验证密码",
+        "wifiJoin.verifyHint": "先点“验证密码”：设备会真实试连一次，密码正确后出现“保存”按钮。",
+        "wifiJoin.verifying": "正在验证(真实试连,最长约 25 秒)…",
+        "wifiJoin.reverify": "SSID 或密码已修改：请重新“验证密码”后再保存",
+        "placeholder.joinSsid": "已自动填入;可手动修改",
+        "placeholder.joinPassword": "至少 8 位",
         "bt.off": "关闭蓝牙",
-        "bt.ble": "低功耗蓝牙",
-        "bt.spp": "经典蓝牙",
+        "bt.ble": "低功耗蓝牙·从机(外设,广播 NUS)",
+        "bt.central": "低功耗蓝牙·主机(中心,扫描并连接另一台设备)",
         "hint.network": "设备默认 AP 地址为 `192.168.8.1`。STA 模式下可连接上游网络，MQTT 会在 STA 获取 IP 后再尝试连出。",
         "hint.gpio": "引脚已固定在固件中。如需调整，请修改源码宏定义后重新编译烧录。GPIO34/35/36/39 仅支持输入且需要外部上下拉。",
-        "hint.bluetooth": "低功耗蓝牙模式下设备会广播名称；经典蓝牙模式下会以从机服务方式等待连接。",
+        "hint.bluetooth": "从机模式下设备会广播 NUS 服务，等待手机/电脑连接；主机模式用于连接另一台 iothub 设备（双机互连场景）。切换模式保存后设备自动重启。",
         "hint.ota": "建议先升级 `storage.bin`，再升级 `iothub.bin`；也可以两者都升级。每次上传成功后设备都会自动重启，页面会提示你刷新并重新连接。",
         "hint.mqtt": "当前阶段会实际发起 MQTT 连接，并周期上报基础遥测。若仍未连接，请确认网络可达和 Broker 配置正确。",
         "hint.uart": "RX/TX 引脚已固定在固件中。请直接设置波特率、数据位、停止位和奇偶校验后保存，并在下方接收窗口中观察串口数据是否正确。",
@@ -670,7 +805,7 @@
         "scan.savedEmptyTitle": "暂无已保存的 WiFi",
         "scan.savedEmptyHint": "先保存一次 STA 配置后，这里会显示常用 Wi‑Fi。",
         "scan.hidden": "(隐藏 SSID)",
-        "scan.modalHint": "点击“使用”可将 SSID 与密码回填到 STA 配置中，随后再保存网络配置。",
+        "scan.modalHint": "点击“使用”进入连接向导：填写密码并验证通过后即可保存。",
         "device.project": "项目",
         "device.target": "目标",
         "device.idf_version": "IDF 版本",
@@ -704,6 +839,8 @@
         "network.savedWifiHint": "点击“使用”可切换到该组已保存的 Wi‑Fi 参数；如果已连接当前 Wi‑Fi，则只提示无需切换。",
         "network.profileApplied": "已回填 Wi-Fi：{ssid}",
         "network.profileDeleted": "已删除保存的 Wi-Fi：{ssid}",
+        "network.profileDeleteFailed": "删除失败:{ssid}(可能不存在或正被使用)",
+        "network.profileCurrent": "当前使用中",
         "network.profileAlreadyConnected": "已连接该 Wi‑Fi：{ssid}，无需切换",
         "network.savedNeedsRestart": "网络配置已保存。新的访问地址：{address}。是否现在重启网络以应用配置？",
         "network.savedStaOnly": "网络配置已保存。当前为纯 STA 模式，重启后请到路由器 DHCP 列表查看新 IP。是否现在重启网络以应用配置？",
@@ -768,9 +905,51 @@
         "network.staSsid": "STA SSID",
         "network.staPassword": "STA Password",
         "network.openSta": "Open network (clear saved password)",
+        "network.apSsidRequired": "AP SSID is required",
+        "network.staSsidRequired": "STA SSID is required",
+        "network.passwordTooShort": "Password must be at least 8 characters",
+        "network.passwordRequired": "Please enter the password",
+        "network.openNetworkHint": "For an open network, check “clear saved password”",
+        "network.validationOk": "Network configuration looks good",
+        "network.validate": "Validate",
+        "network.tryConnect": "Try Connect",
+        "network.tryConnecting": "Trying to connect (scan included, up to ~25s)...",
+        "network.tryConnectOk": "Connect OK: SSID and password are correct, you can save now",
+        "network.tryConnectFailed": "Try-connect failed: {reason}",
+        "network.try.password_ok": "Password correct",
+        "network.try.wrong_password": "Wrong password",
+        "network.try.ap_not_found": "AP not found nearby (for hidden networks, save directly)",
+        "network.try.connect_timeout": "Connect timeout, network unreachable",
+        "network.try.wifi_busy": "Device Wi-Fi busy, try again later",
+        "network.try.connect_failed": "Connection failed",
+        "network.try.invalid_ssid": "Invalid SSID",
+        "network.try.ssid_required": "SSID required",
+        "network.try.tryconnect_requires_ap": "Try-connect would drop the current link: connect to the device hotspot (192.168.8.1) first",
+        "network.staUseStatic": "Use static IP (disable for DHCP)",
+        "network.staStaticDefaultHint": "Empty fields are auto-filled with the current DHCP address (or example values when offline); you can save right away",
+        "network.staStaticIp": "IP Address",
+        "network.staStaticGateway": "Gateway",
+        "network.staStaticNetmask": "Netmask",
+        "network.staStaticDns1": "Primary DNS (optional)",
+        "network.staStaticDns2": "Secondary DNS (optional)",
+        "network.staStaticIpRequired": "Static IP mode requires an IP address",
+        "network.staStaticIpInvalid": "Invalid IP address format",
+        "network.staStaticGatewayRequired": "Static IP mode requires a gateway",
+        "network.staStaticGatewayInvalid": "Invalid gateway format",
+        "network.staStaticNetmaskRequired": "Static IP mode requires a netmask",
+        "network.staStaticNetmaskInvalid": "Invalid netmask format",
+        "network.staStaticDnsInvalid": "Invalid DNS format",
+        "network.ipConflictTitle": "Static IP Conflict",
+        "network.ipConflictText": "The static IP {ip} is already used by another device on the LAN. Change the IP and save the network config again, otherwise the device network may malfunction.",
+        "network.ipConflictFix": "Fix Now",
+        "network.ipConflictSummary": "⚠ Static IP {ip} conflicts with another device on the LAN",
         "placeholder.apPassword": "Saved; type to change, leave empty to keep",
         "placeholder.staSsid": "Upstream router SSID",
         "placeholder.staPassword": "At least 8 chars; leave empty to keep saved",
+        "placeholder.staStaticIp": "192.168.1.213",
+        "placeholder.staStaticGateway": "192.168.1.1",
+        "placeholder.staStaticNetmask": "255.255.255.0",
+        "placeholder.staStaticDns": "192.168.1.1",
         "placeholder.mqttToken": "Saved; type to change, leave empty to keep",
         "placeholder.uartTx": "Enter data to send; hex mode accepts space-separated bytes",
         "mode.ap": "AP",
@@ -779,6 +958,8 @@
         "button.saveNetwork": "Save",
         "button.scanWifi": "Scan Wi-Fi",
         "button.savedWifi": "Saved Wi-Fi",
+        "network.modeAutoApsta": "STA SSID entered: network mode switched to AP + STA (otherwise STA stays disabled)",
+        "network.staSsidInactive": "Warning: STA SSID saved but mode is AP-only, so STA stays disabled; set mode to AP + STA and save",
         "button.toggle": "Toggle",
         "button.saveGpio": "Save GPIO",
         "button.saveBluetooth": "Save Bluetooth Settings",
@@ -793,12 +974,25 @@
         "button.use": "Use",
         "button.delete": "Delete",
         "button.close": "Close",
+        "button.cancel": "Cancel",
+        "dialog.wifiJoinTitle": "Join Wi-Fi",
+        "wifiJoin.ssid": "Wi-Fi name",
+        "wifiJoin.password": "Wi-Fi password",
+        "wifiJoin.dhcp": "DHCP (automatic)",
+        "wifiJoin.staticIp": "Static IP",
+        "wifiJoin.staticHint": "Blank fields are auto-filled from the current DHCP address (example values when offline)",
+        "wifiJoin.verify": "Verify password",
+        "wifiJoin.verifyHint": "Tap \"Verify password\" first: the device makes a real connection attempt, and the Save button appears after the password is confirmed.",
+        "wifiJoin.verifying": "Verifying (real connection attempt, up to ~25s)…",
+        "wifiJoin.reverify": "SSID or password changed: tap \"Verify password\" again before saving",
+        "placeholder.joinSsid": "Pre-filled; editable",
+        "placeholder.joinPassword": "At least 8 characters",
         "bt.off": "BT OFF",
-        "bt.ble": "BLE",
-        "bt.spp": "SPP",
+        "bt.ble": "BLE Peripheral (advertises NUS)",
+        "bt.central": "BLE Central (scans and connects to another device)",
         "hint.network": "The default AP address is `192.168.8.1`. In STA mode the device can connect upstream, and MQTT starts after STA gets an IP.",
         "hint.gpio": "Pins are fixed in firmware. To change them, update the source macros and rebuild/reflash. GPIO34/35/36/39 are input-only and require external pull resistors.",
-        "hint.bluetooth": "In BLE mode, the device advertises its name. In SPP mode, it waits for incoming connections as a Classic Bluetooth slave service.",
+        "hint.bluetooth": "Peripheral mode advertises the NUS service for phones/PCs; central mode connects to another iothub device (two-device scenario). Saving a mode change reboots the device.",
         "hint.ota": "Upgrade `storage.bin` first, then `iothub.bin`; or upload both in sequence. After each successful upload, the device reboots automatically and the page prompts you to refresh and reconnect.",
         "hint.mqtt": "This phase starts a real MQTT connection and publishes basic telemetry periodically. If it is still disconnected, verify network reachability and broker settings.",
         "hint.uart": "RX/TX pins are fixed in firmware. Set baud rate, data bits, stop bits, and parity directly, save them, then verify the data in the receive console below.",
@@ -849,7 +1043,7 @@
         "scan.savedEmptyTitle": "No saved Wi-Fi yet",
         "scan.savedEmptyHint": "Save STA settings once and common Wi‑Fi profiles appear here.",
         "scan.hidden": "(hidden SSID)",
-        "scan.modalHint": "Click \"Use\" to fill the STA SSID and password, then save the network settings.",
+        "scan.modalHint": "Click \"Use\" to open the join wizard: enter the password and save once it is verified.",
         "device.project": "Project",
         "device.target": "Target",
         "device.idf_version": "IDF Version",
@@ -883,6 +1077,8 @@
         "network.savedWifiHint": "Click \"Use\" to switch the form to a saved Wi‑Fi profile. If this Wi‑Fi is already connected, the page only shows a reminder.",
         "network.profileApplied": "Filled Wi-Fi profile: {ssid}",
         "network.profileDeleted": "Deleted saved Wi-Fi: {ssid}",
+        "network.profileDeleteFailed": "Delete failed: {ssid} (missing or in use)",
+        "network.profileCurrent": "In use",
         "network.profileAlreadyConnected": "This Wi‑Fi is already connected: {ssid}",
         "network.savedNeedsRestart": "Network settings were saved. New access address: {address}. Restart networking now to apply the changes?",
         "network.savedStaOnly": "Network settings were saved. STA-only mode cannot predict the next IP. After restart, check your router DHCP list for the new address. Restart networking now?",
@@ -982,6 +1178,19 @@
       element.className = "status" + (tone ? ` ${tone}` : "");
     }
 
+    function setNetworkValidationStatus(text, tone) {
+      const element = document.getElementById("networkValidation");
+      if (!text) {
+        element.hidden = true;
+        element.textContent = "";
+        element.className = "status";
+        return;
+      }
+      element.hidden = false;
+      element.textContent = text;
+      element.className = "status" + (tone ? ` ${tone}` : "");
+    }
+
     function renderUartConsole() {
       const rxFormat = document.getElementById("uartRxFormat");
       const txFormat = document.getElementById("uartTxFormat");
@@ -1032,10 +1241,14 @@
     }
 
     function isTransientFetchError(error) {
+      if (error && (error.name === "AbortError" || error.timeout === true)) {
+        return true;   /* 超时(AbortController)按可重试处理 */
+      }
       const message = String(error?.message || error || "");
       return message === "Failed to fetch" ||
              message === "Load failed" ||
-             message === "NetworkError when attempting to fetch resource.";
+             message === "NetworkError when attempting to fetch resource." ||
+             message === "The operation was aborted.";
     }
 
     function renderDeviceError(message) {
@@ -1123,6 +1336,21 @@
       document.getElementById("savedWifiModal").hidden = true;
     }
 
+    /* 静态 IP 冲突弹窗:状态轮询/加载时发现 sta_ip_conflict=true 即弹出(一次) */
+    function showIpConflictModal(ip) {
+      if (state.ipConflictShown) {
+        return;
+      }
+      state.ipConflictShown = true;
+      document.getElementById("ipConflictText").textContent =
+        t("network.ipConflictText", { ip: ip || "-" });
+      document.getElementById("ipConflictModal").hidden = false;
+    }
+
+    function closeIpConflictModal() {
+      document.getElementById("ipConflictModal").hidden = true;
+    }
+
     function applySavedWifiProfile(index) {
       const profile = state.savedWifiProfiles[index];
       if (!profile) {
@@ -1148,19 +1376,165 @@
       if (!profile) {
         return;
       }
-      document.getElementById("staSsid").value = profile.ssid || "";
-      document.getElementById("staPassword").value = "";
-      closeWifiScanModal();
-      setStatus("networkStatus", t("network.profileApplied", {
-        ssid: profile.ssid || t("scan.hidden")
-      }), "ok");
+      openWifiJoinModal(profile.ssid || "");
+    }
+
+    /* -------------------------------------------------------------------------
+     * 连接 Wi-Fi 向导(1.3-51):扫描列表点“使用”后进入。
+     * SSID 自动填入(可手动改),密码需“验证密码”(真实试连)通过后才出现“保存”;
+     * DHCP / 静态 IP 二选一(默认 DHCP),勾选静态 IP 展开静态地址面板。
+     * “保存”把向导字段回填到主网络表单并走既有 saveNetwork() 全流程
+     * (含静态 IP 校验/模式推断/保存后重启确认),不复制保存逻辑。
+     * ------------------------------------------------------------------------- */
+    function openWifiJoinModal(ssid) {
+      document.getElementById("joinSsid").value = ssid || "";
+      document.getElementById("joinPassword").value = "";
+      document.getElementById("joinIpDhcp").checked = true;
+      document.getElementById("joinStaticPanel").hidden = true;
+      document.getElementById("joinSave").hidden = true;
+      state.joinVerified = null;   /* 1.3-52:换一个 Wi-Fi 就必须重新验证密码 */
+      setJoinValidationStatus("", "");
+      document.getElementById("wifiJoinModal").hidden = false;
+    }
+
+    function closeWifiJoinModal() {
+      document.getElementById("wifiJoinModal").hidden = true;
+    }
+
+    function joinIpMode() {
+      return document.getElementById("joinIpStatic").checked ? "static" : "dhcp";
+    }
+
+    function setJoinValidationStatus(text, tone) {
+      const element = document.getElementById("joinValidation");
+      if (!text) {
+        element.hidden = true;
+        element.textContent = "";
+        element.className = "status";
+        return;
+      }
+      element.hidden = false;
+      element.textContent = text;
+      element.className = "status" + (tone ? ` ${tone}` : "");
+    }
+
+    function updateJoinStaticPanel() {
+      const panel = document.getElementById("joinStaticPanel");
+      panel.hidden = joinIpMode() !== "static";
+      if (panel.hidden) {
+        return;
+      }
+      /* 与主表单同一套默认值策略:留空字段按当前 DHCP 地址/示例值填充 */
+      const defaults = staticIpDefaults();
+      const fill = (id, value) => {
+        const el = document.getElementById(id);
+        if (el && !el.value.trim()) {
+          el.value = value;
+        }
+      };
+      fill("joinStaticIp", defaults.ip);
+      fill("joinStaticGateway", defaults.gw);
+      fill("joinStaticNetmask", defaults.mask);
+      fill("joinStaticDns1", defaults.dns1);
+      fill("joinStaticDns2", defaults.dns2);
+    }
+
+    async function verifyJoinWifi() {
+      const ssid = document.getElementById("joinSsid").value.trim();
+      const password = document.getElementById("joinPassword").value;
+      if (!ssid) {
+        setJoinValidationStatus(t("network.staSsidRequired"), "bad");
+        return;
+      }
+      if (password && password.length < 8) {
+        setJoinValidationStatus(t("network.passwordTooShort"), "bad");
+        return;
+      }
+      document.getElementById("joinSave").hidden = true;
+      stopPolling();
+      setJoinValidationStatus(t("wifiJoin.verifying"), "warn");
+      try {
+        await getJson("/api/v1/config/network/tryconnect", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sta_ssid: ssid, sta_password: password }),
+          timeoutMs: 25000
+        });
+        setJoinValidationStatus(t("network.tryConnectOk"), "ok");
+        document.getElementById("joinSave").hidden = false;
+        state.joinVerified = {
+          ssid: ssid,
+          password: password
+        };
+      } catch (error) {
+        const reason = error?.message || "connect_failed";
+        const text = t("network.try." + reason);
+        setJoinValidationStatus(
+          text === "network.try." + reason
+            ? t("network.tryConnectFailed", { reason })
+            : t("network.tryConnectFailed", { reason: text }), "bad");
+      } finally {
+        startStatusPolling();
+        startUartConsolePolling();
+      }
+    }
+
+    async function saveJoinWifi() {
+      /* 1.3-52:向导直接组 payload(不再回填主表单)。
+       * AP 部分沿用主表单当前值;STA 与静态 IP 按向导选择;SSID/密码若在
+       * "验证密码"通过后又被修改,必须重新验证。 */
+      const joinSsid = document.getElementById("joinSsid").value.trim();
+      const joinPassword = document.getElementById("joinPassword").value;
+      const verified = state.joinVerified;
+      if (!verified || verified.ssid !== joinSsid || verified.password !== joinPassword) {
+        setJoinValidationStatus(t("wifiJoin.reverify"), "bad");
+        return;
+      }
+      const useStatic = joinIpMode() === "static";
+      if (useStatic) {
+        const ip = document.getElementById("joinStaticIp").value.trim();
+        const gw = document.getElementById("joinStaticGateway").value.trim();
+        const mask = document.getElementById("joinStaticNetmask").value.trim();
+        if (!ip || !isValidIpv4(ip)) {
+          setJoinValidationStatus(t("network.staStaticIpInvalid"), "bad");
+          return;
+        }
+        if (!gw || !isValidIpv4(gw)) {
+          setJoinValidationStatus(t("network.staStaticGatewayInvalid"), "bad");
+          return;
+        }
+        if (!mask || !isValidIpv4(mask)) {
+          setJoinValidationStatus(t("network.staStaticNetmaskInvalid"), "bad");
+          return;
+        }
+      }
+      const { payload } = buildNetworkPayload();
+      payload.sta_ssid = joinSsid;
+      payload.sta_password = joinPassword;
+      delete payload.sta_password_clear;
+      payload.sta_use_static = useStatic ? 1 : 0;
+      if (useStatic) {
+        payload.sta_static_ip = document.getElementById("joinStaticIp").value.trim();
+        payload.sta_static_gateway = document.getElementById("joinStaticGateway").value.trim();
+        payload.sta_static_netmask = document.getElementById("joinStaticNetmask").value.trim();
+        const dns1 = document.getElementById("joinStaticDns1").value.trim();
+        const dns2 = document.getElementById("joinStaticDns2").value.trim();
+        if (dns1) {
+          payload.sta_static_dns1 = dns1;
+        }
+        if (dns2) {
+          payload.sta_static_dns2 = dns2;
+        }
+      }
+      closeWifiJoinModal();
+      await submitNetworkConfig(payload, "");
     }
 
     function mergeSavedWifiProfiles(profiles, current) {
       const merged = [];
       const source = Array.isArray(profiles) ? profiles : [];
       const currentProfile = current?.sta_ssid
-        ? { ssid: current.sta_ssid, password_set: Boolean(current.sta_password_set) }
+        ? { ssid: current.sta_ssid, password_set: Boolean(current.sta_password_set), current: true }
         : null;
 
       if (currentProfile) {
@@ -1179,7 +1553,8 @@
         }
         merged.push({
           ssid: profile.ssid,
-          password_set: Boolean(profile.password_set)
+          password_set: Boolean(profile.password_set),
+          current: false
         });
       });
       return merged;
@@ -1197,9 +1572,17 @@
       }
       target.innerHTML = items.map((profile, index) => {
         const maskedPassword = profile.password_set ? "********" : t("network.none");
-        const hintText = current.sta_connected && current.sta_ssid === profile.ssid
-          ? `${t("state.connected")} / ${maskedPassword}`
-          : maskedPassword;
+        const isCurrent = Boolean(profile.current);
+        const hintText = isCurrent
+          ? `${t("network.profileCurrent")} / ${maskedPassword}`
+          : (current.sta_connected && current.sta_ssid === profile.ssid
+              ? `${t("state.connected")} / ${maskedPassword}`
+              : maskedPassword);
+        /* 当前使用的 STA 配置由主配置(sta_ssid)承载,不属于已保存 profile 列表:
+         * 删除它没有意义(服务端会 404 或删完又被重新合并显示),故不给出删除按钮 */
+        const deleteButton = isCurrent
+          ? ""
+          : `<button class="secondary" data-saved-delete="${index}">${t("button.delete")}</button>`;
         return `
         <div class="scan-item">
           <div>
@@ -1208,7 +1591,7 @@
           </div>
           <div class="actions">
             <button class="secondary" data-saved-use="${index}">${t("button.use")}</button>
-            <button class="secondary" data-saved-delete="${index}">${t("button.delete")}</button>
+            ${deleteButton}
           </div>
         </div>`;
       }).join("");
@@ -1242,7 +1625,7 @@
         return `<div class="scan-item">
           <div>
             <strong>${escapeHtml(label)}</strong>
-            <div class="hint">RSSI ${ap.rssi} dBm / ${ap.auth}</div>
+            <div class="hint">RSSI ${ap.rssi} dBm / ${ap.auth}${ap.bssid ? " / " + escapeHtml(ap.bssid) : ""}</div>
           </div>
           <button class="secondary" data-scan-use="${index}" ${ssid ? "" : "disabled"}>${t("button.use")}</button>
         </div>`;
@@ -1298,17 +1681,41 @@
       return { body: { message: sanitized || "invalid_response" }, parseError: new Error("invalid_response") };
     }
 
+    /* 全局单飞队列(1.3-36):设备 httpd 只开少量连接槽 + lru 踢旧,
+     * 浏览器并行 fetch(面板两批加载、状态轮询)会互相顶掉**正在发响应**的
+     * 连接,表现为"登录后部分模块一直加载/报错"。所有 API 请求经此串行,
+     * 复用同一条 keep-alive 连接:局域网内首屏 7 个请求合计约 0.5s,
+     * 且再也不会与手机门户探测等第二客户端争槽位。 */
+    let apiQueue = Promise.resolve();
+
     async function getJson(url, options) {
+      const result = apiQueue.then(() => getJsonRaw(url, options));
+      apiQueue = result.then(() => undefined, () => undefined);
+      return result;
+    }
+
+    async function getJsonRaw(url, options) {
       const method = String(options?.method || "GET").toUpperCase();
       const maxRetries = method === "GET" ? FETCH_RETRY_MAX : 0;
 
       for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        const controller = typeof AbortController === "function" ? new AbortController() : null;
+        const timeoutMs = Number(options?.timeoutMs) > 0 ? Number(options.timeoutMs) : FETCH_TIMEOUT_MS;
+        const timeoutId = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
         try {
-          const response = await fetch(url, options);
+          const requestOptions = controller ? { ...(options || {}), signal: controller.signal } : options;
+          const response = await fetch(url, requestOptions);
           const text = await response.text();
           const { body, parseError } = tryParseJson(text);
 
           if (!response.ok) {
+            if (response.status === 401) {
+              /* 会话失效(Cookie 过期/换浏览器/设备重启)→ 回页面内登录表单。
+               * 服务端已按产品决策不再下发 WWW-Authenticate,故不会再弹系统认证框。
+               * 见 1.3版本优化.md 1.3-22 */
+              window.location.href = "/portal";
+              return;
+            }
             const err = new Error(body?.message || body?.error || text || `HTTP ${response.status}`);
             err.body = body;
             err.status = response.status;
@@ -1328,15 +1735,28 @@
             throw err;
           }
 
+          notePollOk();
           return body;
         } catch (error) {
+          /* 1.3-36:设备 httpd 在堆紧张(MQTT 重连风暴等)时会回 503,
+           * 且此前 503 因带 status 从不重试 → 面板永久缺失。503/502/504、
+           * 空响应/截断响应与连接级瞬断一样按可重试处理。 */
+          const retryableStatus = error?.status === 502 ||
+                                  error?.status === 503 ||
+                                  error?.status === 504;
+          const retryableBody = error?.message === "empty_response" ||
+                                error?.message === "invalid_response";
           const canRetry = attempt < maxRetries &&
-                           !error?.status &&
-                           isTransientFetchError(error);
+                           (retryableStatus || retryableBody ||
+                            (!error?.status && isTransientFetchError(error)));
           if (!canRetry) {
             throw error;
           }
           await sleep(FETCH_RETRY_DELAY_MS * (attempt + 1));
+        } finally {
+          if (timeoutId) {
+            clearTimeout(timeoutId);
+          }
         }
       }
     }
@@ -1386,17 +1806,143 @@
       renderSavedWifiProfiles(network.saved_sta_profiles || []);
       renderScanResults([]);
       renderNetworkStatus(network);
+      updateNetworkValidationStatus();
+    }
+
+    function networkModeHasSta(mode) {
+      return mode === "sta" || mode === "apsta";
+    }
+
+    /* 静态 IP 默认值:优先取当前 DHCP 实际拿到的地址(把"当前地址固定下来"
+     * 是静态 IP 最常见的用法),未联网时退回示例值。只填空白字段,不覆盖已填内容。
+     * 1.3-52:主表单的静态控件已移除,本函数仅供连接向导的静态面板使用。 */
+    function staticIpDefaults() {
+      const net = state.networkConfig || {};
+      const hasIp = net.sta_ip && net.sta_ip !== "0.0.0.0" && isValidIpv4(net.sta_ip);
+      const hasGw = net.sta_gateway && net.sta_gateway !== "0.0.0.0" && isValidIpv4(net.sta_gateway);
+      const hasMask = net.sta_netmask && net.sta_netmask !== "0.0.0.0" && isValidIpv4(net.sta_netmask);
+      const ip = hasIp ? net.sta_ip : "192.168.1.213";
+      const gw = hasGw ? net.sta_gateway : "192.168.1.1";
+      const mask = hasMask ? net.sta_netmask : "255.255.255.0";
+      return { ip, gw, mask, dns1: gw, dns2: "8.8.8.8" };
+    }
+
+    function isValidIpv4(value) {
+      if (!value || typeof value !== "string") {
+        return false;
+      }
+      const parts = value.split(".");
+      if (parts.length !== 4) {
+        return false;
+      }
+      return parts.every((part) => {
+        if (!/^(0|[1-9]\d*)$/.test(part)) {
+          return false;
+        }
+        const num = Number(part);
+        return num >= 0 && num <= 255;
+      });
     }
 
     function renderNetworkStatus(data) {
       const network = data || {};
-      setStatus("networkStatus", t("network.summary", {
+      let summary = t("network.summary", {
         mode: humanMode(network.mode),
         ap: `${network.ap_ssid || t("network.none")}@${network.ap_ip || t("network.none")}`,
         sta: network.sta_ssid || t("network.none"),
         staIp: network.sta_has_ip ? network.sta_ip : t("network.noIp"),
         lastDisconnect: network.last_disconnect || t("network.none")
-      }), network.sta_has_ip ? "ok" : "warn");
+      });
+      /* 已存 STA 名称却仍是纯 AP = 上游永远连不上(1.3-04 实测):摘要后追加显式告警 */
+      if (network.sta_ssid && !networkModeHasSta(network.mode)) {
+        summary += `
+⚠ ${t("network.staSsidInactive")}`;
+      }
+      /* 静态 IP 冲突:摘要加告警 + 弹窗提示去修改(1.3-35) */
+      if (network.sta_ip_conflict) {
+        summary += `
+${t("network.ipConflictSummary", { ip: network.sta_ip || "-" })}`;
+        showIpConflictModal(network.sta_ip || "");
+      }
+      setStatus("networkStatus", summary, network.sta_has_ip && !network.sta_ip_conflict ? "ok" : "warn");
+    }
+
+    function clearNetworkInputErrors() {
+      ["ssid", "password", "staSsid", "staPassword"].forEach((id) => {
+        const el = document.getElementById(id);
+        if (el) {
+          el.classList.remove("input-error");
+        }
+      });
+    }
+
+    function markNetworkInputError(id) {
+      const el = document.getElementById(id);
+      if (el) {
+        el.classList.add("input-error");
+      }
+    }
+
+    /* 前端当场校验:与后端统一层规则对齐(长度、必填、开放网络显式清除、静态 IP 格式)。
+     * 返回 {ok, message};ok=true 时不改状态。 */
+    function validateNetworkForm() {
+      const mode = document.getElementById("netMode").value;
+      const apSsid = document.getElementById("ssid").value.trim();
+      const apPassword = document.getElementById("password").value;
+      const apClear = document.getElementById("apPasswordClear").checked;
+      const staSsid = document.getElementById("staSsid").value.trim();
+      const staPassword = document.getElementById("staPassword").value;
+      const staClear = document.getElementById("staPasswordClear").checked;
+      const current = state.networkConfig || {};
+
+      clearNetworkInputErrors();
+
+      if ((mode === "ap" || mode === "apsta") && !apSsid) {
+        markNetworkInputError("ssid");
+        return { ok: false, message: t("network.apSsidRequired") };
+      }
+      if (apPassword && apPassword.length < 8) {
+        markNetworkInputError("password");
+        return { ok: false, message: t("network.passwordTooShort") };
+      }
+      if ((mode === "ap" || mode === "apsta") && apSsid &&
+          apSsid !== (current.ap_ssid || "") &&
+          !current.password_enabled && !apClear && !apPassword) {
+        markNetworkInputError("password");
+        return { ok: false, message: t("network.passwordRequired") };
+      }
+
+      if ((mode === "sta" || mode === "apsta") && !staSsid) {
+        markNetworkInputError("staSsid");
+        return { ok: false, message: t("network.staSsidRequired") };
+      }
+      if (staSsid && !staClear) {
+        if (staPassword) {
+          if (staPassword.length < 8) {
+            markNetworkInputError("staPassword");
+            return { ok: false, message: t("network.passwordTooShort") };
+          }
+        } else if (!current.sta_password_set) {
+          markNetworkInputError("staPassword");
+          return { ok: false, message: t("network.passwordRequired") };
+        }
+      }
+
+      /* 静态 IP 的填写与校验已随 1.3-51/52 移入连接向导,这里不再检查 */
+      return { ok: true, message: "" };
+    }
+
+    function updateNetworkValidationStatus() {
+      const result = validateNetworkForm();
+      const saveButton = document.getElementById("saveNetwork");
+      if (!result.ok) {
+        setNetworkValidationStatus(result.message, "bad");
+        saveButton.disabled = true;
+      } else {
+        setNetworkValidationStatus(t("network.validationOk"), "ok");
+        saveButton.disabled = false;
+      }
+      return result;
     }
 
     async function loadGpio() {
@@ -1475,13 +2021,65 @@
       }
     }
 
+    /* 轮询连续失败计数:会话失效或设备过载时**主动停轮询**。两个浏览器同开时,
+     * 旧标签页的轮询会把正在使用的新页面挤成"加载中"(设备 httpd 可用连接有限)。
+     * 见 1.3版本优化.md 1.3-22 */
+    state.pollFailCount = 0;
+    state.pollStopped = false;
+    function notePollOk() {
+      state.pollFailCount = 0;
+      if (!state.pollStopped) {
+        return;
+      }
+      /* 自愈:被停过之后,只要有请求成功(用户点按钮/刷新入数据)就恢复轮询 */
+      state.pollStopped = false;
+      refreshStatusPanels().catch(() => {});
+      refreshUartConsole().catch(() => {});
+      startStatusPolling();
+      startUartConsolePolling();
+    }
+
+    function notePollFail(error) {
+      if (error && error.status === 401) {
+        window.location.href = "/portal";
+        return;
+      }
+      state.pollFailCount += 1;
+      if (state.pollFailCount >= 5 && !state.pollStopped) {
+        state.pollStopped = true;
+        stopPolling();
+      }
+    }
+
+    /* 1.3-72:真实页面轮询收敛。状态 5s→10s;UART 控制台只在可见时拉取,
+     * 滚出视野/后台标签页不请求 —— 降低页面多连接对 httpd/堆的压力。
+     * 页面仍是单文件(构建期 minify+gzip),不拆 JS/CSS:当前 httpd 只缓存
+     * 一个页面文件句柄,拆成多文件会让每次页面加载反复 open/close,反而增加
+     * 低堆下的分配抖动;这里按“面板/请求”拆资源,而不是拆静态文件。 */
+    const PAGE_POLL_INTERVAL_MS = 10000;
+
+    function uartConsoleInView() {
+      const el = document.getElementById("uartRxConsole");
+      if (!el || el.offsetParent === null) {
+        return false;
+      }
+      const rect = el.getBoundingClientRect();
+      const vh = window.innerHeight || document.documentElement.clientHeight || 0;
+      return rect.bottom > 0 && rect.top < vh;
+    }
+
     function startStatusPolling() {
       if (state.statusPollTimer) {
         clearInterval(state.statusPollTimer);
       }
+      state.pollStopped = false;
+      state.pollFailCount = 0;
       state.statusPollTimer = setInterval(() => {
-        refreshStatusPanels().catch(() => {});
-      }, 3000);
+        if (document.hidden) {
+          return;
+        }
+        refreshStatusPanels().catch(notePollFail);
+      }, PAGE_POLL_INTERVAL_MS);
     }
 
     async function loadUart() {
@@ -1535,18 +2133,64 @@
       if (state.uartPollTimer) {
         clearInterval(state.uartPollTimer);
       }
+      state.pollStopped = false;
+      state.pollFailCount = 0;
       state.uartPollTimer = setInterval(() => {
+        if (document.hidden || !uartConsoleInView()) {
+          return;
+        }
         refreshUartConsole().catch((error) => {
           setStatus("uartStatus", getErrorMessage(error), "bad");
+          notePollFail(error);
         });
-      }, 1000);
+      }, PAGE_POLL_INTERVAL_MS);
     }
 
-    async function saveNetwork() {
+    function stopPolling() {
+      if (state.statusPollTimer) {
+        clearInterval(state.statusPollTimer);
+        state.statusPollTimer = null;
+      }
+      if (state.uartPollTimer) {
+        clearInterval(state.uartPollTimer);
+        state.uartPollTimer = null;
+      }
+    }
+
+    /* 页面不可见时停掉轮询:否则"开着旧标签"也会持续打设备(status 与 uart console 各每 5 秒一次),
+     * 和当前正在刷新的页面抢 httpd 的 socket —— 而 httpd 可用 socket 仅 ~9 个,
+     * 且**每个常驻连接都吃 httpd 会话缓冲**(1.3-24 实测:8 个僵死连接吃掉 ~6.6KB largest_free,
+     * 叠加 BLE 连接态后历史最低堆只有 360B)。恢复可见时先立即刷一次。 */
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "hidden") {
+        stopPolling();
+        return;
+      }
+      refreshStatusPanels().catch(() => {});
+      refreshUartConsole().catch(() => {});
+      startStatusPolling();
+      startUartConsolePolling();
+    });
+
+    /* 1.3-52 拆分:主表单与连接向导共用"组 payload + 提交"两段。
+     * 主表单已不含静态 IP 控件(移到连接向导),保存时**原样保留**设备上已有
+     * 的静态配置(从 state.networkConfig 重发),避免改 AP 名称时把静态 IP 弄丢。 */
+    function buildNetworkPayload() {
+      const netModeEl = document.getElementById("netMode");
+      const staSsid = document.getElementById("staSsid").value.trim();
+      let mode = netModeEl.value;
+      let modeNote = "";
+      /* 填了 STA 名称却仍是"纯 AP" → 上游永远连不上(1.3-04 实测):
+       * 与后端统一层的一致性推断保持一致,这里先把界面切到 AP + STA 并提示用户 */
+      if (staSsid && !networkModeHasSta(mode)) {
+        netModeEl.value = "apsta";
+        mode = "apsta";
+        modeNote = t("network.modeAutoApsta");
+      }
       const payload = {
-        mode: document.getElementById("netMode").value,
+        mode: mode,
         ap_ssid: document.getElementById("ssid").value.trim(),
-        sta_ssid: document.getElementById("staSsid").value.trim()
+        sta_ssid: staSsid
       };
       const apPassword = document.getElementById("password").value;
       if (apPassword) {
@@ -1562,16 +2206,38 @@
       if (document.getElementById("staPasswordClear").checked) {
         payload.sta_password_clear = true;
       }
+      const current = state.networkConfig || {};
+      payload.sta_use_static = current.sta_use_static ? 1 : 0;
+      if (current.sta_use_static) {
+        payload.sta_static_ip = current.sta_static_ip || "";
+        payload.sta_static_gateway = current.sta_static_gateway || "";
+        payload.sta_static_netmask = current.sta_static_netmask || "";
+        if (current.sta_static_dns1) {
+          payload.sta_static_dns1 = current.sta_static_dns1;
+        }
+        if (current.sta_static_dns2) {
+          payload.sta_static_dns2 = current.sta_static_dns2;
+        }
+      }
+      return { payload, modeNote };
+    }
+
+    async function submitNetworkConfig(payload, modeNote) {
       const data = await getJson("/api/v1/config/network", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
       });
       await loadNetwork();
+      setNetworkValidationStatus("", "");
       const address = data.next_access_ip ? `http://${data.next_access_ip}` : "";
-      const confirmMessage = data.ap_enabled
+      let note = modeNote || "";
+      if (data.mode_adjusted) {
+        note = t("network.modeAutoApsta");   /* 后端推断生效(例如模式被自动升级) */
+      }
+      const confirmMessage = `${note ? note + " " : ""}${data.ap_enabled
         ? t("network.savedNeedsRestart", { address })
-        : t("network.savedStaOnly");
+        : t("network.savedStaOnly")}`;
       setStatus("networkStatus", confirmMessage, "warn");
 
       if (confirm(confirmMessage)) {
@@ -1587,14 +2253,29 @@
       }
     }
 
+    async function saveNetwork() {
+      const clientCheck = validateNetworkForm();
+      if (!clientCheck.ok) {
+        setNetworkValidationStatus(clientCheck.message, "bad");
+        return;
+      }
+      setNetworkValidationStatus("", "");
+      const { payload, modeNote } = buildNetworkPayload();
+      await submitNetworkConfig(payload, modeNote);
+    }
+
     async function deleteSavedWifiProfile(ssid) {
-      await getJson("/api/v1/config/network/profile", {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ssid })
-      });
+      try {
+        await getJson("/api/v1/config/network/profile", {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ssid })
+        });
+        setStatus("networkStatus", t("network.profileDeleted", { ssid }), "ok");
+      } catch (error) {
+        setStatus("networkStatus", t("network.profileDeleteFailed", { ssid }), "bad");
+      }
       await loadNetwork();
-      setStatus("networkStatus", t("network.profileDeleted", { ssid }), "ok");
     }
 
     async function scanNetwork() {
@@ -1843,13 +2524,19 @@
     async function boot() {
       renderUartConsole();
       applyTranslations();
-      await runWithPanelError(loadDevice, (message) => renderDeviceError(message));
-      await runWithPanelError(loadNetwork, (message) => setStatus("networkStatus", message, "bad"));
-      await runWithPanelError(loadGpio, (message) => setStatus("gpioInfo", message, "bad"));
-      await runWithPanelError(loadBluetooth, (message) => setStatus("bluetoothStatus", message, "bad"));
-      await runWithPanelError(loadMqtt, (message) => setStatus("mqttStatus", message, "bad"));
-      await runWithPanelError(loadUart, (message) => setStatus("uartStatus", message, "bad"));
-      await runWithPanelError(refreshUartConsole, (message) => setStatus("uartStatus", message, "bad"));
+      /* 加载各面板。getJson 内部有全局单飞队列(1.3-36),这里看似并行的
+       * Promise.all 实际会逐个串行执行,分两批只影响渲染顺序,不再产生并发连接。 */
+      await Promise.all([
+        runWithPanelError(loadDevice, (message) => renderDeviceError(message)),
+        runWithPanelError(loadNetwork, (message) => setStatus("networkStatus", message, "bad")),
+        runWithPanelError(loadGpio, (message) => setStatus("gpioInfo", message, "bad"))
+      ]);
+      await Promise.all([
+        runWithPanelError(loadBluetooth, (message) => setStatus("bluetoothStatus", message, "bad")),
+        runWithPanelError(loadMqtt, (message) => setStatus("mqttStatus", message, "bad")),
+        runWithPanelError(loadUart, (message) => setStatus("uartStatus", message, "bad")),
+        runWithPanelError(refreshUartConsole, (message) => setStatus("uartStatus", message, "bad"))
+      ]);
       startStatusPolling();
       startUartConsolePolling();
     }
@@ -1864,8 +2551,19 @@
       try {
         await saveNetwork();
       } catch (error) {
-        setStatus("networkStatus", error.message, "bad");
+        setNetworkValidationStatus(error.message, "bad");
       }
+    });
+
+    ["netMode", "ssid", "password", "apPasswordClear", "staSsid", "staPassword", "staPasswordClear"].forEach((id) => {
+      const el = document.getElementById(id);
+      if (!el) {
+        return;
+      }
+      const isToggle = id === "netMode" || id.endsWith("Clear");
+      el.addEventListener(isToggle ? "change" : "input", () => {
+        updateNetworkValidationStatus();
+      });
     });
 
     document.getElementById("scanWifi").addEventListener("click", async () => {
@@ -1891,8 +2589,51 @@
       }
     });
 
+    /* 连接 Wi-Fi 向导(1.3-51):验证密码 / 保存 / 取消 / 静态面板开关 */
+    document.getElementById("joinVerify").addEventListener("click", async () => {
+      await verifyJoinWifi();
+    });
+
+    document.getElementById("joinSave").addEventListener("click", async () => {
+      await saveJoinWifi();
+    });
+
+    document.getElementById("joinCancel").addEventListener("click", () => {
+      closeWifiJoinModal();
+    });
+
+    document.getElementById("wifiJoinModal").addEventListener("click", (event) => {
+      if (event.target.id === "wifiJoinModal") {
+        closeWifiJoinModal();
+      }
+    });
+
+    document.querySelectorAll("input[name=\"joinIpMode\"]").forEach((input) => {
+      input.addEventListener("change", updateJoinStaticPanel);
+    });
+
     document.getElementById("closeSavedWifiModal").addEventListener("click", () => {
       closeSavedWifiModal();
+    });
+
+    document.getElementById("ipConflictDismiss").addEventListener("click", () => {
+      closeIpConflictModal();
+    });
+
+    document.getElementById("ipConflictGoFix").addEventListener("click", () => {
+      /* 1.3-52:静态 IP 已移入连接向导 —— 冲突修复同样指到向导,
+       * 并预选"静态 IP"、回显冲突地址方便直接改。 */
+      closeIpConflictModal();
+      openWifiJoinModal((state.networkConfig?.sta_ssid) || "");
+      document.getElementById("joinIpStatic").checked = true;
+      updateJoinStaticPanel();
+      const conflictedIp = state.networkConfig?.sta_static_ip;
+      if (conflictedIp) {
+        const el = document.getElementById("joinStaticIp");
+        el.value = conflictedIp;
+        el.classList.add("input-error");
+        el.focus();
+      }
     });
 
     document.getElementById("savedWifiModal").addEventListener("click", (event) => {

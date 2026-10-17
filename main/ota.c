@@ -18,6 +18,7 @@
 #include "constants.h"
 #include "http_utils.h"
 #include "mqtt.h"
+#include "http_priv.h"
 #include "ota.h"
 #include "wifi.h"
 
@@ -211,11 +212,30 @@ void app_reboot_task(void *arg)
     esp_restart();
 }
 
-static void app_ota_schedule_reboot(const char *task_name)
+/* 重启调度(1.3-40):各调用方(BT 配置保存/云端命令/BLE 命令/恢复出厂)都在
+ * 低堆场景下触发 —— MQTT 连接风暴能把 largest 砸到 ~1.5KB,届时 xTaskCreate
+ * (2048 栈 + TCB)会静默失败,表现为"已保存将重启"但设备不重启,配置落盘了
+ * 却不生效(实测 BLE 角色切换连续两次没重启)。改静态任务:创建零堆分配、
+ * 不可能失败;pending 位防并发调用重复抢占同一 StaticTask_t。
+ * 1.3-53 栈溢出修复:IDF 6.0.2 Xtensa 的 StackType_t = uint8_t(portmacro.h:78),
+ * 即 xTaskCreateStatic 的栈深度单位是**字节**而非"字"!原 512 实际只有 512B,
+ * esp_restart 的复位链直接溢出 —— coredump 实证 panic "stack overflow in
+ * task bt_config_reboo"(溢出后设备仍经 panic 路径重启,所以 1.3-40 的验收
+ * "一次生效"没暴露,但页面侧表现为保存瞬间崩溃)。扩到 4096B(4KB):重启任务
+ * 只存活 ~1.5s,静态栈 +3.5KB BSS 换重启路径在最坏情况下也绝不溢出。 */
+#define APP_OTA_REBOOT_STACK_BYTES 4096
+static StaticTask_t s_reboot_task_buf;
+static StackType_t s_reboot_stack[APP_OTA_REBOOT_STACK_BYTES];
+static bool s_reboot_pending = false;
+
+void app_reboot_schedule(const char *task_name)
 {
-    if (xTaskCreate(app_reboot_task, task_name, 2048, NULL, 5, NULL) != pdPASS) {
-        ESP_LOGE(TAG, "Failed to schedule reboot task: %s", task_name);
+    if (s_reboot_pending) {
+        return;   /* 已有重启在途,esp_restart 不会回来 */
     }
+    s_reboot_pending = true;
+    (void)xTaskCreateStatic(app_reboot_task, task_name, APP_OTA_REBOOT_STACK_BYTES,
+                            NULL, 5, s_reboot_stack, &s_reboot_task_buf);
 }
 
 static void app_ota_copy_bounded(char *dst, size_t dst_size, const char *src, size_t src_size)
@@ -466,7 +486,7 @@ esp_err_t app_ota_handle_firmware_upload(httpd_req_t *req, char *scratch, size_t
 
     app_http_send_json_text(req, NULL,
                         "{\"status\":\"ok\",\"message\":\"ota image received, device will reboot\"}");
-    app_ota_schedule_reboot("ota_reboot");
+    app_reboot_schedule("ota_reboot");
     return ESP_OK;
 }
 
@@ -546,6 +566,7 @@ esp_err_t app_ota_handle_storage_upload(httpd_req_t *req, char *scratch, size_t 
 
     app_http_send_json_text(req, NULL,
                         "{\"status\":\"ok\",\"message\":\"storage image received, device will reboot\"}");
-    app_ota_schedule_reboot("storage_reboot");
+    app_http_html_cache_reset();
+    app_reboot_schedule("storage_reboot");
     return ESP_OK;
 }

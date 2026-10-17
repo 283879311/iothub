@@ -9,8 +9,11 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
+#include "cJSON.h"
+
 #include "common.h"
 #include "config.h"
+#include "config_apply.h"
 #include "http_priv.h"
 #include "http_utils.h"
 #include "mqtt.h"
@@ -57,66 +60,53 @@ static esp_err_t mqtt_get_handler(httpd_req_t *req)
 
 static esp_err_t mqtt_put_handler(httpd_req_t *req)
 {
-    char value[128];
-    uint16_t port;
-    bool bool_value;
-    esp_err_t save_err;
-    bool need_restart = false;
+    cfg_effect_t effect = CFG_EFFECT_NONE;
+    cJSON *changed = NULL;
+    esp_err_t err;
 
     if (!app_http_require_auth(req)) {
         return ESP_OK;
     }
 
     {
-        esp_err_t err = http_read_body(req, app_http_scratch_buf(), app_http_scratch_size());
-        if (err != ESP_OK) {
-            return app_http_body_read_finished(err) ? ESP_OK : ESP_FAIL;
+        esp_err_t read_err = http_read_body(req, app_http_scratch_buf(), app_http_scratch_size());
+        if (read_err != ESP_OK) {
+            return app_http_body_read_finished(read_err) ? ESP_OK : ESP_FAIL;
         }
     }
 
-    app_config_lock();
-    if (app_json_find_string(app_http_scratch_buf(), "backend", value, sizeof(s_config.mqtt_backend)) && strlen(value) > 0) {
-        app_copy_string(s_config.mqtt_backend, sizeof(s_config.mqtt_backend), value);
-        need_restart = true;
-    }
-    if (app_json_find_string(app_http_scratch_buf(), "host", value, sizeof(s_config.mqtt_host)) && strlen(value) > 0) {
-        app_copy_string(s_config.mqtt_host, sizeof(s_config.mqtt_host), value);
-        need_restart = true;
-    }
-    /* token 留空 = 保持已存值;需要清除时用 token_clear 显式指定 */
-    if (app_json_find_bool(app_http_scratch_buf(), "token_clear", &bool_value) && bool_value) {
-        app_copy_string(s_config.mqtt_token, sizeof(s_config.mqtt_token), "");
-        need_restart = true;
-    } else if (app_json_find_string(app_http_scratch_buf(), "token", value, sizeof(s_config.mqtt_token)) && strlen(value) > 0) {
-        app_copy_string(s_config.mqtt_token, sizeof(s_config.mqtt_token), value);
-        need_restart = true;
-    }
-    if (app_json_find_u16(app_http_scratch_buf(), "port", &port) && port > 0) {
-        if (s_config.mqtt_port != port) {
-            s_config.mqtt_port = port;
-            need_restart = true;
-        }
-    }
-    if (app_json_find_bool(app_http_scratch_buf(), "use_tls", &bool_value)) {
-        if (s_config.mqtt_use_tls != (uint8_t)bool_value) {
-            s_config.mqtt_use_tls = (uint8_t)bool_value;
-            need_restart = true;
+    /* 配置写入统一走 config_apply(唯一写入点)。MQTT 域的生效方式是"子系统重启"
+     * (= 异步重连),不是整机重启;token 留空=保持、token_clear=清除 的既有语义
+     * 由字段表的 empty_keeps / 伪字段承担。 */
+    err = config_apply_json(app_http_scratch_buf(), &changed, &effect);
+    {
+        bool had_changes = (changed != NULL && cJSON_GetArraySize(changed) > 0);
+
+        cJSON_Delete(changed);
+
+        /* 1.3-43:用户保存 MQTT 配置 = 明确要(重新)连接。即使字段与已存值
+         * 相同(config_apply 不触发域生效),也要清致命位并调度一次重连 ——
+         * 否则"broker 认证拒绝后,改好 token 保存同值配置"会毫无反应
+         * (实测:保存相同配置时既不重连也不报错)。 */
+        if (err == ESP_OK) {
+            app_mqtt_clear_fatal();
+            if (!had_changes) {
+                (void)app_mqtt_schedule_restart();
+            }
         }
     }
 
-    save_err = app_config_save(&s_config);
-    app_config_unlock();
-
-    if (save_err != ESP_OK) {
+    if (err == ESP_ERR_INVALID_ARG || err == ESP_ERR_NOT_SUPPORTED) {
+        return app_http_send_json_text(req, "400 Bad Request",
+                                   "{\"status\":\"error\",\"message\":\"invalid_config\"}");
+    }
+    if (err != ESP_OK) {
         return app_http_send_json_text(req, "500 Internal Server Error",
                                    "{\"status\":\"error\",\"message\":\"config_save_failed\"}");
     }
 
     app_http_send_json_text(req, NULL,
                         "{\"status\":\"saved\",\"message\":\"mqtt config saved, connection will restart\"}");
-    if (need_restart && !app_mqtt_schedule_restart()) {
-        ESP_LOGE(HTTP_TAG, "Failed to schedule MQTT restart after config save");
-    }
     return ESP_OK;
 }
 

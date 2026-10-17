@@ -1,0 +1,2 @@
+source /home/tc/workspace/iothub/build-bluedroid/bootloader/gdbinit/symbols
+source /home/tc/workspace/iothub/build-bluedroid/bootloader/gdbinit/connect

@@ -66,9 +66,7 @@ static void app_factory_reset_to_defaults(void)
     }
 
     ESP_LOGW(TAG, "Default configuration saved, rebooting device");
-    if (xTaskCreate(app_reboot_task, "factory_reset_reboot", 2048, NULL, 5, NULL) != pdPASS) {
-        ESP_LOGE(TAG, "Failed to schedule reboot after factory reset");
-    }
+    app_reboot_schedule("factory_reset_reboot");
 }
 
 static void app_factory_reset_button_task(void *arg)

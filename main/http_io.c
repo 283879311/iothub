@@ -3,12 +3,14 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "cJSON.h"
 #include "esp_check.h"
 #include "esp_http_server.h"
 #include "esp_log.h"
 
 #include "common.h"
 #include "config.h"
+#include "config_apply.h"
 #include "http_priv.h"
 #include "http_utils.h"
 #include "state.h"
@@ -50,33 +52,30 @@ static esp_err_t gpio_get_handler(httpd_req_t *req)
 
 static esp_err_t gpio_put_handler(httpd_req_t *req)
 {
-    bool value;
-    esp_err_t save_err;
+    cfg_effect_t effect = CFG_EFFECT_NONE;
+    cJSON *changed = NULL;
+    esp_err_t err;
 
     if (!app_http_require_auth(req)) {
         return ESP_OK;
     }
     {
-        esp_err_t err = http_read_body(req, app_http_scratch_buf(), app_http_scratch_size());
-        if (err != ESP_OK) {
-            return app_http_body_read_finished(err) ? ESP_OK : ESP_FAIL;
+        esp_err_t read_err = http_read_body(req, app_http_scratch_buf(), app_http_scratch_size());
+        if (read_err != ESP_OK) {
+            return app_http_body_read_finished(read_err) ? ESP_OK : ESP_FAIL;
         }
     }
 
-    app_config_lock();
-    if (app_json_find_bool(app_http_scratch_buf(), "relay_on", &value)) {
-        s_config.relay_on = value ? 1 : 0;
-        app_apply_output(app_relay_gpio(), s_config.relay_active_high, s_config.relay_on);
-    }
-    if (app_json_find_bool(app_http_scratch_buf(), "led_on", &value)) {
-        s_config.led_on = value ? 1 : 0;
-        app_apply_output(app_led_gpio(), s_config.led_active_high, s_config.led_on);
-    }
+    /* 配置写入统一走 config_apply(唯一写入点):校验 + diff + 落盘 + 按域生效
+     * (GPIO 域为热生效,立即作用到引脚;同值重复提交不会落盘/不产生额外动作) */
+    err = config_apply_json(app_http_scratch_buf(), &changed, &effect);
+    cJSON_Delete(changed);
 
-    save_err = app_config_save(&s_config);
-    app_config_unlock();
-
-    if (save_err != ESP_OK) {
+    if (err == ESP_ERR_INVALID_ARG || err == ESP_ERR_NOT_SUPPORTED) {
+        return app_http_send_json_text(req, "400 Bad Request",
+                                   "{\"status\":\"error\",\"message\":\"invalid_config\"}");
+    }
+    if (err != ESP_OK) {
         return app_http_send_json_text(req, "500 Internal Server Error",
                                    "{\"status\":\"error\",\"message\":\"config_save_failed\"}");
     }

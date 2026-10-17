@@ -43,9 +43,19 @@
 #define WIFI_SCAN_LIST_SIZE 8
 #define APP_WIFI_PROFILE_MAX 5
 
+/* 蓝牙模式:v1.2 起移除 SPP(经典蓝牙),历史配置中的旧值 2 由
+ * app_bt_apply_config() 归一为 BT_MODE_OFF */
 #define BT_MODE_OFF 0
 #define BT_MODE_BLE 1
-#define BT_MODE_SPP 2
+
+/* 蓝牙角色(v8 起,权威字段):
+ *   0=off        不启用蓝牙
+ *   1=peripheral 从角色:广播 + NUS 数据服务(手机/PC 连本机)
+ *   2=central    主角色:主动扫描并连接对端(如另一台 NUS 从机)
+ * 角色不可热切(官方:初始化后不能直接改角色,必须 deinit 或重启)→ 改角色即重启 */
+#define BT_ROLE_OFF 0
+#define BT_ROLE_PERIPHERAL 1
+#define BT_ROLE_CENTRAL 2
 
 #define NET_MODE_AP 0
 #define NET_MODE_STA 1

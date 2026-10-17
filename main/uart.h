@@ -21,3 +21,7 @@ esp_err_t app_uart_send_console_json(httpd_req_t *req);
 esp_err_t app_uart_handle_clear_console_request(httpd_req_t *req);
 esp_err_t app_uart_handle_send_request(httpd_req_t *req, const char *body);
 esp_err_t app_uart_send_data(const char *encoding, const char *data, unsigned *bytes_sent);
+
+/* 数据面:按长度发送原始字节(二进制安全)+ data_pipe 端口出站函数 */
+esp_err_t app_uart_send_bytes(const uint8_t *data, size_t len, unsigned *bytes_sent);
+bool app_uart_dataplane_write(const uint8_t *data, size_t len, void *ctx);
