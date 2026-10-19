@@ -11,6 +11,7 @@
 #include "constants.h"
 #include "identity.h"
 #include "ota.h"
+#include "prov_pin.h"
 #include "runtime.h"
 #include "state.h"
 #include "uart.h"
@@ -54,25 +55,39 @@ static bool app_factory_reset_button_pressed(void)
     return gpio_get_level(APP_FACTORY_RESET_BOOT_GPIO) == 0;
 }
 
-static void app_factory_reset_to_defaults(void)
+static bool app_factory_reset_to_defaults(void)
 {
     ESP_LOGW(TAG, "BOOT/GPIO0 held for %d ms, restoring default configuration",
              APP_FACTORY_RESET_HOLD_MS);
     app_bootstrap_set_defaults();
     app_config_clear_output_last();
 
-    if (app_bootstrap_save_config() != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to save default configuration during factory reset");
-        return;
+    esp_err_t profile_err = app_config_clear_wifi_profiles();
+    if (profile_err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to clear saved Wi-Fi profiles: %s",
+                 esp_err_to_name(profile_err));
+        return false;
+    }
+    esp_err_t prov_err = app_prov_state_clear();
+    if (prov_err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to clear provisioning PIN/state: %s",
+                 esp_err_to_name(prov_err));
+        return false;
     }
 
-    ESP_LOGW(TAG, "Default configuration saved, rebooting device");
-    app_reboot_schedule("factory_reset_reboot");
+    if (app_bootstrap_save_config() != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to save default configuration during factory reset");
+        return false;
+    }
+
+    ESP_LOGW(TAG, "Default configuration saved; release BOOT to reboot");
+    return true;
 }
 
 static void app_factory_reset_button_task(void *arg)
 {
     bool armed = true;
+    bool reboot_pending = false;
     TickType_t pressed_since = 0;
     const TickType_t poll_ticks = pdMS_TO_TICKS(APP_FACTORY_RESET_POLL_MS);
     const TickType_t hold_ticks = pdMS_TO_TICKS(APP_FACTORY_RESET_HOLD_MS);
@@ -85,6 +100,12 @@ static void app_factory_reset_button_task(void *arg)
         if (!pressed) {
             pressed_since = 0;
             armed = true;
+            if (reboot_pending) {
+                /* 等按键释放后再重启：GPIO0 仍为低时复位会进入 ROM 下载模式。 */
+                reboot_pending = false;
+                ESP_LOGW(TAG, "BOOT released, rebooting after factory reset");
+                app_reboot_schedule("factory_reset_reboot");
+            }
             vTaskDelay(poll_ticks);
             continue;
         }
@@ -95,7 +116,7 @@ static void app_factory_reset_button_task(void *arg)
 
         if (armed && (xTaskGetTickCount() - pressed_since) >= hold_ticks) {
             armed = false;
-            app_factory_reset_to_defaults();
+            reboot_pending = app_factory_reset_to_defaults();
         }
 
         vTaskDelay(poll_ticks);

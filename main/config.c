@@ -838,6 +838,31 @@ esp_err_t app_config_delete_wifi_profile(const char *ssid)
     }
 }
 
+esp_err_t app_config_clear_wifi_profiles(void)
+{
+    nvs_handle_t nvs_handle;
+    esp_err_t err;
+
+    app_wifi_profiles_lock();
+    if (nvs_open(APP_NAMESPACE, NVS_READWRITE, &nvs_handle) != ESP_OK) {
+        app_wifi_profiles_unlock();
+        return ESP_FAIL;
+    }
+    err = nvs_erase_key(nvs_handle, APP_WIFI_PROFILES_KEY);
+    if (err == ESP_ERR_NVS_NOT_FOUND) {
+        err = ESP_OK;
+    }
+    if (err == ESP_OK) {
+        err = nvs_commit(nvs_handle);
+    }
+    nvs_close(nvs_handle);
+    if (err == ESP_OK) {
+        app_wifi_mark_profiles_dirty();
+    }
+    app_wifi_profiles_unlock();
+    return err;
+}
+
 bool app_config_load_output_last(bool relay, bool *on)
 {
     nvs_handle_t nvs_handle;
