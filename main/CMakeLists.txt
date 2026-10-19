@@ -1,7 +1,7 @@
 option(APP_BLE_PEER_TEST "Build the A/B four-characteristic central test harness (default OFF)" OFF)
 
 idf_component_register(
-    SRCS "main.c" "app_captive.c" "ble_cmd.c" "ble_prov_probe.c" "bootstrap.c" "bt.c" "bt_gattc.c" "bt_gattc_nimble.c" "bt_gatts.c" "bt_gatts_nimble.c" "cmd.c" "common.c" "config.c" "config_apply.c" "data_pipe.c" "diag.c" "form_url.c" "http_core.c" "http_io.c" "http_mqtt.c" "http_network.c" "http_ota.c" "http_uart.c" "http_utils.c" "identity.c" "json_escape.c" "mem_guard.c" "mqtt.c" "ota.c" "state.c" "status.c" "transport_ble.c" "uart.c" "uart_console.c" "wifi.c"
+    SRCS "main.c" "app_captive.c" "ble_cmd.c" "ble_prov_probe.c" "bootstrap.c" "bt.c" "bt_gattc.c" "bt_gattc_nimble.c" "bt_gatts.c" "bt_gatts_nimble.c" "cmd.c" "common.c" "config.c" "config_apply.c" "data_pipe.c" "diag.c" "form_url.c" "http_core.c" "http_io.c" "http_mqtt.c" "http_network.c" "http_ota.c" "http_uart.c" "http_utils.c" "identity.c" "json_escape.c" "mem_guard.c" "mqtt.c" "ota.c" "prov_pin.c" "state.c" "status.c" "transport_ble.c" "uart.c" "uart_console.c" "wifi.c"
     INCLUDE_DIRS "."
     REQUIRES
         app_update

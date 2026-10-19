@@ -15,6 +15,7 @@
 #include "data_pipe.h"
 #include "esp_random.h"
 #include "mqtt.h"
+#include "prov_pin.h"
 #include "state.h"
 #include "uart.h"
 #include "wifi.h"
@@ -652,6 +653,49 @@ esp_err_t app_cmd_execute_ex(const cJSON *frame, app_cmd_source_t source,
                         err = "out_of_memory";
                     } else {
                         cJSON_AddBoolToObject(resp, "saved", true);
+                    }
+                }
+            }
+        } else if (strcmp(m, "provisioning.pin.set") == 0) {
+            const cJSON *pin_item = cJSON_IsObject(params)
+                                        ? cJSON_GetObjectItemCaseSensitive(params, "pin")
+                                        : NULL;
+            const cJSON *pass_item = cJSON_IsObject(params)
+                                         ? cJSON_GetObjectItemCaseSensitive(params, "password")
+                                         : NULL;
+            esp_err_t save_err;
+
+            /* 配网 PIN 属于敏感操作：只允许本地 HTTP/BLE，且要求当前管理员口令。
+             * 不回显 PIN，不写日志；新值在下次进入配网时生效。 */
+            if (source != APP_CMD_SOURCE_HTTP && source != APP_CMD_SOURCE_BLE) {
+                err = "forbidden";
+            } else if (!cJSON_IsString(pin_item) || pin_item->valuestring == NULL ||
+                       !app_prov_pin_is_valid(pin_item->valuestring)) {
+                err = "invalid_param";
+            } else if (!cJSON_IsString(pass_item) || pass_item->valuestring == NULL ||
+                       !app_cmd_verify_web_password(pass_item->valuestring)) {
+                err = "unauthorized";
+            } else {
+                save_err = app_prov_pin_set(pin_item->valuestring);
+                if (save_err != ESP_OK) {
+                    err = "save_failed";
+                } else {
+                    cJSON *changed;
+
+                    resp = cJSON_CreateObject();
+                    if (resp == NULL) {
+                        err = "out_of_memory";
+                    } else {
+                        cJSON_AddBoolToObject(resp, "saved", true);
+                        cJSON_AddBoolToObject(resp, "applied", true);
+                        cJSON_AddBoolToObject(resp, "restart_required", false);
+                        cJSON_AddStringToObject(resp, "effect", "none");
+                        cJSON_AddBoolToObject(resp, "pin_set", true);
+                        changed = cJSON_AddArrayToObject(resp, "changed");
+                        if (changed != NULL) {
+                            cJSON_AddItemToArray(changed,
+                                                 cJSON_CreateString("provisioning_pin"));
+                        }
                     }
                 }
             }
