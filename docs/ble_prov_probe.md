@@ -35,6 +35,16 @@
 
 不记录 Wi-Fi 口令；串口只打印 SSID。
 
+## 蓝牙名称区分
+
+- **正常固件**：`IotHubBLE-<Wi-Fi STA MAC 后 4 位>`，例如当前 B 板 `IotHubBLE-65D8`。
+  由 `main/identity.c` 的 `APP_BT_BLE_PREFIX` 生成，和配网探针无关。
+- **配网探针**：`PROV_IOT_<BT MAC 后 4 位>`，例如 `PROV_IOT_65DA`。
+  只有烧录 `probe/ble-prov` 分支、且 NVS 中没有 `ble_prov/done` 标记时才会出现。
+
+因此，扫描到 `IotHubBLE-...` 说明当前跑的是正常固件（或手机缓存了旧设备名），
+不是配网模式；这不代表探针的 `PROV_IOT_...` 广播失败。
+
 ## 使用
 
 ```bash
