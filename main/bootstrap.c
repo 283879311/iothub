@@ -97,18 +97,30 @@ static void app_factory_reset_button_task(void *arg)
 {
     bool armed = true;
     bool reboot_pending = false;
+    bool blink_active = false;
+    bool previous_led_on = false;
+    bool blink_level = false;
     TickType_t pressed_since = 0;
+    TickType_t blink_since = 0;
     const TickType_t poll_ticks = pdMS_TO_TICKS(APP_FACTORY_RESET_POLL_MS);
     const TickType_t hold_ticks = pdMS_TO_TICKS(APP_FACTORY_RESET_HOLD_MS);
+    const TickType_t blink_ticks = pdMS_TO_TICKS(250);
 
     (void)arg;
 
     for (;;) {
         const bool pressed = app_factory_reset_button_pressed();
+        const TickType_t now = xTaskGetTickCount();
 
         if (!pressed) {
             pressed_since = 0;
             armed = true;
+            if (blink_active) {
+                /* 松开后先恢复原 LED 状态，再安排重启。 */
+                blink_active = false;
+                (void)app_io_set_outputs(false, false, true, previous_led_on,
+                                         APP_IO_SOURCE_BOOT);
+            }
             if (reboot_pending) {
                 /* 等按键释放后再重启：GPIO0 仍为低时复位会进入 ROM 下载模式。 */
                 reboot_pending = false;
@@ -120,12 +132,30 @@ static void app_factory_reset_button_task(void *arg)
         }
 
         if (pressed_since == 0) {
-            pressed_since = xTaskGetTickCount();
+            pressed_since = now;
         }
 
-        if (armed && (xTaskGetTickCount() - pressed_since) >= hold_ticks) {
+        if (armed && (now - pressed_since) >= hold_ticks) {
+            app_io_state_t io;
+
             armed = false;
+            app_io_get_state(&io);
+            previous_led_on = io.led_on;
             reboot_pending = app_factory_reset_to_defaults();
+
+            /* 配置已切到默认策略(固定关闭)，闪烁不会写 LED 上次状态 NVS。 */
+            blink_active = true;
+            blink_level = !previous_led_on;
+            blink_since = now;
+            (void)app_io_set_outputs(false, false, true, blink_level,
+                                     APP_IO_SOURCE_BOOT);
+        }
+
+        if (blink_active && (now - blink_since) >= blink_ticks) {
+            blink_since = now;
+            blink_level = !blink_level;
+            (void)app_io_set_outputs(false, false, true, blink_level,
+                                     APP_IO_SOURCE_BOOT);
         }
 
         vTaskDelay(poll_ticks);
