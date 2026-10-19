@@ -33,7 +33,7 @@
     p { color: var(--muted); }
     .grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr));
       gap: 16px;
     }
     .card {
@@ -49,6 +49,7 @@
       gap: 12px;
       margin: 8px 0;
       align-items: center;
+      flex-wrap: wrap;
     }
     .row span:first-child {
       color: var(--muted);
@@ -57,11 +58,12 @@
       display: flex;
       align-items: center;
       gap: 12px;
-      flex: 1;
+      flex: 1 1 240px;
       min-width: 0;
+      flex-wrap: wrap;
     }
     .row-main > span {
-      min-width: 88px;
+      min-width: 0;
       color: var(--muted);
     }
     .row-control {
@@ -76,16 +78,29 @@
       min-width: 110px;
       margin: 0;
     }
+    .row-main .policy-select {
+      width: auto;
+      min-width: 130px;
+      max-width: 220px;
+      flex: 0 1 180px;
+      margin: 0;
+    }
     .row-control strong {
       min-width: 32px;
       text-align: right;
+    }
+    #inputState.input-active {
+      color: var(--ok);
     }
     input[type="text"],
     input[type="password"],
     input[type="number"],
     textarea,
     select {
+      display: block;
       width: 100%;
+      max-width: 100%;
+      min-width: 0;
       padding: 10px 12px;
       margin: 6px 0 12px;
       border-radius: 10px;
@@ -93,9 +108,24 @@
       background: #0b1220;
       color: var(--text);
     }
+    /* 桌面端单行控件不铺满整张卡片;手机端在下面的媒体查询里恢复 100%。 */
+    input[type="text"],
+    input[type="password"],
+    input[type="number"],
+    select {
+      max-width: 480px;
+    }
+    textarea {
+      max-width: 100%;
+    }
     input[type="file"] {
+      display: block;
       width: 100%;
+      max-width: 480px;
       margin: 8px 0 12px;
+    }
+    .lang-switch select {
+      max-width: 240px;
     }
     .checkbox {
       display: flex;
@@ -225,6 +255,9 @@
       white-space: pre-wrap;
     }
     .uart-send {
+      flex: 1 1 220px;
+      width: auto;
+      min-width: 0;
       margin-bottom: 0;
     }
     .modal-overlay {
@@ -260,6 +293,147 @@
       max-height: min(80vh, 720px);
       overflow: auto;
     }
+      .config-nav {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: 16px 0 0;
+    }
+    .config-nav button {
+      background: var(--panel);
+      color: var(--text);
+      border: 1px solid var(--panel-border);
+      border-radius: 999px;
+      padding: 8px 14px;
+      font: inherit;
+      cursor: pointer;
+    }
+    .config-nav button.active {
+      border-color: var(--accent);
+      color: var(--accent);
+      background: rgba(56, 189, 248, 0.12);
+    }
+    [data-panel-card][hidden] {
+      display: none !important;
+    }
+
+    /* 管理员账号:标签列与输入列逐行对齐;桌面固定标签宽,手机单列。 */
+    .form-grid {
+      display: grid;
+      gap: 12px;
+      max-width: 680px;
+    }
+    .form-row {
+      display: grid;
+      grid-template-columns: 150px minmax(0, 480px);
+      align-items: center;
+      gap: 12px;
+    }
+    .form-row > label {
+      margin: 0;
+      min-width: 0;
+      color: var(--muted);
+    }
+    .form-row > input {
+      width: 100%;
+      max-width: 480px;
+      margin: 0;
+    }
+    .form-actions {
+      max-width: 680px;
+      margin-top: 16px;
+      padding-left: 162px;
+    }
+
+    /* 响应式:桌面按容器自动多列,窄屏单列;输入/下拉始终填满可用宽度。 */
+    @media (max-width: 720px) {
+      main {
+        padding: 16px 12px 32px;
+      }
+      .grid {
+        grid-template-columns: 1fr;
+      }
+      .card {
+        padding: 14px;
+        border-radius: 14px;
+      }
+      .row {
+        align-items: flex-start;
+      }
+      .row-main {
+        flex: 1 1 100%;
+      }
+      .row-main > span {
+        flex: 1 1 100%;
+      }
+      .row-main .policy-select,
+      .row-control select {
+        width: 100%;
+        max-width: none;
+        flex: 1 1 100%;
+      }
+      .row-control {
+        width: 100%;
+        justify-content: flex-start;
+      }
+      .actions.nowrap {
+        flex-wrap: wrap;
+      }
+      .lang-switch {
+        width: 100%;
+      }
+      .form-grid,
+      .form-actions {
+        max-width: 100%;
+      }
+      .form-row {
+        grid-template-columns: 1fr;
+        gap: 6px;
+      }
+      .form-actions {
+        margin-top: 14px;
+        padding-left: 0;
+      }
+      .uart-send {
+        flex: 1 1 100%;
+        width: 100%;
+      }
+      input[type="text"],
+      input[type="password"],
+      input[type="number"],
+      textarea,
+      select {
+        max-width: 100%;
+        font-size: 16px; /* 避免 iOS 聚焦自动放大 */
+        min-height: 42px;
+      }
+      input[type="file"] {
+        max-width: 100%;
+      }
+    }
+
+    @media (max-width: 600px) {
+      .subgrid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 380px) {
+      main {
+        padding-left: 8px;
+        padding-right: 8px;
+      }
+      .card {
+        padding: 12px;
+      }
+      input[type="text"],
+      input[type="password"],
+      input[type="number"],
+      textarea,
+      select {
+        font-size: 16px; /* 避免 iOS 聚焦自动放大 */
+      }
+    }
   </style>
 </head>
 <body>
@@ -277,28 +451,51 @@
       </div>      
     </section>
 
+  <nav class="config-nav" id="configNav" aria-label="Config sections">
+    <button type="button" data-panel="device" data-i18n="section.device">设备信息</button>
+    <button type="button" data-panel="webAuth" data-i18n="section.webAuth">管理员账号</button>
+    <button type="button" class="active" data-panel="network" data-i18n="section.network">网络配置</button>
+    <button type="button" data-panel="mqtt" data-i18n="section.mqtt">MQTT / ThingsBoard</button>
+    <button type="button" data-panel="ota" data-i18n="section.ota">OTA 升级</button>
+    <button type="button" data-panel="bluetooth" data-i18n="section.bluetooth">蓝牙配置</button>
+    <button type="button" data-panel="gpio" data-i18n="section.gpio">GPIO 控制</button>
+    <button type="button" data-panel="uart" data-i18n="section.uart">UART 探测</button>
+  </nav>
+
     <section class="grid" style="margin-top:16px;">
-      <article class="card">
+      <article class="card" data-panel-card="device" hidden>
         <h2 data-i18n="section.device">设备信息</h2>
         <div id="deviceInfo"></div>
       </article>
 
-      <article class="card">
+      <article class="card" data-panel-card="webAuth" hidden>
         <h2 data-i18n="section.webAuth">管理员账号</h2>
-        <label for="webUsername" data-i18n="web.username">用户名</label>
-        <input id="webUsername" type="text" maxlength="32" data-i18n-placeholder="placeholder.webUsername" placeholder="留空保持不变">
-        <label for="webOldPassword" data-i18n="web.oldPassword">当前口令</label>
-        <input id="webOldPassword" type="password" maxlength="64">
-        <label for="webNewPassword" data-i18n="web.newPassword">新口令</label>
-        <input id="webNewPassword" type="password" maxlength="64" data-i18n-placeholder="placeholder.webNewPassword" placeholder="至少 8 位">
-        <label for="webNewPassword2" data-i18n="web.confirmPassword">确认新口令</label>
-        <input id="webNewPassword2" type="password" maxlength="64">
-        <button id="saveWebAuth" data-i18n="button.saveWebAuth">保存登录凭据</button>
+        <div class="form-grid">
+          <div class="form-row">
+            <label for="webUsername" data-i18n="web.username">用户名</label>
+            <input id="webUsername" type="text" maxlength="32" data-i18n-placeholder="placeholder.webUsername" placeholder="留空保持不变">
+          </div>
+          <div class="form-row">
+            <label for="webOldPassword" data-i18n="web.oldPassword">当前口令</label>
+            <input id="webOldPassword" type="password" maxlength="64">
+          </div>
+          <div class="form-row">
+            <label for="webNewPassword" data-i18n="web.newPassword">新口令</label>
+            <input id="webNewPassword" type="password" maxlength="64" data-i18n-placeholder="placeholder.webNewPassword" placeholder="至少 8 位">
+          </div>
+          <div class="form-row">
+            <label for="webNewPassword2" data-i18n="web.confirmPassword">确认新口令</label>
+            <input id="webNewPassword2" type="password" maxlength="64">
+          </div>
+        </div>
+        <div class="form-actions">
+          <button id="saveWebAuth" data-i18n="button.saveWebAuth">保存登录凭据</button>
+        </div>
         <div class="hint" data-i18n="hint.webAuth">保存后浏览器会要求用新凭据重新登录;口令以加盐哈希保存在设备中。</div>
         <div id="webAuthStatus" class="status" data-i18n="status.webAuthWaiting">等待修改登录凭据...</div>
       </article>
 
-      <article class="card">
+      <article class="card" data-panel-card="network">
         <h2 data-i18n="section.network">网络配置</h2>
         <label for="netMode" data-i18n="network.mode">网络模式</label>
         <select id="netMode">
@@ -344,7 +541,7 @@
         <div id="networkStatus" class="status" data-i18n="status.networkLoading">等待加载网络配置...</div>
       </article>
 
-      <article class="card">
+      <article class="card" data-panel-card="mqtt" hidden>
         <h2 data-i18n="section.mqtt">MQTT / ThingsBoard</h2>
         <label for="mqttBackend" data-i18n="mqtt.backend">后端类型</label>
         <select id="mqttBackend">
@@ -352,16 +549,10 @@
           <option value="tb_selfhost" data-i18n="mqtt.tbSelfhost">ThingsBoard 自建</option>
           <option value="custom" data-i18n="mqtt.custom">自定义 MQTT</option>
         </select>
-        <div class="subgrid">
-          <div>
-            <label for="mqttHost" data-i18n="mqtt.host">主机地址</label>
-            <input id="mqttHost" type="text" maxlength="63">
-          </div>
-          <div>
-            <label for="mqttPort" data-i18n="mqtt.port">端口</label>
-            <input id="mqttPort" type="number" min="1" max="65535">
-          </div>
-        </div>
+        <label for="mqttHost" data-i18n="mqtt.host">主机地址</label>
+        <input id="mqttHost" type="text" maxlength="63">
+        <label for="mqttPort" data-i18n="mqtt.port">端口</label>
+        <input id="mqttPort" type="number" min="1" max="65535">
         <label for="mqttToken" data-i18n="mqtt.token">Token / 密钥</label>
         <input id="mqttToken" type="password" maxlength="127" data-i18n-placeholder="placeholder.mqttToken" placeholder="已保存;输入则修改,留空保持不变">
         <label class="checkbox">
@@ -377,7 +568,7 @@
         <div id="mqttStatus" class="status" data-i18n="status.mqttLoading">等待加载 MQTT 配置...</div>
       </article>
 
-      <article class="card">
+      <article class="card" data-panel-card="ota" hidden>
         <h2 data-i18n="section.ota">OTA 升级</h2>
         <div class="stack">
           <div>
@@ -399,7 +590,7 @@
         <div id="otaStatus" class="status" data-i18n="status.otaWaiting">等待选择 `storage.bin` 或 `iothub.bin`</div>
       </article>
 
-      <article class="card">
+      <article class="card" data-panel-card="bluetooth" hidden>
         <h2 data-i18n="section.bluetooth">蓝牙配置</h2>
         <label for="btMode" data-i18n="bluetooth.mode">蓝牙模式</label>
         <select id="btMode">
@@ -415,12 +606,18 @@
         <div id="bluetoothStatus" class="status" data-i18n="status.bluetoothLoading">等待加载蓝牙配置...</div>
       </article>
 
-      <article class="card">
+      <article class="card" data-panel-card="gpio" hidden>
         <h2 data-i18n="section.gpio">GPIO控制部分</h2>
         <div class="row">
           <div class="row-main">
             <span data-i18n="gpio.relay">继电器输出</span>
             <div id="relayGpioDisplay" class="hint">GPIO-</div>
+            <label class="hint" data-i18n="gpio.powerPolicy">上电策略</label>
+            <select id="relayPowerPolicy" class="policy-select">
+              <option value="0" data-i18n="gpio.powerFixedOff">固定关闭</option>
+              <option value="1" data-i18n="gpio.powerFixedOn">固定开启</option>
+              <option value="2" data-i18n="gpio.powerRestore">状态记忆</option>
+            </select>
           </div>
           <div class="row-control">
             <button id="toggleRelay" class="secondary" data-i18n="button.toggle">切换</button>
@@ -430,6 +627,12 @@
           <div class="row-main">
             <span data-i18n="gpio.led">状态灯</span>
             <div id="ledGpioDisplay" class="hint">GPIO-</div>
+            <label class="hint" data-i18n="gpio.powerPolicy">上电策略</label>
+            <select id="ledPowerPolicy" class="policy-select">
+              <option value="0" data-i18n="gpio.powerFixedOff">固定关闭</option>
+              <option value="1" data-i18n="gpio.powerFixedOn">固定开启</option>
+              <option value="2" data-i18n="gpio.powerRestore">状态记忆</option>
+            </select>
           </div>
           <div class="row-control">
             <button id="toggleLed" class="secondary" data-i18n="button.toggle">切换</button>
@@ -445,10 +648,12 @@
           </div>
         </div>
         <div class="hint" data-i18n="hint.gpio">引脚已固定在固件中。如需调整，请修改源码宏定义后重新编译烧录。GPIO34/35/36/39 仅支持输入且需要外部上下拉。</div>
+        <div class="hint" data-i18n="gpio.policyHint">固定策略优先；状态记忆只在该路状态变化时写入 NVS。</div>
+        <button id="saveGpioPolicy" class="secondary" data-i18n="button.saveGpio">保存 GPIO 配置</button>
         <div id="gpioInfo" class="status" data-i18n="status.gpioLoading">等待加载 GPIO 状态...</div>
       </article>
 
-      <article class="card">
+      <article class="card" data-panel-card="uart" hidden>
         <h2 data-i18n="section.uart">UART 探测</h2>
         <div class="subgrid">
           <div>
@@ -607,2133 +812,31 @@
   </div>
 
   <script>
-    const state = {
-      uartCommonBaudrates: [1200, 2400, 3600, 4800, 7200, 9600, 14400, 19200, 28800, 38400, 57600, 74880, 115200, 230400, 460800, 921600],
-      relayOn: false,
-      ledOn: false,
-      gpioConfig: null,
-      statusPollTimer: null,
-      statusPollBusy: false,
-      uartConfig: null,
-      uartConsolePlain: "",
-      uartConsoleHex: "",
-      uartRxFormat: "plain",
-      uartTxFormat: "plain",
-      savedWifiProfiles: [],
-      wifiScanResults: [],
-      networkConfig: null,
-      ipConflictShown: false,
-      uartPollTimer: null,
-      uartPollBusy: false
-    };
-
-    const FETCH_RETRY_MAX = 2;
-    const FETCH_RETRY_DELAY_MS = 250;
-    /* 单请求超时:设备是单任务 httpd,慢客户端会阻塞其它请求 → 没有超时就会
-     * "面板永远加载中"(fetch 永不 settle)。见 1.3版本优化.md 1.3-19 */
-    const FETCH_TIMEOUT_MS = 8000;
-
-    const translations = {
-      "zh-CN": {
-        "page.title": "iothub 设备配置页",
-        "page.subtitle": "当前阶段补齐了 AP / STA / APSTA 网络模式、Wi-Fi 扫描、STA 联网状态展示，以及 MQTT 与 STA 上网链路的联动入口。",
-        "language.label": "语言",
-        "language.zh": "中文",
-        "language.en": "English",
-        "section.device": "设备信息",
-        "section.webAuth": "管理员账号",
-        "web.username": "用户名",
-        "web.oldPassword": "当前口令",
-        "web.newPassword": "新口令",
-        "web.confirmPassword": "确认新口令",
-        "web.tooShort": "新口令至少 8 位",
-        "web.confirmMismatch": "两次输入的新口令不一致",
-        "web.saved": "登录凭据已更新，正在重新登录...",
-        "button.saveWebAuth": "保存登录凭据",
-        "hint.webAuth": "保存后浏览器会要求用新凭据重新登录；口令以加盐哈希保存在设备中。",
-        "status.webAuthWaiting": "等待修改登录凭据...",
-        "placeholder.webUsername": "留空保持不变",
-        "placeholder.webNewPassword": "至少 8 位",
-        "section.network": "网络配置",
-        "section.gpio": "GPIO 控制",
-        "section.bluetooth": "蓝牙配置",
-        "section.ota": "OTA 升级",
-        "section.mqtt": "MQTT / ThingsBoard",
-        "section.uart": "UART 探测",
-        "network.mode": "网络模式",
-        "network.apSsid": "AP 名称",
-        "network.apPassword": "AP 密码",
-        "network.openAp": "设为开放网络(清除已存密码)",
-        "network.staSsid": "STA 名称",
-        "network.staPassword": "STA 密码",
-        "network.openSta": "开放网络(清除已存密码)",
-        "network.apSsidRequired": "AP 名称不能为空",
-        "network.staSsidRequired": "STA 名称不能为空",
-        "network.passwordTooShort": "密码至少 8 位",
-        "network.passwordRequired": "请输入密码",
-        "network.openNetworkHint": "如需开放网络,请勾选“清除已存密码”",
-        "network.validationOk": "网络配置校验通过",
-        "network.validate": "校验配置",
-        "network.tryConnect": "试连验证",
-        "network.tryConnecting": "正在试连(含扫描,最长约 25 秒)…",
-        "network.tryConnectOk": "试连成功:SSID 与密码正确,可以保存",
-        "network.tryConnectFailed": "试连失败:{reason}",
-        "network.try.password_ok": "密码正确",
-        "network.try.wrong_password": "密码错误",
-        "network.try.ap_not_found": "附近找不到该 AP(隐藏网络请直接保存尝试)",
-        "network.try.connect_timeout": "连接超时,网络不可达",
-        "network.try.wifi_busy": "设备网络正忙,稍后再试",
-        "network.try.connect_failed": "连接失败",
-        "network.try.invalid_ssid": "SSID 无效",
-        "network.try.ssid_required": "SSID 必填",
-        "network.try.tryconnect_requires_ap": "试连会断开当前网络:请先连接设备热点(192.168.8.1)再操作",
-        "network.staUseStatic": "使用静态 IP(关闭则使用 DHCP)",
-        "network.staStaticDefaultHint": "勾选后留空的字段会自动填入当前 DHCP 获得的地址(未联网时用示例值),可直接保存",
-        "network.staStaticIp": "IP 地址",
-        "network.staStaticGateway": "网关",
-        "network.staStaticNetmask": "子网掩码",
-        "network.staStaticDns1": "首选 DNS(可选)",
-        "network.staStaticDns2": "备用 DNS(可选)",
-        "network.staStaticIpRequired": "静态 IP 模式下必须填写 IP 地址",
-        "network.staStaticIpInvalid": "IP 地址格式不正确",
-        "network.staStaticGatewayRequired": "静态 IP 模式下必须填写网关",
-        "network.staStaticGatewayInvalid": "网关格式不正确",
-        "network.staStaticNetmaskRequired": "静态 IP 模式下必须填写子网掩码",
-        "network.staStaticNetmaskInvalid": "子网掩码格式不正确",
-        "network.staStaticDnsInvalid": "DNS 格式不正确",
-        "network.ipConflictTitle": "静态 IP 地址冲突",
-        "network.ipConflictText": "检测到静态 IP {ip} 已被局域网中的其他设备占用。请修改 IP 后重新保存网络配置，否则设备网络可能异常。",
-        "network.ipConflictFix": "去修改",
-        "network.ipConflictSummary": "⚠ 静态 IP {ip} 与局域网内其他设备冲突",
-        "placeholder.apPassword": "已保存;输入则修改,留空保持不变",
-        "placeholder.staSsid": "上游路由器 SSID",
-        "placeholder.staPassword": "至少 8 位;留空保持已存密码",
-        "placeholder.staStaticIp": "192.168.1.213",
-        "placeholder.staStaticGateway": "192.168.1.1",
-        "placeholder.staStaticNetmask": "255.255.255.0",
-        "placeholder.staStaticDns": "192.168.1.1",
-        "placeholder.mqttToken": "已保存;输入则修改,留空保持不变",
-        "placeholder.uartTx": "输入待发送数据，hex 模式可用空格分隔",
-        "mode.ap": "AP",
-        "mode.sta": "STA",
-        "mode.apsta": "AP + STA",
-        "button.saveNetwork": "保存",
-        "button.scanWifi": "扫描 Wi-Fi",
-        "button.savedWifi": "已保存WiFi",
-        "network.modeAutoApsta": "已填 STA 名称:网络模式自动切为 AP + STA(否则 STA 不会启用)",
-        "network.staSsidInactive": "注意:已保存 STA 名称,但当前是纯 AP 模式 → STA 不会启用;请把网络模式改为 AP + STA 后保存",
-        "button.toggle": "切换",
-        "button.saveGpio": "保存 GPIO 配置",
-        "button.saveBluetooth": "保存蓝牙配置",
-        "button.uploadOta": "上传固件并升级",
-        "button.uploadStorage": "上传网页资源并升级",
-        "button.saveMqtt": "保存 MQTT 配置",
-        "button.saveUart": "保存 UART 配置",
-        "dialog.wifiScanTitle": "扫描到的 Wi-Fi",
-        "dialog.savedWifiTitle": "已保存WiFi",
-        "button.sendUart": "发送",
-        "button.clearUartConsole": "清空",
-        "button.use": "使用",
-        "button.delete": "删除",
-        "button.close": "关闭",
-        "button.cancel": "取消",
-        "dialog.wifiJoinTitle": "连接 Wi-Fi",
-        "wifiJoin.ssid": "Wi-Fi 名称",
-        "wifiJoin.password": "Wi-Fi 密码",
-        "wifiJoin.dhcp": "DHCP(自动获取)",
-        "wifiJoin.staticIp": "静态 IP",
-        "wifiJoin.staticHint": "留空的字段会自动填入当前 DHCP 获得的地址(未联网时用示例值)",
-        "wifiJoin.verify": "验证密码",
-        "wifiJoin.verifyHint": "先点“验证密码”：设备会真实试连一次，密码正确后出现“保存”按钮。",
-        "wifiJoin.verifying": "正在验证(真实试连,最长约 25 秒)…",
-        "wifiJoin.reverify": "SSID 或密码已修改：请重新“验证密码”后再保存",
-        "placeholder.joinSsid": "已自动填入;可手动修改",
-        "placeholder.joinPassword": "至少 8 位",
-        "bt.off": "关闭蓝牙",
-        "bt.ble": "低功耗蓝牙·从机(外设,广播 NUS)",
-        "bt.central": "低功耗蓝牙·主机(中心,扫描并连接另一台设备)",
-        "hint.network": "设备默认 AP 地址为 `192.168.8.1`。STA 模式下可连接上游网络，MQTT 会在 STA 获取 IP 后再尝试连出。",
-        "hint.gpio": "引脚已固定在固件中。如需调整，请修改源码宏定义后重新编译烧录。GPIO34/35/36/39 仅支持输入且需要外部上下拉。",
-        "hint.bluetooth": "从机模式下设备会广播 NUS 服务，等待手机/电脑连接；主机模式用于连接另一台 iothub 设备（双机互连场景）。切换模式保存后设备自动重启。",
-        "hint.ota": "建议先升级 `storage.bin`，再升级 `iothub.bin`；也可以两者都升级。每次上传成功后设备都会自动重启，页面会提示你刷新并重新连接。",
-        "hint.mqtt": "当前阶段会实际发起 MQTT 连接，并周期上报基础遥测。若仍未连接，请确认网络可达和 Broker 配置正确。",
-        "hint.uart": "RX/TX 引脚已固定在固件中。请直接设置波特率、数据位、停止位和奇偶校验后保存，并在下方接收窗口中观察串口数据是否正确。",
-        "gpio.relay": "继电器输出",
-        "gpio.led": "状态灯",
-        "gpio.input": "开关量输入",
-        "gpio.relayPin": "继电器引脚",
-        "gpio.ledPin": "状态灯引脚",
-        "gpio.inputPin": "输入引脚",
-        "bluetooth.mode": "蓝牙模式",
-        "bluetooth.modeSwitchHint": "切换蓝牙模式会使设备重启",
-        "bluetooth.savedNeedsReboot": "蓝牙模式已保存，设备正在重启，请稍候...",
-        "bluetooth.name": "蓝牙名称",
-        "ota.file": "选择固件 `iothub.bin` 文件",
-        "ota.allowDowngrade": "允许降级(跳过版本比较)",
-        "ota.storageFile": "选择网页资源 `storage.bin`",
-        "mqtt.backend": "后端类型",
-        "mqtt.tbCloud": "ThingsBoard Cloud",
-        "mqtt.tbSelfhost": "ThingsBoard 自建",
-        "mqtt.custom": "自定义 MQTT",
-        "mqtt.host": "主机地址",
-        "mqtt.port": "端口",
-        "mqtt.token": "Token / 密钥",
-        "mqtt.clearToken": "清除已存 Token",
-        "mqtt.tls": "启用 TLS",
-        "uart.rx": "接收引脚",
-        "uart.tx": "发送引脚",
-        "uart.rxLabel": "接收引脚：",
-        "uart.txLabel": "发送引脚：",
-        "uart.baudrate": "波特率",
-        "uart.dataBits": "数据位",
-        "uart.stopBits": "停止位",
-        "uart.parity": "奇偶校验",
-        "uart.rxFormat": "接收显示",
-        "uart.txFormat": "发送编码",
-        "uart.rxWindow": "接收数据",
-        "uart.txWindow": "发送数据",
-        "encoding.plain": "文本",
-        "encoding.hex": "16进制",
-        "status.networkLoading": "等待加载网络配置...",
-        "status.gpioLoading": "等待加载 GPIO 状态...",
-        "status.bluetoothLoading": "等待加载蓝牙配置...",
-        "status.otaWaiting": "等待选择 `storage.bin` 或 `iothub.bin`",
-        "status.mqttLoading": "等待加载 MQTT 配置...",
-        "status.uartLoading": "等待加载 UART 配置...",
-        "scan.emptyTitle": "尚无扫描结果",
-        "scan.emptyHint": "点击“扫描 Wi-Fi”获取附近热点",
-        "scan.savedEmptyTitle": "暂无已保存的 WiFi",
-        "scan.savedEmptyHint": "先保存一次 STA 配置后，这里会显示常用 Wi‑Fi。",
-        "scan.hidden": "(隐藏 SSID)",
-        "scan.modalHint": "点击“使用”进入连接向导：填写密码并验证通过后即可保存。",
-        "device.project": "项目",
-        "device.target": "目标",
-        "device.idf_version": "IDF 版本",
-        "device.app_version": "应用版本",
-        "device.mac": "MAC",
-        "device.free_heap": "空闲堆",
-        "device.app_partition": "应用分区",
-        "device.app_usage": "固件占用",
-        "device.storage_usage": "网页占用",
-        "device.net_mode": "网络模式",
-        "device.ap_ip": "AP 地址",
-        "device.sta_ip": "STA 地址",
-        "device.bt_mode": "蓝牙运行模式",
-        "device.mqtt": "MQTT 状态",
-        "device.error": "加载错误",
-        "state.connected": "已连接",
-        "state.disconnected": "未连接",
-        "state.connecting": "连接中",
-        "state.disconnected_error": "连接已断开",
-        "state.valid": "有效",
-        "state.invalid": "无输入",
-        "state.on": "ON",
-        "state.off": "OFF",
-        "state.yes": "是",
-        "state.no": "否",
-        "usage.free": "剩余",
-        "network.summary": "模式={mode}，AP={ap}，STA={sta}，联网={staIp}，最近断开={lastDisconnect}",
-        "network.noIp": "未获取 IP",
-        "network.none": "-",
-        "network.savedProfiles": "已保存 Wi-Fi",
-        "network.savedWifiHint": "点击“使用”可切换到该组已保存的 Wi‑Fi 参数；如果已连接当前 Wi‑Fi，则只提示无需切换。",
-        "network.profileApplied": "已回填 Wi-Fi：{ssid}",
-        "network.profileDeleted": "已删除保存的 Wi-Fi：{ssid}",
-        "network.profileDeleteFailed": "删除失败:{ssid}(可能不存在或正被使用)",
-        "network.profileCurrent": "当前使用中",
-        "network.profileAlreadyConnected": "已连接该 Wi‑Fi：{ssid}，无需切换",
-        "network.savedNeedsRestart": "网络配置已保存。新的访问地址：{address}。是否现在重启网络以应用配置？",
-        "network.savedStaOnly": "网络配置已保存。当前为纯 STA 模式，重启后请到路由器 DHCP 列表查看新 IP。是否现在重启网络以应用配置？",
-        "network.restartStarted": "网络正在重启。若 AP 可用，请使用 http://{address} 重新连接。",
-        "network.scanning": "正在扫描附近 Wi-Fi 热点...",
-        "network.scanDone": "扫描完成，发现 {count} 个热点。可点击“使用”填入 STA SSID。",
-        "bluetooth.summary": "配置模式={mode}，当前运行模式={runtimeMode}，名称={name}",
-        "bluetooth.summaryWithError": "配置模式={mode}，当前运行模式={runtimeMode}，名称={name}，错误={error}",
-        "bluetooth.saving": "蓝牙配置已保存，正在重启蓝牙并刷新状态...",
-        "mqtt.summary": "后端={backend}，主机={host}，端口={port}，连接状态={connected}，错误={error}",
-        "uart.summary": "当前={frame} @ {baudrate}bps",
-        "uart.sent": "已发送 {bytes} 字节，编码={encoding}",
-        "uart.cleared": "接收区已清空",
-        "ota.uploading": "正在上传固件 {name} ({size} bytes)...",
-        "ota.storageUploading": "正在上传网页资源 {name} ({size} bytes)...",
-        "ota.done": "{message}",
-        "ota.waitingForReboot": "上传完成，正在等待设备离线并重启...",
-        "ota.waitingForFirmware": "设备已重新上线，正在核对固件版本与运行分区，当前分区={partition}...",
-        "ota.waitingForStorage": "设备已重新上线，正在确认网页资源升级结果...",
-        "ota.firmwareVerified": "固件升级已确认：当前分区={partition}，编译时间={compileDate} {compileTime}。请手动刷新页面加载最新状态。",
-        "ota.storageVerified": "网页资源升级后设备已重新上线。请手动刷新页面加载最新页面。",
-        "ota.verificationTimedOut": "升级请求已发送，但在超时时间内未确认新状态。当前分区={partition}，请稍后手动刷新核对。",
-        "gpio.summary": "继电器 GPIO{relayGpio}={relayOn}，状态灯 GPIO{ledGpio}={ledOn}，输入 GPIO{inputGpio}",
-        "error.selectFirmware": "请先选择一个 `iothub.bin` 文件",
-        "error.selectStorage": "请先选择一个 `storage.bin` 文件",
-        "error.expectedFirmwareName": "文件名不匹配：固件升级只允许上传 `iothub.bin`，当前选择的是 `{actual}`",
-        "error.expectedStorageName": "文件名不匹配：网页资源升级只允许上传 `storage.bin`，当前选择的是 `{actual}`",
-        "error.emptyResponse": "接口返回空响应",
-        "error.invalidResponse": "接口返回了非 JSON 内容",
-        "error.transientFetch": "设备连接暂时中断，请稍后重试"
-      },
-      "en": {
-        "page.title": "iothub Configuration",
-        "page.subtitle": "This phase adds AP / STA / APSTA mode switching, Wi-Fi scanning, STA connection status, and MQTT startup linkage after STA gets an IP.",
-        "language.label": "Language",
-        "language.zh": "中文",
-        "language.en": "English",
-        "section.device": "Device Info",
-        "section.webAuth": "Admin Account",
-        "web.username": "Username",
-        "web.oldPassword": "Current Password",
-        "web.newPassword": "New Password",
-        "web.confirmPassword": "Confirm New Password",
-        "web.tooShort": "New password must be at least 8 characters",
-        "web.confirmMismatch": "New passwords do not match",
-        "web.saved": "Credentials updated. Re-authenticating...",
-        "button.saveWebAuth": "Save Credentials",
-        "hint.webAuth": "The browser will ask you to sign in again; the password is stored on the device as a salted SHA-256 hash.",
-        "status.webAuthWaiting": "Waiting for credential change...",
-        "placeholder.webUsername": "Leave empty to keep",
-        "placeholder.webNewPassword": "At least 8 characters",
-        "section.network": "Network",
-        "section.gpio": "GPIO Control",
-        "section.bluetooth": "Bluetooth Settings",
-        "section.ota": "OTA Upgrade",
-        "section.mqtt": "MQTT / ThingsBoard",
-        "section.uart": "UART Probe",
-        "network.mode": "Network Mode",
-        "network.apSsid": "AP SSID",
-        "network.apPassword": "AP Password",
-        "network.openAp": "Open network (clear saved password)",
-        "network.staSsid": "STA SSID",
-        "network.staPassword": "STA Password",
-        "network.openSta": "Open network (clear saved password)",
-        "network.apSsidRequired": "AP SSID is required",
-        "network.staSsidRequired": "STA SSID is required",
-        "network.passwordTooShort": "Password must be at least 8 characters",
-        "network.passwordRequired": "Please enter the password",
-        "network.openNetworkHint": "For an open network, check “clear saved password”",
-        "network.validationOk": "Network configuration looks good",
-        "network.validate": "Validate",
-        "network.tryConnect": "Try Connect",
-        "network.tryConnecting": "Trying to connect (scan included, up to ~25s)...",
-        "network.tryConnectOk": "Connect OK: SSID and password are correct, you can save now",
-        "network.tryConnectFailed": "Try-connect failed: {reason}",
-        "network.try.password_ok": "Password correct",
-        "network.try.wrong_password": "Wrong password",
-        "network.try.ap_not_found": "AP not found nearby (for hidden networks, save directly)",
-        "network.try.connect_timeout": "Connect timeout, network unreachable",
-        "network.try.wifi_busy": "Device Wi-Fi busy, try again later",
-        "network.try.connect_failed": "Connection failed",
-        "network.try.invalid_ssid": "Invalid SSID",
-        "network.try.ssid_required": "SSID required",
-        "network.try.tryconnect_requires_ap": "Try-connect would drop the current link: connect to the device hotspot (192.168.8.1) first",
-        "network.staUseStatic": "Use static IP (disable for DHCP)",
-        "network.staStaticDefaultHint": "Empty fields are auto-filled with the current DHCP address (or example values when offline); you can save right away",
-        "network.staStaticIp": "IP Address",
-        "network.staStaticGateway": "Gateway",
-        "network.staStaticNetmask": "Netmask",
-        "network.staStaticDns1": "Primary DNS (optional)",
-        "network.staStaticDns2": "Secondary DNS (optional)",
-        "network.staStaticIpRequired": "Static IP mode requires an IP address",
-        "network.staStaticIpInvalid": "Invalid IP address format",
-        "network.staStaticGatewayRequired": "Static IP mode requires a gateway",
-        "network.staStaticGatewayInvalid": "Invalid gateway format",
-        "network.staStaticNetmaskRequired": "Static IP mode requires a netmask",
-        "network.staStaticNetmaskInvalid": "Invalid netmask format",
-        "network.staStaticDnsInvalid": "Invalid DNS format",
-        "network.ipConflictTitle": "Static IP Conflict",
-        "network.ipConflictText": "The static IP {ip} is already used by another device on the LAN. Change the IP and save the network config again, otherwise the device network may malfunction.",
-        "network.ipConflictFix": "Fix Now",
-        "network.ipConflictSummary": "⚠ Static IP {ip} conflicts with another device on the LAN",
-        "placeholder.apPassword": "Saved; type to change, leave empty to keep",
-        "placeholder.staSsid": "Upstream router SSID",
-        "placeholder.staPassword": "At least 8 chars; leave empty to keep saved",
-        "placeholder.staStaticIp": "192.168.1.213",
-        "placeholder.staStaticGateway": "192.168.1.1",
-        "placeholder.staStaticNetmask": "255.255.255.0",
-        "placeholder.staStaticDns": "192.168.1.1",
-        "placeholder.mqttToken": "Saved; type to change, leave empty to keep",
-        "placeholder.uartTx": "Enter data to send; hex mode accepts space-separated bytes",
-        "mode.ap": "AP",
-        "mode.sta": "STA",
-        "mode.apsta": "AP + STA",
-        "button.saveNetwork": "Save",
-        "button.scanWifi": "Scan Wi-Fi",
-        "button.savedWifi": "Saved Wi-Fi",
-        "network.modeAutoApsta": "STA SSID entered: network mode switched to AP + STA (otherwise STA stays disabled)",
-        "network.staSsidInactive": "Warning: STA SSID saved but mode is AP-only, so STA stays disabled; set mode to AP + STA and save",
-        "button.toggle": "Toggle",
-        "button.saveGpio": "Save GPIO",
-        "button.saveBluetooth": "Save Bluetooth Settings",
-        "button.uploadOta": "Upload Firmware",
-        "button.uploadStorage": "Upload Web Assets",
-        "button.saveMqtt": "Save MQTT",
-        "button.saveUart": "Save UART",
-        "dialog.wifiScanTitle": "Scanned Wi-Fi Networks",
-        "dialog.savedWifiTitle": "Saved Wi-Fi",
-        "button.sendUart": "Send",
-        "button.clearUartConsole": "Clear",
-        "button.use": "Use",
-        "button.delete": "Delete",
-        "button.close": "Close",
-        "button.cancel": "Cancel",
-        "dialog.wifiJoinTitle": "Join Wi-Fi",
-        "wifiJoin.ssid": "Wi-Fi name",
-        "wifiJoin.password": "Wi-Fi password",
-        "wifiJoin.dhcp": "DHCP (automatic)",
-        "wifiJoin.staticIp": "Static IP",
-        "wifiJoin.staticHint": "Blank fields are auto-filled from the current DHCP address (example values when offline)",
-        "wifiJoin.verify": "Verify password",
-        "wifiJoin.verifyHint": "Tap \"Verify password\" first: the device makes a real connection attempt, and the Save button appears after the password is confirmed.",
-        "wifiJoin.verifying": "Verifying (real connection attempt, up to ~25s)…",
-        "wifiJoin.reverify": "SSID or password changed: tap \"Verify password\" again before saving",
-        "placeholder.joinSsid": "Pre-filled; editable",
-        "placeholder.joinPassword": "At least 8 characters",
-        "bt.off": "BT OFF",
-        "bt.ble": "BLE Peripheral (advertises NUS)",
-        "bt.central": "BLE Central (scans and connects to another device)",
-        "hint.network": "The default AP address is `192.168.8.1`. In STA mode the device can connect upstream, and MQTT starts after STA gets an IP.",
-        "hint.gpio": "Pins are fixed in firmware. To change them, update the source macros and rebuild/reflash. GPIO34/35/36/39 are input-only and require external pull resistors.",
-        "hint.bluetooth": "Peripheral mode advertises the NUS service for phones/PCs; central mode connects to another iothub device (two-device scenario). Saving a mode change reboots the device.",
-        "hint.ota": "Upgrade `storage.bin` first, then `iothub.bin`; or upload both in sequence. After each successful upload, the device reboots automatically and the page prompts you to refresh and reconnect.",
-        "hint.mqtt": "This phase starts a real MQTT connection and publishes basic telemetry periodically. If it is still disconnected, verify network reachability and broker settings.",
-        "hint.uart": "RX/TX pins are fixed in firmware. Set baud rate, data bits, stop bits, and parity directly, save them, then verify the data in the receive console below.",
-        "gpio.relay": "Relay Output",
-        "gpio.led": "Status LED",
-        "gpio.input": "Digital Input",
-        "gpio.relayPin": "Relay Pin",
-        "gpio.ledPin": "LED Pin",
-        "gpio.inputPin": "Input Pin",
-        "bluetooth.mode": "Bluetooth Mode",
-        "bluetooth.modeSwitchHint": "Switching the Bluetooth mode reboots the device",
-        "bluetooth.savedNeedsReboot": "Bluetooth mode saved. Device is rebooting, please wait...",
-        "bluetooth.name": "Device Name",
-        "ota.file": "Select Firmware `iothub.bin`",
-        "ota.allowDowngrade": "Allow downgrade (skip version check)",
-        "ota.storageFile": "Select Web Assets `storage.bin`",
-        "mqtt.backend": "Backend Type",
-        "mqtt.tbCloud": "ThingsBoard Cloud",
-        "mqtt.tbSelfhost": "Self-hosted ThingsBoard",
-        "mqtt.custom": "Custom MQTT",
-        "mqtt.host": "Host",
-        "mqtt.port": "Port",
-        "mqtt.token": "Token / Secret",
-        "mqtt.clearToken": "Clear saved token",
-        "mqtt.tls": "Enable TLS",
-        "uart.rx": "RX Pin",
-        "uart.tx": "TX Pin",
-        "uart.rxLabel": "RX Pin: ",
-        "uart.txLabel": "TX Pin: ",
-        "uart.baudrate": "Baud Rate",
-        "uart.dataBits": "Data Bits",
-        "uart.stopBits": "Stop Bits",
-        "uart.parity": "Parity",
-        "uart.rxFormat": "Receive View",
-        "uart.txFormat": "Send Encoding",
-        "uart.rxWindow": "Received Data",
-        "uart.txWindow": "Send Data",
-        "encoding.plain": "Plain",
-        "encoding.hex": "Hex",
-        "status.networkLoading": "Loading network configuration...",
-        "status.gpioLoading": "Loading GPIO status...",
-        "status.bluetoothLoading": "Loading Bluetooth settings...",
-        "status.otaWaiting": "Waiting for `storage.bin` or `iothub.bin` selection",
-        "status.mqttLoading": "Loading MQTT configuration...",
-        "status.uartLoading": "Loading UART configuration...",
-        "scan.emptyTitle": "No scan results yet",
-        "scan.emptyHint": "Click \"Scan Wi-Fi\" to discover nearby networks",
-        "scan.savedEmptyTitle": "No saved Wi-Fi yet",
-        "scan.savedEmptyHint": "Save STA settings once and common Wi‑Fi profiles appear here.",
-        "scan.hidden": "(hidden SSID)",
-        "scan.modalHint": "Click \"Use\" to open the join wizard: enter the password and save once it is verified.",
-        "device.project": "Project",
-        "device.target": "Target",
-        "device.idf_version": "IDF Version",
-        "device.app_version": "App Version",
-        "device.mac": "MAC",
-        "device.free_heap": "Free Heap",
-        "device.app_partition": "App Partition",
-        "device.app_usage": "Firmware Usage",
-        "device.storage_usage": "Web Usage",
-        "device.net_mode": "Network Mode",
-        "device.ap_ip": "AP IP",
-        "device.sta_ip": "STA IP",
-        "device.bt_mode": "Active Bluetooth Mode",
-        "device.mqtt": "MQTT Status",
-        "device.error": "Load Error",
-        "state.connected": "connected",
-        "state.disconnected": "disconnected",
-        "state.connecting": "connecting",
-        "state.disconnected_error": "disconnected",
-        "state.valid": "active",
-        "state.invalid": "inactive",
-        "state.on": "ON",
-        "state.off": "OFF",
-        "state.yes": "yes",
-        "state.no": "no",
-        "usage.free": "free",
-        "network.summary": "Mode={mode}, AP={ap}, STA={sta}, Online={staIp}, Last disconnect={lastDisconnect}",
-        "network.noIp": "no IP",
-        "network.none": "-",
-        "network.savedProfiles": "Saved Wi-Fi",
-        "network.savedWifiHint": "Click \"Use\" to switch the form to a saved Wi‑Fi profile. If this Wi‑Fi is already connected, the page only shows a reminder.",
-        "network.profileApplied": "Filled Wi-Fi profile: {ssid}",
-        "network.profileDeleted": "Deleted saved Wi-Fi: {ssid}",
-        "network.profileDeleteFailed": "Delete failed: {ssid} (missing or in use)",
-        "network.profileCurrent": "In use",
-        "network.profileAlreadyConnected": "This Wi‑Fi is already connected: {ssid}",
-        "network.savedNeedsRestart": "Network settings were saved. New access address: {address}. Restart networking now to apply the changes?",
-        "network.savedStaOnly": "Network settings were saved. STA-only mode cannot predict the next IP. After restart, check your router DHCP list for the new address. Restart networking now?",
-        "network.restartStarted": "Network restart started. If AP is enabled, reconnect using http://{address}.",
-        "network.scanning": "Scanning nearby Wi-Fi networks...",
-        "network.scanDone": "Scan finished. Found {count} networks. Click \"Use\" to fill the STA SSID.",
-        "bluetooth.summary": "Configured mode={mode}, active mode={runtimeMode}, device name={name}",
-        "bluetooth.summaryWithError": "Configured mode={mode}, active mode={runtimeMode}, device name={name}, error={error}",
-        "bluetooth.saving": "Bluetooth settings saved. Restarting Bluetooth services and refreshing status...",
-        "mqtt.summary": "Backend={backend}, host={host}, port={port}, status={connected}, error={error}",
-        "uart.summary": "Current={frame} @ {baudrate}bps",
-        "uart.sent": "Sent {bytes} bytes, encoding={encoding}",
-        "uart.cleared": "Receive console cleared",
-        "ota.uploading": "Uploading firmware {name} ({size} bytes)...",
-        "ota.storageUploading": "Uploading web assets {name} ({size} bytes)...",
-        "ota.done": "{message}",
-        "ota.waitingForReboot": "Upload complete. Waiting for the device to go offline and reboot...",
-        "ota.waitingForFirmware": "The device is back online. Verifying firmware build and running partition. Current partition={partition}...",
-        "ota.waitingForStorage": "The device is back online. Confirming the web asset upgrade...",
-        "ota.firmwareVerified": "Firmware upgrade confirmed: running partition={partition}, compile time={compileDate} {compileTime}. Please refresh the page manually to load the latest state.",
-        "ota.storageVerified": "The device is back online after the web asset upgrade. Please refresh the page manually to load the latest page.",
-        "ota.verificationTimedOut": "The upgrade request was sent, but the new state was not confirmed before timeout. Current partition={partition}. Please refresh manually and verify later.",
-        "gpio.summary": "Relay GPIO{relayGpio}={relayOn}, LED GPIO{ledGpio}={ledOn}, Input GPIO{inputGpio}",
-        "error.selectFirmware": "Please choose an `iothub.bin` file first",
-        "error.selectStorage": "Please choose a `storage.bin` file first",
-        "error.expectedFirmwareName": "File name mismatch: firmware upload only accepts `iothub.bin`, current selection is `{actual}`",
-        "error.expectedStorageName": "File name mismatch: web assets upload only accepts `storage.bin`, current selection is `{actual}`",
-        "error.emptyResponse": "The API returned an empty response",
-        "error.invalidResponse": "The API returned non-JSON content",
-        "error.transientFetch": "The device connection was interrupted temporarily. Please try again shortly."
-      }
-    };
-
-    function detectLanguage() {
-      const saved = localStorage.getItem("iothub_lang");
-      if (saved && translations[saved]) {
-        return saved;
-      }
-      return navigator.language && navigator.language.toLowerCase().startsWith("zh") ? "zh-CN" : "en";
-    }
-
-    state.language = detectLanguage();
-
-    function t(key, vars = {}) {
-      const dict = translations[state.language] || translations["zh-CN"];
-      const fallback = translations["zh-CN"];
-      const template = dict[key] ?? fallback[key] ?? key;
-      return template.replace(/\{(\w+)\}/g, (_, name) => vars[name] ?? "");
-    }
-
-    function humanMode(mode) {
-      if (!mode) {
-        return "-";
-      }
-      const key = `mode.${mode}`;
-      const text = t(key);
-      return text === key ? mode : text;
-    }
-
-    function humanBtMode(mode) {
-      if (!mode) {
-        return "-";
-      }
-      const key = `bt.${mode}`;
-      const text = t(key);
-      return text === key ? mode : text;
-    }
-
-    function humanMqttState(connected, lastError) {
-      if (connected) {
-        return t("state.connected");
-      }
-      if (!lastError) {
-        return t("state.disconnected");
-      }
-
-      const key = `state.${lastError}`;
-      const text = t(key);
-      return text === key ? lastError : text;
-    }
-
-    function applyTranslations() {
-      document.documentElement.lang = state.language;
-      document.title = t("page.title");
-      document.getElementById("languageSelect").value = state.language;
-      document.querySelectorAll("[data-i18n]").forEach((element) => {
-        element.textContent = t(element.dataset.i18n);
+    (() => {
+      const version = "__ASSET_VERSION__";
+      const files = [
+        "/config-bundle-i18n.js",
+        "/config-bundle-core.js",
+        "/config-bundle-app.js"
+      ];
+      let chain = Promise.resolve();
+      files.forEach((file) => {
+        chain = chain.then(() => new Promise((resolve, reject) => {
+          const script = document.createElement("script");
+          script.async = false;
+          script.src = `${file}?v=${version}`;
+          script.onload = resolve;
+          script.onerror = () => reject(new Error(file));
+          document.body.appendChild(script);
+        }));
       });
-      document.querySelectorAll("[data-i18n-placeholder]").forEach((element) => {
-        element.placeholder = t(element.dataset.i18nPlaceholder);
-      });
-    }
-
-    function setStatus(id, text, tone) {
-      const element = document.getElementById(id);
-      element.textContent = text;
-      element.className = "status" + (tone ? ` ${tone}` : "");
-    }
-
-    function setNetworkValidationStatus(text, tone) {
-      const element = document.getElementById("networkValidation");
-      if (!text) {
-        element.hidden = true;
-        element.textContent = "";
-        element.className = "status";
-        return;
-      }
-      element.hidden = false;
-      element.textContent = text;
-      element.className = "status" + (tone ? ` ${tone}` : "");
-    }
-
-    function renderUartConsole() {
-      const rxFormat = document.getElementById("uartRxFormat");
-      const txFormat = document.getElementById("uartTxFormat");
-      const consoleBox = document.getElementById("uartRxConsole");
-      let renderedValue = "";
-      if (!consoleBox) {
-        return;
-      }
-
-      if (rxFormat) {
-        rxFormat.value = state.uartRxFormat;
-      }
-      if (txFormat) {
-        txFormat.value = state.uartTxFormat;
-      }
-
-      renderedValue = state.uartRxFormat === "hex"
-        ? (state.uartConsoleHex || "")
-        : (state.uartConsolePlain || "");
-      consoleBox.value = renderedValue;
-      consoleBox.scrollTop = consoleBox.scrollHeight;
-    }
-
-    function renderKeyValues(targetId, data) {
-      const target = document.getElementById(targetId);
-      target.innerHTML = Object.entries(data).map(([key, value]) => {
-        return `<div class="row"><span>${t(`device.${key}`)}</span><strong>${value}</strong></div>`;
-      }).join("");
-    }
-
-    function getErrorMessage(error) {
-      const statusPrefix = error?.status ? `HTTP ${error.status}: ` : "";
-      if (error?.message === "empty_response") {
-        return `${statusPrefix}${t("error.emptyResponse")}`;
-      }
-      if (error?.message === "invalid_response") {
-        return `${statusPrefix}${t("error.invalidResponse")}`;
-      }
-      if (isTransientFetchError(error)) {
-        return t("error.transientFetch");
-      }
-      const message = error?.message || String(error) || t("network.none");
-      return `${statusPrefix}${message}`;
-    }
-
-    function sleep(ms) {
-      return new Promise((resolve) => setTimeout(resolve, ms));
-    }
-
-    function isTransientFetchError(error) {
-      if (error && (error.name === "AbortError" || error.timeout === true)) {
-        return true;   /* 超时(AbortController)按可重试处理 */
-      }
-      const message = String(error?.message || error || "");
-      return message === "Failed to fetch" ||
-             message === "Load failed" ||
-             message === "NetworkError when attempting to fetch resource." ||
-             message === "The operation was aborted.";
-    }
-
-    function renderDeviceError(message) {
-      renderKeyValues("deviceInfo", {
-        error: message
-      });
-    }
-
-    async function runWithPanelError(task, onError) {
-      try {
-        await task();
-      } catch (error) {
-        onError(getErrorMessage(error));
-      }
-    }
-
-    function formatBytes(bytes) {
-      const value = Number(bytes) || 0;
-      if (value >= 1024 * 1024) {
-        return `${(value / (1024 * 1024)).toFixed(2)} MiB`;
-      }
-      if (value >= 1024) {
-        return `${(value / 1024).toFixed(1)} KiB`;
-      }
-      return `${value} B`;
-    }
-
-    function formatUsage(usedBytes, totalBytes) {
-      const used = Number(usedBytes);
-      const total = Number(totalBytes);
-      if (!Number.isFinite(used) || !Number.isFinite(total) || total <= 0) {
-        return "-";
-      }
-      const free = total > used ? total - used : 0;
-      const percent = ((used * 100) / total).toFixed(1);
-      return `${formatBytes(used)} / ${formatBytes(total)} (${percent}%), ${t("usage.free")} ${formatBytes(free)}`;
-    }
-
-    function formatPartitionLabel(label, totalBytes) {
-      if (!label) {
-        return "-";
-      }
-      const total = Number(totalBytes);
-      return Number.isFinite(total) && total > 0
-        ? `${label} (${formatBytes(total)})`
-        : label;
-    }
-
-    function formatGpioLabel(gpio) {
-      return Number.isFinite(Number(gpio)) ? `GPIO${gpio}` : "GPIO-";
-    }
-
-    function escapeHtml(value) {
-      return String(value ?? "")
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;")
-        .replace(/'/g, "&#39;");
-    }
-
-    function renderUartBaudList() {
-      const select = document.getElementById("uartBaudSelect");
-      if (!select) {
-        return;
-      }
-
-      select.innerHTML = state.uartCommonBaudrates.map((baudrate) =>
-        `<option value="${baudrate}">${baudrate}</option>`).join("");
-    }
-
-    function openWifiScanModal() {
-      document.getElementById("wifiScanModal").hidden = false;
-    }
-
-    function closeWifiScanModal() {
-      document.getElementById("wifiScanModal").hidden = true;
-    }
-
-    function openSavedWifiModal() {
-      document.getElementById("savedWifiModal").hidden = false;
-    }
-
-    function closeSavedWifiModal() {
-      document.getElementById("savedWifiModal").hidden = true;
-    }
-
-    /* 静态 IP 冲突弹窗:状态轮询/加载时发现 sta_ip_conflict=true 即弹出(一次) */
-    function showIpConflictModal(ip) {
-      if (state.ipConflictShown) {
-        return;
-      }
-      state.ipConflictShown = true;
-      document.getElementById("ipConflictText").textContent =
-        t("network.ipConflictText", { ip: ip || "-" });
-      document.getElementById("ipConflictModal").hidden = false;
-    }
-
-    function closeIpConflictModal() {
-      document.getElementById("ipConflictModal").hidden = true;
-    }
-
-    function applySavedWifiProfile(index) {
-      const profile = state.savedWifiProfiles[index];
-      if (!profile) {
-        return;
-      }
-      const current = state.networkConfig || {};
-      if (current.sta_connected && current.sta_ssid === profile.ssid) {
-        setStatus("networkStatus", t("network.profileAlreadyConnected", {
-          ssid: profile.ssid || t("scan.hidden")
-        }), "ok");
-        return;
-      }
-      document.getElementById("staSsid").value = profile.ssid || "";
-      document.getElementById("staPassword").value = "";
-      closeSavedWifiModal();
-      setStatus("networkStatus", t("network.profileApplied", {
-        ssid: profile.ssid || t("scan.hidden")
-      }), "ok");
-    }
-
-    function applyScannedWifi(index) {
-      const profile = state.wifiScanResults[index];
-      if (!profile) {
-        return;
-      }
-      openWifiJoinModal(profile.ssid || "");
-    }
-
-    /* -------------------------------------------------------------------------
-     * 连接 Wi-Fi 向导(1.3-51):扫描列表点“使用”后进入。
-     * SSID 自动填入(可手动改),密码需“验证密码”(真实试连)通过后才出现“保存”;
-     * DHCP / 静态 IP 二选一(默认 DHCP),勾选静态 IP 展开静态地址面板。
-     * “保存”把向导字段回填到主网络表单并走既有 saveNetwork() 全流程
-     * (含静态 IP 校验/模式推断/保存后重启确认),不复制保存逻辑。
-     * ------------------------------------------------------------------------- */
-    function openWifiJoinModal(ssid) {
-      document.getElementById("joinSsid").value = ssid || "";
-      document.getElementById("joinPassword").value = "";
-      document.getElementById("joinIpDhcp").checked = true;
-      document.getElementById("joinStaticPanel").hidden = true;
-      document.getElementById("joinSave").hidden = true;
-      state.joinVerified = null;   /* 1.3-52:换一个 Wi-Fi 就必须重新验证密码 */
-      setJoinValidationStatus("", "");
-      document.getElementById("wifiJoinModal").hidden = false;
-    }
-
-    function closeWifiJoinModal() {
-      document.getElementById("wifiJoinModal").hidden = true;
-    }
-
-    function joinIpMode() {
-      return document.getElementById("joinIpStatic").checked ? "static" : "dhcp";
-    }
-
-    function setJoinValidationStatus(text, tone) {
-      const element = document.getElementById("joinValidation");
-      if (!text) {
-        element.hidden = true;
-        element.textContent = "";
-        element.className = "status";
-        return;
-      }
-      element.hidden = false;
-      element.textContent = text;
-      element.className = "status" + (tone ? ` ${tone}` : "");
-    }
-
-    function updateJoinStaticPanel() {
-      const panel = document.getElementById("joinStaticPanel");
-      panel.hidden = joinIpMode() !== "static";
-      if (panel.hidden) {
-        return;
-      }
-      /* 与主表单同一套默认值策略:留空字段按当前 DHCP 地址/示例值填充 */
-      const defaults = staticIpDefaults();
-      const fill = (id, value) => {
-        const el = document.getElementById(id);
-        if (el && !el.value.trim()) {
-          el.value = value;
-        }
-      };
-      fill("joinStaticIp", defaults.ip);
-      fill("joinStaticGateway", defaults.gw);
-      fill("joinStaticNetmask", defaults.mask);
-      fill("joinStaticDns1", defaults.dns1);
-      fill("joinStaticDns2", defaults.dns2);
-    }
-
-    async function verifyJoinWifi() {
-      const ssid = document.getElementById("joinSsid").value.trim();
-      const password = document.getElementById("joinPassword").value;
-      if (!ssid) {
-        setJoinValidationStatus(t("network.staSsidRequired"), "bad");
-        return;
-      }
-      if (password && password.length < 8) {
-        setJoinValidationStatus(t("network.passwordTooShort"), "bad");
-        return;
-      }
-      document.getElementById("joinSave").hidden = true;
-      stopPolling();
-      setJoinValidationStatus(t("wifiJoin.verifying"), "warn");
-      try {
-        await getJson("/api/v1/config/network/tryconnect", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ sta_ssid: ssid, sta_password: password }),
-          timeoutMs: 25000
-        });
-        setJoinValidationStatus(t("network.tryConnectOk"), "ok");
-        document.getElementById("joinSave").hidden = false;
-        state.joinVerified = {
-          ssid: ssid,
-          password: password
-        };
-      } catch (error) {
-        const reason = error?.message || "connect_failed";
-        const text = t("network.try." + reason);
-        setJoinValidationStatus(
-          text === "network.try." + reason
-            ? t("network.tryConnectFailed", { reason })
-            : t("network.tryConnectFailed", { reason: text }), "bad");
-      } finally {
-        startStatusPolling();
-        startUartConsolePolling();
-      }
-    }
-
-    async function saveJoinWifi() {
-      /* 1.3-52:向导直接组 payload(不再回填主表单)。
-       * AP 部分沿用主表单当前值;STA 与静态 IP 按向导选择;SSID/密码若在
-       * "验证密码"通过后又被修改,必须重新验证。 */
-      const joinSsid = document.getElementById("joinSsid").value.trim();
-      const joinPassword = document.getElementById("joinPassword").value;
-      const verified = state.joinVerified;
-      if (!verified || verified.ssid !== joinSsid || verified.password !== joinPassword) {
-        setJoinValidationStatus(t("wifiJoin.reverify"), "bad");
-        return;
-      }
-      const useStatic = joinIpMode() === "static";
-      if (useStatic) {
-        const ip = document.getElementById("joinStaticIp").value.trim();
-        const gw = document.getElementById("joinStaticGateway").value.trim();
-        const mask = document.getElementById("joinStaticNetmask").value.trim();
-        if (!ip || !isValidIpv4(ip)) {
-          setJoinValidationStatus(t("network.staStaticIpInvalid"), "bad");
-          return;
-        }
-        if (!gw || !isValidIpv4(gw)) {
-          setJoinValidationStatus(t("network.staStaticGatewayInvalid"), "bad");
-          return;
-        }
-        if (!mask || !isValidIpv4(mask)) {
-          setJoinValidationStatus(t("network.staStaticNetmaskInvalid"), "bad");
-          return;
-        }
-      }
-      const { payload } = buildNetworkPayload();
-      payload.sta_ssid = joinSsid;
-      payload.sta_password = joinPassword;
-      delete payload.sta_password_clear;
-      payload.sta_use_static = useStatic ? 1 : 0;
-      if (useStatic) {
-        payload.sta_static_ip = document.getElementById("joinStaticIp").value.trim();
-        payload.sta_static_gateway = document.getElementById("joinStaticGateway").value.trim();
-        payload.sta_static_netmask = document.getElementById("joinStaticNetmask").value.trim();
-        const dns1 = document.getElementById("joinStaticDns1").value.trim();
-        const dns2 = document.getElementById("joinStaticDns2").value.trim();
-        if (dns1) {
-          payload.sta_static_dns1 = dns1;
-        }
-        if (dns2) {
-          payload.sta_static_dns2 = dns2;
-        }
-      }
-      closeWifiJoinModal();
-      await submitNetworkConfig(payload, "");
-    }
-
-    function mergeSavedWifiProfiles(profiles, current) {
-      const merged = [];
-      const source = Array.isArray(profiles) ? profiles : [];
-      const currentProfile = current?.sta_ssid
-        ? { ssid: current.sta_ssid, password_set: Boolean(current.sta_password_set), current: true }
-        : null;
-
-      if (currentProfile) {
-        merged.push(currentProfile);
-      }
-      source.forEach((profile) => {
-        if (!profile?.ssid) {
-          return;
-        }
-        const existing = merged.find((item) => item.ssid === profile.ssid);
-        if (existing) {
-          if (!existing.password_set && profile.password_set) {
-            existing.password_set = true;
-          }
-          return;
-        }
-        merged.push({
-          ssid: profile.ssid,
-          password_set: Boolean(profile.password_set),
-          current: false
-        });
-      });
-      return merged;
-    }
-
-    function renderSavedWifiProfiles(profiles) {
-      const target = document.getElementById("savedWifiList");
-      const current = state.networkConfig || {};
-      const items = mergeSavedWifiProfiles(profiles, current);
-
-      state.savedWifiProfiles = items;
-      if (!items.length) {
-        target.innerHTML = `<div class="scan-item"><span>${t("scan.savedEmptyTitle")}</span><span class="hint">${t("scan.savedEmptyHint")}</span></div>`;
-        return;
-      }
-      target.innerHTML = items.map((profile, index) => {
-        const maskedPassword = profile.password_set ? "********" : t("network.none");
-        const isCurrent = Boolean(profile.current);
-        const hintText = isCurrent
-          ? `${t("network.profileCurrent")} / ${maskedPassword}`
-          : (current.sta_connected && current.sta_ssid === profile.ssid
-              ? `${t("state.connected")} / ${maskedPassword}`
-              : maskedPassword);
-        /* 当前使用的 STA 配置由主配置(sta_ssid)承载,不属于已保存 profile 列表:
-         * 删除它没有意义(服务端会 404 或删完又被重新合并显示),故不给出删除按钮 */
-        const deleteButton = isCurrent
-          ? ""
-          : `<button class="secondary" data-saved-delete="${index}">${t("button.delete")}</button>`;
-        return `
-        <div class="scan-item">
-          <div>
-            <strong>${escapeHtml(profile.ssid || t("scan.hidden"))}</strong>
-            <div class="hint">${hintText}</div>
-          </div>
-          <div class="actions">
-            <button class="secondary" data-saved-use="${index}">${t("button.use")}</button>
-            ${deleteButton}
-          </div>
-        </div>`;
-      }).join("");
-
-      target.querySelectorAll("button[data-saved-use]").forEach((button) => {
-        button.addEventListener("click", () => applySavedWifiProfile(Number(button.dataset.savedUse)));
-      });
-      target.querySelectorAll("button[data-saved-delete]").forEach((button) => {
-        button.addEventListener("click", async () => {
-          const profile = state.savedWifiProfiles[Number(button.dataset.savedDelete)];
-          if (!profile) {
-            return;
-          }
-          await deleteSavedWifiProfile(profile.ssid);
-        });
-      });
-    }
-
-    function renderScanResults(aps) {
-      const target = document.getElementById("wifiScanList");
-      const items = Array.isArray(aps) ? aps : [];
-
-      state.wifiScanResults = items;
-      if (!items.length) {
-        target.innerHTML = `<div class="scan-item"><span>${t("scan.emptyTitle")}</span><span class="hint">${t("scan.emptyHint")}</span></div>`;
-        return;
-      }
-      target.innerHTML = items.map((ap, index) => {
-        const ssid = ap.ssid || "";
-        const label = ssid || t("scan.hidden");
-        return `<div class="scan-item">
-          <div>
-            <strong>${escapeHtml(label)}</strong>
-            <div class="hint">RSSI ${ap.rssi} dBm / ${ap.auth}${ap.bssid ? " / " + escapeHtml(ap.bssid) : ""}</div>
-          </div>
-          <button class="secondary" data-scan-use="${index}" ${ssid ? "" : "disabled"}>${t("button.use")}</button>
-        </div>`;
-      }).join("");
-
-      target.querySelectorAll("button[data-scan-use]").forEach((button) => {
-        button.addEventListener("click", () => applyScannedWifi(Number(button.dataset.scanUse)));
-      });
-    }
-
-    function tryParseJson(text) {
-      if (!text) {
-        return { body: null, parseError: null };
-      }
-
-      const sanitized = text.replace(/^\uFEFF/, "").trim();
-      if (!sanitized) {
-        return { body: null, parseError: null };
-      }
-
-      const parseCandidates = [sanitized];
-      const cleaned = sanitized.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, "");
-      if (cleaned !== sanitized) {
-        parseCandidates.push(cleaned);
-      }
-
-      for (const candidateText of parseCandidates) {
-        try {
-          return { body: JSON.parse(candidateText), parseError: null };
-        } catch (error) {
-          const firstObject = candidateText.indexOf("{");
-          const lastObject = candidateText.lastIndexOf("}");
-          const firstArray = candidateText.indexOf("[");
-          const lastArray = candidateText.lastIndexOf("]");
-          let candidate = "";
-
-          if (firstObject !== -1 && lastObject > firstObject) {
-            candidate = candidateText.slice(firstObject, lastObject + 1);
-          } else if (firstArray !== -1 && lastArray > firstArray) {
-            candidate = candidateText.slice(firstArray, lastArray + 1);
-          }
-
-          if (candidate) {
-            try {
-              return { body: JSON.parse(candidate), parseError: null };
-            } catch (candidateError) {
-              // Continue trying the next sanitized candidate before reporting failure.
-            }
-          }
-        }
-      }
-
-      return { body: { message: sanitized || "invalid_response" }, parseError: new Error("invalid_response") };
-    }
-
-    /* 全局单飞队列(1.3-36):设备 httpd 只开少量连接槽 + lru 踢旧,
-     * 浏览器并行 fetch(面板两批加载、状态轮询)会互相顶掉**正在发响应**的
-     * 连接,表现为"登录后部分模块一直加载/报错"。所有 API 请求经此串行,
-     * 复用同一条 keep-alive 连接:局域网内首屏 7 个请求合计约 0.5s,
-     * 且再也不会与手机门户探测等第二客户端争槽位。 */
-    let apiQueue = Promise.resolve();
-
-    async function getJson(url, options) {
-      const result = apiQueue.then(() => getJsonRaw(url, options));
-      apiQueue = result.then(() => undefined, () => undefined);
-      return result;
-    }
-
-    async function getJsonRaw(url, options) {
-      const method = String(options?.method || "GET").toUpperCase();
-      const maxRetries = method === "GET" ? FETCH_RETRY_MAX : 0;
-
-      for (let attempt = 0; attempt <= maxRetries; attempt++) {
-        const controller = typeof AbortController === "function" ? new AbortController() : null;
-        const timeoutMs = Number(options?.timeoutMs) > 0 ? Number(options.timeoutMs) : FETCH_TIMEOUT_MS;
-        const timeoutId = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
-        try {
-          const requestOptions = controller ? { ...(options || {}), signal: controller.signal } : options;
-          const response = await fetch(url, requestOptions);
-          const text = await response.text();
-          const { body, parseError } = tryParseJson(text);
-
-          if (!response.ok) {
-            if (response.status === 401) {
-              /* 会话失效(Cookie 过期/换浏览器/设备重启)→ 回页面内登录表单。
-               * 服务端已按产品决策不再下发 WWW-Authenticate,故不会再弹系统认证框。
-               * 见 1.3版本优化.md 1.3-22 */
-              window.location.href = "/portal";
-              return;
-            }
-            const err = new Error(body?.message || body?.error || text || `HTTP ${response.status}`);
-            err.body = body;
-            err.status = response.status;
-            throw err;
-          }
-
-          if (!text || body === null) {
-            const err = new Error("empty_response");
-            err.status = response.status;
-            throw err;
-          }
-
-          if (parseError) {
-            const err = new Error(body?.message || "invalid_response");
-            err.status = response.status;
-            err.body = body;
-            throw err;
-          }
-
-          notePollOk();
-          return body;
-        } catch (error) {
-          /* 1.3-36:设备 httpd 在堆紧张(MQTT 重连风暴等)时会回 503,
-           * 且此前 503 因带 status 从不重试 → 面板永久缺失。503/502/504、
-           * 空响应/截断响应与连接级瞬断一样按可重试处理。 */
-          const retryableStatus = error?.status === 502 ||
-                                  error?.status === 503 ||
-                                  error?.status === 504;
-          const retryableBody = error?.message === "empty_response" ||
-                                error?.message === "invalid_response";
-          const canRetry = attempt < maxRetries &&
-                           (retryableStatus || retryableBody ||
-                            (!error?.status && isTransientFetchError(error)));
-          if (!canRetry) {
-            throw error;
-          }
-          await sleep(FETCH_RETRY_DELAY_MS * (attempt + 1));
-        } finally {
-          if (timeoutId) {
-            clearTimeout(timeoutId);
-          }
-        }
-      }
-    }
-
-    async function loadDevice() {
-      const data = await getJson("/api/v1/device/status");
-      renderDevice(data);
-    }
-
-    function renderDevice(data) {
-      const appPartition = data?.app_partition || {};
-      const storage = data?.storage || {};
-      const network = data?.network || {};
-      const bluetooth = data?.bluetooth || {};
-      const mqtt = data?.mqtt || {};
-
-      renderKeyValues("deviceInfo", {
-        project: data?.project || "-",
-        app_version: data?.app_version || "-",
-        target: data?.idf_target || "-",
-        idf_version: data?.idf_version || "-",
-        mac: data?.mac || "-",
-        net_mode: humanMode(network.mode),
-        ap_ip: network.ap_ip || "-",
-        sta_ip: network.sta_ip || "-",
-        bt_mode: humanBtMode(bluetooth.runtime_mode),
-        mqtt: humanMqttState(mqtt.connected, mqtt.last_error),
-        free_heap: formatBytes(data?.free_heap),
-        app_partition: formatPartitionLabel(appPartition.label, appPartition.total_bytes),
-        app_usage: formatUsage(appPartition.used_bytes, appPartition.total_bytes),
-        storage_usage: formatUsage(storage.used_bytes, storage.total_bytes)
-      });
-    }
-
-    async function loadNetwork() {
-      const data = await getJson("/api/v1/config/network");
-      const network = data || {};
-      state.networkConfig = network;
-      document.getElementById("netMode").value = network.mode || "ap";
-      document.getElementById("ssid").value = network.ap_ssid || "";
-      /* 凭据不回传明文:输入框留空 = 保持已存值 */
-      document.getElementById("password").value = "";
-      document.getElementById("apPasswordClear").checked = false;
-      document.getElementById("staSsid").value = network.sta_ssid || "";
-      document.getElementById("staPassword").value = "";
-      document.getElementById("staPasswordClear").checked = false;
-      renderSavedWifiProfiles(network.saved_sta_profiles || []);
-      renderScanResults([]);
-      renderNetworkStatus(network);
-      updateNetworkValidationStatus();
-    }
-
-    function networkModeHasSta(mode) {
-      return mode === "sta" || mode === "apsta";
-    }
-
-    /* 静态 IP 默认值:优先取当前 DHCP 实际拿到的地址(把"当前地址固定下来"
-     * 是静态 IP 最常见的用法),未联网时退回示例值。只填空白字段,不覆盖已填内容。
-     * 1.3-52:主表单的静态控件已移除,本函数仅供连接向导的静态面板使用。 */
-    function staticIpDefaults() {
-      const net = state.networkConfig || {};
-      const hasIp = net.sta_ip && net.sta_ip !== "0.0.0.0" && isValidIpv4(net.sta_ip);
-      const hasGw = net.sta_gateway && net.sta_gateway !== "0.0.0.0" && isValidIpv4(net.sta_gateway);
-      const hasMask = net.sta_netmask && net.sta_netmask !== "0.0.0.0" && isValidIpv4(net.sta_netmask);
-      const ip = hasIp ? net.sta_ip : "192.168.1.213";
-      const gw = hasGw ? net.sta_gateway : "192.168.1.1";
-      const mask = hasMask ? net.sta_netmask : "255.255.255.0";
-      return { ip, gw, mask, dns1: gw, dns2: "8.8.8.8" };
-    }
-
-    function isValidIpv4(value) {
-      if (!value || typeof value !== "string") {
-        return false;
-      }
-      const parts = value.split(".");
-      if (parts.length !== 4) {
-        return false;
-      }
-      return parts.every((part) => {
-        if (!/^(0|[1-9]\d*)$/.test(part)) {
-          return false;
-        }
-        const num = Number(part);
-        return num >= 0 && num <= 255;
-      });
-    }
-
-    function renderNetworkStatus(data) {
-      const network = data || {};
-      let summary = t("network.summary", {
-        mode: humanMode(network.mode),
-        ap: `${network.ap_ssid || t("network.none")}@${network.ap_ip || t("network.none")}`,
-        sta: network.sta_ssid || t("network.none"),
-        staIp: network.sta_has_ip ? network.sta_ip : t("network.noIp"),
-        lastDisconnect: network.last_disconnect || t("network.none")
-      });
-      /* 已存 STA 名称却仍是纯 AP = 上游永远连不上(1.3-04 实测):摘要后追加显式告警 */
-      if (network.sta_ssid && !networkModeHasSta(network.mode)) {
-        summary += `
-⚠ ${t("network.staSsidInactive")}`;
-      }
-      /* 静态 IP 冲突:摘要加告警 + 弹窗提示去修改(1.3-35) */
-      if (network.sta_ip_conflict) {
-        summary += `
-${t("network.ipConflictSummary", { ip: network.sta_ip || "-" })}`;
-        showIpConflictModal(network.sta_ip || "");
-      }
-      setStatus("networkStatus", summary, network.sta_has_ip && !network.sta_ip_conflict ? "ok" : "warn");
-    }
-
-    function clearNetworkInputErrors() {
-      ["ssid", "password", "staSsid", "staPassword"].forEach((id) => {
-        const el = document.getElementById(id);
-        if (el) {
-          el.classList.remove("input-error");
+      chain.catch((error) => {
+        const box = document.getElementById("deviceInfo");
+        if (box) {
+          box.textContent = `页面脚本加载失败: ${error.message}`;
         }
       });
-    }
-
-    function markNetworkInputError(id) {
-      const el = document.getElementById(id);
-      if (el) {
-        el.classList.add("input-error");
-      }
-    }
-
-    /* 前端当场校验:与后端统一层规则对齐(长度、必填、开放网络显式清除、静态 IP 格式)。
-     * 返回 {ok, message};ok=true 时不改状态。 */
-    function validateNetworkForm() {
-      const mode = document.getElementById("netMode").value;
-      const apSsid = document.getElementById("ssid").value.trim();
-      const apPassword = document.getElementById("password").value;
-      const apClear = document.getElementById("apPasswordClear").checked;
-      const staSsid = document.getElementById("staSsid").value.trim();
-      const staPassword = document.getElementById("staPassword").value;
-      const staClear = document.getElementById("staPasswordClear").checked;
-      const current = state.networkConfig || {};
-
-      clearNetworkInputErrors();
-
-      if ((mode === "ap" || mode === "apsta") && !apSsid) {
-        markNetworkInputError("ssid");
-        return { ok: false, message: t("network.apSsidRequired") };
-      }
-      if (apPassword && apPassword.length < 8) {
-        markNetworkInputError("password");
-        return { ok: false, message: t("network.passwordTooShort") };
-      }
-      if ((mode === "ap" || mode === "apsta") && apSsid &&
-          apSsid !== (current.ap_ssid || "") &&
-          !current.password_enabled && !apClear && !apPassword) {
-        markNetworkInputError("password");
-        return { ok: false, message: t("network.passwordRequired") };
-      }
-
-      if ((mode === "sta" || mode === "apsta") && !staSsid) {
-        markNetworkInputError("staSsid");
-        return { ok: false, message: t("network.staSsidRequired") };
-      }
-      if (staSsid && !staClear) {
-        if (staPassword) {
-          if (staPassword.length < 8) {
-            markNetworkInputError("staPassword");
-            return { ok: false, message: t("network.passwordTooShort") };
-          }
-        } else if (!current.sta_password_set) {
-          markNetworkInputError("staPassword");
-          return { ok: false, message: t("network.passwordRequired") };
-        }
-      }
-
-      /* 静态 IP 的填写与校验已随 1.3-51/52 移入连接向导,这里不再检查 */
-      return { ok: true, message: "" };
-    }
-
-    function updateNetworkValidationStatus() {
-      const result = validateNetworkForm();
-      const saveButton = document.getElementById("saveNetwork");
-      if (!result.ok) {
-        setNetworkValidationStatus(result.message, "bad");
-        saveButton.disabled = true;
-      } else {
-        setNetworkValidationStatus(t("network.validationOk"), "ok");
-        saveButton.disabled = false;
-      }
-      return result;
-    }
-
-    async function loadGpio() {
-      const data = await getJson("/api/v1/config/gpio");
-      state.relayOn = Boolean(data.relay_on);
-      state.ledOn = Boolean(data.led_on);
-      state.gpioConfig = data;
-      document.getElementById("relayGpioDisplay").textContent = formatGpioLabel(data.relay_gpio);
-      document.getElementById("ledGpioDisplay").textContent = formatGpioLabel(data.led_gpio);
-      document.getElementById("inputGpioDisplay").textContent = formatGpioLabel(data.input_gpio);
-      document.getElementById("inputState").textContent = data.input_active ? t("state.valid") : t("state.invalid");
-      setStatus("gpioInfo", t("gpio.summary", {
-        relayGpio: data.relay_gpio,
-        relayOn: data.relay_on ? t("state.on") : t("state.off"),
-        ledGpio: data.led_gpio,
-        ledOn: data.led_on ? t("state.on") : t("state.off"),
-        inputGpio: data.input_gpio
-      }), "ok");
-    }
-
-    async function loadBluetooth() {
-      const data = await getJson("/api/v1/config/bluetooth");
-      const bluetooth = data || {};
-      document.getElementById("btMode").value = bluetooth.mode || "off";
-      document.getElementById("btName").value = bluetooth.device_name || "";
-      renderBluetoothStatus(bluetooth);
-    }
-
-    function renderBluetoothStatus(data) {
-      const bluetooth = data || {};
-      const hasError = Boolean(bluetooth.last_error);
-      setStatus("bluetoothStatus", t(hasError ? "bluetooth.summaryWithError" : "bluetooth.summary", {
-        mode: humanBtMode(bluetooth.mode),
-        runtimeMode: humanBtMode(bluetooth.runtime_mode),
-        name: bluetooth.device_name || t("network.none"),
-        error: bluetooth.last_error || t("network.none")
-      }), hasError ? "warn" : "ok");
-    }
-
-    async function loadMqtt() {
-      const data = await getJson("/api/v1/config/mqtt");
-      document.getElementById("mqttBackend").value = data.backend || "tb_cloud";
-      document.getElementById("mqttHost").value = data.host || "";
-      document.getElementById("mqttPort").value = data.port || 1883;
-      document.getElementById("mqttToken").value = "";
-      document.getElementById("mqttTokenClear").checked = false;
-      document.getElementById("mqttTls").checked = Boolean(data.use_tls);
-      renderMqttStatus(data);
-    }
-
-    function renderMqttStatus(data) {
-      setStatus("mqttStatus", t("mqtt.summary", {
-        backend: data.backend,
-        host: data.host,
-        port: data.port,
-        connected: data.connected ? t("state.connected") : t("state.disconnected"),
-        error: data.last_error || t("network.none")
-      }), data.connected ? "ok" : "warn");
-    }
-
-    async function refreshStatusPanels() {
-      if (state.statusPollBusy) {
-        return;
-      }
-      state.statusPollBusy = true;
-      try {
-        const deviceData = await getJson("/api/v1/device/status");
-        renderDevice(deviceData);
-        renderNetworkStatus(deviceData?.network || {});
-        renderBluetoothStatus(deviceData?.bluetooth || {});
-        renderMqttStatus(deviceData?.mqtt || {});
-      } catch (error) {
-        renderDeviceError(getErrorMessage(error));
-      } finally {
-        state.statusPollBusy = false;
-      }
-    }
-
-    /* 轮询连续失败计数:会话失效或设备过载时**主动停轮询**。两个浏览器同开时,
-     * 旧标签页的轮询会把正在使用的新页面挤成"加载中"(设备 httpd 可用连接有限)。
-     * 见 1.3版本优化.md 1.3-22 */
-    state.pollFailCount = 0;
-    state.pollStopped = false;
-    function notePollOk() {
-      state.pollFailCount = 0;
-      if (!state.pollStopped) {
-        return;
-      }
-      /* 自愈:被停过之后,只要有请求成功(用户点按钮/刷新入数据)就恢复轮询 */
-      state.pollStopped = false;
-      refreshStatusPanels().catch(() => {});
-      refreshUartConsole().catch(() => {});
-      startStatusPolling();
-      startUartConsolePolling();
-    }
-
-    function notePollFail(error) {
-      if (error && error.status === 401) {
-        window.location.href = "/portal";
-        return;
-      }
-      state.pollFailCount += 1;
-      if (state.pollFailCount >= 5 && !state.pollStopped) {
-        state.pollStopped = true;
-        stopPolling();
-      }
-    }
-
-    /* 1.3-72:真实页面轮询收敛。状态 5s→10s;UART 控制台只在可见时拉取,
-     * 滚出视野/后台标签页不请求 —— 降低页面多连接对 httpd/堆的压力。
-     * 页面仍是单文件(构建期 minify+gzip),不拆 JS/CSS:当前 httpd 只缓存
-     * 一个页面文件句柄,拆成多文件会让每次页面加载反复 open/close,反而增加
-     * 低堆下的分配抖动;这里按“面板/请求”拆资源,而不是拆静态文件。 */
-    const PAGE_POLL_INTERVAL_MS = 10000;
-
-    function uartConsoleInView() {
-      const el = document.getElementById("uartRxConsole");
-      if (!el || el.offsetParent === null) {
-        return false;
-      }
-      const rect = el.getBoundingClientRect();
-      const vh = window.innerHeight || document.documentElement.clientHeight || 0;
-      return rect.bottom > 0 && rect.top < vh;
-    }
-
-    function startStatusPolling() {
-      if (state.statusPollTimer) {
-        clearInterval(state.statusPollTimer);
-      }
-      state.pollStopped = false;
-      state.pollFailCount = 0;
-      state.statusPollTimer = setInterval(() => {
-        if (document.hidden) {
-          return;
-        }
-        refreshStatusPanels().catch(notePollFail);
-      }, PAGE_POLL_INTERVAL_MS);
-    }
-
-    async function loadUart() {
-      const data = await getJson("/api/v1/config/uart");
-      state.uartConfig = data;
-      document.getElementById("uartRxDisplay").textContent = formatGpioLabel(data.rx_gpio);
-      document.getElementById("uartTxDisplay").textContent = formatGpioLabel(data.tx_gpio);
-      renderUartBaudList();
-      document.getElementById("uartBaudSelect").value = String(data.baudrate || 9600);
-      document.getElementById("uartDataBits").value = String(data.data_bits || 8);
-      document.getElementById("uartStopBits").value = String(data.stop_bits || 1);
-      document.getElementById("uartParity").value = data.parity || "none";
-      setStatus("uartStatus", t("uart.summary", {
-        frame: data.frame,
-        baudrate: data.baudrate
-      }), "warn");
-    }
-
-    async function loadUartConsole() {
-      const data = await getJson("/api/v1/uart/console");
-      state.uartConsolePlain = data.plain || "";
-      state.uartConsoleHex = data.hex || "";
-      renderUartConsole();
-    }
-
-    async function refreshUartConsole() {
-      if (state.uartPollBusy) {
-        return;
-      }
-      state.uartPollBusy = true;
-      try {
-        await loadUartConsole();
-      } finally {
-        state.uartPollBusy = false;
-      }
-    }
-
-    async function clearUartConsole() {
-      await getJson("/api/v1/uart/console/clear", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: "{}"
-      });
-      state.uartConsolePlain = "";
-      state.uartConsoleHex = "";
-      renderUartConsole();
-      setStatus("uartStatus", t("uart.cleared"), "ok");
-    }
-
-    function startUartConsolePolling() {
-      if (state.uartPollTimer) {
-        clearInterval(state.uartPollTimer);
-      }
-      state.pollStopped = false;
-      state.pollFailCount = 0;
-      state.uartPollTimer = setInterval(() => {
-        if (document.hidden || !uartConsoleInView()) {
-          return;
-        }
-        refreshUartConsole().catch((error) => {
-          setStatus("uartStatus", getErrorMessage(error), "bad");
-          notePollFail(error);
-        });
-      }, PAGE_POLL_INTERVAL_MS);
-    }
-
-    function stopPolling() {
-      if (state.statusPollTimer) {
-        clearInterval(state.statusPollTimer);
-        state.statusPollTimer = null;
-      }
-      if (state.uartPollTimer) {
-        clearInterval(state.uartPollTimer);
-        state.uartPollTimer = null;
-      }
-    }
-
-    /* 页面不可见时停掉轮询:否则"开着旧标签"也会持续打设备(status 与 uart console 各每 5 秒一次),
-     * 和当前正在刷新的页面抢 httpd 的 socket —— 而 httpd 可用 socket 仅 ~9 个,
-     * 且**每个常驻连接都吃 httpd 会话缓冲**(1.3-24 实测:8 个僵死连接吃掉 ~6.6KB largest_free,
-     * 叠加 BLE 连接态后历史最低堆只有 360B)。恢复可见时先立即刷一次。 */
-    document.addEventListener("visibilitychange", () => {
-      if (document.visibilityState === "hidden") {
-        stopPolling();
-        return;
-      }
-      refreshStatusPanels().catch(() => {});
-      refreshUartConsole().catch(() => {});
-      startStatusPolling();
-      startUartConsolePolling();
-    });
-
-    /* 1.3-52 拆分:主表单与连接向导共用"组 payload + 提交"两段。
-     * 主表单已不含静态 IP 控件(移到连接向导),保存时**原样保留**设备上已有
-     * 的静态配置(从 state.networkConfig 重发),避免改 AP 名称时把静态 IP 弄丢。 */
-    function buildNetworkPayload() {
-      const netModeEl = document.getElementById("netMode");
-      const staSsid = document.getElementById("staSsid").value.trim();
-      let mode = netModeEl.value;
-      let modeNote = "";
-      /* 填了 STA 名称却仍是"纯 AP" → 上游永远连不上(1.3-04 实测):
-       * 与后端统一层的一致性推断保持一致,这里先把界面切到 AP + STA 并提示用户 */
-      if (staSsid && !networkModeHasSta(mode)) {
-        netModeEl.value = "apsta";
-        mode = "apsta";
-        modeNote = t("network.modeAutoApsta");
-      }
-      const payload = {
-        mode: mode,
-        ap_ssid: document.getElementById("ssid").value.trim(),
-        sta_ssid: staSsid
-      };
-      const apPassword = document.getElementById("password").value;
-      if (apPassword) {
-        payload.ap_password = apPassword;
-      }
-      if (document.getElementById("apPasswordClear").checked) {
-        payload.ap_password_clear = true;
-      }
-      const staPassword = document.getElementById("staPassword").value;
-      if (staPassword) {
-        payload.sta_password = staPassword;
-      }
-      if (document.getElementById("staPasswordClear").checked) {
-        payload.sta_password_clear = true;
-      }
-      const current = state.networkConfig || {};
-      payload.sta_use_static = current.sta_use_static ? 1 : 0;
-      if (current.sta_use_static) {
-        payload.sta_static_ip = current.sta_static_ip || "";
-        payload.sta_static_gateway = current.sta_static_gateway || "";
-        payload.sta_static_netmask = current.sta_static_netmask || "";
-        if (current.sta_static_dns1) {
-          payload.sta_static_dns1 = current.sta_static_dns1;
-        }
-        if (current.sta_static_dns2) {
-          payload.sta_static_dns2 = current.sta_static_dns2;
-        }
-      }
-      return { payload, modeNote };
-    }
-
-    async function submitNetworkConfig(payload, modeNote) {
-      const data = await getJson("/api/v1/config/network", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      });
-      await loadNetwork();
-      setNetworkValidationStatus("", "");
-      const address = data.next_access_ip ? `http://${data.next_access_ip}` : "";
-      let note = modeNote || "";
-      if (data.mode_adjusted) {
-        note = t("network.modeAutoApsta");   /* 后端推断生效(例如模式被自动升级) */
-      }
-      const confirmMessage = `${note ? note + " " : ""}${data.ap_enabled
-        ? t("network.savedNeedsRestart", { address })
-        : t("network.savedStaOnly")}`;
-      setStatus("networkStatus", confirmMessage, "warn");
-
-      if (confirm(confirmMessage)) {
-        const restartData = await getJson("/api/v1/network/restart", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: "{}"
-        });
-        const restartMessage = data.ap_enabled
-          ? t("network.restartStarted", { address })
-          : restartData.message;
-        setStatus("networkStatus", restartMessage, "ok");
-      }
-    }
-
-    async function saveNetwork() {
-      const clientCheck = validateNetworkForm();
-      if (!clientCheck.ok) {
-        setNetworkValidationStatus(clientCheck.message, "bad");
-        return;
-      }
-      setNetworkValidationStatus("", "");
-      const { payload, modeNote } = buildNetworkPayload();
-      await submitNetworkConfig(payload, modeNote);
-    }
-
-    async function deleteSavedWifiProfile(ssid) {
-      try {
-        await getJson("/api/v1/config/network/profile", {
-          method: "DELETE",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ssid })
-        });
-        setStatus("networkStatus", t("network.profileDeleted", { ssid }), "ok");
-      } catch (error) {
-        setStatus("networkStatus", t("network.profileDeleteFailed", { ssid }), "bad");
-      }
-      await loadNetwork();
-    }
-
-    async function scanNetwork() {
-      setStatus("networkStatus", t("network.scanning"), "warn");
-      const data = await getJson("/api/v1/network/scan");
-      renderScanResults(data.aps || []);
-      openWifiScanModal();
-      setStatus("networkStatus", t("network.scanDone", { count: data.count || 0 }), "ok");
-    }
-
-    async function saveGpio(patch) {
-      await getJson("/api/v1/config/gpio", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          relay_on: "relay_on" in patch ? patch.relay_on : state.relayOn,
-          led_on: "led_on" in patch ? patch.led_on : state.ledOn
-        })
-      });
-      await loadGpio();
-    }
-
-    async function saveBluetooth() {
-      const payload = {
-        mode: document.getElementById("btMode").value,
-        device_name: document.getElementById("btName").value.trim()
-      };
-      const data = await getJson("/api/v1/config/bluetooth", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      });
-      if (data.restart_required) {
-        /* 跨模式切换:设备将整机重启以释放/重选蓝牙栈内存 */
-        setStatus("bluetoothStatus", t("bluetooth.savedNeedsReboot"), "warn");
-        await waitForDeviceRestart();
-        await loadBluetooth();
-        return;
-      }
-      setStatus("bluetoothStatus", t("bluetooth.saving"), "warn");
-      await new Promise((resolve) => setTimeout(resolve, 800));
-      await loadBluetooth();
-    }
-
-    async function saveWebAuth() {
-      const new_password = document.getElementById("webNewPassword").value;
-      if (new_password.length < 8) {
-        setStatus("webAuthStatus", t("web.tooShort"), "bad");
-        return;
-      }
-      if (new_password !== document.getElementById("webNewPassword2").value) {
-        setStatus("webAuthStatus", t("web.confirmMismatch"), "bad");
-        return;
-      }
-      const payload = {
-        old_password: document.getElementById("webOldPassword").value,
-        new_password
-      };
-      const username = document.getElementById("webUsername").value.trim();
-      if (username) {
-        payload.new_username = username;
-      }
-      await getJson("/api/v1/config/web", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      });
-      setStatus("webAuthStatus", t("web.saved"), "warn");
-      await new Promise((resolve) => setTimeout(resolve, 1500));
-      location.reload();
-    }
-
-    async function waitForDeviceRestart() {
-      for (let waited = 0; waited < 20000; waited += 2000) {
-        await new Promise((resolve) => setTimeout(resolve, 2000));
-        try {
-          await getJson("/api/v1/device/info");
-          return;
-        } catch (error) {
-          /* 设备重启中,继续等待 */
-        }
-      }
-    }
-
-    async function saveMqtt() {
-      const payload = {
-        backend: document.getElementById("mqttBackend").value,
-        host: document.getElementById("mqttHost").value.trim(),
-        port: Number(document.getElementById("mqttPort").value),
-        use_tls: document.getElementById("mqttTls").checked
-      };
-      const token = document.getElementById("mqttToken").value.trim();
-      if (token) {
-        payload.token = token;
-      }
-      if (document.getElementById("mqttTokenClear").checked) {
-        payload.token_clear = true;
-      }
-      const data = await getJson("/api/v1/config/mqtt", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      });
-      setStatus("mqttStatus", data.message, "warn");
-    }
-
-    async function saveUart() {
-      const baudrate = Number(document.getElementById("uartBaudSelect").value);
-      const payload = {
-        baudrate,
-        data_bits: Number(document.getElementById("uartDataBits").value),
-        stop_bits: Number(document.getElementById("uartStopBits").value),
-        parity: document.getElementById("uartParity").value
-      };
-      await getJson("/api/v1/config/uart", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      });
-      await loadUart();
-      await loadGpio();
-    }
-
-    async function sendUart() {
-      const payload = {
-        encoding: state.uartTxFormat,
-        data: document.getElementById("uartTxData").value
-      };
-      const data = await getJson("/api/v1/uart/send", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      });
-      setStatus("uartStatus", t("uart.sent", {
-        bytes: data.bytes_sent || 0,
-        encoding: state.uartTxFormat
-      }), "ok");
-      document.getElementById("uartTxData").value = "";
-      await refreshUartConsole();
-    }
-
-    function delay(ms) {
-      return new Promise((resolve) => window.setTimeout(resolve, ms));
-    }
-
-    async function getOtaRuntimeSnapshot() {
-      const [info, status] = await Promise.all([
-        getJson("/api/v1/device/info"),
-        getJson("/api/v1/device/status")
-      ]);
-      return {
-        appVersion: info.app_version || "",
-        compileDate: info.compile_date || "-",
-        compileTime: info.compile_time || "-",
-        compileMarker: `${info.app_version || ""}|${info.compile_date || ""}|${info.compile_time || ""}`,
-        partition: (status.app_partition && status.app_partition.label) || "unknown"
-      };
-    }
-
-    async function waitForOtaRecovery(kind, baselineSnapshot) {
-      const startedAt = Date.now();
-      const timeoutMs = 120000;
-      const pollMs = 2000;
-      let sawOffline = false;
-
-      setStatus("otaStatus", t("ota.waitingForReboot"), "warn");
-
-      while (Date.now() - startedAt < timeoutMs) {
-        await delay(pollMs);
-        try {
-          const snapshot = await getOtaRuntimeSnapshot();
-          const compileChanged = !baselineSnapshot || snapshot.compileMarker !== baselineSnapshot.compileMarker;
-          const partitionChanged = !!baselineSnapshot && snapshot.partition !== baselineSnapshot.partition;
-          const elapsedMs = Date.now() - startedAt;
-
-          if (kind === "firmware") {
-            if (compileChanged || partitionChanged) {
-              setStatus("otaStatus", t("ota.firmwareVerified", {
-                partition: snapshot.partition,
-                compileDate: snapshot.compileDate,
-                compileTime: snapshot.compileTime
-              }), "ok");
-              return;
-            }
-            setStatus("otaStatus", t("ota.waitingForFirmware", {
-              partition: snapshot.partition
-            }), "warn");
-            continue;
-          }
-
-          if (sawOffline || elapsedMs >= 8000) {
-            setStatus("otaStatus", t("ota.storageVerified"), "ok");
-            return;
-          }
-          setStatus("otaStatus", t("ota.waitingForStorage"), "warn");
-        } catch (error) {
-          sawOffline = true;
-          setStatus("otaStatus", t("ota.waitingForReboot"), "warn");
-        }
-      }
-
-      let partition = (baselineSnapshot && baselineSnapshot.partition) || "unknown";
-      try {
-        const snapshot = await getOtaRuntimeSnapshot();
-        partition = snapshot.partition || partition;
-      } catch (error) {
-        // Keep the last known partition when the device is still offline.
-      }
-      throw new Error(t("ota.verificationTimedOut", { partition }));
-    }
-
-    function ensureExpectedUploadName(file, expectedName, missingKey, mismatchKey) {
-      if (!file) {
-        throw new Error(t(missingKey));
-      }
-      if (file.name !== expectedName) {
-        throw new Error(t(mismatchKey, { actual: file.name || "-" }));
-      }
-    }
-
-    async function uploadBinary(fileInputId, endpoint, missingKey, mismatchKey, expectedName, uploadingKey) {
-      const file = document.getElementById(fileInputId).files[0];
-      ensureExpectedUploadName(file, expectedName, missingKey, mismatchKey);
-      const baselineSnapshot = await getOtaRuntimeSnapshot().catch(() => null);
-
-      setStatus("otaStatus", t(uploadingKey, { name: file.name, size: file.size }), "warn");
-      const data = await getJson(endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/octet-stream" },
-        body: file
-      });
-      setStatus("otaStatus", t("ota.done", { message: data.message }), "ok");
-      await waitForOtaRecovery(endpoint === "/api/v1/ota/upload" ? "firmware" : "storage", baselineSnapshot);
-    }
-
-    async function uploadOta() {
-      const allowDowngrade = document.getElementById("otaAllowDowngrade").checked;
-      const endpoint = allowDowngrade ? "/api/v1/ota/upload?allow_downgrade=1" : "/api/v1/ota/upload";
-      await uploadBinary("otaFile", endpoint, "error.selectFirmware", "error.expectedFirmwareName", "iothub.bin", "ota.uploading");
-    }
-
-    async function uploadStorage() {
-      await uploadBinary("storageFile", "/api/v1/storage/upload", "error.selectStorage", "error.expectedStorageName", "storage.bin", "ota.storageUploading");
-    }
-
-    async function boot() {
-      renderUartConsole();
-      applyTranslations();
-      /* 加载各面板。getJson 内部有全局单飞队列(1.3-36),这里看似并行的
-       * Promise.all 实际会逐个串行执行,分两批只影响渲染顺序,不再产生并发连接。 */
-      await Promise.all([
-        runWithPanelError(loadDevice, (message) => renderDeviceError(message)),
-        runWithPanelError(loadNetwork, (message) => setStatus("networkStatus", message, "bad")),
-        runWithPanelError(loadGpio, (message) => setStatus("gpioInfo", message, "bad"))
-      ]);
-      await Promise.all([
-        runWithPanelError(loadBluetooth, (message) => setStatus("bluetoothStatus", message, "bad")),
-        runWithPanelError(loadMqtt, (message) => setStatus("mqttStatus", message, "bad")),
-        runWithPanelError(loadUart, (message) => setStatus("uartStatus", message, "bad")),
-        runWithPanelError(refreshUartConsole, (message) => setStatus("uartStatus", message, "bad"))
-      ]);
-      startStatusPolling();
-      startUartConsolePolling();
-    }
-
-    document.getElementById("languageSelect").addEventListener("change", async (event) => {
-      state.language = event.target.value;
-      localStorage.setItem("iothub_lang", state.language);
-      await boot();
-    });
-
-    document.getElementById("saveNetwork").addEventListener("click", async () => {
-      try {
-        await saveNetwork();
-      } catch (error) {
-        setNetworkValidationStatus(error.message, "bad");
-      }
-    });
-
-    ["netMode", "ssid", "password", "apPasswordClear", "staSsid", "staPassword", "staPasswordClear"].forEach((id) => {
-      const el = document.getElementById(id);
-      if (!el) {
-        return;
-      }
-      const isToggle = id === "netMode" || id.endsWith("Clear");
-      el.addEventListener(isToggle ? "change" : "input", () => {
-        updateNetworkValidationStatus();
-      });
-    });
-
-    document.getElementById("scanWifi").addEventListener("click", async () => {
-      try {
-        await scanNetwork();
-      } catch (error) {
-        setStatus("networkStatus", error.message, "bad");
-      }
-    });
-
-    document.getElementById("showSavedWifi").addEventListener("click", () => {
-      renderSavedWifiProfiles(state.savedWifiProfiles);
-      openSavedWifiModal();
-    });
-
-    document.getElementById("closeWifiScanModal").addEventListener("click", () => {
-      closeWifiScanModal();
-    });
-
-    document.getElementById("wifiScanModal").addEventListener("click", (event) => {
-      if (event.target.id === "wifiScanModal") {
-        closeWifiScanModal();
-      }
-    });
-
-    /* 连接 Wi-Fi 向导(1.3-51):验证密码 / 保存 / 取消 / 静态面板开关 */
-    document.getElementById("joinVerify").addEventListener("click", async () => {
-      await verifyJoinWifi();
-    });
-
-    document.getElementById("joinSave").addEventListener("click", async () => {
-      await saveJoinWifi();
-    });
-
-    document.getElementById("joinCancel").addEventListener("click", () => {
-      closeWifiJoinModal();
-    });
-
-    document.getElementById("wifiJoinModal").addEventListener("click", (event) => {
-      if (event.target.id === "wifiJoinModal") {
-        closeWifiJoinModal();
-      }
-    });
-
-    document.querySelectorAll("input[name=\"joinIpMode\"]").forEach((input) => {
-      input.addEventListener("change", updateJoinStaticPanel);
-    });
-
-    document.getElementById("closeSavedWifiModal").addEventListener("click", () => {
-      closeSavedWifiModal();
-    });
-
-    document.getElementById("ipConflictDismiss").addEventListener("click", () => {
-      closeIpConflictModal();
-    });
-
-    document.getElementById("ipConflictGoFix").addEventListener("click", () => {
-      /* 1.3-52:静态 IP 已移入连接向导 —— 冲突修复同样指到向导,
-       * 并预选"静态 IP"、回显冲突地址方便直接改。 */
-      closeIpConflictModal();
-      openWifiJoinModal((state.networkConfig?.sta_ssid) || "");
-      document.getElementById("joinIpStatic").checked = true;
-      updateJoinStaticPanel();
-      const conflictedIp = state.networkConfig?.sta_static_ip;
-      if (conflictedIp) {
-        const el = document.getElementById("joinStaticIp");
-        el.value = conflictedIp;
-        el.classList.add("input-error");
-        el.focus();
-      }
-    });
-
-    document.getElementById("savedWifiModal").addEventListener("click", (event) => {
-      if (event.target.id === "savedWifiModal") {
-        closeSavedWifiModal();
-      }
-    });
-
-    document.getElementById("toggleRelay").addEventListener("click", async () => {
-      try {
-        await saveGpio({ relay_on: !state.relayOn });
-      } catch (error) {
-        setStatus("gpioInfo", error.message, "bad");
-      }
-    });
-
-    document.getElementById("toggleLed").addEventListener("click", async () => {
-      try {
-        await saveGpio({ led_on: !state.ledOn });
-      } catch (error) {
-        setStatus("gpioInfo", error.message, "bad");
-      }
-    });
-
-    document.getElementById("saveWebAuth").addEventListener("click", async () => {
-      try {
-        await saveWebAuth();
-      } catch (error) {
-        setStatus("webAuthStatus", getErrorMessage(error), "bad");
-      }
-    });
-
-    document.getElementById("saveBluetooth").addEventListener("click", async () => {
-      try {
-        await saveBluetooth();
-      } catch (error) {
-        setStatus("bluetoothStatus", error.message, "bad");
-      }
-    });
-
-    document.getElementById("uploadOta").addEventListener("click", async () => {
-      try {
-        await uploadOta();
-      } catch (error) {
-        setStatus("otaStatus", error.message, "bad");
-      }
-    });
-
-    document.getElementById("uploadStorage").addEventListener("click", async () => {
-      try {
-        await uploadStorage();
-      } catch (error) {
-        setStatus("otaStatus", error.message, "bad");
-      }
-    });
-
-    document.getElementById("saveMqtt").addEventListener("click", async () => {
-      try {
-        await saveMqtt();
-      } catch (error) {
-        setStatus("mqttStatus", error.message, "bad");
-      }
-    });
-
-    document.getElementById("saveUart").addEventListener("click", async () => {
-      try {
-        await saveUart();
-      } catch (error) {
-        setStatus("uartStatus", error.message, "bad");
-      }
-    });
-
-    document.getElementById("uartRxFormat").addEventListener("change", (event) => {
-      state.uartRxFormat = event.target.value;
-      renderUartConsole();
-    });
-
-    document.getElementById("uartTxFormat").addEventListener("change", (event) => {
-      state.uartTxFormat = event.target.value;
-      renderUartConsole();
-    });
-
-    document.getElementById("sendUart").addEventListener("click", async () => {
-      try {
-        await sendUart();
-      } catch (error) {
-        setStatus("uartStatus", error.message, "bad");
-      }
-    });
-
-    document.getElementById("clearUartConsole").addEventListener("click", async () => {
-      try {
-        await clearUartConsole();
-      } catch (error) {
-        setStatus("uartStatus", error.message, "bad");
-      }
-    });
-
-    applyTranslations();
-    boot();
+    })();
   </script>
 </body>
 </html>

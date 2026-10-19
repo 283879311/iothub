@@ -28,6 +28,11 @@ static SemaphoreHandle_t s_json_mutex = NULL;
 static StaticSemaphore_t s_uart_op_mutex_buf;
 static StaticSemaphore_t s_json_mutex_buf;
 
+/* 1.3-76:UART TX ring buffer。原 tx_buffer_size=0 时 uart_write_bytes 会
+ * 阻塞到数据全部发出(官方 UART 文档),data_pipe 任务被拖住 → 队列 overrun。
+ * 2048 > UART_HW_FIFO_LEN,ISR 后台搬 FIFO;发送前用 free_size 做非阻塞背压。 */
+#define UART_DRV_TX_BUF_SIZE 2048
+
 static char s_escaped_tx_data[UART_TX_BUFFER_SIZE * 2];
 static char s_escaped_tx_preview[UART_TX_PREVIEW_SIZE * 2];
 static char s_escaped_tx_hex[UART_TX_HEX_TEXT_SIZE * 2];
@@ -229,6 +234,18 @@ static esp_err_t app_uart_send_payload(const char *encoding, const char *data,
     }
     if (!app_uart_lock(pdMS_TO_TICKS(200))) {
         return ESP_ERR_TIMEOUT;
+    }
+    /* 1.3-76:TX ring 余量不足时直接返回可重试错误,不阻塞 data_pipe 任务。
+     * 官方 UART 文档:tx_buffer_size>0 时 write 只负责拷入 ring,ISR 搬 FIFO;
+     * 这里先看 free_size,避免 uart_write_bytes 在 ring 满时阻塞。 */
+    {
+        size_t tx_free = 0;
+
+        if (uart_get_tx_buffer_free_size(UART_PORT, &tx_free) != ESP_OK ||
+            tx_free < payload_len) {
+            app_uart_unlock();
+            return ESP_ERR_NO_MEM;
+        }
     }
     written = uart_write_bytes(UART_PORT, payload, payload_len);
     app_uart_unlock();
@@ -442,7 +459,7 @@ static esp_err_t app_uart_apply_config_values(uint32_t baudrate, uint8_t data_bi
 
         /* CONFIG_UART_ISR_IN_IRAM=y 时 ISR 必须驻留 IRAM;显式带上 flag,
          * 否则驱动会打印 "flag not set ... flag updated" 警告(问题与版本优化.md 第 31 项) */
-        err = uart_driver_install(UART_PORT, UART_RX_BUFFER_SIZE * 2, 0, 0, NULL,
+        err = uart_driver_install(UART_PORT, UART_RX_BUFFER_SIZE * 2, UART_DRV_TX_BUF_SIZE, 0, NULL,
                                   ESP_INTR_FLAG_IRAM);
         if (err != ESP_OK) {
             app_uart_set_apply_error("uart_driver_install_failed");

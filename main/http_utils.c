@@ -50,7 +50,7 @@ esp_err_t app_http_send_json_text(httpd_req_t *req, const char *status, const ch
 }
 
 /* ============================================================================
- * 零堆 JSON 构建基建(1.3版本优化.md 1.3-12)
+ * 零堆 JSON 构建基建(问题与版本优化.md 1.3-12)
  *
  * 动机:status/network 两个热接口原走 cJSON"建树 + 序列化"(两份堆),在并发 + 堆
  * 偏紧(BLE 常驻时 free 仅 ~16KB)时会 500(out_of_memory)或出现秒级延迟尖峰。

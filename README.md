@@ -7,21 +7,22 @@
 ## 功能
 
 - **串口调试台**:UART 参数配置(5-8 数据位、奇偶校验、1/2 停止位、任意波特率),收发数据查看(文本/hex)、清屏、手动发送。
+- **GPIO/命令层**:继电器、LED、触摸输入统一走 `cmd.c`;MQTT RPC、BLE CMD、Web `POST /api/v1/command` 共用 `led.set/led.toggle/relay.set/io.set/io.get` 及旧别名;触摸按下调用同一 `led.toggle`,长按不重复;每路可配置上电策略,引脚由 Kconfig 统一配置;GPIO 面板 1s 实时刷新输入状态。
 - **Web 管理页 `/config`**:网络、MQTT、GPIO、蓝牙、UART 配置,管理员账号修改与固件升级(Basic 认证,可在页面修改口令)。
 - **强制门户**:AP 模式下手机/电脑接入后自动弹出配置页(本地 DNS 劫持 + OS 连通性探测 302);mDNS(`.local` 域名)已于 1.3-27 移除(BLE 常驻时堆挤占,局域网内用 IP 直连)。
 - **网络**:AP(192.168.8.1)/ STA / APSTA;最多 5 条 STA profile,RSSI 择优自动重连;纯 STA 启动 90s 失败自动降级 AP 并持久化。
-- **MQTT(ThingsBoard)**:10s 周期遥测(继电器/LED/输入/堆内存)+ attributes 上报;下行 RPC `setRelay/setLed/getStatus/setState` 控 GPIO;支持 tb_cloud / tb_selfhost / 自定义 topic,TLS(证书 bundle)与 LWT。
+- **MQTT(ThingsBoard)**:10s 周期遥测(继电器/LED/输入/堆内存)+ attributes 上报;下行 RPC `setRelay/setLed/getStatus/setState` 控 GPIO;支持 tb_cloud / tb_selfhost / 自定义 topic,TLS(证书 bundle,可选)与 LWT;数据面自 1.3-82 起走 QoS1。
 - **OTA**:Web 上传固件(`iothub.bin`),带应用描述区校验(魔数/项目名/版本降级拒绝);网页资源 `storage.bin` 支持运行时整分区替换;升级后经健康确认窗口(业务可达才 mark valid,超时自动回滚)。
 - **恢复出厂**:BOOT 键(GPIO0)长按 5s。
-- **蓝牙**:BLE 广播(占位,暂无 GATT 数据面,见 `问题与版本优化.md` 第 8 项);经典蓝牙 / SPP 已于 v1.2 移除(CONFIG_BT_CLASSIC_ENABLED=n)。
+- **蓝牙**:BLE NUS GATT 数据面(peripheral 从机 + central 主机),支持数据 RX/TX 与 CMD 通道(命令写 `6E400004`、回包订阅 `6E400005`;先 `login` 换 token,回包在 `result.token`);默认 NimBLE 主机栈,可回退 Bluedroid;A/B 双向角色互换脚本 `tools/ble_nus/role_swap.py` 已通过(1.3-81);经典蓝牙 / SPP 已于 v1.2 移除(CONFIG_BT_CLASSIC_ENABLED=n)。
 
 ## 硬件引脚(编译期固定,`main/constants.h`)
 
 | 功能 | GPIO |
 | --- | --- |
 | 继电器 | 16 |
-| LED | 27 |
-| 输入检测 | 33 |
+| 状态灯 | 4 |
+| 输入检测 | 27(T7 触摸焊盘) |
 | UART1 TX / RX | 17 / 18 |
 | BOOT 键(恢复出厂) | 0 |
 
@@ -37,6 +38,8 @@ tools/idfbuild.sh monitor
 tools/idfbuild.sh paths        # 自检:ninja / cmake / toolchain / idf.py / python 的定位结果
 tools/idfbuild.sh cache-guard  # 仅清理生成器不匹配的 build/ 缓存
 ```
+
+GPIO 引脚由 Kconfig 统一配置（`main/Kconfig.projbuild` → `Iothub Configuration` → `GPIO pin assignment`），默认继电器 16、状态灯 4、输入 27(触摸 T7)。换脚只需菜单配置/修改 `sdkconfig` 后重新构建烧录，不需要改 `state.c` 或其它源码；GPIO34–39 不能作为输出，构建期会拒绝。
 
 默认 BT 主机栈为 **NimBLE**。需要回退 Bluedroid 时用独立的回退 profile:
 
@@ -77,13 +80,23 @@ nvs 16K / otadata / phy / **ota_0 + ota_1 各 1.9375MB(双 OTA)** / storage(litt
 ```
 main/            固件源码(模块划分见各 .h 接口)
 web/             前端页面(配置页 config.html,单页形态)
-tools/           宿主侧脚本与单测(JS 语法检查、HTML/JS 压缩、协议/JSON 转义单测;**不进固件**)
-docs/debug/      UART 排查记录(遗留问题见文档内状态)
-问题与版本优化.md  版本优化与问题记录汇总(v1.0/v1.1 审查、v1.2 设计基线、v1.2.1 问题闭环,含立项第 27/28 项)
+tools/           宿主侧脚本与单测(JS 语法检查、HTML/JS 压缩、协议/JSON 转义单测、BLE NUS/角色互换验收;**不进固件**)
+问题与版本优化.md  唯一主记录:v1.0–v1.2.1 历史 + v1.3 增量/清单 + 附录 A–E
+docs/soak_test_plan.md  全链路 soak 方案(独立)
+docs/archive/     原始日志/历史归档(只读留证)
 ```
+
+## 文档导航
+
+- **唯一主记录**:`问题与版本优化.md` —— v1.0–v1.2.1 历史、v1.3 增量与当前清单(**1.3-70**)、附录 A NimBLE 评估、B 串口抓包、C 已解决索引、D UART 调试、E 手机验收测试卡。
+- **独立方案**:`docs/soak_test_plan.md`(全链路 soak;`tools/soak/` 尚未实现)。
+- **原始归档**:`docs/archive/`(日志/代码,只读留证)。
 
 ## 已知问题与安全提示
 
-- 全站无 TLS(Basic 凭据明文传输)—— 见 `问题与版本优化.md` 第 1 项遗留部分;
-- 蓝牙功能为占位实现(仅 BLE 广播,无 GATT 数据面;经典蓝牙 / SPP 已在 v1.2 移除);
-- UART RX 电气层问题排查记录见 `docs/debug/`。
+- **Web 管理页/门户无 TLS,Basic 凭据明文传输;TLS/带 SAN 证书/NVS 加密/首启强制改密已按 2026-10-18 决定不排期**。当前全开堆余量不足以承担 TLS 握手/会话缓冲;继续限定可信局域网/设备 AP,**禁止直接暴露公网**。部署前人工修改默认口令;NVS 中的 WiFi/MQTT/Web 凭据保持明文,设备需物理受控。MQTT 可选 TLS 不受此决定影响。详见 `问题与版本优化.md` 1.3-14/15 与 v1.2.1-1/16。
+- UART RX 电气层问题排查记录见 `问题与版本优化.md` 附录 D;
+- B 板在高负载下曾出现一次 WiFi/IP 失联(BLE/CMD 仍存活,heap 健康),重新插拔 USB 后 115200/9600 各 1h 未复现;保留后续观察(24h 按当前安排暂缓,1.3-77/78/79)。
+- 配置页已按 1.3-80 做导航/按需面板、3 个 JS bundle 顺序加载、版本化缓存和发送回压;新 B 板(65D8)替换后 A/B 1h 页面压力均 60 循环、0 坏页面/0 错误,旧 B 的堆崩溃未复现。
+- BLE 真机四态(RX/TX/CMD RX/CMD TX)尚未执行;断连重广播、A/B 双向角色互换(1.3-78/81)已通过,手机 nRF Connect 步骤见 `docs/soak_test_plan.md` §2.4,另一台 Ubuntu 的角色互换/数据面/回传执行包见 §2.5。
+- MQTT 数据面旧实现误用 `esp_mqtt_client_enqueue` 的 QoS0/store=false(返回 -1、未真正入队),导致实际漏发远大于 `dropped_mqtt` 记录的 2%;已改 QoS1/store=true,1KB/s 负载 6min 0 丢、outbox 0(1.3-82)。

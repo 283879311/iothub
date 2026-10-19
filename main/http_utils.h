@@ -8,10 +8,10 @@
 
 esp_err_t app_http_send_json_text(httpd_req_t *req, const char *status, const char *payload);
 esp_err_t app_http_send_jsonf(httpd_req_t *req, const char *status, const char *fmt, ...);
-/* 响应前关 Nagle(分块/多段响应提速,见 1.3版本优化.md 1.3-36) */
+/* 响应前关 Nagle(分块/多段响应提速,见 问题与版本优化.md 1.3-36) */
 void      app_http_tcp_nodelay(httpd_req_t *req);
 
-/* ---- 零堆 JSON 构建基建(1.3版本优化.md 1.3-12)----------------------------------
+/* ---- 零堆 JSON 构建基建(问题与版本优化.md 1.3-12)----------------------------------
  * 背景:原 status/network 两个热接口走 cJSON"建树 + 序列化"(两份堆),在
  * 并发 + 堆偏紧(BLE 常驻时 free 仅 ~16KB)时会 500 或出现秒级延迟尖峰。
  *

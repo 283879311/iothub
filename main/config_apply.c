@@ -298,6 +298,21 @@ static bool cfg_validate_static_ip_cross(const app_config_t *old_cfg, const app_
     return true;
 }
 
+static esp_err_t cfg_validate_gpio_power_policy(const cJSON *value, const char *field,
+                                                 char *err, size_t err_size)
+{
+    uint32_t policy = 0xFFFFFFFFu;
+
+    if (!cfg_coerce_uint(value, 255, &policy) ||
+        (policy != APP_GPIO_POWER_FIXED_OFF &&
+         policy != APP_GPIO_POWER_FIXED_ON &&
+         policy != APP_GPIO_POWER_RESTORE)) {
+        snprintf(err, err_size, "%s must be 0(fixed off)/1(fixed on)/2(restore last)", field);
+        return ESP_ERR_INVALID_ARG;
+    }
+    return ESP_OK;
+}
+
 static esp_err_t cfg_validate_bt_role(const cJSON *value, const char *field,
                                       char *err, size_t err_size)
 {
@@ -440,11 +455,13 @@ static void cfg_changed_add(cJSON *changed, const char *field)
  * 提交这些字段会被拒绝(ESP_ERR_NOT_SUPPORTED),绝不"改了但不生效"。
  * ------------------------------------------------------------------------- */
 static const cfg_field_t s_fields[] = {
-    /* ---------- GPIO 输出:热生效,立即作用到引脚 ---------- */
-    {.field = "relay_on", .type = CFG_T_BOOL8, .offset = CFG_OFF(relay_on),
-     .domain = CFG_DOMAIN_GPIO, .effect = CFG_EFFECT_NONE},
-    {.field = "led_on", .type = CFG_T_BOOL8, .offset = CFG_OFF(led_on),
-     .domain = CFG_DOMAIN_GPIO, .effect = CFG_EFFECT_NONE},
+    /* ---------- GPIO 输出:上电策略(持久化;改策略后由状态核心立即按固定态/记忆态处理) ---------- */
+    {.field = "relay_power_policy", .type = CFG_T_U8, .offset = CFG_OFF(relay_power_policy),
+     .domain = CFG_DOMAIN_GPIO, .effect = CFG_EFFECT_NONE,
+     .validate = cfg_validate_gpio_power_policy},
+    {.field = "led_power_policy", .type = CFG_T_U8, .offset = CFG_OFF(led_power_policy),
+     .domain = CFG_DOMAIN_GPIO, .effect = CFG_EFFECT_NONE,
+     .validate = cfg_validate_gpio_power_policy},
     /* GPIO 极性/输入极性:改动需重新配置引脚,重启生效(当前无对外 API,产线/内部用) */
     {.field = "relay_active_high", .type = CFG_T_BOOL8, .offset = CFG_OFF(relay_active_high),
      .domain = CFG_DOMAIN_GPIO, .effect = CFG_EFFECT_REBOOT},
@@ -675,7 +692,7 @@ bool config_apply_domain_wired(cfg_domain_t domain)
     case CFG_DOMAIN_GPIO:
     case CFG_DOMAIN_BT: /* 蓝牙为重启生效:仅落盘,由调用方按 effect 重启 */
     case CFG_DOMAIN_MQTT:
-    case CFG_DOMAIN_NET: /* B3(1.3版本优化.md 1.3-09):网络为重启生效,仅落盘 */
+    case CFG_DOMAIN_NET: /* B3(问题与版本优化.md 1.3-09):网络为重启生效,仅落盘 */
     case CFG_DOMAIN_WEB_AUTH: /* B6:仅用户名走字段表(口令是盐+SHA256 的专用接口) */
     case CFG_DOMAIN_DATAPIPE: /* 1.3-07:数据面路由,立即生效 */
         return true;
@@ -690,20 +707,10 @@ esp_err_t config_apply_domain_apply(cfg_domain_t domain)
     case CFG_DOMAIN_NONE:
         return ESP_OK;
 
-    case CFG_DOMAIN_GPIO: {
-        bool relay_on, led_on, relay_active_high, led_active_high;
-
-        app_config_lock();
-        relay_on = (s_config.relay_on != 0);
-        led_on = (s_config.led_on != 0);
-        relay_active_high = (s_config.relay_active_high != 0);
-        led_active_high = (s_config.led_active_high != 0);
-        app_config_unlock();
-
-        app_apply_output(app_relay_gpio(), relay_active_high, relay_on);
-        app_apply_output(app_led_gpio(), led_active_high, led_on);
+    case CFG_DOMAIN_GPIO:
+        /* 输出状态不再由配置 blob 驱动:固定策略立即生效,记忆策略保存当前状态。 */
+        app_io_apply_policies_at_runtime();
         return ESP_OK;
-    }
 
     case CFG_DOMAIN_MQTT:
         /* 1.3-43:配置变更 = 用户明确要重连,先清致命位再调度 */
@@ -715,7 +722,7 @@ esp_err_t config_apply_domain_apply(cfg_domain_t domain)
         return ESP_OK;
 
     case CFG_DOMAIN_NET:
-        /* B3(1.3版本优化.md 1.3-09):网络配置为整机重启生效,本层只负责落盘;
+        /* B3(问题与版本优化.md 1.3-09):网络配置为整机重启生效,本层只负责落盘;
          * 是否提示/触发重启由调用方按 effect_out 决定(HTTP handler 返回 restart_required) */
         return ESP_OK;
 

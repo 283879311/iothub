@@ -40,6 +40,7 @@ static const char *TAG = "mqtt";
 #define MQTT_STOP_EVENT_TELEMETRY BIT0
 #define MQTT_STOP_EVENT_BOOST     BIT1
 #define MQTT_STOP_EVENT_RESTART   BIT2
+#define MQTT_IO_EVENT             BIT3
 
 extern app_config_t s_config;
 mqtt_runtime_t s_mqtt = {0};
@@ -73,6 +74,36 @@ int app_mqtt_outbox_size(void)
         app_mqtt_client_release();
     }
     return size;
+}
+
+/* 1.3-89:低优先级 state/attributes 的有界让路。
+ * 页面发送期间/outbox 积压时只延后可合并的状态，置 IO 事件表示"还有最新值待发"；
+ * RPC 响应仍走各自的直接 publish，不经过此闸门。 */
+#define APP_MQTT_LOW_PRIO_OUTBOX_LIMIT 2048
+static uint32_t s_low_prio_page_defer;
+static uint32_t s_low_prio_outbox_defer;
+
+static bool app_mqtt_low_prio_defer(void)
+{
+    bool page = app_http_serving_page();
+    int outbox = page ? -1 : app_mqtt_outbox_size();
+    uint32_t *counter;
+    const char *reason;
+
+    if (!page && outbox <= APP_MQTT_LOW_PRIO_OUTBOX_LIMIT) {
+        return false;
+    }
+    counter = page ? &s_low_prio_page_defer : &s_low_prio_outbox_defer;
+    (*counter)++;
+    reason = page ? "page" : "outbox";
+    if (*counter <= 3u || (*counter % 20u) == 0u) {
+        ESP_LOGW(TAG,
+                 "low-prio publish deferred #%u (%s): outbox=%d free=%u largest=%u",
+                 (unsigned)*counter, reason, outbox,
+                 (unsigned)esp_get_free_heap_size(),
+                 (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_DEFAULT));
+    }
+    return true;
 }
 
 /* 1.3-44:内存深紧张(CRITICAL)时被跳过的周期遥测拍数 —— diag 观测用 */
@@ -306,7 +337,60 @@ static void app_mqtt_build_data_topics(void)
 /* data_pipe 出站执行者:MUST 用 enqueue(纯入 outbox 立即返回)——
  * 严禁 publish():data_pipe 是唯一出站任务,被 TCP 发送阻塞会队头阻塞 UART/BLE 出站(1.3-07)。
  * 未连接时短路,防空转 outbox。 */
-static bool app_mqtt_dataplane_write(const uint8_t *data, size_t len, void *ctx)
+/* 1.3-76:data_pipe→MQTT 聚合 256B(20B/帧×50/s → 256B/≈4/s),降低发布频率与
+ * 每帧 outbox/TCP 开销;outbox 阈值改用字节 —— esp_mqtt_client_get_outbox_size()
+ * 返回字节,原 `>16` 实际只有 16 字节,几乎每帧都被误判为背压(官方 esp-mqtt
+ * 文档:outbox limit 是字节;数据面用 QoS1 保证已接受的消息收到 PUBACK)。 */
+#define APP_MQTT_DP_AGG_BYTES        256
+#define APP_MQTT_DP_OUTBOX_LIMIT     4096
+#define APP_MQTT_DP_FLUSH_PERIOD_MS  250
+/* 1.3-82:数据面必须用 QoS1 + store=true。
+ * 官方 esp_mqtt_client_enqueue 对 QoS0 & store=false 不会入 outbox,而是把消息
+ * 留在 connection.outbound_message 并返回 -1("not enqueued");原实现把它当异步发布,
+ * 既误判成功又漏发。QoS1 会复制到 outbox,由 MQTT 任务发送并等 PUBACK;
+ * 返回值是 message id(>0),不是 ESP_OK。 */
+#define APP_MQTT_DP_QOS              1
+#define APP_MQTT_DP_STORE            true
+
+static uint8_t s_dp_agg[APP_MQTT_DP_AGG_BYTES];
+static size_t s_dp_agg_len;
+static portMUX_TYPE s_dp_agg_mux = portMUX_INITIALIZER_UNLOCKED;
+
+/* 1.3-82 诊断:把 data_pipe 的 dropped_mqtt 拆成可解释原因。data_pipe 只看到
+ * app_mqtt_dataplane_write 的 bool,无法区分 outbox 满、未连接、编码失败或
+ * enqueue 失败;定时 flush 失败此前完全静默。计数均为字节,日志每 8 次打一条。 */
+static uint32_t s_dp_drop_outbox_bytes;
+static uint32_t s_dp_drop_enqueue_bytes;
+static uint32_t s_dp_drop_encode_bytes;
+static uint32_t s_dp_drop_notconn_bytes;
+static uint32_t s_dp_flush_fail_bytes;
+static uint32_t s_dp_drop_events;
+
+static void app_mqtt_dp_note_drop(const char *reason, size_t bytes, int outbox, int rc)
+{
+    if (strcmp(reason, "outbox") == 0) {
+        s_dp_drop_outbox_bytes += (uint32_t)bytes;
+    } else if (strcmp(reason, "enqueue") == 0) {
+        s_dp_drop_enqueue_bytes += (uint32_t)bytes;
+    } else if (strcmp(reason, "encode") == 0) {
+        s_dp_drop_encode_bytes += (uint32_t)bytes;
+    } else {
+        s_dp_drop_notconn_bytes += (uint32_t)bytes;
+    }
+    s_dp_drop_events++;
+    if ((s_dp_drop_events % 8u) == 1u) {
+        ESP_LOGW(TAG,
+                 "dataplane drop[%s] %uB outbox=%d rc=%d | totals outbox=%u enqueue=%u encode=%u notconn=%u flush=%u",
+                 reason, (unsigned)bytes, outbox, rc,
+                 (unsigned)s_dp_drop_outbox_bytes,
+                 (unsigned)s_dp_drop_enqueue_bytes,
+                 (unsigned)s_dp_drop_encode_bytes,
+                 (unsigned)s_dp_drop_notconn_bytes,
+                 (unsigned)s_dp_flush_fail_bytes);
+    }
+}
+
+static bool app_mqtt_dp_send(const uint8_t *data, size_t len)
 {
     esp_mqtt_client_handle_t client;
     const char *topic;
@@ -314,8 +398,7 @@ static bool app_mqtt_dataplane_write(const uint8_t *data, size_t len, void *ctx)
     size_t body_len;
     size_t olen = 0;
 
-    (void)ctx;
-    if (len == 0 || len > 0x7FFFFFFFu) {
+    if (data == NULL || len == 0 || len > 0x7FFFFFFFu) {
         return false;
     }
     /* 1.3-53:借出引用(client 销毁被挂起),直到本帧 enqueue 完毕才归还 */
@@ -324,21 +407,20 @@ static bool app_mqtt_dataplane_write(const uint8_t *data, size_t len, void *ctx)
         if (client != NULL) {
             app_mqtt_client_release();
         }
+        app_mqtt_dp_note_drop("notconn", len, -1, 0);
         return false;
     }
 
-    /* 出站背压水线(1.3-07 方案 A 实测):B 的 UART 数据源持续灌数时,esp-mqtt
-     * outbox 无限累积会把堆吃穿(实测 free 跌到 320B → MQTT 5s 断连死循环)。
-     * outbox > 16 条 → 本帧丢弃(计入 dropped_mqtt)——"字节流允许缺口、
-     * 丢帧保序",符合 1.3-07 协议约定;比打穿堆再一起死强。 */
-    if (esp_mqtt_client_get_outbox_size(client) > 16) {
-        static unsigned s_backpressure_logged = 0;
+    /* 字节口径的 outbox 背压:遥测/属性/数据面 QoS1 都占 outbox。
+     * 超过 4KB 才丢,避免原 >16 字节的误判;outbox 满时 enqueue 返回 -2。 */
+    {
+        int outbox = esp_mqtt_client_get_outbox_size(client);
 
-        if ((s_backpressure_logged++ % 32u) == 0u) {
-            ESP_LOGW(TAG, "mqtt outbox backpressure: drop frame (%u logged)", s_backpressure_logged);
+        if (outbox > APP_MQTT_DP_OUTBOX_LIMIT) {
+            app_mqtt_dp_note_drop("outbox", len, outbox, 0);
+            app_mqtt_client_release();
+            return false;
         }
-        app_mqtt_client_release();
-        return false;
     }
 
     if (app_mqtt_is_thingsboard_backend()) {
@@ -349,14 +431,14 @@ static bool app_mqtt_dataplane_write(const uint8_t *data, size_t len, void *ctx)
         int n;
 
         if (rc != 0 || olen >= sizeof(s_b64_buf)) {
-            ESP_LOGW(TAG, "dataplane base64 encode failed (rc=%d len=%u)", rc, (unsigned)len);
+            app_mqtt_dp_note_drop("encode", len, -1, rc);
             app_mqtt_client_release();
             return false;
         }
         s_b64_buf[olen] = '\0';
         n = snprintf(s_telemetry_buf, sizeof(s_telemetry_buf), "{\"data\":\"%s\"}", s_b64_buf);
         if (n < 0 || (size_t)n >= sizeof(s_telemetry_buf)) {
-            ESP_LOGW(TAG, "dataplane telemetry json overflow (len=%u)", (unsigned)len);
+            app_mqtt_dp_note_drop("encode", len, -1, n);
             app_mqtt_client_release();
             return false;
         }
@@ -371,19 +453,108 @@ static bool app_mqtt_dataplane_write(const uint8_t *data, size_t len, void *ctx)
     }
 
     {
-        bool ok = (esp_mqtt_client_enqueue(client, topic, body, (int)body_len, 0, 0, false) == ESP_OK);
+        int rc = esp_mqtt_client_enqueue(client, topic, body, (int)body_len,
+                                         APP_MQTT_DP_QOS, 0, APP_MQTT_DP_STORE);
+        bool ok = (rc > 0);   /* enqueue 返回 message id;0/-1/-2 都不是成功 */
 
+        if (!ok) {
+            app_mqtt_dp_note_drop("enqueue", len, esp_mqtt_client_get_outbox_size(client), rc);
+        }
         app_mqtt_client_release();
         return ok;
     }
+}
+
+static bool app_mqtt_dp_flush(void)
+{
+    uint8_t buf[APP_MQTT_DP_AGG_BYTES];
+    size_t n;
+
+    portENTER_CRITICAL(&s_dp_agg_mux);
+    n = s_dp_agg_len;
+    if (n > 0) {
+        memcpy(buf, s_dp_agg, n);
+        s_dp_agg_len = 0;
+    }
+    portEXIT_CRITICAL(&s_dp_agg_mux);
+    if (n == 0) {
+        return true;
+    }
+    {
+        bool ok = app_mqtt_dp_send(buf, n);
+
+        if (!ok) {
+            s_dp_flush_fail_bytes += (uint32_t)n;
+            if ((s_dp_flush_fail_bytes % 2048u) < (uint32_t)n) {
+                ESP_LOGW(TAG, "dataplane flush failed (%uB), total=%uB",
+                         (unsigned)n, (unsigned)s_dp_flush_fail_bytes);
+            }
+        }
+        return ok;
+    }
+}
+
+static bool app_mqtt_dataplane_write(const uint8_t *data, size_t len, void *ctx)
+{
+    bool ok = true;
+    size_t off = 0;
+
+    (void)ctx;
+    if (data == NULL || len == 0 || len > 0x7FFFFFFFu) {
+        return false;
+    }
+    while (off < len) {
+        size_t space;
+        size_t n;
+        bool full;
+
+        portENTER_CRITICAL(&s_dp_agg_mux);
+        space = sizeof(s_dp_agg) - s_dp_agg_len;
+        n = len - off;
+        if (n > space) {
+            n = space;
+        }
+        memcpy(s_dp_agg + s_dp_agg_len, data + off, n);
+        s_dp_agg_len += n;
+        off += n;
+        full = (s_dp_agg_len == sizeof(s_dp_agg));
+        portEXIT_CRITICAL(&s_dp_agg_mux);
+        if (full) {
+            ok = app_mqtt_dp_flush() && ok;
+        }
+    }
+    return ok;
+}
+
+static void app_mqtt_dp_flush_task(void *arg)
+{
+    (void)arg;
+    for (;;) {
+        vTaskDelay(pdMS_TO_TICKS(APP_MQTT_DP_FLUSH_PERIOD_MS));
+        (void)app_mqtt_dp_flush();
+    }
+}
+
+static void app_mqtt_ensure_dp_flush_task(void)
+{
+    static bool s_started = false;
+
+    if (s_started) {
+        return;
+    }
+    if (xTaskCreate(app_mqtt_dp_flush_task, "mqtt_dp_flush", 2560, NULL, 4, NULL) != pdPASS) {
+        ESP_LOGW(TAG, "mqtt_dp_flush task create failed");
+        return;
+    }
+    s_started = true;
 }
 
 static void app_mqtt_request_initial_attributes(void)
 {
     /* 1.3-57: 必须显式列出 sharedKeys。TB 对空对象 {} 的返回语义未定义
      * (实测只回 client 组),离线期间改的共享属性重连后同步不到。
-     * 只取本机消费的键:data(数据下行)+ relay_on/led_on(属性即配置)。 */
-    const char *payload = "{\"sharedKeys\":\"data,relay_on,led_on\"}";
+     * 只取数据面 data;继电器/LED 只允许 RPC 控制。 */
+    const char *payload = "{\"sharedKeys\":\"data\"}";
     char topic[64];
     esp_mqtt_client_handle_t client;
 
@@ -412,6 +583,10 @@ static void app_mqtt_publish_attributes(void)
     if (!app_mqtt_connected_safe()) {
         return;
     }
+    if (app_mqtt_low_prio_defer()) {
+        app_mqtt_on_io_change();
+        return;
+    }
     app_mqtt_build_uart_frame_str(uart_frame, sizeof(uart_frame));
 
     app_desc = esp_app_get_description();
@@ -430,6 +605,19 @@ static void app_mqtt_publish_attributes(void)
     cJSON_AddStringToObject(root, "bt_mode",     app_bt_mode_to_string(s_config.bt_role));
     cJSON_AddStringToObject(root, "uart_frame",  uart_frame);
     cJSON_AddNumberToObject(root, "uart_baudrate", (double)s_config.uart_baudrate);
+    {
+        app_io_state_t io;
+
+        app_io_get_state(&io);
+        /* 用 *_state 命名,避免与共享属性命令键 relay_on/led_on 混淆。 */
+        cJSON_AddBoolToObject(root, "relay_state", io.relay_on);
+        cJSON_AddBoolToObject(root, "led_state", io.led_on);
+        cJSON_AddBoolToObject(root, "input_state", io.input_active);
+        cJSON_AddNumberToObject(root, "io_seq", io.seq);
+        cJSON_AddStringToObject(root, "io_source", app_io_source_name(io.last_source));
+        cJSON_AddNumberToObject(root, "relay_power_policy", s_config.relay_power_policy);
+        cJSON_AddNumberToObject(root, "led_power_policy", s_config.led_power_policy);
+    }
     app_mqtt_add_common_active_online(root);
 
     app_mqtt_publish_json(app_mqtt_attributes_topic(), root, false);
@@ -444,15 +632,26 @@ static void app_mqtt_publish_state(void)
     if (!app_mqtt_connected_safe()) {
         return;
     }
+    if (app_mqtt_low_prio_defer()) {
+        app_mqtt_on_io_change();
+        return;
+    }
     app_mqtt_build_uart_frame_str(uart_frame, sizeof(uart_frame));
 
     root = cJSON_CreateObject();
     if (root == NULL) {
         return;
     }
-    cJSON_AddBoolToObject  (root, "relay_on",      s_config.relay_on);
-    cJSON_AddBoolToObject  (root, "led_on",        s_config.led_on);
-    cJSON_AddBoolToObject  (root, "input_active",  app_get_input_state());
+    {
+        app_io_state_t io;
+
+        app_io_get_state(&io);
+        cJSON_AddBoolToObject  (root, "relay_on",      io.relay_on);
+        cJSON_AddBoolToObject  (root, "led_on",        io.led_on);
+        cJSON_AddBoolToObject  (root, "input_active",  io.input_active);
+        cJSON_AddNumberToObject(root, "io_seq",        io.seq);
+        cJSON_AddStringToObject(root, "io_source",     app_io_source_name(io.last_source));
+    }
     cJSON_AddStringToObject(root, "bt_mode",       app_bt_mode_to_string(s_config.bt_role));
     cJSON_AddStringToObject(root, "net_mode",      app_network_mode_to_string(s_config.net_mode));
     cJSON_AddBoolToObject  (root, "sta_has_ip",    s_wifi.sta_has_ip);
@@ -540,7 +739,7 @@ static void app_mqtt_apply_command(const char *topic, const char *payload, int d
         const char *err = NULL;
         cJSON *resp = NULL;
 
-        if (app_cmd_execute(root, &resp, &out, &err) != ESP_OK || resp == NULL) {
+        if (app_cmd_execute_ex(root, APP_CMD_SOURCE_MQTT, &resp, &out, &err) != ESP_OK || resp == NULL) {
             resp = cJSON_CreateObject();
             if (resp != NULL) {
                 cJSON_AddBoolToObject(resp, "success", false);
@@ -579,15 +778,11 @@ static void app_mqtt_apply_command(const char *topic, const char *payload, int d
 /* 1.3-57: TB 共享属性统一入口。两路来源:
  *   实时更新  v1/devices/me/attributes            → 扁平 JSON
  *   初始同步  v1/devices/me/attributes/response/<id> → {"client":{...},"shared":{...}}
- * "data" 按 base64 解码后喂数据管道;其余顶层键(relay_on/led_on)交命令层。
- * 之前初始应答整包丢给 app_cmd_execute(只认 method/顶层 relay/led),shared.data
- * 被静默忽略 —— 设备离线期间改的共享属性重连后永远同步不到。 */
+ * 只处理数据面 data(base64 → data_pipe);继电器/LED 只允许 RPC 命令,
+ * 共享属性中的 relay_on/led_on 已删除,避免平台同时存在两套控制入口。 */
 static void app_mqtt_apply_shared_attrs(const cJSON *shared)
 {
     const cJSON *data_item;
-    app_cmd_result_t out = {0};
-    const char *err = NULL;
-    cJSON *resp = NULL;
 
     if (!cJSON_IsObject(shared)) {
         return;
@@ -605,22 +800,6 @@ static void app_mqtt_apply_shared_attrs(const cJSON *shared)
         } else {
             ESP_LOGW(TAG, "downlink base64 decode failed (rc=%d)", rc);
         }
-    }
-
-    /* 只含 data 时命令层无事可做且不报错;relay_on/led_on 在这里生效 */
-    (void)app_cmd_execute(shared, &resp, &out, &err);
-    if (resp != NULL) {
-        cJSON_Delete(resp);
-    }
-    if (out.reboot_after_response) {
-        app_reboot_schedule("cloud_cmd_reboot");
-    }
-    if (out.handled) {
-        /* 与实时属性路径一致:配置生效后回传最新属性/状态 */
-        if (out.changed_any) {
-            app_mqtt_publish_attributes();
-        }
-        app_mqtt_publish_state();
     }
 }
 
@@ -722,7 +901,7 @@ static bool app_mqtt_schedule_boost(void)
     return true;
 }
 
-/* ---- 1.3版本优化.md 1.3-10:应用层重连退避 ----
+/* ---- 问题与版本优化.md 1.3-10:应用层重连退避 ----
  * 关闭 esp-mqtt 内建固定 5s 自动重连后,由 mqtt_restart 任务按指数退避重连:
  * 连接正常时的配置变更仅等 200ms(step=0);连续失败 1s→2→4→8→16→30s。
  * s_restart_backoff_step 仅该任务自增、由 MQTT_EVENT_CONNECTED 复位(单写者,无需加锁)。 */
@@ -761,7 +940,7 @@ static void app_mqtt_event_handler(void *handler_args, esp_event_base_t base, in
         s_mqtt.fatal_error = false;
         app_mqtt_unlock();
         app_copy_string(s_mqtt.last_error, sizeof(s_mqtt.last_error), "");
-        s_restart_backoff_step = 0;   /* 连上即复位退避(1.3版本优化.md 1.3-10) */
+        s_restart_backoff_step = 0;   /* 连上即复位退避(问题与版本优化.md 1.3-10) */
         esp_mqtt_client_subscribe(event->client, app_mqtt_rpc_topic(), 1);
         esp_mqtt_client_subscribe(event->client, app_mqtt_shared_attr_response_topic(), 1);
         if (app_mqtt_is_thingsboard_backend()) {
@@ -783,7 +962,7 @@ static void app_mqtt_event_handler(void *handler_args, esp_event_base_t base, in
         app_mqtt_unlock();
         app_copy_string(s_mqtt.last_error, sizeof(s_mqtt.last_error), "disconnected");
         ESP_LOGW(TAG, "MQTT_EVENT_DISCONNECTED");
-        /* 已关闭客户端内建自动重连 → 由应用层按退避重连(1.3版本优化.md 1.3-10)。
+        /* 已关闭客户端内建自动重连 → 由应用层按退避重连(问题与版本优化.md 1.3-10)。
          * 仅在 STA 仍有 IP 时才调度:STA 掉线的情况由 WIFI_EVENT 处理器统一处理,
          * 避免"网络已断还在猛重连"的风暴。 */
         if (s_wifi.sta_has_ip) {
@@ -816,8 +995,8 @@ static void app_mqtt_event_handler(void *handler_args, esp_event_base_t base, in
         /* 数据/配置下行(1.3-07 方案 A,1.3-57 补初始同步):
          * TB: v1/devices/me/attributes = 共享属性变更(扁平 JSON);
          *     v1/devices/me/attributes/response/<id> = 初始同步应答
-         *     ({"client":{...},"shared":{...}})。两路统一取 shared:
-         *     data(base64)喂管道,relay_on/led_on 走命令层。
+         *     ({"client":{...},"shared":{...}})。只取 shared.data(base64)
+         *     喂管道;GPIO 控制只走 RPC,已不再接受共享属性 relay_on/led_on。
          * custom: iothub/{mac}/data/down 原始字节。命令帧永不进管道。 */
         if (app_mqtt_is_thingsboard_backend() &&
             app_mqtt_topic_is_tb_attributes(topic, event->topic_len)) {
@@ -1043,12 +1222,13 @@ esp_err_t app_mqtt_apply_config(void)
     app_mqtt_build_data_topics();
     /* 数据面 MQTT 端口(1.3-07):出站 = enqueue 到 up 主题;下行由订阅回调喂入 */
     data_pipe_register_port(DATA_PORT_MQTT, app_mqtt_dataplane_write, NULL);
+    app_mqtt_ensure_dp_flush_task();   /* 1.3-76:256B 聚合的定时兜底 flush */
 
     is_tb_backend = strcmp(s_config.mqtt_backend, "tb_cloud") == 0 ||
                     strcmp(s_config.mqtt_backend, "tb_selfhost") == 0;
 
     mqtt_cfg.broker.address.uri = s_mqtt.uri;
-    /* 1.3版本优化.md 1.3-10:keepalive 15→45s(减少 PINGREQ 与"无响应断连"概率,
+    /* 问题与版本优化.md 1.3-10:keepalive 15→45s(减少 PINGREQ 与"无响应断连"概率,
      * 仍在 ThingsBoard 默认 60s 限制内);重连改由**应用层 mqtt_restart 任务**承担 ——
      * 关掉客户端内建的固定 5s 自动重连,改为**指数退避**(200ms→1→2→4→8→16→30s,
      * 连上即复位),避免 broker 不可达时的重连风暴占 socket/堆 */
@@ -1057,7 +1237,12 @@ esp_err_t app_mqtt_apply_config(void)
      * 页面/小接口随机失败。收 outbox 与任务栈:buffer 1024→512、out_size 512→256、
      * 共回收 ~768B 常驻;数据面另有 outbox 背压水线兜底。 */
     mqtt_cfg.buffer.size = 512;
-    mqtt_cfg.buffer.out_size = 256;
+    /* 1.3-76:数据面聚合 256B 后 TB JSON 约 354B,out_size=256 装不下会导致
+     * 发送失败/客户端反复重连;恢复到 512(代价仅 +256B)。 */
+    mqtt_cfg.buffer.out_size = 512;
+    /* 1.3-76:官方 esp-mqtt 的 outbox.limit 是字节预算;给 QoS1 遥测/属性
+     * 留 8KB;数据面 QoS1 仍走字节阈值(4KB),outbox 满则丢并计数。 */
+    mqtt_cfg.outbox.limit = 8192;
     /* 1.3-43:非 TLS 任务栈 6144→4096,省 2KB 常驻堆(文章建议 4096;
      * TLS 保持 6144,mbedtls 握手栈需求)。此前曾随快路径实验一并回退,
      * 现按官方建议单独恢复。 */
@@ -1143,7 +1328,7 @@ static void app_mqtt_restart_task_fn(void *arg)
             ESP_LOGW(TAG, "mqtt fatal error: auto reconnect paused (waiting config change)");
             continue;
         }
-        /* 指数退避(1.3版本优化.md 1.3-10):连上后 step 复位为 0 → 配置变更类重启仅等 200ms;
+        /* 指数退避(问题与版本优化.md 1.3-10):连上后 step 复位为 0 → 配置变更类重启仅等 200ms;
          * 连续失败则 1s→2→4→8→16→30s,避免"断网/ broker 不可达"时的重连风暴 */
         vTaskDelay(pdMS_TO_TICKS(app_mqtt_backoff_delay_ms(s_restart_backoff_step)));
         if (s_restart_backoff_step < APP_MQTT_BACKOFF_MAX_STEP) {
@@ -1221,6 +1406,13 @@ void app_mqtt_restart_task(void *arg)
     app_mqtt_schedule_restart();
 }
 
+void app_mqtt_on_io_change(void)
+{
+    if (s_mqtt.stop_events != NULL) {
+        xEventGroupSetBits(s_mqtt.stop_events, MQTT_IO_EVENT);
+    }
+}
+
 static void app_mqtt_telemetry_task(void *arg)
 {
     EventBits_t bits;
@@ -1228,7 +1420,8 @@ static void app_mqtt_telemetry_task(void *arg)
 
     (void)arg;
     for (;;) {
-        bits = xEventGroupWaitBits(s_mqtt.stop_events, MQTT_STOP_EVENT_TELEMETRY,
+        bits = xEventGroupWaitBits(s_mqtt.stop_events,
+                                   MQTT_STOP_EVENT_TELEMETRY | MQTT_IO_EVENT,
                                    pdFALSE, pdFALSE, wait_ticks);
         if ((bits & MQTT_STOP_EVENT_TELEMETRY) != 0) {
             ESP_LOGI(TAG, "Telemetry task exiting on stop request");
@@ -1239,10 +1432,20 @@ static void app_mqtt_telemetry_task(void *arg)
             vTaskDelete(NULL);
             return;
         }
+        /* 1.3-89:页面发送/outbox 积压时只延后可合并的 state/attributes;
+         * 保留 IO 事件,页面结束后补发最新值。RPC 响应不经过本任务。 */
+        if (app_mqtt_low_prio_defer()) {
+            app_mqtt_on_io_change();
+            vTaskDelay(pdMS_TO_TICKS(500));
+            continue;
+        }
         /* 1.3-44:内存深紧张时本拍遥测让路 —— 发布路径(cJSON + outbox +
          * TCP 发送缓冲)是低堆期最容易失败并把压力放大的一环;跳过本拍
          * 不影响连接本体(心跳由 MQTT 客户端自己维持),水位恢复后下个
          * 周期照常。让路计数经 app_mqtt_tele_shed_count() 暴露给 diag。 */
+        if ((bits & MQTT_IO_EVENT) != 0) {
+            xEventGroupClearBits(s_mqtt.stop_events, MQTT_IO_EVENT);
+        }
         if (app_mem_level() == APP_MEM_CRITICAL) {
             const size_t largest = heap_caps_get_largest_free_block(MALLOC_CAP_DEFAULT);
 
@@ -1255,6 +1458,9 @@ static void app_mqtt_telemetry_task(void *arg)
             continue;
         }
         app_mqtt_publish_state();
+        if ((bits & MQTT_IO_EVENT) != 0) {
+            app_mqtt_publish_attributes();
+        }
     }
 }
 

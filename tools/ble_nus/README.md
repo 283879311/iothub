@@ -17,6 +17,25 @@ sudo apt install bluez && sudo systemctl start bluetooth   # Linux 必需:提供
 设备侧前置:BLE 在广播且模式正确 —— `status.bluetooth` 应为 `mode=ble, adv_active=true`;
 UART 为 `9600 8N1`(线速 ≈ **960 B/s**,压测间隔必须 ≥ ~8.4ms/8B 才不超线速)。
 
+## 角色互换(A/B 双板)
+
+`role_swap.py` 通过两块板自己的 HTTP 配置接口切 `bt_role`,轮询两侧 status 判定
+`runtime_mode/adv_active/connected/last_error`;失败或 Ctrl-C 会把 central 板恢复为 `ble`。
+
+```bash
+python3 tools/ble_nus/role_swap.py --central B --peripheral A   # B 主机连 A 从机
+python3 tools/ble_nus/role_swap.py --central A --peripheral B   # A 主机连 B 从机
+```
+
+默认 A=`http://192.168.1.213`、B=`http://192.168.1.42`;可用 `IOTHUB_A_HOST`/`IOTHUB_B_HOST` 覆盖。
+注意:central 侧配置名仍是本机名,实际匹配会回退到 `"Iot*"`;同场只留一台 peripheral。
+完整执行环境、串口抓取、结果回传模板见 `docs/soak_test_plan.md` §2.5。
+
+## 四态(手机 nRF Connect,真机)
+
+RX/TX/CMD RX/CMD TX 的 UUID、写入内容和判据见 `docs/soak_test_plan.md` §2.4;另一台 Ubuntu 的完整执行顺序见 §2.5。
+PC 侧 `ble_nus.py` 的 echo/soak 不能替代手机 GATT 属性可见性验收。
+
 ## 命令与期望
 
 | 命令 | 含义 | 期望结果 |

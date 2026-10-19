@@ -51,7 +51,7 @@ void data_pipe_set_route(data_port_t from, uint32_t dest_mask);
 /* NVS 路由落位(1.3-07):设置"持久路由"并立即生效(回环开启时仅存档) */
 void data_pipe_apply_routes(uint32_t uart1_mask, uint32_t ble_mask, uint32_t mqtt_mask);
 
-/* 回环(1.3版本优化.md 1.3-03 验收):开 = 每端口把入站字节回写**自身**
+/* 回环(问题与版本优化.md 1.3-03 验收):开 = 每端口把入站字节回写**自身**
  * (BLE<->BLE / UART1<->UART1 / MQTT<->MQTT),关 = 恢复 data_pipe_apply_routes 落位的路由。
  * 运行期生效、不落 NVS(重启即恢复,不影响产品行为)。 */
 void data_pipe_set_loopback(bool on);

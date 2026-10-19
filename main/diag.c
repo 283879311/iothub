@@ -150,13 +150,30 @@ static void app_diag_dump_core_idle(void)
 }
 
 /* 存储自检(诊断用,1.3-36 后续):开机读一次 config.html.gz,
- * 区分"littlefs 读坏"与"httpd 上下文问题"。 */
+ * 区分"littlefs 读坏"与"httpd 上下文问题"。
+ * 1.3-89:页面发送或内存非 normal 时不打开文件 —— 自检本身要占 FILE/FD,
+ * 在低堆期会和页面发送抢最后一个可分配块;跳过只损失一次诊断,不影响业务。 */
 static void app_diag_storage_selftest(void)
 {
-    FILE *f = fopen(APP_BASE_PATH "/config.html.gz", "rb");
+    static uint32_t s_skip_count;
+    app_mem_level_t level = app_mem_level();
+    FILE *f;
     char buf[64];
     size_t got;
 
+    if (app_http_serving_page() || level != APP_MEM_NORMAL) {
+        s_skip_count++;
+        if (s_skip_count <= 3u || (s_skip_count % 20u) == 0u) {
+            ESP_LOGW(TAG,
+                     "storage selftest skipped #%u: page=%d level=%s free=%u largest=%u",
+                     (unsigned)s_skip_count, app_http_serving_page() ? 1 : 0,
+                     app_mem_level_str(level),
+                     (unsigned)esp_get_free_heap_size(),
+                     (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_DEFAULT));
+        }
+        return;
+    }
+    f = fopen(APP_BASE_PATH "/config.html.gz", "rb");
     if (f == NULL) {
         ESP_LOGE(TAG, "storage selftest: fopen failed");
         return;

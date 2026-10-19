@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""IotHub BLE 数据面(NUS)验收 harness —— 1.3版本优化.md 1.3-03。
+"""IotHub BLE 数据面(NUS)验收 harness —— 问题与版本优化.md 1.3-03。
 
 PC 侧充当 BLE central(bleak + BlueZ),对设备 NUS 服务做写入/回显/长压测,
 并用设备的 /api/v1/device/status(admin 认证)读回 data_pipe 统计做断言。

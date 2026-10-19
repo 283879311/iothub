@@ -18,9 +18,11 @@
 
 static const char *TAG = "ble_cmd";
 
-/* 行重组:JSON 行以 \n 结尾(裸字节管道,单写 ≤MTU-3);单行上限 512B */
+/* 行重组:JSON 行以 \n 结尾(裸字节管道,单写 ≤MTU-3);单行上限 512B。
+ * 1.3-87:也接受"一次写入就是完整 JSON 对象"的形式(末尾无换行),
+ * 兼容只发送 ASCII 文本、不带行结束符的通用 BLE 串口 App。 */
 #define BLE_CMD_LINE_MAX 512
-#define BLE_CMD_QUEUE_DEPTH 2
+#define BLE_CMD_QUEUE_DEPTH 8
 #define BLE_CMD_TOKEN_TTL_MS 600000
 
 typedef struct {
@@ -39,10 +41,72 @@ static char s_token[33];
 static int64_t s_token_expire_ms = 0;
 static int64_t s_last_cmd_ms = 0;
 
+/* 判断缓冲区里是否已经有一个完整的 JSON 对象(括号配对,跳过字符串内容)。
+ * 仅做字节扫描,不分配内存;用于兼容末尾不带 \n 的 ASCII 写入。 */
+static bool app_ble_cmd_json_complete(const char *s, size_t len)
+{
+    bool started = false;
+    bool in_string = false;
+    bool escaped = false;
+    int depth = 0;
+    size_t i;
+
+    for (i = 0; i < len; i++) {
+        char ch = s[i];
+
+        if (!started) {
+            if (ch == '{') {
+                started = true;
+                depth = 1;
+            }
+            continue;
+        }
+        if (in_string) {
+            if (escaped) {
+                escaped = false;
+            } else if (ch == '\\') {
+                escaped = true;
+            } else if (ch == '"') {
+                in_string = false;
+            }
+            continue;
+        }
+        if (ch == '"') {
+            in_string = true;
+        } else if (ch == '{') {
+            depth++;
+        } else if (ch == '}') {
+            depth--;
+            if (depth == 0) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+static void app_ble_cmd_queue_line(void)
+{
+    ble_cmd_line_t line;
+
+    s_line[s_line_len] = '\0';
+    line.len = (uint16_t)s_line_len;
+    memcpy(line.buf, s_line, s_line_len + 1);
+    if (s_line_len > 0 && s_cmd_queue != NULL) {
+        if (xQueueSend(s_cmd_queue, &line, 0) != pdTRUE) {
+            ESP_LOGW(TAG, "cmd queue full, line dropped (%u bytes)", (unsigned)s_line_len);
+        } else {
+            ESP_LOGI(TAG, "cmd line queued (%u bytes)", (unsigned)s_line_len);
+        }
+    }
+    s_line_len = 0;
+}
+
 /* CMD 特征写回调:GATT 回调上下文,只做行重组 + 入队,绝不执行命令 */
 void app_ble_cmd_on_write(const uint8_t *data, size_t len)
 {
     size_t i;
+    bool saw_newline = false;
 
     if (data == NULL || len == 0) {
         return;
@@ -51,17 +115,8 @@ void app_ble_cmd_on_write(const uint8_t *data, size_t len)
         uint8_t ch = data[i];
 
         if (ch == '\n') {
-            ble_cmd_line_t line;
-
-            s_line[s_line_len] = '\0';
-            line.len = (uint16_t)s_line_len;
-            memcpy(line.buf, s_line, s_line_len + 1);
-            if (s_line_len > 0 && s_cmd_queue != NULL) {
-                if (xQueueSend(s_cmd_queue, &line, 0) != pdTRUE) {
-                    ESP_LOGW(TAG, "cmd queue full, line dropped (%u bytes)", (unsigned)s_line_len);
-                }
-            }
-            s_line_len = 0;
+            saw_newline = true;
+            app_ble_cmd_queue_line();
             continue;
         }
         if (s_line_len >= BLE_CMD_LINE_MAX) {
@@ -75,19 +130,32 @@ void app_ble_cmd_on_write(const uint8_t *data, size_t len)
         }
         s_line[s_line_len++] = (char)ch;
     }
+
+    /* 本次写入没有换行,但已经凑成完整 JSON 对象 → 直接提交 */
+    if (!saw_newline && s_line_len > 0 &&
+        app_ble_cmd_json_complete(s_line, s_line_len)) {
+        ESP_LOGI(TAG, "cmd frame complete without newline (%u bytes)",
+                 (unsigned)s_line_len);
+        app_ble_cmd_queue_line();
+    }
 }
 
 void app_ble_cmd_on_disconnect(void)
 {
     s_token[0] = '\0';
     s_token_expire_ms = 0;
+    s_last_cmd_ms = 0;
     s_line_len = 0;
     ESP_LOGI(TAG, "cmd session token invalidated (disconnect)");
 }
 
+static uint32_t s_cmd_notify_fail;
+
 static void app_ble_cmd_send(const cJSON *resp)
 {
     char *body;
+    bool sent = false;
+    int attempt;
 
     if (resp == NULL) {
         return;
@@ -96,8 +164,21 @@ static void app_ble_cmd_send(const cJSON *resp)
     if (body == NULL) {
         return;
     }
-    if (!app_ble_gatts_cmd_notify((const uint8_t *)body, strlen(body))) {
-        ESP_LOGW(TAG, "cmd notify failed (not connected / congested)");
+    /* 1.3-76:notify 失败(msys 暂空/拥塞/未订阅)短重试 3 次,10ms 间隔;
+     * 官方 NimBLE 的 ble_gatts_notify_custom 没有等待 buffer 的选项,
+     * 只能在应用层重试;响应很小,不会出现前缀重复问题。 */
+    for (attempt = 0; attempt < 3 && !sent; attempt++) {
+        sent = app_ble_gatts_cmd_notify((const uint8_t *)body, strlen(body));
+        if (!sent) {
+            vTaskDelay(pdMS_TO_TICKS(10));
+        }
+    }
+    if (!sent) {
+        s_cmd_notify_fail++;
+        if ((s_cmd_notify_fail % 8u) == 1u) {
+            ESP_LOGW(TAG, "cmd notify failed after retries (total=%u)",
+                     (unsigned)s_cmd_notify_fail);
+        }
     }
     cJSON_free(body);
 }
@@ -139,17 +220,6 @@ static void app_ble_cmd_handle_line(const char *line, size_t len)
     const char *err = NULL;
     bool reboot_after_response = false;
 
-    /* 限频:5 次/秒(与 MQTT RPC 同决策,2026-10-15) */
-    {
-        int64_t now = esp_timer_get_time() / 1000;
-
-        if (now - s_last_cmd_ms < 200) {
-            ESP_LOGW(TAG, "ble cmd rate limited");
-            return;
-        }
-        s_last_cmd_ms = now;
-    }
-
     frame = cJSON_ParseWithLength(line, len);
     if (frame == NULL || !cJSON_IsObject(frame)) {
         resp = cJSON_CreateObject();
@@ -169,6 +239,26 @@ static void app_ble_cmd_handle_line(const char *line, size_t len)
 
     method = cJSON_GetObjectItemCaseSensitive(frame, "method");
     params = cJSON_GetObjectItemCaseSensitive(frame, "params");
+    if (cJSON_IsString(method) && method->valuestring != NULL) {
+        ESP_LOGI(TAG, "rx method=%s id=%lld", method->valuestring, (long long)id);
+    }
+
+    /* 限频:5 次/秒(与 MQTT RPC 同决策,2026-10-15)。
+     * 超限也要回包,否则发送方会把"被丢弃"误判成"BLE 没有响应"。 */
+    {
+        int64_t now = esp_timer_get_time() / 1000;
+
+        if (now - s_last_cmd_ms < 200) {
+            ESP_LOGW(TAG, "ble cmd rate limited");
+            resp = cJSON_CreateObject();
+            if (resp != NULL) {
+                cJSON_AddBoolToObject(resp, "ok", false);
+                cJSON_AddStringToObject(resp, "error", "rate_limited");
+            }
+            goto wrap;
+        }
+        s_last_cmd_ms = now;
+    }
 
     /* login:web 同源口令换短时 token(免 token) */
     if (cJSON_IsString(method) && method->valuestring != NULL &&
@@ -180,11 +270,12 @@ static void app_ble_cmd_handle_line(const char *line, size_t len)
 
         if (ok) {
             app_ble_cmd_issue_token(s_token, sizeof(s_token));
+            /* 只放结果字段;外层统一包装补 {"id","ok","result"},
+             * 避免 token 落在 result.result.token。 */
             resp = cJSON_CreateObject();
             if (resp != NULL) {
-                cJSON *result = cJSON_AddObjectToObject(resp, "result");
-                cJSON_AddStringToObject(result, "token", s_token);
-                cJSON_AddNumberToObject(result, "expires_in", (double)(BLE_CMD_TOKEN_TTL_MS / 1000));
+                cJSON_AddStringToObject(resp, "token", s_token);
+                cJSON_AddNumberToObject(resp, "expires_in", (double)(BLE_CMD_TOKEN_TTL_MS / 1000));
                 ESP_LOGI(TAG, "ble cmd login ok, token issued (ttl=%us)",
                          (unsigned)(BLE_CMD_TOKEN_TTL_MS / 1000));
             }
@@ -211,7 +302,7 @@ static void app_ble_cmd_handle_line(const char *line, size_t len)
     }
 
     /* 命令内核(与 MQTT RPC 同一分发器) */
-    if (app_cmd_execute(frame, &resp, &out, &err) != ESP_OK || resp == NULL) {
+    if (app_cmd_execute_ex(frame, APP_CMD_SOURCE_BLE, &resp, &out, &err) != ESP_OK || resp == NULL) {
         cJSON *err_resp = cJSON_CreateObject();
 
         if (err_resp != NULL) {

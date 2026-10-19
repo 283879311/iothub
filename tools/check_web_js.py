@@ -219,15 +219,19 @@ def check_html_file(file_path: pathlib.Path):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Check inline JavaScript syntax in HTML files.")
+    parser = argparse.ArgumentParser(description="Check inline and external JavaScript syntax in web assets.")
     parser.add_argument("source", type=pathlib.Path, help="Web source directory")
     args = parser.parse_args()
 
     html_files = sorted(args.source.resolve().glob("*.html"))
+    js_files = sorted(args.source.resolve().glob("*.js"))
     checked_scripts = 0
     for html_file in html_files:
         checked_scripts += check_html_file(html_file)
-    print(f"Checked {checked_scripts} inline script block(s) in {len(html_files)} HTML file(s).")
+    for js_file in js_files:
+        check_script_syntax(js_file.read_text(encoding="utf-8"), js_file.name)
+        checked_scripts += 1
+    print(f"Checked {checked_scripts} script block(s) in {len(html_files)} HTML and {len(js_files)} JS file(s).")
 
 
 if __name__ == "__main__":

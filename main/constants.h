@@ -1,5 +1,7 @@
 #pragma once
 
+#include "sdkconfig.h"
+
 #include "driver/gpio.h"
 #include "driver/uart.h"
 
@@ -21,9 +23,10 @@
 #define APP_FACTORY_RESET_HOLD_MS 5000
 #define APP_FACTORY_RESET_POLL_MS 100
 
-#define RELAY_DEFAULT_GPIO GPIO_NUM_16
-#define LED_DEFAULT_GPIO GPIO_NUM_27
-#define INPUT_DEFAULT_GPIO GPIO_NUM_33
+/* 引脚唯一来源:Kconfig -> sdkconfig -> CONFIG_*;改脚只需 menuconfig/改 sdkconfig。 */
+#define RELAY_DEFAULT_GPIO ((gpio_num_t)CONFIG_RELAY_GPIO)
+#define LED_DEFAULT_GPIO   ((gpio_num_t)CONFIG_LED_GPIO)
+#define INPUT_DEFAULT_GPIO ((gpio_num_t)CONFIG_INPUT_GPIO)
 #define UART_PORT UART_NUM_1
 #define UART_RX_GPIO GPIO_NUM_18
 #define UART_TX_GPIO GPIO_NUM_17

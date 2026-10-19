@@ -46,7 +46,7 @@ void app_status_get_ap_network_strings(char *ip, size_t ip_len, char *gateway, s
     snprintf(netmask, netmask_len, IPSTR, IP2STR(&ip_info.netmask));
 }
 
-/* `send_cjson_response()` 已随 1.3版本优化.md 1.3-12 移除:两个热接口改为
+/* `send_cjson_response()` 已随 问题与版本优化.md 1.3-12 移除:两个热接口改为
  * app_http_send_jsonf() 零堆直出,不再需要"cJSON 建树 + 序列化"的两份堆。 */
 
 esp_err_t app_status_send_device_info(httpd_req_t *req)
@@ -97,8 +97,9 @@ esp_err_t app_status_send_device_status(httpd_req_t *req)
     uint8_t s_net_mode;
     char s_ap_ssid[sizeof(s_config.ap_ssid)];
     char s_sta_ssid[sizeof(s_config.sta_ssid)];
-    uint8_t s_relay_on;
-    uint8_t s_led_on;
+    uint8_t s_relay_policy;
+    uint8_t s_led_policy;
+    app_io_state_t s_io;
     uint8_t s_bt_mode;
     char s_bt_device_name[sizeof(s_config.bt_device_name)];
     char s_mqtt_backend[sizeof(s_config.mqtt_backend)];
@@ -134,8 +135,8 @@ esp_err_t app_status_send_device_status(httpd_req_t *req)
     s_net_mode = s_config.net_mode;
     memcpy(s_ap_ssid, s_config.ap_ssid, sizeof(s_ap_ssid));
     memcpy(s_sta_ssid, s_config.sta_ssid, sizeof(s_sta_ssid));
-    s_relay_on = s_config.relay_on;
-    s_led_on = s_config.led_on;
+    s_relay_policy = s_config.relay_power_policy;
+    s_led_policy = s_config.led_power_policy;
     s_bt_mode = s_config.bt_role;
     memcpy(s_bt_device_name, s_config.bt_device_name, sizeof(s_bt_device_name));
     memcpy(s_mqtt_backend, s_config.mqtt_backend, sizeof(s_mqtt_backend));
@@ -143,6 +144,7 @@ esp_err_t app_status_send_device_status(httpd_req_t *req)
     s_mqtt_port = s_config.mqtt_port;
     s_mqtt_use_tls = s_config.mqtt_use_tls;
     app_config_unlock();
+    app_io_get_state(&s_io);
 
     app_wifi_runtime_lock();
     w_sta_connected = s_wifi.sta_connected;
@@ -185,7 +187,8 @@ esp_err_t app_status_send_device_status(httpd_req_t *req)
         ",\"sta_ip\":\"%s\",\"startup_connect_active\":%s,\"startup_connect_deadline_ms\":%lld"
         ",\"startup_fallback_to_ap\":%s,\"startup_fallback_reason\":\"%s\",\"sta_ip_conflict\":%s}"
         ",\"gpio\":{\"relay_gpio\":%d,\"led_gpio\":%d,\"input_gpio\":%d,\"relay_on\":%s,\"led_on\":%s"
-        ",\"input_active\":%s}"
+        ",\"input_active\":%s,\"relay_power_policy\":%u,\"led_power_policy\":%u"
+        ",\"io_seq\":%u,\"io_source\":\"%s\"}"
         ",\"bluetooth\":{\"mode\":\"%s\",\"device_name\":\"%s\",\"runtime_mode\":\"%s\",\"adv_active\":%s,\"connected\":%s,\"last_error\":\"%s\"}"
         ",\"mqtt\":{\"backend\":\"%s\",\"host\":\"%s\",\"port\":%u,\"use_tls\":%s,\"connected\":%s"
         ",\"last_error\":\"%s\",\"publish_count\":%u,\"outbox\":%d}"
@@ -212,8 +215,10 @@ esp_err_t app_status_send_device_status(httpd_req_t *req)
         w_startup_fallback_to_ap ? "true" : "false", app_json_escaped(w_startup_fallback_reason),
         w_sta_ip_conflict ? "true" : "false",
         (int)app_relay_gpio(), (int)app_led_gpio(), (int)app_input_gpio(),
-        s_relay_on ? "true" : "false", s_led_on ? "true" : "false",
-        app_get_input_state() ? "true" : "false",
+        s_io.relay_on ? "true" : "false", s_io.led_on ? "true" : "false",
+        s_io.input_active ? "true" : "false",
+        (unsigned)s_relay_policy, (unsigned)s_led_policy,
+        (unsigned)s_io.seq, app_io_source_name(s_io.last_source),
         app_bt_mode_to_string(s_bt_mode), app_json_escaped(s_bt_device_name),
         app_bt_mode_to_string(s_bt_runtime_snapshot),
         app_bt_advertising() ? "true" : "false",

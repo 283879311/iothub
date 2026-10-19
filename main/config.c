@@ -16,7 +16,9 @@
 #define APP_CONFIG_KEY "runtime_cfg"
 #define APP_WIFI_PROFILES_KEY "wifi_profiles"
 #define APP_CONFIG_MAGIC 0x494f5448UL
-#define APP_CONFIG_VERSION 10
+#define APP_CONFIG_VERSION 11
+#define APP_IO_RELAY_LAST_KEY "io_relay_last"
+#define APP_IO_LED_LAST_KEY   "io_led_last"
 #define APP_WIFI_PROFILES_MAGIC 0x57494649UL
 #define APP_WIFI_PROFILES_VERSION 1
 
@@ -65,9 +67,14 @@ typedef struct {
  *       v7 blob 同样是 v8 的字节前缀——迁移时读入前缀,再由 v7 的 bt_mode 推导:
  *       bt_mode==1(ble) → peripheral,其余 → off
  *
- *   v9 (current APP_CONFIG_VERSION = 9 — app_config_t):
+ *   v9 (APP_CONFIG_VERSION = 9 — app_config_t):
  *     + appends STA 静态 IP 字段(sta_use_static / sta_static_ip / gateway / netmask / dns1 / dns2);
  *       v8 blob 是 v9 的字节前缀——迁移时读入前缀,新字段由 set_defaults 初始化为 DHCP。
+ *
+ *   v11 (current APP_CONFIG_VERSION = 11 — app_config_t):
+ *     + appends relay_power_policy / led_power_policy(0=固定关/1=固定开/2=状态记忆);
+ *       v10 blob 是 v11 的字节前缀——迁移时读入前缀,新字段由 set_defaults 初始化为固定关。
+ *       输出上次状态不再写主 blob,而是独立 NVS 键(仅状态记忆策略写)。
  */
 
 typedef struct {
@@ -390,7 +397,7 @@ void app_config_set_defaults(app_config_t *config)
     config->uart_parity_mode = UART_PARITY_DISABLE;
     config->uart_data_bits = 8;
     config->uart_stop_bits = 1;
-    config->uart_baudrate = 9600;
+    config->uart_baudrate = 115200;
     config->sta_use_static = 0;
     app_copy_string(config->sta_static_ip, sizeof(config->sta_static_ip), "");
     app_copy_string(config->sta_static_gateway, sizeof(config->sta_static_gateway), "");
@@ -401,6 +408,9 @@ void app_config_set_defaults(app_config_t *config)
     config->data_route_uart1 = DATA_PORT_MASK(DATA_PORT_BLE);
     config->data_route_ble = DATA_PORT_MASK(DATA_PORT_UART1) | DATA_PORT_MASK(DATA_PORT_MQTT);
     config->data_route_mqtt = DATA_PORT_MASK(DATA_PORT_BLE);
+    /* v11:输出上电策略,默认固定关闭(安全默认);不写上次状态。 */
+    config->relay_power_policy = APP_GPIO_POWER_FIXED_OFF;
+    config->led_power_policy = APP_GPIO_POWER_FIXED_OFF;
     app_copy_string(config->ap_ssid, sizeof(config->ap_ssid), "iothub");
     app_copy_string(config->bt_device_name, sizeof(config->bt_device_name), "iothub-bt");
     app_copy_string(config->mqtt_backend, sizeof(config->mqtt_backend), "tb_cloud");
@@ -457,7 +467,7 @@ esp_err_t app_config_save(const app_config_t *config)
         err = nvs_commit(nvs_handle);
     }
     nvs_close(nvs_handle);
-    /* 观测(1.3版本优化.md 1.3-10 ②):NVS 写是在**配置锁内**完成的 —— 这是刻意的,
+    /* 观测(问题与版本优化.md 1.3-10 ②):NVS 写是在**配置锁内**完成的 —— 这是刻意的,
      * 用于防"读-改-写"丢更新(若解锁后再写,另一写者的新值可能被本次旧快照覆盖)。
      * 锁是递归锁,且只有"确有变化"才会走到这里(上面已与 NVS 现值比对),故真实开销
      * 只发生在**改配置**时。这里把"到底多久"变成可见数字:若频繁 >50ms,再按
@@ -720,7 +730,7 @@ esp_err_t app_config_save_wifi_profile(const char *ssid, const char *password)
     }
     app_config_load_wifi_profiles_blob(nvs_handle, &s_blob);
 
-    /* 护栏(1.3版本优化.md 1.3-20):空口令**不得**覆盖已存的非空口令。
+    /* 护栏(问题与版本优化.md 1.3-20):空口令**不得**覆盖已存的非空口令。
      * 否则一次空写(如某个调用点拿到空 profile 口令)就会永久抹掉可用凭据,
      * 且会被 IP_EVENT_STA_GOT_IP 的回写路径自我强化。 */
     if (password[0] == '\0') {
@@ -826,4 +836,61 @@ esp_err_t app_config_delete_wifi_profile(const char *ssid)
         app_wifi_profiles_unlock();
         return err;
     }
+}
+
+bool app_config_load_output_last(bool relay, bool *on)
+{
+    nvs_handle_t nvs_handle;
+    uint8_t value = 0;
+    const char *key = relay ? APP_IO_RELAY_LAST_KEY : APP_IO_LED_LAST_KEY;
+
+    if (on == NULL) {
+        return false;
+    }
+    *on = false;
+    if (nvs_open(APP_NAMESPACE, NVS_READONLY, &nvs_handle) != ESP_OK) {
+        ESP_LOGW(TAG, "open NVS for %s failed, fallback off", key);
+        return false;
+    }
+    if (nvs_get_u8(nvs_handle, key, &value) != ESP_OK) {
+        nvs_close(nvs_handle);
+        return false;
+    }
+    nvs_close(nvs_handle);
+    *on = (value != 0);
+    return true;
+}
+
+esp_err_t app_config_save_output_last(bool relay, bool on)
+{
+    nvs_handle_t nvs_handle;
+    const char *key = relay ? APP_IO_RELAY_LAST_KEY : APP_IO_LED_LAST_KEY;
+    esp_err_t err;
+
+    if (nvs_open(APP_NAMESPACE, NVS_READWRITE, &nvs_handle) != ESP_OK) {
+        ESP_LOGW(TAG, "open NVS to save %s failed", key);
+        return ESP_FAIL;
+    }
+    err = nvs_set_u8(nvs_handle, key, on ? 1 : 0);
+    if (err == ESP_OK) {
+        err = nvs_commit(nvs_handle);
+    }
+    nvs_close(nvs_handle);
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "save %s failed: %s", key, esp_err_to_name(err));
+    }
+    return err;
+}
+
+void app_config_clear_output_last(void)
+{
+    nvs_handle_t nvs_handle;
+
+    if (nvs_open(APP_NAMESPACE, NVS_READWRITE, &nvs_handle) != ESP_OK) {
+        return;
+    }
+    (void)nvs_erase_key(nvs_handle, APP_IO_RELAY_LAST_KEY);
+    (void)nvs_erase_key(nvs_handle, APP_IO_LED_LAST_KEY);
+    (void)nvs_commit(nvs_handle);
+    nvs_close(nvs_handle);
 }

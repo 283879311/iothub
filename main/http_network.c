@@ -173,7 +173,7 @@ static esp_err_t network_put_handler(httpd_req_t *req)
     ap_enabled_before = app_network_mode_has_ap(s_config.net_mode);
     app_config_unlock();
 
-    /* 统一写入层(1.3版本优化.md 1.3-09 · B3):校验/比较/落盘/生效全部交给 config_apply,
+    /* 统一写入层(问题与版本优化.md 1.3-09 · B3):校验/比较/落盘/生效全部交给 config_apply,
      * 本 handler 只承担"副作用 + 响应体"。既有语义完整保留:
      *   - 密码留空 = 保持(字段表 empty_keeps);ap/sta_password_clear = 清除(伪字段)
      *   - HTTP 短名 `mode` 是 `net_mode` 的别名

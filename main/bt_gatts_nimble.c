@@ -3,7 +3,7 @@
  *
  * 1.3-56(NimBLE 迁移 Step 2):与 bt_gatts.c(Bluedroid 实现)同 facade、
  * 同 NUS 服务形态(4 特征值,RX/TX/CMD RX/CMD TX),全部 NimBLE API。
- * 差异要点(见 docs/nimble_migration_assessment.md §2):
+ * 差异要点(见 问题与版本优化.md 附录 A A.2):
  *   - 服务表:ble_gatt_svc_def(CCCD 由栈自动生成,不手写)
  *   - 写回调:每特征 access_cb(BLE_GATT_ACCESS_OP_WRITE_CHR,数据在 os_mbuf)
  *   - notify:ble_gatts_notify_custom + os_msys_get_pkthdr(分片按 ble_att_mtu-3)
@@ -65,7 +65,9 @@ static uint16_t s_cmd_tx_val_handle;
 static uint16_t s_conn_handle = BLE_HS_CONN_HANDLE_NONE;
 static uint16_t s_mtu = 23;
 static bool s_connected = false;
-static bool s_subscribed = false;
+static bool s_data_subscribed = false;
+static bool s_cmd_subscribed = false;
+static bool s_cmd_rx_unsub_warned = false;
 static bool s_reg_pending = false;
 static bool s_host_synced = false;
 
@@ -100,6 +102,14 @@ static int nus_write_common(struct ble_gatt_access_ctxt *ctxt, bool is_cmd)
         return BLE_ATT_ERR_UNLIKELY;
     }
     if (is_cmd) {
+        ESP_LOGI(TAG, "cmd RX write: %u byte(s) last=0x%02X newline=%d",
+                 (unsigned)len, (unsigned)buf[len - 1], buf[len - 1] == '\n' ? 1 : 0);
+        if (!s_cmd_subscribed && !s_cmd_rx_unsub_warned) {
+            s_cmd_rx_unsub_warned = true;
+            ESP_LOGW(TAG,
+                     "CMD RX written but CMD TX (6E400005) not subscribed; "
+                     "enable notifications on CMD TX to receive replies");
+        }
         app_ble_cmd_on_write(buf, len);          /* 命令帧 → 行重组器 */
     } else {
         app_ble_dataplane_on_write(buf, len);    /* 数据帧 → data_pipe(只入队) */
@@ -220,11 +230,33 @@ void app_ble_gatts_nimble_on_sync(void)
 void app_ble_gatts_nimble_on_connect(uint16_t conn_handle)
 {
     struct ble_gap_upd_params cp = {0};
+    struct ble_gap_conn_desc desc;
 
     s_conn_handle = conn_handle;
     s_connected = true;
+    s_data_subscribed = false;
+    s_cmd_subscribed = false;
+    s_cmd_rx_unsub_warned = false;
     s_mtu = 23;
-    ESP_LOGI(TAG, "central connected (conn_handle=%u)", (unsigned)conn_handle);
+    /* 1.3-74:记录占用连接的 central 地址,便于定位"蓝牙被谁连着导致不广播"。
+     * peer_ota 是空口地址(手机隐私地址常见 random),peer_id 是身份地址;
+     * 地址按人类可读顺序(MSB→LSB)打印。 */
+    if (ble_gap_conn_find(conn_handle, &desc) == 0) {
+        ESP_LOGI(TAG,
+                 "central connected (conn=%u) peer_ota=%02X:%02X:%02X:%02X:%02X:%02X type=%u "
+                 "peer_id=%02X:%02X:%02X:%02X:%02X:%02X type=%u",
+                 (unsigned)conn_handle,
+                 desc.peer_ota_addr.val[5], desc.peer_ota_addr.val[4],
+                 desc.peer_ota_addr.val[3], desc.peer_ota_addr.val[2],
+                 desc.peer_ota_addr.val[1], desc.peer_ota_addr.val[0],
+                 (unsigned)desc.peer_ota_addr.type,
+                 desc.peer_id_addr.val[5], desc.peer_id_addr.val[4],
+                 desc.peer_id_addr.val[3], desc.peer_id_addr.val[2],
+                 desc.peer_id_addr.val[1], desc.peer_id_addr.val[0],
+                 (unsigned)desc.peer_id_addr.type);
+    } else {
+        ESP_LOGI(TAG, "central connected (conn_handle=%u) peer=unknown", (unsigned)conn_handle);
+    }
     /* 主动请求更耐受 WiFi 共存的连接参数(与 Bluedroid 侧 1.3-24 同参):
      * 30-50ms / latency 0 / timeout 6s;central 可拒绝,无副作用 */
     cp.itvl_min = 24;                /* 24 × 1.25ms = 30ms */
@@ -240,7 +272,9 @@ void app_ble_gatts_nimble_on_disconnect(int reason)
 {
     ESP_LOGW(TAG, "central disconnected (reason=0x%x)", (unsigned)reason);
     s_connected = false;
-    s_subscribed = false;
+    s_data_subscribed = false;
+    s_cmd_subscribed = false;
+    s_cmd_rx_unsub_warned = false;
     s_conn_handle = BLE_HS_CONN_HANDLE_NONE;
     s_mtu = 23;
     app_ble_cmd_on_disconnect();   /* 断连作废命令短时 token(连接级鉴权) */
@@ -251,11 +285,23 @@ void app_ble_gatts_nimble_on_disconnect(int reason)
 void app_ble_gatts_nimble_on_subscribe(uint16_t conn_handle, uint16_t attr_handle,
                                        uint8_t cur_notify)
 {
+    bool on = (cur_notify != 0);
+
     (void)conn_handle;
-    if (attr_handle == s_tx_val_handle || attr_handle == s_cmd_tx_val_handle) {
-        s_subscribed = (cur_notify != 0);
-        ESP_LOGI(TAG, "notify subscription %s (handle=%u)",
-                 s_subscribed ? "on" : "off", (unsigned)attr_handle);
+    if (attr_handle == s_tx_val_handle) {
+        s_data_subscribed = on;
+        ESP_LOGI(TAG, "data TX subscribe %s (handle=%u)", on ? "on" : "off",
+                 (unsigned)attr_handle);
+    } else if (attr_handle == s_cmd_tx_val_handle) {
+        s_cmd_subscribed = on;
+        if (on) {
+            s_cmd_rx_unsub_warned = false;
+        }
+        ESP_LOGI(TAG, "cmd TX subscribe %s (handle=%u)", on ? "on" : "off",
+                 (unsigned)attr_handle);
+    } else {
+        ESP_LOGI(TAG, "subscribe event on other handle=%u notify=%u",
+                 (unsigned)attr_handle, (unsigned)cur_notify);
     }
 }
 
@@ -288,7 +334,9 @@ esp_err_t app_ble_gatts_start(void)
 void app_ble_gatts_reset(void)
 {
     s_connected = false;
-    s_subscribed = false;
+    s_data_subscribed = false;
+    s_cmd_subscribed = false;
+    s_cmd_rx_unsub_warned = false;
     s_conn_handle = BLE_HS_CONN_HANDLE_NONE;
     s_mtu = 23;
     s_reg_pending = false;
@@ -326,7 +374,8 @@ bool app_ble_gatts_notify(const uint8_t *data, size_t len, void *ctx)
     uint16_t chunk;
 
     (void)ctx;
-    if (!s_connected || s_tx_val_handle == 0 || data == NULL || len == 0) {
+    if (!s_connected || !s_data_subscribed || s_tx_val_handle == 0 ||
+        data == NULL || len == 0) {
         return false;
     }
     chunk = (s_mtu > 3) ? (uint16_t)(s_mtu - 3) : 20;
@@ -352,7 +401,8 @@ bool app_ble_gatts_cmd_notify(const uint8_t *data, size_t len)
     size_t offset = 0;
     uint16_t chunk;
 
-    if (!s_connected || s_cmd_tx_val_handle == 0 || data == NULL || len == 0) {
+    if (!s_connected || !s_cmd_subscribed || s_cmd_tx_val_handle == 0 ||
+        data == NULL || len == 0) {
         return false;
     }
     chunk = (s_mtu > 3) ? (uint16_t)(s_mtu - 3) : 20;

@@ -21,11 +21,11 @@ char *app_http_scratch_buf(void);
 size_t app_http_scratch_size(void);
 
 esp_err_t app_http_ignore_client_disconnect(esp_err_t err, const char *context);
-/* 当前已建立的 HTTP 连接数(观测用,见 1.3版本优化.md 1.3-19) */
+/* 当前已建立的 HTTP 连接数(观测用,见 问题与版本优化.md 1.3-19) */
 size_t app_http_client_count(void);
 /* 配置页是否正在流式发送(MQTT 重连避让用,见 1.3-36) */
 bool   app_http_serving_page(void);
-/* HTTP 并发连接上限(见 1.3版本优化.md 1.3-28) */
+/* HTTP 并发连接上限(见 问题与版本优化.md 1.3-28) */
 size_t app_http_client_max(void);
 bool      app_http_body_read_finished(esp_err_t err);
 esp_err_t app_http_send_auth_challenge(httpd_req_t *req);

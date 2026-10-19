@@ -957,7 +957,7 @@ static void app_wifi_schedule_connect_task(TickType_t delay_ticks)
     }
 }
 
-/* STA 断连原因码 → 可读名(1.3版本优化.md 1.3-08)。
+/* STA 断连原因码 → 可读名(问题与版本优化.md 1.3-08)。
  * 覆盖外场最常见的失败:NO_AP_FOUND / 4WAY_HANDSHAKE_TIMEOUT(=口令错) / AUTH_FAIL 等。 */
 static const char *app_wifi_reason_name(uint8_t reason)
 {
@@ -1181,7 +1181,7 @@ static void app_wifi_event_handler(void *arg, esp_event_base_t event_base, int32
             active_profile_snapshot = s_wifi_active_profile_index;
             app_wifi_profiles_unlock();
 
-            /* 外场可诊断(1.3版本优化.md 1.3-08):断连原因 + 重试计数必须可见。
+            /* 外场可诊断(问题与版本优化.md 1.3-08):断连原因 + 重试计数必须可见。
              * 旧实现只写 last_disconnect 字符串、**不打任何日志**,现场与"设备卡死"无法区分。 */
             ESP_LOGW(TAG, "STA disconnected: reason=%d(%s) retries=%u has_sta=%d profile=%d",
                      disconnected->reason, app_wifi_reason_name(disconnected->reason),
@@ -1284,7 +1284,7 @@ static void app_wifi_event_handler(void *arg, esp_event_base_t event_base, int32
             app_copy_string(profile_password, sizeof(profile_password),
                             s_wifi_profiles[active_profile_snapshot].password);
             app_wifi_profiles_unlock();
-            /* 护栏(1.3版本优化.md 1.3-20):profile 的 ssid/口令为空时**不回写**主配置 ——
+            /* 护栏(问题与版本优化.md 1.3-20):profile 的 ssid/口令为空时**不回写**主配置 ——
              * 否则会把可用的凭据用空值覆盖并落盘(自我强化地丢口令)。 */
             if (profile_ssid[0] != '\0' && profile_password[0] != '\0') {
                 app_config_lock();

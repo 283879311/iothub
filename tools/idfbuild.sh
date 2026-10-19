@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ============================================================================
-# 统一构建/烧录入口(1.3版本优化.md 1.3-18)
+# 统一构建/烧录入口(问题与版本优化.md 1.3-18)
 #
 # 解决三类"每次都得重新发现"的环境问题:
 #   1) 本机离线安装: `$IDF_PATH/export.sh` 不可用(缺 esp-rom-elfs 安装记录),
@@ -109,7 +109,7 @@ if [ -n "$mismatch" ]; then
     rm -f "$BUILD_DIR/CMakeCache.txt"
     rm -rf "$BUILD_DIR/CMakeFiles"
 fi
-# 占住构建目录的调试进程(会让 idf.py 静默卡住,见 1.3版本优化.md §3.1)
+# 占住构建目录的调试进程(会让 idf.py 静默卡住,见 问题与版本优化.md §3.1)
 DBG_PIDS="$(pgrep -f 'cmake.*--debugge[r]' 2>/dev/null | tr '\n' ' ' || true)"
 if [ -n "$DBG_PIDS" ]; then
     echo "!! 检测到 cmake --debugger 进程(PID: $DBG_PIDS)—— 它会让 idf.py 构建静默卡住" >&2

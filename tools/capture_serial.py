@@ -9,7 +9,7 @@
 2026-10-17(1.3-60c)补充:**短抓包仍会复位板子** —— close() 时 termios 的
 HUPCL 会拉低 DTR,open() 时驱动设置初始线态也可能产生一次跳变。已清 HUPCL
 并在退出前保持 DTR/RTS;但 open 仍可能触发一次复位。使用规范见
-docs/serial_capture.md:测试期间保持一路长抓包,不要反复短抓;换固件前先停抓包。
+问题与版本优化.md 附录 B:测试期间保持一路长抓包,不要反复短抓;换固件前先停抓包。
 """
 import sys
 import termios

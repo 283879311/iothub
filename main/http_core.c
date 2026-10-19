@@ -2,6 +2,7 @@
 #include <errno.h>
 #include <stdarg.h>
 #include <stdbool.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -213,7 +214,7 @@ static void app_http_reaper_task(void *arg)
 }
 
 /* ============================================================================
- * Web 会话认证(Cookie)—— 强制门户登录表单的落点(1.3版本优化.md 1.3-01)
+ * Web 会话认证(Cookie)—— 强制门户登录表单的落点(问题与版本优化.md 1.3-01)
  *
  * 背景:手机系统的强制门户小窗(CNA)能弹出并接受 Basic 挑战,但登录后的跳转与
  *   页面子请求不再可靠携带凭据 → 表现为"能登录,却停在'正在打开配置页'"。
@@ -469,7 +470,7 @@ static bool app_http_capacity_ok(httpd_req_t *req)
  * 被 DNS 劫持的探测域名、`.local` 名(mDNS 已移除,1.3-27)或异常 Host 一律回退到 AP 网关。
  * 为什么必须绝对:①部分强制门户小窗(CNA)不跟随相对 Location;
  *                ②局域网侧客户端只能用它的 Host(192.168.1.x)访问,不能被指回 192.168.8.1。
- * 见 1.3版本优化.md 1.3-19 */
+ * 见 问题与版本优化.md 1.3-19 */
 static bool app_http_host_is_local(const char *host)
 {
     const char *p;
@@ -570,7 +571,7 @@ esp_err_t app_http_send_auth_challenge(httpd_req_t *req)
     static int64_t s_last_401_log_ms = 0;
 
     /* 观测:API 路径此前完全没有日志,导致"页面一直加载中"时无法判断是认证还是连不上。
-     * 限频 3s,避免无凭据轮询把串口刷满(见 1.3版本优化.md 1.3-19) */
+     * 限频 3s,避免无凭据轮询把串口刷满(见 问题与版本优化.md 1.3-19) */
     if (esp_timer_get_time() / 1000 - s_last_401_log_ms > 3000) {
         s_last_401_log_ms = esp_timer_get_time() / 1000;
         ESP_LOGW(TAG, "auth 401: %.64s", req->uri);
@@ -589,7 +590,7 @@ esp_err_t app_http_send_auth_challenge(httpd_req_t *req)
     /* HTML 页面:不发 Basic 挑战 —— 手机强制门户小窗(CNA)无法可靠完成"挑战→
      * 登录→带凭据跳转"这条链路(实测:能弹框、能通过,却停在落地页)。
      * 统一 302 到免认证的登录表单页,由表单 POST 建立会话 Cookie 后再进 /config。
-     * 见 1.3版本优化.md 1.3-01 */
+     * 见 问题与版本优化.md 1.3-01 */
     {
         char target[96];
 
@@ -692,6 +693,14 @@ static bool http_accepts_gzip(httpd_req_t *req)
  * largest=1152"、页面半截、面板缺失)—— 现按 largest 自适应降档:>=6144 用 2KB,
  * >=3072 用 1KB,再低直接 503 让前端重试,绝不再出半截页面。 */
 #define HTTP_HTML_CHUNK_BYTES 2048
+/* A/B: chunk 完成后的主动让出时间(ms);当前基线 20。 */
+#define HTTP_HTML_CHUNK_GAP_MS 20
+/* 实验 B:每块发送前若 largest<2048,有界等待。0=关闭(B0)。 */
+#define HTTP_HTML_LOW_HEAP_WAIT_MS 0
+#define HTTP_HTML_LOW_HEAP_WAIT_MAX_MS 0
+/* A/B 实验:页面首次发送的分块上限。默认 1024;512/256 用于对比首次
+ * send() 对 Wi-Fi TX 池的冲击。数组容量仍是 HTTP_HTML_CHUNK_BYTES。 */
+#define HTTP_HTML_INITIAL_CHUNK_BYTES 512
 
 /* ---------------------------------------------------------------------------
  * 页面文件句柄缓存(2026-10-15 实测):MQTT 连接态下堆只剩 ~5KB、largest ~2.9KB,
@@ -704,6 +713,182 @@ static long s_html_cached_size = 0;
 static char s_html_cached_path[96];
 static bool s_html_cached_gz = false;   /* 缓存句柄对应内容是否 gzip 预压缩 */
 static volatile bool s_html_serving = false; /* 页面流式发送中(供 MQTT 重连避让,1.3-36) */
+
+/* 1.3-89 页面发送观测:只统计,不改变分块/协调行为。
+ * send() 失败重试发生在 app_http_send_override,计数器在每页开始时清零。 */
+static uint32_t s_page_send_retries;
+static uint32_t s_page_send_eagain;
+static uint32_t s_page_send_enobufs;
+static uint32_t s_page_send_enomem;
+static uint32_t s_page_send_timeouts;
+static uint32_t s_page_send_errors;
+static uint32_t s_page_send_calls;
+static uint32_t s_page_send_attempts;
+static uint32_t s_page_send_ok;
+static uint32_t s_page_send_partial;
+static uint32_t s_page_send_len_le16;
+static uint32_t s_page_send_len_le128;
+static uint32_t s_page_send_len_gt128;
+static uint32_t s_page_send_eagain_le16;
+static uint32_t s_page_send_eagain_le128;
+static uint32_t s_page_send_eagain_gt128;
+static uint64_t s_page_send_fn_max_us;
+static uint64_t s_page_send_override_max_us;
+static esp_timer_handle_t s_post_page_timer;
+static volatile uint32_t s_page_seq;
+static volatile uint32_t s_post_seq;
+
+typedef struct {
+    long fsize;
+    size_t chunk_bytes;
+    size_t bytes_sent;
+    uint32_t seq;
+    uint32_t chunks;
+    uint32_t downshift_512;
+    uint32_t downshift_256;
+    uint32_t low_wait_count;
+    uint32_t low_wait_total_ms;
+    uint32_t low_wait_max_ms;
+    uint32_t low_abort;
+    uint32_t send_retries;
+    uint32_t send_eagain;
+    uint32_t send_enobufs;
+    uint32_t send_enomem;
+    uint32_t send_timeouts;
+    uint32_t send_errors;
+    uint32_t send_calls;
+    uint32_t send_attempts;
+    uint32_t send_ok;
+    uint32_t send_partial;
+    uint32_t send_len_le16;
+    uint32_t send_len_le128;
+    uint32_t send_len_gt128;
+    uint32_t send_eagain_le16;
+    uint32_t send_eagain_le128;
+    uint32_t send_eagain_gt128;
+    uint64_t chunk_max_us;
+    uint64_t send_fn_max_us;
+    uint64_t override_max_us;
+    uint64_t page_total_us;
+    int64_t page_start_us;
+    size_t start_free, start_largest;
+    size_t min_free, min_largest;
+    size_t end_free, end_largest;
+    size_t start_free8, start_largest8;
+    size_t min_free8, min_largest8;
+    size_t end_free8, end_largest8;
+    size_t global_min8_start, global_min8_end;
+    int outbox_start, outbox_end;
+} http_page_stats_t;
+
+static void app_http_page_sample(http_page_stats_t *s)
+{
+    const size_t free_default = esp_get_free_heap_size();
+    const size_t largest_default = heap_caps_get_largest_free_block(MALLOC_CAP_DEFAULT);
+    const size_t free8 = heap_caps_get_free_size(MALLOC_CAP_8BIT);
+    const size_t largest8 = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
+
+    if (free_default < s->min_free) {
+        s->min_free = free_default;
+    }
+    if (largest_default < s->min_largest) {
+        s->min_largest = largest_default;
+    }
+    if (free8 < s->min_free8) {
+        s->min_free8 = free8;
+    }
+    if (largest8 < s->min_largest8) {
+        s->min_largest8 = largest8;
+    }
+}
+
+static void app_http_log_page_stats(const http_page_stats_t *s, esp_err_t err)
+{
+    ESP_LOGI(TAG,
+             "html page: fsize=%ld sent=%u chunk=%u start=%u/%u min=%u/%u end=%u/%u "
+             "| 8bit start=%u/%u min=%u/%u end=%u/%u | min8_all=%u->%u "
+             "| outbox=%d->%d | down=%u/%u | send retry=%u eagain=%u "
+             "enobufs=%u enomem=%u timeout=%u err=%s",
+             s->fsize, (unsigned)s->bytes_sent, (unsigned)s->chunk_bytes,
+             (unsigned)s->start_free, (unsigned)s->start_largest,
+             (unsigned)s->min_free, (unsigned)s->min_largest,
+             (unsigned)s->end_free, (unsigned)s->end_largest,
+             (unsigned)s->start_free8, (unsigned)s->start_largest8,
+             (unsigned)s->min_free8, (unsigned)s->min_largest8,
+             (unsigned)s->end_free8, (unsigned)s->end_largest8,
+             (unsigned)s->global_min8_start, (unsigned)s->global_min8_end,
+             s->outbox_start, s->outbox_end,
+             (unsigned)s->downshift_512, (unsigned)s->downshift_256,
+             s->send_retries, s->send_eagain, s->send_enobufs,
+             s->send_enomem, s->send_timeouts, esp_err_to_name(err));
+}
+
+static void app_http_post_page_cb(void *arg)
+{
+    uint32_t seq = s_post_seq;
+    size_t free_default;
+    size_t largest_default;
+    size_t free8;
+    size_t largest8;
+
+    (void)arg;
+    if (s_html_serving || seq != s_page_seq) {
+        ESP_LOGI(TAG,
+                 "html page post: seq=%u skipped (page=%d current_seq=%u)",
+                 (unsigned)seq, s_html_serving ? 1 : 0, (unsigned)s_page_seq);
+        return;
+    }
+    free_default = esp_get_free_heap_size();
+    largest_default = heap_caps_get_largest_free_block(MALLOC_CAP_DEFAULT);
+    free8 = heap_caps_get_free_size(MALLOC_CAP_8BIT);
+    largest8 = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
+    ESP_LOGI(TAG,
+             "html page post: seq=%u delay_ms=500 free=%u largest=%u "
+             "free8=%u largest8=%u",
+             (unsigned)seq, (unsigned)free_default, (unsigned)largest_default,
+             (unsigned)free8, (unsigned)largest8);
+}
+
+static void app_http_post_page_init(void)
+{
+    esp_timer_create_args_t args = {
+        .callback = app_http_post_page_cb,
+        .arg = NULL,
+        .name = "html_post",
+    };
+
+    if (s_post_page_timer != NULL) {
+        return;
+    }
+    if (esp_timer_create(&args, &s_post_page_timer) != ESP_OK) {
+        s_post_page_timer = NULL;
+        ESP_LOGW(TAG, "html post-page timer create failed");
+    }
+}
+
+static void app_http_log_page_timing(const http_page_stats_t *s, esp_err_t err)
+{
+    ESP_LOGI(TAG,
+             "html page timing: seq=%u page_ms=%llu chunk_max_us=%llu send_fn_max_us=%llu "
+             "override_max_us=%llu | calls=%u attempts=%u ok=%u partial=%u "
+             "retries=%u eagain=%u | len<=16=%u <=128=%u >128=%u "
+             "eagain_len<=16=%u <=128=%u >128=%u "
+             "| wait=%u wait_ms=%u wait_max=%u abort=%u err=%s",
+             (unsigned)s->seq, (unsigned long long)(s->page_total_us / 1000u),
+             (unsigned long long)s->chunk_max_us,
+             (unsigned long long)s->send_fn_max_us,
+             (unsigned long long)s->override_max_us,
+             (unsigned)s->send_calls, (unsigned)s->send_attempts,
+             (unsigned)s->send_ok, (unsigned)s->send_partial,
+             (unsigned)s->send_retries, (unsigned)s->send_eagain,
+             (unsigned)s->send_len_le16, (unsigned)s->send_len_le128,
+             (unsigned)s->send_len_gt128,
+             (unsigned)s->send_eagain_le16, (unsigned)s->send_eagain_le128,
+             (unsigned)s->send_eagain_gt128,
+             (unsigned)s->low_wait_count, (unsigned)s->low_wait_total_ms,
+             (unsigned)s->low_wait_max_ms, (unsigned)s->low_abort,
+             esp_err_to_name(err));
+}
 
 bool app_http_serving_page(void)
 {
@@ -725,6 +910,7 @@ void app_http_html_cache_warmup(void)
         s_html_cached_path[0] = '\0';
         return;
     }
+    (void)setvbuf(s_html_cached, NULL, _IONBF, 0);
     if (fseek(s_html_cached, 0, SEEK_END) != 0 ||
         (s_html_cached_size = ftell(s_html_cached)) <= 0 ||
         s_html_cached_size > HTTP_HTML_MAX_BYTES) {
@@ -748,7 +934,131 @@ void app_http_html_cache_reset(void)
     ESP_LOGI(TAG, "html cache reset");
 }
 
-esp_err_t http_serve_html(httpd_req_t *req, const char *file_name)
+static void app_http_send_note_len(size_t len)
+{
+    if (!s_html_serving) {
+        return;
+    }
+    s_page_send_calls++;
+    if (len <= 16) {
+        s_page_send_len_le16++;
+    } else if (len <= 128) {
+        s_page_send_len_le128++;
+    } else {
+        s_page_send_len_gt128++;
+    }
+}
+
+static void app_http_send_note_eagain_len(size_t len)
+{
+    if (!s_html_serving) {
+        return;
+    }
+    if (len <= 16) {
+        s_page_send_eagain_le16++;
+    } else if (len <= 128) {
+        s_page_send_eagain_le128++;
+    } else {
+        s_page_send_eagain_gt128++;
+    }
+}
+
+static void app_http_send_note_override(int64_t start_us)
+{
+    uint64_t elapsed;
+
+    if (!s_html_serving) {
+        return;
+    }
+    elapsed = (uint64_t)(esp_timer_get_time() - start_us);
+    if (elapsed > s_page_send_override_max_us) {
+        s_page_send_override_max_us = elapsed;
+    }
+}
+
+/* 1.3-80/P1:默认 httpd send 在 EAGAIN/ENOBUFS 时直接失败;这里做有界等待,
+ * 让 WiFi TX buffer 先排空。总等待 ~400ms,超时仍返回 HTTPD_SOCK_ERR_TIMEOUT,
+ * 由 httpd 关闭会话,避免单任务被无限阻塞(适用于明文 HTTP,不用于 HTTPS)。
+ * 1.3-89:只增加调用/耗时/按长度分桶统计,不改变重试与延时行为。 */
+static int app_http_send_override(httpd_handle_t hd, int sockfd, const char *buf,
+                                  size_t buf_len, int flags)
+{
+    struct timeval tv = { .tv_sec = 0, .tv_usec = 20000 };
+    int64_t override_start = esp_timer_get_time();
+    int attempt;
+
+    (void)hd;
+    if (buf == NULL) {
+        return HTTPD_SOCK_ERR_INVALID;
+    }
+    app_http_send_note_len(buf_len);
+    (void)setsockopt(sockfd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
+    for (attempt = 0; attempt < 20; attempt++) {
+        int64_t send_start = esp_timer_get_time();
+        int ret = send(sockfd, buf, buf_len, flags);
+        uint64_t send_us = (uint64_t)(esp_timer_get_time() - send_start);
+
+        if (s_html_serving) {
+            s_page_send_attempts++;
+            if (send_us > s_page_send_fn_max_us) {
+                s_page_send_fn_max_us = send_us;
+            }
+        }
+        if (ret > 0) {
+            if (s_html_serving) {
+                s_page_send_ok++;
+                if ((size_t)ret < buf_len) {
+                    s_page_send_partial++;
+                }
+            }
+            app_http_send_note_override(override_start);
+            return ret;
+        }
+        if (ret == 0) {
+            if (s_html_serving) {
+                s_page_send_errors++;
+            }
+            app_http_send_note_override(override_start);
+            return HTTPD_SOCK_ERR_FAIL;
+        }
+        if (errno == EAGAIN || errno == EWOULDBLOCK || errno == ENOBUFS || errno == ENOMEM) {
+            if (s_html_serving) {
+                s_page_send_retries++;
+                if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                    s_page_send_eagain++;
+                    app_http_send_note_eagain_len(buf_len);
+                } else if (errno == ENOBUFS) {
+                    s_page_send_enobufs++;
+                } else {
+                    s_page_send_enomem++;
+                }
+            }
+            vTaskDelay(pdMS_TO_TICKS(10));
+            continue;
+        }
+        if (errno == EINTR) {
+            if (s_html_serving) {
+                s_page_send_retries++;
+            }
+            continue;
+        }
+        if (s_html_serving) {
+            s_page_send_errors++;
+        }
+        app_http_send_note_override(override_start);
+        return (errno == EBADF || errno == EINVAL) ? HTTPD_SOCK_ERR_INVALID
+                                                   : HTTPD_SOCK_ERR_FAIL;
+    }
+    if (s_html_serving) {
+        s_page_send_timeouts++;
+    }
+    app_http_send_note_override(override_start);
+    return HTTPD_SOCK_ERR_TIMEOUT;
+}
+
+static esp_err_t http_serve_file(httpd_req_t *req, const char *file_name,
+                                  const char *content_type, bool require_auth,
+                                  bool cache_immutable)
 {
     char path[96];
     char etag[48];
@@ -761,11 +1071,17 @@ esp_err_t http_serve_html(httpd_req_t *req, const char *file_name)
     bool use_gzip = false;
     size_t chunk_bytes = HTTP_HTML_CHUNK_BYTES; /* 自适应分块:见下方堆预检 */
     esp_err_t err;
+    http_page_stats_t page = {
+        .min_free = SIZE_MAX,
+        .min_largest = SIZE_MAX,
+        .min_free8 = SIZE_MAX,
+        .min_largest8 = SIZE_MAX,
+    };
 
     /* 管理页认证按文件级统一控制,新增路由只要经此函数出 config.html 就自动覆盖。
      * 管理页必须走 Cookie 会话(拒绝 Basic),否则某些浏览器持续发 Basic 凭据会
      * 绕过下面的单连接会话接管。 */
-    if (strcmp(file_name, "config.html") == 0) {
+    if (require_auth) {
         char cookie_token[WEB_SESSION_TOKEN_HEX + 1];
 
         if (!app_http_require_auth_cookie(req)) {
@@ -793,6 +1109,7 @@ esp_err_t http_serve_html(httpd_req_t *req, const char *file_name)
         snprintf(s_html_cached_path, sizeof(s_html_cached_path), "%s", path);
         s_html_cached = fopen(path, "rb");
         if (s_html_cached != NULL) {
+            (void)setvbuf(s_html_cached, NULL, _IONBF, 0);
             if (fseek(s_html_cached, 0, SEEK_END) != 0 ||
                 (s_html_cached_size = ftell(s_html_cached)) <= 0 ||
                 s_html_cached_size > HTTP_HTML_MAX_BYTES) {
@@ -811,6 +1128,7 @@ esp_err_t http_serve_html(httpd_req_t *req, const char *file_name)
             snprintf(s_html_cached_path, sizeof(s_html_cached_path), "%s", path);
             s_html_cached = fopen(path, "rb");
             if (s_html_cached != NULL) {
+                (void)setvbuf(s_html_cached, NULL, _IONBF, 0);
                 if (fseek(s_html_cached, 0, SEEK_END) != 0 ||
                     (s_html_cached_size = ftell(s_html_cached)) <= 0 ||
                     s_html_cached_size > HTTP_HTML_MAX_BYTES) {
@@ -847,7 +1165,7 @@ esp_err_t http_serve_html(httpd_req_t *req, const char *file_name)
                                    "{\"status\":\"error\",\"message\":\"page_size_invalid\"}");
     }
 
-    /* 堆预检(见 1.3版本优化.md 1.3-19):分块发送本身还要申请 lwIP 发送 pbuf,
+    /* 堆预检(见 问题与版本优化.md 1.3-19):分块发送本身还要申请 lwIP 发送 pbuf,
      * 若最大连续块已不足,就**不要开始**注定失败的流 —— 否则客户端只拿到
      * 半截响应,浏览器那条连接会僵死,后续请求全部排不上队(面板"一直加载中")。
      * 这里直接回一个小体积 503,让前端按可重试错误处理。
@@ -855,13 +1173,14 @@ esp_err_t http_serve_html(httpd_req_t *req, const char *file_name)
      * 实测 broker 不可达时 MQTT 重连把堆压到 free≈3.2KB/largest≈2.5KB,3072 门槛
      * 把配置页挡死在 503;512B 块的 pbuf+余量 ~1.5KB,largest≥2048 即可完整送页,
      * 云端挂掉时管理页必须仍然可用(这正是用户要修配置的时刻)。 */
-    chunk_bytes = HTTP_HTML_CHUNK_BYTES;
+    chunk_bytes = HTTP_HTML_INITIAL_CHUNK_BYTES;
     {
-        size_t largest = heap_caps_get_largest_free_block(MALLOC_CAP_DEFAULT);
+        const size_t free_bytes = esp_get_free_heap_size();
+        const size_t largest = heap_caps_get_largest_free_block(MALLOC_CAP_DEFAULT);
 
         if (largest < 2048) {
             ESP_LOGW(TAG, "html send skipped (heap low): free=%u largest=%u",
-                     (unsigned)esp_get_free_heap_size(), (unsigned)largest);
+                     (unsigned)free_bytes, (unsigned)largest);
             httpd_resp_set_status(req, "503 Service Unavailable");
             httpd_resp_set_hdr(req, "Cache-Control", "no-store");
             httpd_resp_set_hdr(req, "Retry-After", "2");
@@ -875,17 +1194,19 @@ esp_err_t http_serve_html(httpd_req_t *req, const char *file_name)
                     "<p><a href=\"/config\">点此重试</a>(本页 2 秒后自动重试)</p>"),
                 "html busy page");
         }
-        /* 1.3-42:1024B 档门槛 4096→3072 —— MQTT 连接 + BLE 常驻时 largest
-         * 稳定在 ~4KB,512B 档要发 40 块,慢客户端(手机 AP 侧省电)每块最多
-         * 卡 10.5s,单机能把单任务 httpd 拖死半分钟以上;1KB 块减半到 20 块,
-         * pbuf 需求 ~1.5KB 在 3072 余量内。 */
-        if (largest < 3072) {
-            chunk_bytes = 512;
-            ESP_LOGI(TAG, "html send chunk ->512 (largest=%u)", (unsigned)largest);
-        } else if (largest < 6144) {
-            chunk_bytes = 1024;
-            ESP_LOGI(TAG, "html send chunk ->1024 (largest=%u)", (unsigned)largest);
+        /* 1.3-80:2KB 分块在 free 仅 14-16KB 时会把 WiFi 动态 TX 池(约 14KB)
+         * 一起撑满,largest 跌到 <1KB 后 httpd send 只能 EAGAIN。先按 free 与
+         * largest 双门槛降档;只有 free/largest 都充裕才用 2KB。 */
+        if (free_bytes < (20 * 1024) || largest < (8 * 1024)) {
+            chunk_bytes = (HTTP_HTML_INITIAL_CHUNK_BYTES < 512)
+                              ? HTTP_HTML_INITIAL_CHUNK_BYTES : 512;
         }
+        if (free_bytes < (8 * 1024) || largest < (3 * 1024)) {
+            chunk_bytes = (HTTP_HTML_INITIAL_CHUNK_BYTES < 256)
+                              ? HTTP_HTML_INITIAL_CHUNK_BYTES : 256;
+        }
+        ESP_LOGI(TAG, "html send chunk=%u free=%u largest=%u",
+                 (unsigned)chunk_bytes, (unsigned)free_bytes, (unsigned)largest);
 
         {
             long remain = fsize;
@@ -921,9 +1242,13 @@ esp_err_t http_serve_html(httpd_req_t *req, const char *file_name)
      * ETag 计算的代价远小于重新发送内容)。 */
     snprintf(etag, sizeof(etag), "\"%ld-%08x\"", fsize, (unsigned)hash);
 
-    httpd_resp_set_type(req, "text/html; charset=utf-8");
+    httpd_resp_set_type(req, content_type);
     httpd_resp_set_hdr(req, "ETag", etag);
-    httpd_resp_set_hdr(req, "Cache-Control", "no-cache");   /* 可缓存,但每次必须带 ETag 校验 */
+    httpd_resp_set_hdr(req, "Cache-Control", cache_immutable
+                       ? "public, max-age=31536000, immutable"
+                       : (strcmp(file_name, "config.html") == 0
+                          ? "private, max-age=60"
+                          : "no-cache"));   /* bundle 长期缓存;配置页私有缓存 60s;en 每次校验 */
     httpd_resp_set_hdr(req, "Vary", "Accept-Encoding");     /* gz / 未压缩是两个变体 */
     if (use_gzip) {
         httpd_resp_set_hdr(req, "Content-Encoding", "gzip");
@@ -957,6 +1282,43 @@ esp_err_t http_serve_html(httpd_req_t *req, const char *file_name)
             ESP_LOGW(TAG, "html serve: mqtt connect still in flight, serving anyway");
         }
     }
+    {
+        int fd = httpd_req_to_sockfd(req);
+        if (fd >= 0) {
+            (void)httpd_sess_set_send_override(req->handle, fd, app_http_send_override);
+        }
+    }
+    page.fsize = fsize;
+    page.chunk_bytes = chunk_bytes;
+    page.start_free = esp_get_free_heap_size();
+    page.start_largest = heap_caps_get_largest_free_block(MALLOC_CAP_DEFAULT);
+    page.start_free8 = heap_caps_get_free_size(MALLOC_CAP_8BIT);
+    page.start_largest8 = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
+    page.global_min8_start = heap_caps_get_minimum_free_size(MALLOC_CAP_8BIT);
+    page.outbox_start = app_mqtt_outbox_size();
+    s_page_send_retries = 0;
+    s_page_send_eagain = 0;
+    s_page_send_enobufs = 0;
+    s_page_send_enomem = 0;
+    s_page_send_timeouts = 0;
+    s_page_send_errors = 0;
+    s_page_send_calls = 0;
+    s_page_send_attempts = 0;
+    s_page_send_ok = 0;
+    s_page_send_partial = 0;
+    s_page_send_len_le16 = 0;
+    s_page_send_len_le128 = 0;
+    s_page_send_len_gt128 = 0;
+    s_page_send_eagain_le16 = 0;
+    s_page_send_eagain_le128 = 0;
+    s_page_send_eagain_gt128 = 0;
+    s_page_send_fn_max_us = 0;
+    s_page_send_override_max_us = 0;
+    page.chunk_max_us = 0;
+    s_page_seq++;
+    page.seq = s_page_seq;
+    page.page_start_us = esp_timer_get_time();
+    app_http_page_sample(&page);
     s_html_serving = true;
     app_http_tcp_nodelay(req);   /* 分块流式直发,见 1.3-36 */
     err = ESP_OK;
@@ -966,6 +1328,55 @@ esp_err_t http_serve_html(httpd_req_t *req, const char *file_name)
         long remain = fsize;
 
         while (remain > 0) {
+            size_t live_largest = heap_caps_get_largest_free_block(MALLOC_CAP_DEFAULT);
+            size_t live_free = esp_get_free_heap_size();
+
+            app_http_page_sample(&page);
+            if (live_largest < chunk_bytes + 1024) {
+                if (chunk_bytes > 512 && live_largest >= 1536) {
+                    chunk_bytes = 512;
+                    page.downshift_512++;
+                    ESP_LOGW(TAG, "html send chunk downshift ->512 (free=%u largest=%u)",
+                             (unsigned)live_free, (unsigned)live_largest);
+                } else if (chunk_bytes > 256 && live_largest >= 512) {
+                    chunk_bytes = 256;
+                    page.downshift_256++;
+                    ESP_LOGW(TAG, "html send chunk downshift ->256 (free=%u largest=%u)",
+                             (unsigned)live_free, (unsigned)live_largest);
+                }
+            }
+
+#if HTTP_HTML_LOW_HEAP_WAIT_MS > 0
+            if (live_largest < 2048) {
+                uint32_t waited = 0;
+
+                page.low_wait_count++;
+                while (waited < HTTP_HTML_LOW_HEAP_WAIT_MAX_MS && live_largest < 2048) {
+                    vTaskDelay(pdMS_TO_TICKS(HTTP_HTML_LOW_HEAP_WAIT_MS));
+                    waited += HTTP_HTML_LOW_HEAP_WAIT_MS;
+                    live_largest = heap_caps_get_largest_free_block(MALLOC_CAP_DEFAULT);
+                    live_free = esp_get_free_heap_size();
+                }
+                page.low_wait_total_ms += waited;
+                if (waited > page.low_wait_max_ms) {
+                    page.low_wait_max_ms = waited;
+                }
+                app_http_page_sample(&page);
+                if (live_largest < 1024) {
+                    page.low_abort++;
+                    ESP_LOGW(TAG,
+                             "html send aborted: largest<1024 after wait (free=%u largest=%u)",
+                             (unsigned)live_free, (unsigned)live_largest);
+                    err = ESP_ERR_NO_MEM;
+                    break;
+                }
+                if (live_largest < 2048 && chunk_bytes > 256) {
+                    chunk_bytes = 256;
+                    page.downshift_256++;
+                }
+            }
+#endif
+
             size_t want = (remain > (long)chunk_bytes) ? chunk_bytes : (size_t)remain;
             size_t got = fread(chunk, 1, want, file);
 
@@ -973,29 +1384,92 @@ esp_err_t http_serve_html(httpd_req_t *req, const char *file_name)
                 err = ESP_FAIL;
                 break;
             }
-            err = httpd_resp_send_chunk(req, chunk, got);
+            {
+                int64_t chunk_start = esp_timer_get_time();
+                uint64_t chunk_us;
+
+                err = httpd_resp_send_chunk(req, chunk, got);
+                chunk_us = (uint64_t)(esp_timer_get_time() - chunk_start);
+                if (chunk_us > page.chunk_max_us) {
+                    page.chunk_max_us = chunk_us;
+                }
+            }
             if (err != ESP_OK) {
                 /* 短断流补救(1.3-36):手机在 AP 侧关联/探测会让 STA 空口中断
                  * 几秒,send 超时失败时该 chunk 通常尚未上链,稍候重发同一 chunk;
                  * 补救再失败才放弃(最坏与直接放弃同果:客户端报错/刷新)。 */
                 vTaskDelay(pdMS_TO_TICKS(500));
-                err = httpd_resp_send_chunk(req, chunk, got);
+                {
+                    int64_t chunk_start = esp_timer_get_time();
+                    uint64_t chunk_us;
+
+                    err = httpd_resp_send_chunk(req, chunk, got);
+                    chunk_us = (uint64_t)(esp_timer_get_time() - chunk_start);
+                    if (chunk_us > page.chunk_max_us) {
+                        page.chunk_max_us = chunk_us;
+                    }
+                }
                 if (err != ESP_OK) {
                     break;
                 }
             }
+            page.chunks++;
+            page.bytes_sent += got;
+            app_http_page_sample(&page);
             remain -= (long)got;
             /* 1.3-67:分块间让出 10ms。页面本身是常驻 FILE + 2KB 静态块(无整页
              * 堆分配),但 21KB 页面连续灌给 WiFi 时,动态 TX 缓冲池会按需扩到
              * ~14KB 并常驻,把 largest 从 19KB 压到 ~7.9KB(1h 页面负载实测)。
              * 让出后 TX 池先排空/复用,避免为整页一次性扩容;11 块约 +110ms。 */
-            vTaskDelay(pdMS_TO_TICKS(10));
+            vTaskDelay(pdMS_TO_TICKS(HTTP_HTML_CHUNK_GAP_MS));
         }
         if (err == ESP_OK) {
+            int64_t chunk_start = esp_timer_get_time();
+            uint64_t chunk_us;
+
             err = httpd_resp_send_chunk(req, NULL, 0);   /* 收尾:0 长度块结束响应 */
+            chunk_us = (uint64_t)(esp_timer_get_time() - chunk_start);
+            if (chunk_us > page.chunk_max_us) {
+                page.chunk_max_us = chunk_us;
+            }
         }
     }
+    page.page_total_us = (uint64_t)(esp_timer_get_time() - page.page_start_us);
     s_html_serving = false;
+    page.chunk_bytes = chunk_bytes;
+    page.end_free = esp_get_free_heap_size();
+    page.end_largest = heap_caps_get_largest_free_block(MALLOC_CAP_DEFAULT);
+    page.end_free8 = heap_caps_get_free_size(MALLOC_CAP_8BIT);
+    page.end_largest8 = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
+    page.global_min8_end = heap_caps_get_minimum_free_size(MALLOC_CAP_8BIT);
+    page.outbox_end = app_mqtt_outbox_size();
+    page.send_retries = s_page_send_retries;
+    page.send_eagain = s_page_send_eagain;
+    page.send_enobufs = s_page_send_enobufs;
+    page.send_enomem = s_page_send_enomem;
+    page.send_timeouts = s_page_send_timeouts;
+    page.send_errors = s_page_send_errors;
+    page.send_calls = s_page_send_calls;
+    page.send_attempts = s_page_send_attempts;
+    page.send_ok = s_page_send_ok;
+    page.send_partial = s_page_send_partial;
+    page.send_len_le16 = s_page_send_len_le16;
+    page.send_len_le128 = s_page_send_len_le128;
+    page.send_len_gt128 = s_page_send_len_gt128;
+    page.send_eagain_le16 = s_page_send_eagain_le16;
+    page.send_eagain_le128 = s_page_send_eagain_le128;
+    page.send_eagain_gt128 = s_page_send_eagain_gt128;
+    page.send_fn_max_us = s_page_send_fn_max_us;
+    page.override_max_us = s_page_send_override_max_us;
+    app_http_log_page_stats(&page, err);
+    app_http_log_page_timing(&page, err);
+    if (s_post_page_timer != NULL) {
+        s_post_seq = page.seq;
+        (void)esp_timer_stop(s_post_page_timer);
+        if (esp_timer_start_once(s_post_page_timer, 500000) != ESP_OK) {
+            ESP_LOGW(TAG, "html post-page timer start failed");
+        }
+    }
     if (err != ESP_OK) {
         /* 不再静默吞掉:截断必须在外场可见(问题与版本优化.md 第 34 项)。
          * 附堆水位:区分"链路被掐/客户端断开"(堆正常)与"内存已见底"。
@@ -1008,6 +1482,19 @@ esp_err_t http_serve_html(httpd_req_t *req, const char *file_name)
         return ESP_FAIL;
     }
     return ESP_OK;
+}
+
+esp_err_t http_serve_html(httpd_req_t *req, const char *file_name)
+{
+    return http_serve_file(req, file_name, "text/html; charset=utf-8",
+                           strcmp(file_name, "config.html") == 0, false);
+}
+
+static esp_err_t http_serve_asset(httpd_req_t *req, const char *file_name)
+{
+    const bool immutable = strncmp(file_name, "config-bundle-", 14) == 0;
+
+    return http_serve_file(req, file_name, "application/javascript", false, immutable);
 }
 
 static esp_err_t device_info_get_handler(httpd_req_t *req)
@@ -1192,6 +1679,30 @@ static esp_err_t index_handler(httpd_req_t *req)
         }
     }
 
+    {
+        static const struct {
+            const char *uri;
+            const char *file;
+        } assets[] = {
+            {"/config-bundle-i18n.js", "config-bundle-i18n.js"},
+            {"/config-bundle-core.js", "config-bundle-core.js"},
+            {"/config-bundle-app.js",  "config-bundle-app.js"},
+            {"/config-i18n-en.js",     "config-i18n-en.js"},
+        };
+        size_t i;
+
+        const size_t uri_len = strcspn(req->uri, "?");
+
+        for (i = 0; i < sizeof(assets) / sizeof(assets[0]); i++) {
+            const size_t asset_len = strlen(assets[i].uri);
+
+            if (uri_len == asset_len &&
+                strncmp(req->uri, assets[i].uri, asset_len) == 0) {
+                return http_serve_asset(req, assets[i].file);
+            }
+        }
+    }
+
     if (app_http_is_captive_probe(req->uri)) {
         /* 已登录客户端:回 204 让手机连通性重校验通过(见 web_portal_mark_authed
          * 头注释,荣耀/Android 16 的重校验探测不带 Cookie,只能按 IP 认人) */
@@ -1243,7 +1754,7 @@ static esp_err_t index_handler(httpd_req_t *req)
     return http_serve_html(req, file_name);
 }
 
-/* ---- 强制门户落地页 = 登录表单(1.3版本优化.md 1.3-01) ----
+/* ---- 强制门户落地页 = 登录表单(问题与版本优化.md 1.3-01) ----
  * 免认证 200:各 OS 探测(302)与 DHCP 选项 114 都指向这里。原实现是"纯静态页 +
  * meta refresh 跳 /config",但 /config 需要 Basic 认证,而手机强制门户小窗(CNA)
  * 无法可靠完成这条交接(实测:能弹框、能通过,却停在落地页)。现改为表单登录:
@@ -1252,7 +1763,7 @@ static esp_err_t index_handler(httpd_req_t *req)
 
 /* urlencoded 解码:就地处理 '+' → 空格、%XX → 字节(非法转义原样保留) */
 /* urlencoded / 表单字段 / Cookie 解析已移至 main/form_url.c
- * (零 IDF 依赖 -> 可被 tools/form_url/ 的宿主单测直接编译,见 1.3版本优化.md 1.3-01) */
+ * (零 IDF 依赖 -> 可被 tools/form_url/ 的宿主单测直接编译,见 问题与版本优化.md 1.3-01) */
 
 /* 登录页的凭据回显口径(1.3-23 补充;判定逻辑见 `app_http_send_login_page`):
  *   ① 用户名与口令**都**是出厂默认 → 两个框都预填;
@@ -1327,7 +1838,7 @@ static esp_err_t app_http_send_login_page(httpd_req_t *req, const char *error)
         "</style></head><body><div class=\"card\"><h2>IotHub 配置</h2>";
     /* 表单改为**运行期构造**(1.3-23 补充):用户名取配置里的**当前实际值**(明文存储,
      * 含用户自定义),HTML 转义后回显;口令仅当**仍是出厂默认**时预填 —— 设备只保存
-     * 加盐 SHA-256,自定义口令**无法回显**(见 1.3版本优化.md 1.3-23)。 */
+     * 加盐 SHA-256,自定义口令**无法回显**(见 问题与版本优化.md 1.3-23)。 */
     char username[33];
     char username_html[6 * sizeof(username)];   /* 转义最坏 5 倍膨胀 + NUL */
     char form[768];
@@ -1456,7 +1967,7 @@ static esp_err_t web_login_post_handler(httpd_req_t *req)
     /* ⚠️ 顺序很重要:**先切字段、再解码**(`app_form_lookup_raw`)。
      * 旧流程是 `app_form_decode_all()` + `app_form_lookup()` —— 先把整段解码,值里的 `%26`
      * 变成裸 '&',随后按 '&' 切字段就把该值**拦腰截断**(实测用户名含 & 时只收到前半段,
-     * user_len=5 → 永远登不进去)。真实用户口令里出现 & 也是同一场景。见 1.3版本优化.md 1.3-23。 */
+     * user_len=5 → 永远登不进去)。真实用户口令里出现 & 也是同一场景。见 问题与版本优化.md 1.3-23。 */
     if (!app_form_lookup_raw(body, "username", username, sizeof(username)) ||
         !app_form_lookup_raw(body, "password", password, sizeof(password)) ||
         !app_http_check_credentials(username, password)) {
@@ -1608,6 +2119,7 @@ void app_http_start_webserver(void)
     /* httpd 起不来等于无管理面,保留 abort 重启重试;路由注册失败只降级对应功能组,
      * 不再 abort 整机(无人值守设备缺一组 API 好过无限重启) */
     ESP_ERROR_CHECK(httpd_start(&s_web.server, &config));
+    app_http_post_page_init();
     app_http_html_cache_warmup();
     /* 空闲会话收割:lru_purge 关闭后,靠它回收占满槽位的闲置 keep-alive。
      * 1.3-44:低堆下创建可能失败(1536B 栈),失败只损失"闲置收割"

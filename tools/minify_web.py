@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import argparse
 import gzip
+import hashlib
 import pathlib
 import re
 import shutil
@@ -213,7 +214,26 @@ def compress_gzip(payload: bytes):
     return out, encoder
 
 
+JS_BUNDLES = {
+    "config-bundle-i18n.js": ["config-i18n.js"],
+    "config-bundle-core.js": ["config-core.js", "config-api.js"],
+    "config-bundle-app.js": ["config-panels.js", "config-boot.js"],
+}
+BUNDLED_JS = {name for files in JS_BUNDLES.values() for name in files}
+
+
+def bundle_version(source_dir: pathlib.Path) -> str:
+    digest = hashlib.sha256()
+    for bundle_name, members in JS_BUNDLES.items():
+        digest.update(bundle_name.encode())
+        for member in members:
+            digest.update((source_dir / member).read_bytes())
+            digest.update(b"\0")
+    return digest.hexdigest()[:8]
+
+
 def process_directory(source_dir: pathlib.Path, output_dir: pathlib.Path) -> None:
+    asset_version = bundle_version(source_dir)
     if output_dir.exists():
         shutil.rmtree(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -228,13 +248,33 @@ def process_directory(source_dir: pathlib.Path, output_dir: pathlib.Path) -> Non
         target_path.parent.mkdir(parents=True, exist_ok=True)
         if source_path.suffix.lower() == ".html":
             content = source_path.read_text(encoding="utf-8")
+            content = content.replace("__ASSET_VERSION__", asset_version)
+            content = re.sub(r'src="(/config-bundle-[^"]+\.js)"',
+                             lambda m: f'src="{m.group(1)}?v={asset_version}"', content)
             minified = minify_html(content)
             # 构建期直接产出 gzip 资产(MTIME=0 保证可重现);littlefs 不再打包未压缩 HTML
             gz_bytes, encoder = compress_gzip(minified.encode("utf-8"))
             target_path.with_name(target_path.name + ".gz").write_bytes(gz_bytes)
             print(f"{relative_path.name}: {len(minified.encode('utf-8'))} -> {len(gz_bytes)} bytes (gzip/{encoder})")
+        elif source_path.suffix.lower() in (".js", ".css"):
+            if source_path.suffix.lower() == ".js" and relative_path.name in BUNDLED_JS:
+                continue
+            content = source_path.read_text(encoding="utf-8")
+            minified = minify_script(content) if source_path.suffix.lower() == ".js" else minify_css(content)
+            gz_bytes, encoder = compress_gzip(minified.encode("utf-8"))
+            target_path.with_name(target_path.name + ".gz").write_bytes(gz_bytes)
+            print(f"{relative_path.name}: {len(minified.encode('utf-8'))} -> {len(gz_bytes)} bytes (gzip/{encoder})")
         else:
             shutil.copy2(source_path, target_path)
+
+    for bundle_name, members in JS_BUNDLES.items():
+        parts = []
+        for member in members:
+            parts.append((source_dir / member).read_text(encoding="utf-8"))
+        minified = minify_script("\n".join(parts))
+        gz_bytes, encoder = compress_gzip(minified.encode("utf-8"))
+        (output_dir / (bundle_name + ".gz")).write_bytes(gz_bytes)
+        print(f"{bundle_name}: {len(minified.encode('utf-8'))} -> {len(gz_bytes)} bytes (gzip/{encoder}, bundle)")
 
 
 def main() -> None:

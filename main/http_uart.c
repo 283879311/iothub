@@ -67,7 +67,7 @@ static esp_err_t uart_send_handler(httpd_req_t *req)
     return app_uart_handle_send_request(req, app_http_scratch_buf());
 }
 
-/* 数据面回环开关(1.3版本优化.md 1.3-03 验收):POST {\"enabled\":true|false}
+/* 数据面回环开关(问题与版本优化.md 1.3-03 验收):POST {\"enabled\":true|false}
  * 运行期生效、不落 NVS;用于让"BLE<->BLE"自环,从而用一次手机写入验证收发双向。 */
 static esp_err_t data_loopback_handler(httpd_req_t *req)
 {

@@ -6,6 +6,11 @@
 #include "esp_err.h"
 #include "constants.h"
 
+/* GPIO 输出上电策略(每路独立;固定策略优先级最高,状态记忆才读写上次状态) */
+#define APP_GPIO_POWER_FIXED_OFF 0
+#define APP_GPIO_POWER_FIXED_ON  1
+#define APP_GPIO_POWER_RESTORE   2
+
 typedef struct {
     char ssid[33];
     char password[65];
@@ -17,6 +22,8 @@ typedef struct {
     uint8_t relay_active_high;
     uint8_t led_active_high;
     uint8_t input_active_low;
+    /* 旧版输出状态字段(已废弃):输出状态改由 state.c 的 app_io_state_t 管理,
+     * 仅保留在结构体中占位以维持 blob 布局;不再被命令层/配置表使用。 */
     uint8_t relay_on;
     uint8_t led_on;
     uint8_t bt_mode;
@@ -57,6 +64,11 @@ typedef struct {
     uint32_t data_route_uart1;
     uint32_t data_route_ble;
     uint32_t data_route_mqtt;
+
+    /* v11 新增:输出上电策略(追加在末尾,v10 blob 是 v11 的字节前缀)。
+     * 0=固定关闭 / 1=固定开启 / 2=状态记忆(仅该策略写 NVS 上次状态) */
+    uint8_t relay_power_policy;
+    uint8_t led_power_policy;
 } app_config_t;
 
 void app_config_set_defaults(app_config_t *config);
@@ -65,6 +77,12 @@ void app_config_load(app_config_t *config);
 esp_err_t app_config_load_wifi_profiles(app_wifi_profile_t *profiles, size_t max_profiles, size_t *profile_count);
 esp_err_t app_config_save_wifi_profile(const char *ssid, const char *password);
 esp_err_t app_config_delete_wifi_profile(const char *ssid);
+
+/* GPIO 输出上次状态(仅"状态记忆"策略使用):
+ * 独立 NVS 键,不随主配置 blob 写入;读失败返回 false(调用方回退安全关闭)。 */
+bool app_config_load_output_last(bool relay, bool *on);
+esp_err_t app_config_save_output_last(bool relay, bool on);
+void app_config_clear_output_last(void);
 
 void app_config_lock(void);
 void app_config_unlock(void);

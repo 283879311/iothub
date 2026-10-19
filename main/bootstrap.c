@@ -59,6 +59,7 @@ static void app_factory_reset_to_defaults(void)
     ESP_LOGW(TAG, "BOOT/GPIO0 held for %d ms, restoring default configuration",
              APP_FACTORY_RESET_HOLD_MS);
     app_bootstrap_set_defaults();
+    app_config_clear_output_last();
 
     if (app_bootstrap_save_config() != ESP_OK) {
         ESP_LOGE(TAG, "Failed to save default configuration during factory reset");

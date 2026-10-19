@@ -17,8 +17,12 @@ managed_components/
 __pycache__/
 *.pyc
 
+# 本地 Python 虚拟环境
+.venv*/
+
 # 本地 sdkconfig 备份
 sdkconfig.old
+.sdkconfig.*
 
 # clangd 编译数据库与索引（idf.py / clangd 生成）
 compile_commands.json
