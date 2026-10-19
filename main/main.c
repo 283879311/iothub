@@ -5,6 +5,7 @@
 #include "nvs_flash.h"
 
 #include "app_captive.h"
+#include "ble_prov_probe.h"
 #include "bootstrap.h"
 #include "bt.h"
 #include "config.h"
@@ -56,6 +57,14 @@ void app_main(void)
      * 因此不再需要"配网态保留整栈"的特殊分支。 */
     ESP_LOGI(TAG, "[boot-4b] app_bt_release_unused_memory");
     app_bt_release_unused_memory();
+
+#if CONFIG_IOTHUB_BLE_PROV_PROBE
+    if (app_ble_prov_probe_should_start()) {
+        app_ble_prov_probe_run();
+        return;
+    }
+#endif
+
     ESP_LOGI(TAG, "[boot-5] app_configure_gpio");
     app_configure_gpio();
     ESP_LOGI(TAG, "[boot-6] app_ota_mount_fs");

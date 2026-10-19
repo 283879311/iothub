@@ -82,4 +82,24 @@ menu "Iothub Configuration"
                 repeat because only the edge triggers one toggle.
     endmenu
 
+    menu "BLE provisioning probe (temporary)"
+        config IOTHUB_BLE_PROV_PROBE
+            bool "Enable BLE provisioning probe boot mode"
+            default n
+            help
+                Temporary probe: when no provisioning-done marker exists,
+                boot into official network_provisioning (Security 1 + PoP)
+                instead of the normal Wi-Fi/BLE/MQTT/HTTP stack. After a
+                successful Wi-Fi connection and config save, reboot into the
+                normal firmware. Do not enable in production builds.
+
+        config IOTHUB_BLE_PROV_POP
+            string "Probe PoP"
+            depends on IOTHUB_BLE_PROV_PROBE
+            default "probe-pop-1234"
+            help
+                Proof-of-possession used by the probe. Test value only; do
+                not use a production secret here.
+    endmenu
+
 endmenu
