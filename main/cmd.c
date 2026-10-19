@@ -21,6 +21,10 @@
 
 static const char *TAG = "cmd";
 
+static const char *const k_config_domains[] = {
+    "network", "mqtt", "bluetooth", "uart", "gpio", "web",
+};
+
 extern app_config_t s_config;
 
 /* ---------------------------------------------------------------------------
@@ -102,8 +106,37 @@ static bool app_cmd_parse_bool_param(const cJSON *params, bool fallback)
     return fallback;
 }
 
+static bool app_cmd_domain_known(const char *name)
+{
+    size_t i;
+
+    for (i = 0; i < sizeof(k_config_domains) / sizeof(k_config_domains[0]); i++) {
+        if (strcmp(name, k_config_domains[i]) == 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/* config.get domains 过滤:domains 省略表示全部;未知域名由调用方先拒绝 */
+static bool app_cmd_domain_wanted(const cJSON *domains, const char *name)
+{
+    const cJSON *item = NULL;
+
+    if (domains == NULL) {
+        return true;
+    }
+    cJSON_ArrayForEach(item, domains) {
+        if (cJSON_IsString(item) && item->valuestring != NULL &&
+            strcmp(item->valuestring, name) == 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
 /* getConfig 的脱敏汇总:与 HTTP GET 同规则 —— 口令/token 永不回明文,只回 *_set */
-static cJSON *app_cmd_build_get_config(void)
+static cJSON *app_cmd_build_get_config(const cJSON *domains)
 {
     app_config_t cfg;
     cJSON *root;
@@ -233,6 +266,16 @@ static cJSON *app_cmd_build_get_config(void)
         cJSON_AddStringToObject(sec, "username", cfg.web_username);
     }
 
+    if (domains != NULL) {
+        size_t i;
+
+        for (i = 0; i < sizeof(k_config_domains) / sizeof(k_config_domains[0]); i++) {
+            if (!app_cmd_domain_wanted(domains, k_config_domains[i])) {
+                cJSON_DeleteItemFromObjectCaseSensitive(root, k_config_domains[i]);
+            }
+        }
+    }
+
     return root;
 }
 
@@ -272,6 +315,21 @@ static cJSON *app_cmd_build_success(cJSON *changed, cfg_effect_t effect)
         cJSON_AddStringToObject(resp, "io_source", app_io_source_name(io.last_source));
     }
     return resp;
+}
+
+/* config.set 的统一事务字段;applied 只表示运行态已接受配置,不表示服务健康 */
+static void app_cmd_add_txn_fields(cJSON *resp, cfg_effect_t effect)
+{
+    if (resp == NULL) {
+        return;
+    }
+    cJSON_AddBoolToObject(resp, "saved", true);
+    cJSON_AddBoolToObject(resp, "applied", effect != CFG_EFFECT_REBOOT);
+    cJSON_AddBoolToObject(resp, "restart_required", effect == CFG_EFFECT_REBOOT);
+    cJSON_AddStringToObject(resp, "rollback", "none");
+    if (effect == CFG_EFFECT_REBOOT) {
+        cJSON_AddStringToObject(resp, "operation_type", "reboot");
+    }
 }
 
 /* patch 执行(统一层):err_out 置静态错误串或 NULL;changed/effect 输出 */
@@ -387,12 +445,38 @@ esp_err_t app_cmd_execute_ex(const cJSON *frame, app_cmd_source_t source,
                 changed_list = NULL;   /* 所有权移交 resp */
                 if (resp == NULL) {
                     err = "out_of_memory";
+                } else {
+                    app_cmd_add_txn_fields(resp, effect);
                 }
             }
         } else if (strcmp(m, "getConfig") == 0 || strcmp(m, "config.get") == 0) {
-            resp = app_cmd_build_get_config();
-            if (resp == NULL) {
-                err = "out_of_memory";
+            const cJSON *domains = cJSON_IsObject(params)
+                                       ? cJSON_GetObjectItemCaseSensitive(params, "domains")
+                                       : NULL;
+
+            if (domains != NULL) {
+                const cJSON *item = NULL;
+
+                if (!cJSON_IsArray(domains)) {
+                    err = "invalid_config";
+                } else {
+                    cJSON_ArrayForEach(item, domains) {
+                        if (!cJSON_IsString(item) || item->valuestring == NULL) {
+                            err = "invalid_config";
+                            break;
+                        }
+                        if (!app_cmd_domain_known(item->valuestring)) {
+                            err = "domain_not_supported";
+                            break;
+                        }
+                    }
+                }
+            }
+            if (err == NULL) {
+                resp = app_cmd_build_get_config(domains);
+                if (resp == NULL) {
+                    err = "out_of_memory";
+                }
             }
         } else if (strcmp(m, "getStatus") == 0 || strcmp(m, "io.get") == 0) {
             uint8_t net_mode;
