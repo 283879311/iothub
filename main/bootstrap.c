@@ -2,6 +2,7 @@
 
 #include "driver/gpio.h"
 #include "esp_log.h"
+#include "esp_wifi.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
@@ -73,6 +74,14 @@ static bool app_factory_reset_to_defaults(void)
         ESP_LOGE(TAG, "Failed to clear provisioning PIN/state: %s",
                  esp_err_to_name(prov_err));
         return false;
+    }
+
+    /* 同时清掉 Wi-Fi 驱动可能写入 NVS 的配置(本工程平时用 RAM storage,
+     * 但官方配网或其他代码路径可能留下)。失败只告警,不阻塞主配置重置。 */
+    esp_err_t wifi_err = esp_wifi_restore();
+    if (wifi_err != ESP_OK && wifi_err != ESP_ERR_WIFI_NOT_INIT) {
+        ESP_LOGW(TAG, "Failed to restore Wi-Fi driver config: %s",
+                 esp_err_to_name(wifi_err));
     }
 
     if (app_bootstrap_save_config() != ESP_OK) {
