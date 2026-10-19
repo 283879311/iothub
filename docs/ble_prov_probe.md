@@ -5,7 +5,7 @@
 ## 结论（已在本机验证）
 
 - `network_provisioning 1.2.4` 在 ESP-IDF v6.0.2 + NimBLE 下编译通过。
-- 探针固件 `iothub.bin = 0x14d680`，主 app 分区剩余 31%。
+- 探针固件 `iothub.bin = 0x14d780`，主 app 分区剩余 31%。
 - 未配网时进入配网专用启动：只启动 Wi-Fi STA、NimBLE/protocomm、UART console；
   **没有**调用 `app_start_wifi()`、`app_captive_init()`、`app_bt_apply_config()`、
   `app_mqtt_start()`、`app_http_start_webserver()`、`data_pipe_init()`。
@@ -17,13 +17,41 @@
 | 配网运行中 | 71,892 | 69,632 | 83,756 | 71,892 |
 
 - BLE 广播名：`PROV_IOT_<MAC 后 4 位>`（本次 `PROV_IOT_65DA`），Security 1。
-- 正常固件恢复后：HTTP 200，`free=15,532 / largest=6,912`。
+- 正常固件恢复后：HTTP 200，STA 模式 `free≈14.8KB / largest≈8.7KB`。
 
-## 未完成（本机无 BlueZ/手机）
+## 手机实测结果（2026-10-19）
 
-- 官方手机 App 完成配网、错误 PoP 被拒、错误密码/AP 不存在/超时。
-- 配网成功后写入 `app_config_t`、重启、正常固件的完整链路。
-- 重复进入配网（当前需清 NVS 后重刷探针）。
+用户手机已完成 Security 1 PoP + Wi-Fi 提交。App 侧显示错误，但设备日志证明配网实际成功：
+
+```text
+wifi: apply_wifi_config: net_mode=2 ... sta_ssid='CMCC-502'
+wifi: connected with CMCC-502 ...
+esp_netif_handlers: sta ip: 192.168.1.45 ...
+iothub: [boot-10] app_mqtt_start
+mqtt: MQTT connected ...
+```
+
+根因有两个：
+
+1. **App 误报失败**：设备在拿到 IP 后只等 1 秒就重启，BLE 配网会话提前断开，
+   App 没收到最终成功响应。已改为 10 秒定时重启，让 App 先收到结果并主动断开。
+2. **重启后堆被 APSTA 压低**：探针最初保存 `net_mode=APSTA`，SoftAP+STA+MQTT
+   同时运行，free 降到约 3.2KB、largest 1.28KB，HTTP 超时、MQTT 断链。
+   现有低内存基线是 STA-only；已改为保存 `net_mode=STA`，重启后恢复到约
+   14.8KB/8.7KB。
+
+修复后仍需复测一次手机端“成功”提示；错误 PoP、错误密码、AP 不可用、超时、
+重复配网仍未验证。
+
+## 配置写入
+
+官方 `network_provisioning` 会把凭据写到 Wi-Fi 驱动的 NVS，而 iothub 读自己的
+`app_config_t`。探针在 `NETWORK_PROV_WIFI_CRED_RECV` 保存 SSID/口令，
+在 `IP_EVENT_STA_GOT_IP` 后用 `app_config_save()` 写入主配置，设置
+`net_mode=NET_MODE_STA`、`sta_use_static=0`，并写 `ble_prov/done` 标记；
+随后启动 10 秒定时器重启。只有“拿到 IP + 配置保存成功 + 标记成功”三者都成立才重启。
+
+不记录 Wi-Fi 口令；串口只打印 SSID。
 
 ## 配置写入
 
@@ -71,7 +99,7 @@ tools/capture_serial.py /dev/ttyUSB1 /tmp/ble_prov_probe.log
 ble_prov_probe: starting BLE provisioning: service=PROV_IOT_65DA security=1
 ble_prov_probe: wifi credentials received (ssid=...)
 ble_prov_probe: sta got ip: ...
-ble_prov_probe: credentials committed; rebooting into normal firmware
+ble_prov_probe: credentials committed; rebooting in 10s
 ```
 
 重启后应看到正常固件的 `[boot-5] ...`、Wi-Fi、BLE、MQTT、HTTP 日志。

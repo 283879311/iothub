@@ -15,6 +15,7 @@
 #include "esp_mac.h"
 #include "esp_netif.h"
 #include "esp_system.h"
+#include "esp_timer.h"
 #include "esp_wifi.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -34,6 +35,7 @@ static char s_ssid[33];
 static char s_password[65];
 static bool s_have_creds;
 static bool s_committing;
+static esp_timer_handle_t s_reboot_timer;
 
 static bool app_ble_prov_probe_done(void)
 {
@@ -92,7 +94,7 @@ static esp_err_t app_ble_prov_save_config(void)
 
     snprintf(cfg.sta_ssid, sizeof(cfg.sta_ssid), "%s", s_ssid);
     snprintf(cfg.sta_password, sizeof(cfg.sta_password), "%s", s_password);
-    cfg.net_mode = NET_MODE_APSTA;   /* 保留 AP/Web 恢复入口 */
+    cfg.net_mode = NET_MODE_STA;     /* 与现有低内存运行基线一致;APSTA 会多占约 12KB */
     cfg.sta_use_static = 0;          /* 配网结果按 DHCP 保存 */
 
     err = app_config_save(&cfg);
@@ -126,6 +128,12 @@ static void app_ble_prov_log_tasks(const char *stage)
         ESP_LOGI(TAG, "%s task=%s hwm_words=%u",
                  stage, tasks[i].pcTaskName, (unsigned)tasks[i].usStackHighWaterMark);
     }
+}
+
+static void app_ble_prov_reboot_cb(void *arg)
+{
+    (void)arg;
+    esp_restart();
 }
 
 static void app_ble_prov_event_handler(void *arg, esp_event_base_t event_base,
@@ -201,11 +209,16 @@ static void app_ble_prov_event_handler(void *arg, esp_event_base_t event_base,
             s_committing = false;
             return;
         }
-        ESP_LOGI(TAG, "credentials committed; rebooting into normal firmware");
+        ESP_LOGI(TAG, "credentials committed; rebooting in 10s");
         app_ble_prov_log_heap("before_reboot");
         app_ble_prov_log_tasks("before_reboot");
-        vTaskDelay(pdMS_TO_TICKS(1000));
-        esp_restart();
+        /* 给官方 App 足够时间收到最终响应并主动断开,避免设备提前重启被误报失败 */
+        esp_err_t timer_err = esp_timer_start_once(s_reboot_timer, 10ULL * 1000 * 1000);
+        if (timer_err != ESP_OK) {
+            ESP_LOGE(TAG, "reboot timer failed: %s; rebooting in 3s", esp_err_to_name(timer_err));
+            vTaskDelay(pdMS_TO_TICKS(3000));
+            esp_restart();
+        }
     }
 }
 
@@ -242,6 +255,12 @@ void app_ble_prov_probe_run(void)
     };
     ESP_ERROR_CHECK(network_prov_mgr_init(mgr_cfg));
     ESP_ERROR_CHECK(network_prov_mgr_disable_auto_stop(1000));
+
+    const esp_timer_create_args_t reboot_timer_args = {
+        .callback = app_ble_prov_reboot_cb,
+        .name = "prov_reboot",
+    };
+    ESP_ERROR_CHECK(esp_timer_create(&reboot_timer_args, &s_reboot_timer));
 
     esp_read_mac(mac, ESP_MAC_BT);
     snprintf(service_name, sizeof(service_name), PROBE_SERVICE_PREFIX "%02X%02X",
