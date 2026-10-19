@@ -1,0 +1,40 @@
+# ESP-IDF 构建产物（由 idf.py build 重新生成）
+build/
+
+# 组件管理器拉取的依赖（由 idf.py 根据 idf_component.yml / dependencies.lock 重新生成）
+managed_components/
+
+# clangd 索引缓存
+.cache/
+
+# 个人 IDE / 工具配置（VS Code / ZCode 均为个人使用，不随仓库共享）
+.vscode/
+.zcode/
+.zcodeignore
+.dbg/
+
+# Python 缓存
+__pycache__/
+*.pyc
+
+# 本地 Python 虚拟环境
+.venv*/
+
+# 本地 sdkconfig 备份
+sdkconfig.old
+.sdkconfig.*
+
+# clangd 编译数据库与索引（idf.py / clangd 生成）
+compile_commands.json
+.clangd
+
+# 常见 OS / 编辑器垃圾文件
+.DS_Store
+Thumbs.db
+.idea/
+*.swp
+*.swo
+*~
+
+# 日志
+*.log

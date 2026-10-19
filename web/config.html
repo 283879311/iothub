@@ -1,0 +1,842 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>iothub 配置页</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #0f172a;
+      --panel: #111827;
+      --panel-border: #334155;
+      --accent: #38bdf8;
+      --text: #e5e7eb;
+      --muted: #94a3b8;
+      --ok: #22c55e;
+      --warn: #f59e0b;
+      --bad: #f87171;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: linear-gradient(180deg, #020617 0%, #0f172a 100%);
+      color: var(--text);
+    }
+    main {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 24px 16px 48px;
+    }
+    h1, h2 { margin: 0 0 12px; }
+    p { color: var(--muted); }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr));
+      gap: 16px;
+    }
+    .card {
+      background: rgba(17, 24, 39, 0.92);
+      border: 1px solid var(--panel-border);
+      border-radius: 16px;
+      padding: 16px;
+      box-shadow: 0 12px 30px rgba(0, 0, 0, 0.2);
+    }
+    .row {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      margin: 8px 0;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .row span:first-child {
+      color: var(--muted);
+    }
+    .row-main {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex: 1 1 240px;
+      min-width: 0;
+      flex-wrap: wrap;
+    }
+    .row-main > span {
+      min-width: 0;
+      color: var(--muted);
+    }
+    .row-control {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+    .row-control select {
+      width: auto;
+      min-width: 110px;
+      margin: 0;
+    }
+    .row-main .policy-select {
+      width: auto;
+      min-width: 130px;
+      max-width: 220px;
+      flex: 0 1 180px;
+      margin: 0;
+    }
+    .row-control strong {
+      min-width: 32px;
+      text-align: right;
+    }
+    #inputState.input-active {
+      color: var(--ok);
+    }
+    input[type="text"],
+    input[type="password"],
+    input[type="number"],
+    textarea,
+    select {
+      display: block;
+      width: 100%;
+      max-width: 100%;
+      min-width: 0;
+      padding: 10px 12px;
+      margin: 6px 0 12px;
+      border-radius: 10px;
+      border: 1px solid var(--panel-border);
+      background: #0b1220;
+      color: var(--text);
+    }
+    /* 桌面端单行控件不铺满整张卡片;手机端在下面的媒体查询里恢复 100%。 */
+    input[type="text"],
+    input[type="password"],
+    input[type="number"],
+    select {
+      max-width: 480px;
+    }
+    textarea {
+      max-width: 100%;
+    }
+    input[type="file"] {
+      display: block;
+      width: 100%;
+      max-width: 480px;
+      margin: 8px 0 12px;
+    }
+    .lang-switch select {
+      max-width: 240px;
+    }
+    .checkbox {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin: 8px 0 12px;
+      color: var(--muted);
+    }
+    input[type="checkbox"],
+    input[type="radio"] {
+      accent-color: var(--accent);
+      width: 16px;
+      height: 16px;
+    }
+    button {
+      border: 0;
+      border-radius: 10px;
+      padding: 10px 14px;
+      font-weight: 700;
+      cursor: pointer;
+      background: var(--accent);
+      color: #062033;
+    }
+    button.secondary {
+      background: #1e293b;
+      color: var(--text);
+      border: 1px solid var(--panel-border);
+    }
+    button.probing {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: #991b1b;
+      color: #fee2e2;
+      border: 1px solid #ef4444;
+    }
+    button.probing::after {
+      content: "";
+      width: 12px;
+      height: 12px;
+      border: 2px solid rgba(254, 226, 226, 0.35);
+      border-top-color: #fee2e2;
+      border-radius: 50%;
+      animation: probe-spin 0.8s linear infinite;
+    }
+    @keyframes probe-spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+    .hint {
+      font-size: 13px;
+      color: var(--muted);
+    }
+    input.input-error,
+    select.input-error {
+      border-color: var(--bad);
+      box-shadow: 0 0 0 2px rgba(248, 113, 113, 0.25);
+    }
+    .status {
+      margin-top: 12px;
+      padding: 10px 12px;
+      border-radius: 10px;
+      background: rgba(56, 189, 248, 0.08);
+      color: var(--text);
+      min-height: 42px;
+    }
+    .status.ok { background: rgba(34, 197, 94, 0.14); }
+    .status.warn { background: rgba(245, 158, 11, 0.14); }
+    .status.bad { background: rgba(248, 113, 113, 0.14); }
+    .pill {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: rgba(34, 197, 94, 0.15);
+      color: var(--ok);
+      font-size: 12px;
+      margin-left: 8px;
+    }
+    .subgrid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+    .actions {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-top: 8px;
+    }
+    .actions.nowrap {
+      flex-wrap: nowrap;
+    }
+    .scan-list {
+      margin-top: 12px;
+      display: grid;
+      gap: 8px;
+    }
+    .scan-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 12px;
+      border-radius: 10px;
+      border: 1px solid var(--panel-border);
+      background: #0b1220;
+    }
+    .scan-item button {
+      padding: 8px 12px;
+    }
+    .toolbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .lang-switch {
+      min-width: 150px;
+    }
+    .mono {
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    }
+    .uart-console {
+      min-height: 96px;
+      resize: vertical;
+      white-space: pre-wrap;
+    }
+    .uart-send {
+      flex: 1 1 220px;
+      width: auto;
+      min-width: 0;
+      margin-bottom: 0;
+    }
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(2, 6, 23, 0.72);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+      z-index: 1000;
+    }
+    .modal-overlay[hidden] {
+      display: none;
+    }
+    .modal-card {
+      width: min(520px, 100%);
+      background: rgba(17, 24, 39, 0.98);
+      border: 1px solid var(--panel-border);
+      border-radius: 16px;
+      padding: 18px;
+      box-shadow: 0 20px 48px rgba(0, 0, 0, 0.35);
+    }
+    .modal-card h3 {
+      margin: 0 0 10px;
+    }
+    .modal-card p {
+      margin: 0 0 12px;
+      line-height: 1.5;
+    }
+    .modal-card.large {
+      width: min(640px, 100%);
+      max-height: min(80vh, 720px);
+      overflow: auto;
+    }
+      .config-nav {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: 16px 0 0;
+    }
+    .config-nav button {
+      background: var(--panel);
+      color: var(--text);
+      border: 1px solid var(--panel-border);
+      border-radius: 999px;
+      padding: 8px 14px;
+      font: inherit;
+      cursor: pointer;
+    }
+    .config-nav button.active {
+      border-color: var(--accent);
+      color: var(--accent);
+      background: rgba(56, 189, 248, 0.12);
+    }
+    [data-panel-card][hidden] {
+      display: none !important;
+    }
+
+    /* 管理员账号:标签列与输入列逐行对齐;桌面固定标签宽,手机单列。 */
+    .form-grid {
+      display: grid;
+      gap: 12px;
+      max-width: 680px;
+    }
+    .form-row {
+      display: grid;
+      grid-template-columns: 150px minmax(0, 480px);
+      align-items: center;
+      gap: 12px;
+    }
+    .form-row > label {
+      margin: 0;
+      min-width: 0;
+      color: var(--muted);
+    }
+    .form-row > input {
+      width: 100%;
+      max-width: 480px;
+      margin: 0;
+    }
+    .form-actions {
+      max-width: 680px;
+      margin-top: 16px;
+      padding-left: 162px;
+    }
+
+    /* 响应式:桌面按容器自动多列,窄屏单列;输入/下拉始终填满可用宽度。 */
+    @media (max-width: 720px) {
+      main {
+        padding: 16px 12px 32px;
+      }
+      .grid {
+        grid-template-columns: 1fr;
+      }
+      .card {
+        padding: 14px;
+        border-radius: 14px;
+      }
+      .row {
+        align-items: flex-start;
+      }
+      .row-main {
+        flex: 1 1 100%;
+      }
+      .row-main > span {
+        flex: 1 1 100%;
+      }
+      .row-main .policy-select,
+      .row-control select {
+        width: 100%;
+        max-width: none;
+        flex: 1 1 100%;
+      }
+      .row-control {
+        width: 100%;
+        justify-content: flex-start;
+      }
+      .actions.nowrap {
+        flex-wrap: wrap;
+      }
+      .lang-switch {
+        width: 100%;
+      }
+      .form-grid,
+      .form-actions {
+        max-width: 100%;
+      }
+      .form-row {
+        grid-template-columns: 1fr;
+        gap: 6px;
+      }
+      .form-actions {
+        margin-top: 14px;
+        padding-left: 0;
+      }
+      .uart-send {
+        flex: 1 1 100%;
+        width: 100%;
+      }
+      input[type="text"],
+      input[type="password"],
+      input[type="number"],
+      textarea,
+      select {
+        max-width: 100%;
+        font-size: 16px; /* 避免 iOS 聚焦自动放大 */
+        min-height: 42px;
+      }
+      input[type="file"] {
+        max-width: 100%;
+      }
+    }
+
+    @media (max-width: 600px) {
+      .subgrid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 380px) {
+      main {
+        padding-left: 8px;
+        padding-right: 8px;
+      }
+      .card {
+        padding: 12px;
+      }
+      input[type="text"],
+      input[type="password"],
+      input[type="number"],
+      textarea,
+      select {
+        font-size: 16px; /* 避免 iOS 聚焦自动放大 */
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <section class="card">
+      <div class="toolbar">
+        <h1><span data-i18n="page.title">设备配置页</span></h1>
+        <div class="lang-switch">
+          <label for="languageSelect" data-i18n="language.label">语言</label>
+          <select id="languageSelect">
+            <option value="zh-CN" data-i18n="language.zh">中文</option>
+            <option value="en" data-i18n="language.en">English</option>
+          </select>
+        </div>
+      </div>      
+    </section>
+
+  <nav class="config-nav" id="configNav" aria-label="Config sections">
+    <button type="button" data-panel="device" data-i18n="section.device">设备信息</button>
+    <button type="button" data-panel="webAuth" data-i18n="section.webAuth">管理员账号</button>
+    <button type="button" class="active" data-panel="network" data-i18n="section.network">网络配置</button>
+    <button type="button" data-panel="mqtt" data-i18n="section.mqtt">MQTT / ThingsBoard</button>
+    <button type="button" data-panel="ota" data-i18n="section.ota">OTA 升级</button>
+    <button type="button" data-panel="bluetooth" data-i18n="section.bluetooth">蓝牙配置</button>
+    <button type="button" data-panel="gpio" data-i18n="section.gpio">GPIO 控制</button>
+    <button type="button" data-panel="uart" data-i18n="section.uart">UART 探测</button>
+  </nav>
+
+    <section class="grid" style="margin-top:16px;">
+      <article class="card" data-panel-card="device" hidden>
+        <h2 data-i18n="section.device">设备信息</h2>
+        <div id="deviceInfo"></div>
+      </article>
+
+      <article class="card" data-panel-card="webAuth" hidden>
+        <h2 data-i18n="section.webAuth">管理员账号</h2>
+        <div class="form-grid">
+          <div class="form-row">
+            <label for="webUsername" data-i18n="web.username">用户名</label>
+            <input id="webUsername" type="text" maxlength="32" data-i18n-placeholder="placeholder.webUsername" placeholder="留空保持不变">
+          </div>
+          <div class="form-row">
+            <label for="webOldPassword" data-i18n="web.oldPassword">当前口令</label>
+            <input id="webOldPassword" type="password" maxlength="64">
+          </div>
+          <div class="form-row">
+            <label for="webNewPassword" data-i18n="web.newPassword">新口令</label>
+            <input id="webNewPassword" type="password" maxlength="64" data-i18n-placeholder="placeholder.webNewPassword" placeholder="至少 8 位">
+          </div>
+          <div class="form-row">
+            <label for="webNewPassword2" data-i18n="web.confirmPassword">确认新口令</label>
+            <input id="webNewPassword2" type="password" maxlength="64">
+          </div>
+        </div>
+        <div class="form-actions">
+          <button id="saveWebAuth" data-i18n="button.saveWebAuth">保存登录凭据</button>
+        </div>
+        <div class="hint" data-i18n="hint.webAuth">保存后浏览器会要求用新凭据重新登录;口令以加盐哈希保存在设备中。</div>
+        <div id="webAuthStatus" class="status" data-i18n="status.webAuthWaiting">等待修改登录凭据...</div>
+      </article>
+
+      <article class="card" data-panel-card="network">
+        <h2 data-i18n="section.network">网络配置</h2>
+        <label for="netMode" data-i18n="network.mode">网络模式</label>
+        <select id="netMode">
+          <option value="ap" data-i18n="mode.ap">AP</option>
+          <option value="sta" data-i18n="mode.sta">STA</option>
+          <option value="apsta" data-i18n="mode.apsta">AP + STA</option>
+        </select>
+        <div class="subgrid">
+          <div>
+            <label for="ssid" data-i18n="network.apSsid">AP 名称</label>
+            <input id="ssid" type="text" maxlength="32">
+          </div>
+          <div>
+            <label for="password" data-i18n="network.apPassword">AP 密码</label>
+            <input id="password" type="password" maxlength="64" data-i18n-placeholder="placeholder.apPassword" placeholder="已保存;输入则修改,留空保持不变">
+            <label class="checkbox">
+              <input id="apPasswordClear" type="checkbox">
+              <span data-i18n="network.openAp">设为开放网络(清除已存密码)</span>
+            </label>
+          </div>
+        </div>
+        <div class="subgrid">
+          <div>
+            <label for="staSsid" data-i18n="network.staSsid">STA 名称</label>
+            <input id="staSsid" type="text" maxlength="32" data-i18n-placeholder="placeholder.staSsid" placeholder="上游路由器 SSID">
+          </div>
+          <div>
+            <label for="staPassword" data-i18n="network.staPassword">STA 密码</label>
+            <input id="staPassword" type="password" maxlength="64" data-i18n-placeholder="placeholder.staPassword" placeholder="至少 8 位;留空保持已存密码">
+            <label class="checkbox">
+              <input id="staPasswordClear" type="checkbox">
+              <span data-i18n="network.openSta">开放网络(清除已存密码)</span>
+            </label>
+          </div>
+        </div>
+        <div class="actions nowrap">
+          <button id="saveNetwork" data-i18n="button.saveNetwork">保存</button>
+          <button id="scanWifi" class="secondary" data-i18n="button.scanWifi">扫描 Wi-Fi</button>
+          <button id="showSavedWifi" class="secondary" data-i18n="button.savedWifi">已保存WiFi</button>
+        </div>
+        <div class="hint" data-i18n="hint.network">设备默认 AP 地址为 `192.168.8.1`。STA 模式下可连接上游网络，MQTT 会在 STA 获取 IP 后再尝试连出。静态 IP 与密码验证在“扫描 Wi-Fi → 连接向导”中设置。</div>
+        <div id="networkValidation" class="status" hidden></div>
+        <div id="networkStatus" class="status" data-i18n="status.networkLoading">等待加载网络配置...</div>
+      </article>
+
+      <article class="card" data-panel-card="mqtt" hidden>
+        <h2 data-i18n="section.mqtt">MQTT / ThingsBoard</h2>
+        <label for="mqttBackend" data-i18n="mqtt.backend">后端类型</label>
+        <select id="mqttBackend">
+          <option value="tb_cloud" data-i18n="mqtt.tbCloud">ThingsBoard Cloud</option>
+          <option value="tb_selfhost" data-i18n="mqtt.tbSelfhost">ThingsBoard 自建</option>
+          <option value="custom" data-i18n="mqtt.custom">自定义 MQTT</option>
+        </select>
+        <label for="mqttHost" data-i18n="mqtt.host">主机地址</label>
+        <input id="mqttHost" type="text" maxlength="63">
+        <label for="mqttPort" data-i18n="mqtt.port">端口</label>
+        <input id="mqttPort" type="number" min="1" max="65535">
+        <label for="mqttToken" data-i18n="mqtt.token">Token / 密钥</label>
+        <input id="mqttToken" type="password" maxlength="127" data-i18n-placeholder="placeholder.mqttToken" placeholder="已保存;输入则修改,留空保持不变">
+        <label class="checkbox">
+          <input id="mqttTokenClear" type="checkbox">
+          <span data-i18n="mqtt.clearToken">清除已存 Token</span>
+        </label>
+        <label class="checkbox">
+          <input id="mqttTls" type="checkbox">
+          <span data-i18n="mqtt.tls">启用 TLS</span>
+        </label>
+        <button id="saveMqtt" data-i18n="button.saveMqtt">保存 MQTT 配置</button>
+        <div class="hint" data-i18n="hint.mqtt">当前阶段会实际发起 MQTT 连接，并周期上报基础遥测。若仍未连接，请确认网络可达和 Broker 配置正确。</div>
+        <div id="mqttStatus" class="status" data-i18n="status.mqttLoading">等待加载 MQTT 配置...</div>
+      </article>
+
+      <article class="card" data-panel-card="ota" hidden>
+        <h2 data-i18n="section.ota">OTA 升级</h2>
+        <div class="stack">
+          <div>
+            <label for="storageFile" data-i18n="ota.storageFile">选择网页资源 `storage.bin`</label>
+            <input id="storageFile" type="file" accept=".bin,application/octet-stream">
+            <button id="uploadStorage" data-i18n="button.uploadStorage">上传网页资源并升级</button>
+          </div>
+          <div>
+            <label for="otaFile" data-i18n="ota.file">选择固件 `iothub.bin` 文件</label>
+            <input id="otaFile" type="file" accept=".bin,application/octet-stream">
+            <label class="checkbox">
+              <input id="otaAllowDowngrade" type="checkbox">
+              <span data-i18n="ota.allowDowngrade">允许降级(跳过版本比较)</span>
+            </label>
+            <button id="uploadOta" data-i18n="button.uploadOta">上传固件并升级</button>
+          </div>
+        </div>
+        <div class="hint" data-i18n="hint.ota">建议先升级 `storage.bin`，再升级 `iothub.bin`；也可以两者都升级。每次上传成功后设备都会自动重启，页面会提示你刷新并重新连接。</div>
+        <div id="otaStatus" class="status" data-i18n="status.otaWaiting">等待选择 `storage.bin` 或 `iothub.bin`</div>
+      </article>
+
+      <article class="card" data-panel-card="bluetooth" hidden>
+        <h2 data-i18n="section.bluetooth">蓝牙配置</h2>
+        <label for="btMode" data-i18n="bluetooth.mode">蓝牙模式</label>
+        <select id="btMode">
+          <option value="off" data-i18n="bt.off">关闭蓝牙</option>
+          <option value="ble" data-i18n="bt.ble">低功耗蓝牙·从机(广播 NUS)</option>
+          <option value="central" data-i18n="bt.central">低功耗蓝牙·主机(扫描并连接另一台设备)</option>
+        </select>
+        <div class="hint" data-i18n="bluetooth.modeSwitchHint">切换蓝牙模式会使设备重启</div>
+        <label for="btName" data-i18n="bluetooth.name">蓝牙名称</label>
+        <input id="btName" type="text" maxlength="32">
+        <button id="saveBluetooth" data-i18n="button.saveBluetooth">保存蓝牙配置</button>
+        <div class="hint" data-i18n="hint.bluetooth">低功耗蓝牙模式下设备会广播名称，等待手机/电脑连接。</div>
+        <div id="bluetoothStatus" class="status" data-i18n="status.bluetoothLoading">等待加载蓝牙配置...</div>
+      </article>
+
+      <article class="card" data-panel-card="gpio" hidden>
+        <h2 data-i18n="section.gpio">GPIO控制部分</h2>
+        <div class="row">
+          <div class="row-main">
+            <span data-i18n="gpio.relay">继电器输出</span>
+            <div id="relayGpioDisplay" class="hint">GPIO-</div>
+            <label class="hint" data-i18n="gpio.powerPolicy">上电策略</label>
+            <select id="relayPowerPolicy" class="policy-select">
+              <option value="0" data-i18n="gpio.powerFixedOff">固定关闭</option>
+              <option value="1" data-i18n="gpio.powerFixedOn">固定开启</option>
+              <option value="2" data-i18n="gpio.powerRestore">状态记忆</option>
+            </select>
+          </div>
+          <div class="row-control">
+            <button id="toggleRelay" class="secondary" data-i18n="button.toggle">切换</button>
+          </div>
+        </div>
+        <div class="row">
+          <div class="row-main">
+            <span data-i18n="gpio.led">状态灯</span>
+            <div id="ledGpioDisplay" class="hint">GPIO-</div>
+            <label class="hint" data-i18n="gpio.powerPolicy">上电策略</label>
+            <select id="ledPowerPolicy" class="policy-select">
+              <option value="0" data-i18n="gpio.powerFixedOff">固定关闭</option>
+              <option value="1" data-i18n="gpio.powerFixedOn">固定开启</option>
+              <option value="2" data-i18n="gpio.powerRestore">状态记忆</option>
+            </select>
+          </div>
+          <div class="row-control">
+            <button id="toggleLed" class="secondary" data-i18n="button.toggle">切换</button>
+          </div>
+        </div>
+        <div class="row">
+          <div class="row-main">
+            <span data-i18n="gpio.input">开关量输入</span>
+            <div id="inputGpioDisplay" class="hint">GPIO-</div>
+          </div>
+          <div class="row-control">
+            <strong id="inputState">-</strong>
+          </div>
+        </div>
+        <div class="hint" data-i18n="hint.gpio">引脚已固定在固件中。如需调整，请修改源码宏定义后重新编译烧录。GPIO34/35/36/39 仅支持输入且需要外部上下拉。</div>
+        <div class="hint" data-i18n="gpio.policyHint">固定策略优先；状态记忆只在该路状态变化时写入 NVS。</div>
+        <button id="saveGpioPolicy" class="secondary" data-i18n="button.saveGpio">保存 GPIO 配置</button>
+        <div id="gpioInfo" class="status" data-i18n="status.gpioLoading">等待加载 GPIO 状态...</div>
+      </article>
+
+      <article class="card" data-panel-card="uart" hidden>
+        <h2 data-i18n="section.uart">UART 探测</h2>
+        <div class="subgrid">
+          <div>
+            <div class="hint"><span data-i18n="uart.rxLabel">接收引脚：</span><strong id="uartRxDisplay">GPIO-</strong></div>
+          </div>
+          <div>
+            <div class="hint"><span data-i18n="uart.txLabel">发送引脚：</span><strong id="uartTxDisplay">GPIO-</strong></div>
+          </div>
+        </div>
+        <div class="subgrid">
+          <div>
+            <label for="uartBaudSelect" data-i18n="uart.baudrate">波特率</label>
+            <select id="uartBaudSelect"></select>
+          </div>
+          <div>
+            <label for="uartDataBits" data-i18n="uart.dataBits">数据位</label>
+            <select id="uartDataBits">
+              <option value="5">5</option>
+              <option value="6">6</option>
+              <option value="7">7</option>
+              <option value="8">8</option>
+            </select>
+          </div>
+          <div>
+            <label for="uartStopBits" data-i18n="uart.stopBits">停止位</label>
+            <select id="uartStopBits">
+              <option value="1">1</option>
+              <option value="2">2</option>
+            </select>
+          </div>
+          <div>
+            <label for="uartParity" data-i18n="uart.parity">奇偶校验</label>
+            <select id="uartParity">
+              <option value="none">None</option>
+              <option value="even">Even</option>
+              <option value="odd">Odd</option>
+            </select>
+          </div>
+        </div>
+        <div class="row">
+          <button id="saveUart" data-i18n="button.saveUart">保存 UART 配置</button>
+        </div>
+        <div class="subgrid">
+          <div>
+            <label for="uartRxFormat" data-i18n="uart.rxFormat">接收显示</label>
+            <select id="uartRxFormat">
+              <option value="plain" data-i18n="encoding.plain">Plain</option>
+              <option value="hex" data-i18n="encoding.hex">Hex</option>
+            </select>
+          </div>
+          <div>
+            <label for="uartTxFormat" data-i18n="uart.txFormat">发送编码</label>
+            <select id="uartTxFormat">
+              <option value="plain" data-i18n="encoding.plain">Plain</option>
+              <option value="hex" data-i18n="encoding.hex">Hex</option>
+            </select>
+          </div>
+        </div>
+        <label for="uartRxConsole" data-i18n="uart.rxWindow">接收数据</label>
+        <textarea id="uartRxConsole" class="mono uart-console" rows="4" readonly></textarea>
+        <div class="actions">
+          <button id="clearUartConsole" class="secondary" data-i18n="button.clearUartConsole">清空</button>
+        </div>
+        <label for="uartTxData" data-i18n="uart.txWindow">发送数据</label>
+        <div class="actions">
+          <input id="uartTxData" class="mono uart-send" type="text" maxlength="255" data-i18n-placeholder="placeholder.uartTx" placeholder="输入待发送数据，hex 模式可用空格分隔">
+          <button id="sendUart" class="secondary" data-i18n="button.sendUart">发送</button>
+        </div>
+        <div class="hint" data-i18n="hint.uart">RX/TX 引脚已固定在固件中。请直接设置波特率、数据位、停止位和奇偶校验后保存，并在下方观察接收样本是否正确。</div>
+        <div id="uartStatus" class="status" data-i18n="status.uartLoading">等待加载 UART 配置...</div>
+      </article>
+    </section>
+  </main>
+  <div id="wifiScanModal" class="modal-overlay" hidden>
+    <div class="modal-card large">
+      <h3 data-i18n="dialog.wifiScanTitle">扫描到的 Wi-Fi</h3>
+      <p data-i18n="scan.modalHint">点击“使用”进入连接向导：填写密码并验证通过后即可保存。</p>
+      <div id="wifiScanList" class="scan-list"></div>
+      <div class="actions">
+        <button id="closeWifiScanModal" class="secondary" data-i18n="button.cancel">取消</button>
+      </div>
+    </div>
+  </div>
+  <div id="wifiJoinModal" class="modal-overlay" hidden>
+    <div class="modal-card large">
+      <h3 data-i18n="dialog.wifiJoinTitle">连接 Wi-Fi</h3>
+      <div class="subgrid">
+        <div>
+          <label for="joinSsid" data-i18n="wifiJoin.ssid">Wi-Fi 名称</label>
+          <input id="joinSsid" type="text" maxlength="32" data-i18n-placeholder="placeholder.joinSsid" placeholder="已自动填入;可手动修改">
+        </div>
+        <div>
+          <label for="joinPassword" data-i18n="wifiJoin.password">Wi-Fi 密码</label>
+          <input id="joinPassword" type="password" maxlength="64" data-i18n-placeholder="placeholder.joinPassword" placeholder="至少 8 位">
+        </div>
+      </div>
+      <label class="checkbox">
+        <input id="joinIpDhcp" type="radio" name="joinIpMode" value="dhcp" checked>
+        <span data-i18n="wifiJoin.dhcp">DHCP(自动获取)</span>
+      </label>
+      <label class="checkbox">
+        <input id="joinIpStatic" type="radio" name="joinIpMode" value="static">
+        <span data-i18n="wifiJoin.staticIp">静态 IP</span>
+      </label>
+      <div id="joinStaticPanel" class="subgrid" hidden>
+        <div class="hint" style="grid-column: 1 / -1;" data-i18n="wifiJoin.staticHint">留空的字段会自动填入当前 DHCP 获得的地址(未联网时用示例值)</div>
+        <div>
+          <label for="joinStaticIp" data-i18n="network.staStaticIp">IP 地址</label>
+          <input id="joinStaticIp" type="text" maxlength="15" placeholder="192.168.1.213">
+        </div>
+        <div>
+          <label for="joinStaticGateway" data-i18n="network.staStaticGateway">网关</label>
+          <input id="joinStaticGateway" type="text" maxlength="15" placeholder="192.168.1.1">
+        </div>
+        <div>
+          <label for="joinStaticNetmask" data-i18n="network.staStaticNetmask">子网掩码</label>
+          <input id="joinStaticNetmask" type="text" maxlength="15" placeholder="255.255.255.0">
+        </div>
+        <div>
+          <label for="joinStaticDns1" data-i18n="network.staStaticDns1">首选 DNS(可选)</label>
+          <input id="joinStaticDns1" type="text" maxlength="15" placeholder="192.168.1.1">
+        </div>
+        <div>
+          <label for="joinStaticDns2" data-i18n="network.staStaticDns2">备用 DNS(可选)</label>
+          <input id="joinStaticDns2" type="text" maxlength="15" placeholder="8.8.8.8">
+        </div>
+      </div>
+      <p class="hint" data-i18n="wifiJoin.verifyHint">先点“验证密码”：设备会真实试连一次，密码正确后出现“保存”按钮。</p>
+      <div id="joinValidation" class="status" hidden></div>
+      <div class="actions">
+        <button id="joinVerify" class="secondary" data-i18n="wifiJoin.verify">验证密码</button>
+        <button id="joinSave" hidden data-i18n="button.saveNetwork">保存</button>
+        <button id="joinCancel" class="secondary" data-i18n="button.cancel">取消</button>
+      </div>
+    </div>
+  </div>
+  <div id="savedWifiModal" class="modal-overlay" hidden>
+    <div class="modal-card large">
+      <h3 data-i18n="dialog.savedWifiTitle">已保存WiFi</h3>
+      <p data-i18n="network.savedWifiHint">点击“使用”可切换到该组已保存的 Wi‑Fi 参数；如果已连接当前 Wi‑Fi，则只提示无需切换。</p>
+      <div id="savedWifiList" class="scan-list"></div>
+      <div class="actions">
+        <button id="closeSavedWifiModal" class="secondary" data-i18n="button.close">关闭</button>
+      </div>
+    </div>
+  </div>
+  <div id="ipConflictModal" class="modal-overlay" hidden>
+    <div class="modal-card">
+      <h3 data-i18n="network.ipConflictTitle">静态 IP 地址冲突</h3>
+      <p id="ipConflictText"></p>
+      <div class="actions">
+        <button id="ipConflictGoFix" data-i18n="network.ipConflictFix">去修改</button>
+        <button id="ipConflictDismiss" class="secondary" data-i18n="button.close">忽略</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (() => {
+      const version = "__ASSET_VERSION__";
+      const files = [
+        "/config-bundle-i18n.js",
+        "/config-bundle-core.js",
+        "/config-bundle-app.js"
+      ];
+      let chain = Promise.resolve();
+      files.forEach((file) => {
+        chain = chain.then(() => new Promise((resolve, reject) => {
+          const script = document.createElement("script");
+          script.async = false;
+          script.src = `${file}?v=${version}`;
+          script.onload = resolve;
+          script.onerror = () => reject(new Error(file));
+          document.body.appendChild(script);
+        }));
+      });
+      chain.catch((error) => {
+        const box = document.getElementById("deviceInfo");
+        if (box) {
+          box.textContent = `页面脚本加载失败: ${error.message}`;
+        }
+      });
+    })();
+  </script>
+</body>
+</html>

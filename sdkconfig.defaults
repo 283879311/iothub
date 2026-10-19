@@ -1,0 +1,119 @@
+# 与 IDF 默认不同的关键配置;fullclean 或删除 sdkconfig 重新生成时以此兜底
+# 注意:sdkconfig 其余非默认项(约百余项)不在本文件,重新生成后应从 git 恢复 sdkconfig
+# 自定义分区表(ota_0/ota_1/storage/coredump,见 partitions.csv);不开此项,开启 coredump 后
+# IDF 会自动改用官方 partitions_singleapp_coredump.csv(1M factory,无 storage),littlefs 打包即失败
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
+# littlefs 官方要求:flash 写/擦期间 cache 禁用,UART ISR 驻留 flash 会 cache miss 崩溃
+CONFIG_UART_ISR_IN_IRAM=y
+# OTA 健康确认依赖的回滚机制,见 问题与版本优化.md 第 4 项
+CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE=y
+# 崩溃转储写入专用 coredump 分区,配合 OTA 回滚可定位 mark-valid 前的崩溃,见 问题与版本优化.md 第 15 项
+CONFIG_ESP_COREDUMP_ENABLE_TO_FLASH=y
+# v1.2 移除 SPP(经典蓝牙):BLE 是唯一保留的蓝牙栈,关闭主机的 Classic 与 BTDM 双模
+# 可省约 200KB Flash(见 问题与版本优化.md 第 29 项)
+CONFIG_BT_CLASSIC_ENABLED=n
+# 问题与版本优化.md 1.3-17 Tier 2:数据面只支持**一个**中心设备(NUS),Bluedroid 默认预留 4 条 ACL
+# 连接(每条含缓冲)纯属浪费 —— 收到 2 条(留一点余量)。BLE 常驻时堆极紧(实测 min=232B)。
+CONFIG_BT_ACL_CONNECTIONS=1
+# 官方依据(IDF《Reducing heap usage》原文):"Reduce CONFIG_BTDM_CTRL_BLE_MAX_CONN if using Bluetooth LE"
+# Kconfig 原文注明:"Each connection uses 1KB static DRAM whenever the BT controller is enabled"
+# 数据面只支持 1 个中心(NUS) ⇒ 3 → 1,净省 2KB 静态 DRAM(range 1..9,合法)。
+CONFIG_BTDM_CTRL_BLE_MAX_CONN=1
+# 官方依据(IDF Kconfig · Bluedroid Options):"Use dynamic memory allocation in BT/BLE stack"
+# —— 不再预留静态池,轻载时更省 RAM(用 A/B 实测核对 free 与 largest 两个口径)。
+CONFIG_BT_BLE_DYNAMIC_ENV_MEMORY=y
+CONFIG_BTDM_CTRL_MODE_BLE_ONLY=y
+# v1.2 AP 下 socket 池默认 10 偏紧(守护进程已占 ~5,手机/PDA 并发易打满 -> accept ENFILE),
+# 见 问题与版本优化.md 第 30 项
+CONFIG_LWIP_MAX_SOCKETS=24
+# 每连接 TCP 发送/接收缓冲默认 5760B:在稳态堆只有 ~13KB 时,2-3 条并发连接就能把堆
+# 吃到见底 —— 实测 `html send failed (16040 bytes) | free=1336 largest=1216`(手机连 AP
+# 打开配置页),客户端拿半截响应 → 浏览器连接僵死 → 面板一直"加载中"。
+# 减半到 2880B(≥2×MSS):单连接省 ~2.9KB;16KB 页面只多几个往返,体验无感。
+# 见 问题与版本优化.md 1.3-19
+CONFIG_LWIP_TCP_SND_BUF_DEFAULT=2880
+CONFIG_LWIP_TCP_WND_DEFAULT=2880
+# ---- 1.3-17 抬高低谷堆余量(全常驻态 free 曾仅 ~14.9KB,7 路并发即 OOM) ----
+# 1.3-48 修正归因(C8E4 启动分阶段实测):"连上 wifi 后内存紧张"的主因不是 AP 客户端流量,
+# 而是 **STA 上线后 MQTT 启动**(含 esp-mqtt 自带任务):BLE+AP 就绪后 free=24,560 →
+# STA 拿 IP + MQTT 起来后 free=10,612,即 STA+MQTT ≈ -14KB(其中 esp-mqtt 任务栈 6144
+# + 应用侧 telemetry/boost/restart 4096/3072/4096 ≈ 17.4KB 任务栈)。
+# WiFi 静态 RX:10×1600B≈16KB 在 init 即从堆划走;6→4 再省 ~3.2KB 常驻(1.3-17 曾 10→6)。
+CONFIG_ESP_WIFI_STATIC_RX_BUFFER_NUM=6
+# 动态 RX/TX:按需分配、上界=个数×~1.6KB;32→16(1.3-17)→10(1.3-48)→8(1.3-50,回退 10:上机实测"两板无法访问",RX 池被 AP 侧客户端流量+STA 侧 MQTT 流量共享,8 个缓冲耗尽→DHCP/HTTP 丢帧)
+CONFIG_ESP_WIFI_DYNAMIC_RX_BUFFER_NUM=10
+CONFIG_ESP_WIFI_DYNAMIC_TX_BUFFER_NUM=4
+# Block-Ack 重排窗口缓冲:6→4(低吞吐场景无感),再省一点
+CONFIG_ESP_WIFI_RX_BA_WIN=4
+# httpd 每连接请求头/URI 缓冲:1.3-17 曾压到 768/384 省堆(×8 连接≈3KB);
+# 1.3-29 起 httpd 已是单连接(max_open_sockets=1),省堆收益不复存在,而
+# 荣耀/华为系 CNA WebView 的请求头集很大(实测超 768 → 431 "Header fields
+# are too long",登录页无法提交)。放宽到 2048/512,单连接成本约 +1.2KB。
+CONFIG_HTTPD_MAX_REQ_HDR_LEN=2048
+CONFIG_HTTPD_MAX_URI_LEN=512
+
+# 1.3-27:mDNS 整体移除(espressif/mdns 依赖已删,BLE 常驻时堆挤占;
+# 强制门户走 captive DNS 劫持不受影响,局域网访问用 IP 直连)。
+# lwIP 解析 .local 名的能力随之关闭(网关自身无需解析 mDNS 名,也少一类组播查询)。
+CONFIG_LWIP_DNS_SUPPORT_MDNS_QUERIES=n
+
+# 1.3-30 批 1:双核分载 A+B —— Wi-Fi 任务与 lwIP tcpip 任务钉到 core 1,
+# core 0 留给 BT 控制器 + Bluedroid 主机(官方 coexist 推荐布局:BT 同核、Wi-Fi 另一核)。
+# httpd 任务(C 项)是代码级 config.core_id=1,不在此处。
+CONFIG_ESP_WIFI_TASK_PINNED_TO_CORE_1=y
+CONFIG_LWIP_TCPIP_TASK_AFFINITY_CPU1=y
+CONFIG_TCPIP_TASK_AFFINITY_CPU1=y
+
+# 1.3-30 核分载观测:开 FreeRTOS 运行时间统计(diag 每 30s 打每核空闲率,
+# 每 10min 打一次全任务占比表;ESP_TIMER 1MHz 时钟,diag 用增量法绕开 32 位回绕)。
+CONFIG_FREERTOS_USE_TRACE_FACILITY=y
+CONFIG_FREERTOS_USE_STATS_FORMATTING_FUNCTIONS=y
+CONFIG_FREERTOS_GENERATE_RUN_TIME_STATS=y
+CONFIG_FREERTOS_RUN_TIME_STATS_USING_ESP_TIMER=y
+
+# BLE 堆裁剪(1.3-39,2026-10-15):单 NUS 服务 11 属性、无配对、单连接
+CONFIG_BT_ALARM_MAX_NUM=16
+# 1.3-47 修复 1.3-39 的潜伏回归:句柄块池 gatt_alloc_hdl_buffer 大小 = 本值
+# (gatt_utils.c:297 循环 GATT_MAX_SR_PROFILES),且被三方共享:
+#   内部 GAP 服务(1) + 内部 GATT 服务(1, gap_attr_db_init/gatt_profile_db_init 开机各占一块)
+#   + 应用服务(N)
+# ⇒ 1.3-39 的 8→2 让池子在建 NUS 前就满,peripheral 服务永远建不起来
+#   (BT_GATT: GATTS_ReserveHandle: no free handle blocks → create attr tab failed: 133);
+#   当时只验了"能连接"(连接不需要服务)所以潜伏。取 4 = 内部 2 + 应用 1 + 余量 1。
+CONFIG_BT_GATT_MAX_SR_PROFILES=4
+# 注:MAX_SR_ATTRIBUTES 实为"属性数校验上限"(esp_gatts_api.c:116,超限报错),
+# 不是内存池;它只决定 btc 属性表深拷贝里 handles[] 的长度(20×2B),保留 20 做误配护栏。
+CONFIG_BT_GATT_MAX_SR_ATTRIBUTES=20
+CONFIG_BT_GATTC_MAX_CACHE_CHAR=16
+CONFIG_BT_GATTC_NOTIF_REG_MAX=3
+CONFIG_BT_GATTC_CONNECT_RETRY_COUNT=1
+CONFIG_BT_BLE_SMP_ENABLE=n
+CONFIG_BT_BLE_SMP_BOND_NVS_FLASH=n
+CONFIG_BT_BLE_42_DTM_TEST_EN=n
+CONFIG_BT_BLE_VENDOR_HCI_EN=y
+CONFIG_BTDM_BLE_ADV_REPORT_FLOW_CTRL_NUM=50
+CONFIG_BTDM_BLE_PING_EN=n
+
+# 1.3-55:板载 flash 为 4MB(profile 种子重建时 Kconfig 会回落 2MB 默认值,
+# 导致分区表 3.9MB > 2MB 构建失败) —— 硬件事实固化为默认项
+CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
+
+# ============================================================================
+# BT 主机栈(1.3-62):默认 NimBLE(稳定性优先)
+# Bluedroid 回退 profile 的完整种子见 sdkconfig.bluedroid;
+# 构建命令:IDF_BUILD_DIR=build-bluedroid tools/idfbuild.sh build
+# ============================================================================
+CONFIG_BT_NIMBLE_ENABLED=y
+CONFIG_BT_BLUEDROID_ENABLED=n
+CONFIG_BT_NIMBLE_MAX_CONNECTIONS=3
+CONFIG_BT_NIMBLE_ROLE_CENTRAL=y
+CONFIG_BT_NIMBLE_ROLE_PERIPHERAL=y
+CONFIG_BT_NIMBLE_ROLE_OBSERVER=y
+# CONFIG_BT_NIMBLE_GATT_CACHING is not set
+CONFIG_BT_NIMBLE_SECURITY_ENABLE=y
+CONFIG_BT_NIMBLE_MAX_BONDS=3
+CONFIG_BT_NIMBLE_ATT_PREFERRED_MTU=256
+CONFIG_BT_NIMBLE_HOST_TASK_STACK_SIZE=4096
+CONFIG_BT_NIMBLE_MSYS_1_BLOCK_COUNT=32
+CONFIG_BT_NIMBLE_LOG_LEVEL_INFO=y
