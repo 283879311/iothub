@@ -77,6 +77,7 @@ void app_config_load(app_config_t *config);
 esp_err_t app_config_load_wifi_profiles(app_wifi_profile_t *profiles, size_t max_profiles, size_t *profile_count);
 esp_err_t app_config_save_wifi_profile(const char *ssid, const char *password);
 esp_err_t app_config_delete_wifi_profile(const char *ssid);
+esp_err_t app_config_clear_wifi_profiles(void);
 
 /* GPIO 输出上次状态(仅"状态记忆"策略使用):
  * 独立 NVS 键,不随主配置 blob 写入;读失败返回 false(调用方回退安全关闭)。 */

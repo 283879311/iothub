@@ -13,7 +13,7 @@
 - **网络**:AP(192.168.8.1)/ STA / APSTA;最多 5 条 STA profile,RSSI 择优自动重连;纯 STA 启动 90s 失败自动降级 AP 并持久化。
 - **MQTT(ThingsBoard)**:10s 周期遥测(继电器/LED/输入/堆内存)+ attributes 上报;下行 RPC `setRelay/setLed/getStatus/setState` 控 GPIO;支持 tb_cloud / tb_selfhost / 自定义 topic,TLS(证书 bundle,可选)与 LWT;数据面自 1.3-82 起走 QoS1。
 - **OTA**:Web 上传固件(`iothub.bin`),带应用描述区校验(魔数/项目名/版本降级拒绝);网页资源 `storage.bin` 支持运行时整分区替换;升级后经健康确认窗口(业务可达才 mark valid,超时自动回滚)。
-- **恢复出厂**:BOOT 键(GPIO0)长按 5s。
+- **恢复出厂**:BOOT 键(GPIO0)长按 5s 后松开；设备恢复默认配置、清除已保存 Wi-Fi 列表和配网 PIN/状态，再重启。
 - **蓝牙**:BLE NUS GATT 数据面(peripheral 从机 + central 主机),支持数据 RX/TX 与 CMD 通道(命令写 `6E400004`、回包订阅 `6E400005`;先 `login` 换 token,回包在 `result.token`);默认 NimBLE 主机栈,可回退 Bluedroid;A/B 双向角色互换脚本 `tools/ble_nus/role_swap.py` 已通过(1.3-81);经典蓝牙 / SPP 已于 v1.2 移除(CONFIG_BT_CLASSIC_ENABLED=n)。
 
 ## 硬件引脚(编译期固定,`main/constants.h`)

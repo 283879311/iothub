@@ -14,3 +14,5 @@
 bool app_prov_pin_is_valid(const char *pin);
 esp_err_t app_prov_pin_get(char *out, size_t out_len);
 esp_err_t app_prov_pin_set(const char *pin);
+/* 恢复出厂：清除 PIN 以及探针的 ble_prov/done 标记。 */
+esp_err_t app_prov_state_clear(void);

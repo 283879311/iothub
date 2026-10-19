@@ -57,6 +57,35 @@ esp_err_t app_prov_pin_get(char *out, size_t out_len)
     return ESP_OK;
 }
 
+esp_err_t app_prov_state_clear(void)
+{
+    nvs_handle_t handle;
+    esp_err_t err;
+
+    err = nvs_open(PROV_PIN_NAMESPACE, NVS_READWRITE, &handle);
+    if (err == ESP_ERR_NVS_NOT_FOUND) {
+        return ESP_OK;
+    }
+    if (err != ESP_OK) {
+        return err;
+    }
+    err = nvs_erase_key(handle, PROV_PIN_KEY);
+    if (err == ESP_ERR_NVS_NOT_FOUND) {
+        err = ESP_OK;
+    }
+    if (err == ESP_OK) {
+        esp_err_t done_err = nvs_erase_key(handle, "done");
+        if (done_err != ESP_OK && done_err != ESP_ERR_NVS_NOT_FOUND) {
+            err = done_err;
+        }
+    }
+    if (err == ESP_OK) {
+        err = nvs_commit(handle);
+    }
+    nvs_close(handle);
+    return err;
+}
+
 esp_err_t app_prov_pin_set(const char *pin)
 {
     nvs_handle_t handle;
