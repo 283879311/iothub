@@ -92,14 +92,8 @@ menu "Iothub Configuration"
                 instead of the normal Wi-Fi/BLE/MQTT/HTTP stack. After a
                 successful Wi-Fi connection and config save, reboot into the
                 normal firmware. Do not enable in production builds.
-
-        config IOTHUB_BLE_PROV_POP
-            string "Probe PoP"
-            depends on IOTHUB_BLE_PROV_PROBE
-            default "probe-pop-1234"
-            help
-                Proof-of-possession used by the probe. Test value only; do
-                not use a production secret here.
+                The provisioning PIN defaults to "abcd1234" and can be
+                changed through provisioning.pin.set; it is stored in NVS.
     endmenu
 
 endmenu

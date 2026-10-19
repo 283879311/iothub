@@ -91,7 +91,8 @@ tools/capture_serial.py /dev/ttyUSB1 /tmp/ble_prov_probe.log
 
 - 设备名：`PROV_IOT_65DA`（以实际日志为准）
 - Security：1
-- PoP：`probe-pop-1234`（测试值，不是生产密钥）
+- PoP/PIN：`abcd1234`（官方示例默认值；可在正常固件里通过
+  `provisioning.pin.set` 修改）
 
 预期串口关键行：
 
@@ -103,6 +104,26 @@ ble_prov_probe: credentials committed; rebooting in 10s
 ```
 
 重启后应看到正常固件的 `[boot-5] ...`、Wi-Fi、BLE、MQTT、HTTP 日志。
+
+## 修改配网 PIN
+
+探针从 NVS `ble_prov/pop` 读取 PIN；没有记录时使用默认 `abcd1234`。正常固件通过共享命令层修改：
+
+```json
+{
+  "method": "provisioning.pin.set",
+  "params": {
+    "pin": "new-pin-1234",
+    "password": "<current web admin password>"
+  }
+}
+```
+
+- 只允许 HTTP/BLE 本地来源，MQTT/其他来源返回 `forbidden`；
+- 需要当前管理员口令，错误返回 `unauthorized`；
+- PIN 长度 8–64，可打印 ASCII；不合法返回 `invalid_param`；
+- 存 NVS `ble_prov/pop`，不进入 `config.get`、日志或命令响应；
+- 新值在下次进入配网时生效，当前没有读回明文的接口。
 
 ## 恢复主固件
 

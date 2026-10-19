@@ -22,6 +22,7 @@
 #include "network_provisioning/manager.h"
 #include "network_provisioning/scheme_ble.h"
 #include "nvs.h"
+#include "prov_pin.h"
 
 static const char *TAG = "ble_prov_probe";
 
@@ -230,8 +231,8 @@ bool app_ble_prov_probe_should_start(void)
 void app_ble_prov_probe_run(void)
 {
     char service_name[16];
+    char pop[APP_PROV_PIN_MAX_LEN + 1];
     uint8_t mac[6];
-    const char *pop = CONFIG_IOTHUB_BLE_PROV_POP;
 
     ESP_LOGI(TAG, "probe mode: official provisioning owns Wi-Fi/NimBLE");
     app_ble_prov_log_heap("boot");
@@ -262,11 +263,17 @@ void app_ble_prov_probe_run(void)
     };
     ESP_ERROR_CHECK(esp_timer_create(&reboot_timer_args, &s_reboot_timer));
 
+    if (app_prov_pin_get(pop, sizeof(pop)) != ESP_OK) {
+        snprintf(pop, sizeof(pop), "%s", APP_PROV_PIN_DEFAULT);
+        ESP_LOGW(TAG, "provisioning PIN read failed; using default");
+    }
+
     esp_read_mac(mac, ESP_MAC_BT);
     snprintf(service_name, sizeof(service_name), PROBE_SERVICE_PREFIX "%02X%02X",
              mac[4], mac[5]);
 
-    ESP_LOGI(TAG, "starting BLE provisioning: service=%s security=1", service_name);
+    ESP_LOGI(TAG, "starting BLE provisioning: service=%s security=1 pin_source=nvs/default",
+             service_name);
     ESP_ERROR_CHECK(network_prov_mgr_start_provisioning(NETWORK_PROV_SECURITY_1,
                                                         (const void *)pop,
                                                         service_name, NULL));
