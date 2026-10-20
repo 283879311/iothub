@@ -3,22 +3,32 @@
 > 依据：阶段 2 设计冻结、G1–G6 关卡、当前 `iothub` 源码。
 > 本文件冻结 BLE 的产品定位与需求；本轮不改代码。现状栏是源码事实，目标栏才是待实现要求。
 
-## 1. 定位
+## 1. 定位与硬性决策
 
 BLE 是设备**常态运行时的本地配置与管理通道**，不是一次性 Wi-Fi 配网工具。
 
-- ESP32 常态作为 BLE Peripheral / GATT Server。
-- 手机 App/小程序作为 Central / GATT Client。
+- **产品固件必须始终以 BLE Peripheral / GATT Server 运行**；手机 App/小程序作为 Central / GATT Client。
+- **Peripheral 是唯一产品角色**：`off`、`central` 不再作为正常运行状态；配置/迁移中出现的旧角色值应在启动时收敛为 Peripheral。
+- **Central 能力可以关闭甚至删除**，但必须先实测 Flash/RAM 收益；在收益确认前不把删除 Central 作为 always-on 的前置条件。
 - BLE 生命周期不依赖 Wi-Fi 或 MQTT 是否连接。
-- Wi-Fi 断开、MQTT 离线时，手机仍应能连接设备、查询状态、修复网络配置。
+- Wi-Fi 未配置、Wi-Fi 断开、MQTT 离线时，手机仍应能连接设备、查询状态、修复网络配置和修改其他允许的配置。
 - 数据透传继续走现有 NUS 数据特征；控制命令继续走 CMD 特征和 `app_cmd_execute_ex()`。
 - Web 配置页是过渡入口；最终删除 Web 不等于删除 BLE 管理能力。
+
+### 1.1 实现含义
+
+1. 启动顺序必须是“加载配置 → 初始化 BLE Peripheral → 初始化 Wi-Fi/MQTT/HTTP”；Wi-Fi 初始化失败不得中止 BLE。
+2. `app_bt_apply_config()` 只能启动 Peripheral；不能再根据 `bt_role=off/central` 关闭或切换角色。
+3. `app_bt_release_unused_memory()` 不得释放 BLE 所需内存；当前“bt_role=off 时释放整栈”的路径必须移除或只对 Classic 生效。
+4. `config.set` 的 `bt_role` 仍可按兼容字段读取，但运行时必须忽略 off/central 的业务含义；Web 面板中的角色选择最终随 Web 一起清理。
+5. BLE 起来后，网络配置和其他配置命令必须可用；即使 Wi-Fi 处于断开/未配置状态，命令层也不能因为网络事件而停止。
+6. 恢复出厂后的默认状态必须是 Peripheral 运行，而不是当前的 `bt_role=0`。
 
 ## 2. 需求与现状对照
 
 | 需求 | 目标 | 当前现状 | 差距/证据 |
 | --- | --- | --- | --- |
-| 常态广播 | 正常启动即初始化 BLE Peripheral 并广播 | 只有 `bt_role=PERIPHERAL` 或兼容 `bt_mode=BLE` 才启动；出厂默认 `bt_role=0`（off） | `config.c:394-395`、`config.c:415`、`bt.c:402-417`；恢复出厂后 BLE 默认关闭 |
+| 常态广播 | 启动即强制初始化 BLE Peripheral 并广播，不接受 off/central | 只有 `bt_role=PERIPHERAL` 或兼容 `bt_mode=BLE` 才启动；出厂默认 `bt_role=0`（off） | `config.c:394-395`、`config.c:415`、`bt.c:402-417`；恢复出厂后 BLE 默认关闭 |
 | 生命周期独立于 Wi-Fi | Wi-Fi 初始化失败/未连接时 BLE 仍可管理 | BLE 在 `app_start_wifi()` 和 `app_captive_init()` 之后启动 | `main.c:63-73`；`app_start_wifi()` 内部使用 `ESP_ERROR_CHECK`，失败会中止启动 |
 | 生命周期独立于 MQTT | MQTT 离线不影响 BLE | MQTT 在 BLE 之后启动，通常不阻塞 BLE | `main.c:88-91`；仍需断网/无 token 场景实测 |
 | 自动恢复广播 | 手机断开后恢复广播 | 断连回调调用 `app_bt_restart_advertising()` | `bt_gatts_nimble.c:271-282`、`bt.c:373-393` |
@@ -36,14 +46,18 @@ BLE 是设备**常态运行时的本地配置与管理通道**，不是一次性
 
 ## 3. 角色边界
 
-产品只需要 Peripheral / GATT Server：
+产品运行时只使用 Peripheral / GATT Server：
 
-- 保留广播、接受连接、GATT 服务/特征、命令写入、通知响应。
+- 必须保留广播、接受连接、GATT 服务/特征、命令写入、通知响应。
 - 不需要 ESP32 主动扫描或连接其他 BLE 外设。
 - 不需要为 Wi-Fi 配网切换主从角色，也不进入一次性配网模式。
-- 暂不强制关闭 NimBLE Central 编译能力；是否关闭需在 G6 前按 Flash/RAM 实测决定，不能只凭产品不用 Central 就推断收益。
+- 启动时强制 Peripheral；旧配置中的 `bt_role=off/central` 收敛为 Peripheral。
+- Central 代码可以在收益确认后删除/关闭：
+  - 可评估关闭 `CONFIG_BT_NIMBLE_ROLE_CENTRAL`、`CONFIG_BT_NIMBLE_GATT_CLIENT`、`CONFIG_BT_NIMBLE_ROLE_OBSERVER` 及 `bt_gattc_nimble.c` 的构建；
+  - 必须实测 Flash、IRAM、DRAM、任务栈和运行时堆，不能只凭“产品不用 Central”推断收益；
+  - 在实测完成前保留现有编译能力，不作为 always-on 的前置条件。
 
-当前 `bt_role` 仍允许 off/central/peripheral；目标产品默认应为 peripheral：
+当前 `bt_role` 仍允许 off/central/peripheral；目标产品运行时应只走 peripheral：
 `bt.c:402-417`、`bt.c:729-754`。
 
 ## 4. 与 Wi-Fi / MQTT / Web 的关系
@@ -76,11 +90,12 @@ BLE 是设备**常态运行时的本地配置与管理通道**，不是一次性
 
 ### 必须优先解决
 
-1. **默认角色**：出厂默认 `bt_role=off` 与“常态广播”冲突；需产品确认将默认改为 peripheral（或启动时强制 peripheral）。
-2. **启动顺序**：BLE 目前在 Wi-Fi/captive/OTA 挂载之后，Wi-Fi 初始化失败会阻断 BLE；需把 BLE 初始化前移或在 Wi-Fi 失败时仍保证 BLE 起来。
-3. **状态命令**：补 `device.status`、`network.status`，至少覆盖 BLE/Wi-Fi/MQTT/堆/失败原因。
-4. **Wi-Fi 事务**：按 G2/G3/G4 实现候选、试连、提交、取消和恢复；G1 验收前不新增这些命令。
-5. **安全**：D5 独立专项；`SM_LVL=0` 不能视为链路安全。
+1. **角色收敛**：出厂默认 `bt_role=off`、且仍允许 central/off，与“始终 Peripheral”冲突；启动时忽略 off/central，恢复出厂后也必须是 Peripheral。
+2. **启动顺序**：BLE 目前在 Wi-Fi/captive/OTA 挂载之后，Wi-Fi 初始化失败会阻断 BLE；需把 BLE 初始化前移到 Wi-Fi 之前，或保证 Wi-Fi 失败时 BLE 仍启动。
+3. **BT 内存释放**：当前 `app_bt_release_unused_memory()` 在 off 模式会释放 BT 内存；always-on 后必须不能走这条路径。
+4. **状态命令**：补 `device.status`、`network.status`，至少覆盖 BLE/Wi-Fi/MQTT/堆/失败原因。
+5. **Wi-Fi 事务**：按 G2/G3/G4 实现候选、试连、提交、取消和恢复；G1 验收前不新增这些命令。
+6. **安全**：D5 独立专项；`SM_LVL=0` 不能视为链路安全。
 
 ### 关卡对应
 
@@ -98,12 +113,14 @@ BLE 是设备**常态运行时的本地配置与管理通道**，不是一次性
 在 G6 原有验收外，增加：
 
 - 设备启动后无需 Wi-Fi/MQTT 成功即可被手机发现并连接。
-- Wi-Fi 未配置、Wi-Fi 断开、MQTT 离线时，BLE 仍可查询状态和修改网络配置。
+- Wi-Fi 初始化失败、未配置、断开时，BLE 仍可查询状态和修改网络配置。
+- 设备运行角色始终为 Peripheral；旧配置 off/central 在重启后收敛为 Peripheral。
 - 手机断开后设备恢复广播；重复连接不产生重复初始化或泄漏。
 - BLE 命令与数据透传并发时，CMD 不阻塞数据通道。
 - 超长命令返回 `line_too_long`；分片发送失败有 `truncated` 诊断，不伪报完整成功。
 - 恢复出厂后默认角色、广播名和 BLE 可管理性符合产品定义。
 - 记录 BLE 连接前后、Wi-Fi 连接后、MQTT 连接后、试连/提交期间的最低 `free/largest`。
+- 若决定关闭 Central，单独记录关闭前后的 Flash/IRAM/DRAM/运行时堆差异；未实测前不宣称收益。
 
 ## 8. 当前边界
 
