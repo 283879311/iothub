@@ -43,8 +43,10 @@ static bool app_cmd_patch_allowed(app_cmd_source_t source, const cJSON *params)
 #else
     const cJSON *item = NULL;
 
-    /* HTTP(配置页)和 BLE(本地配网)允许改网络/MQTT;MQTT 下发默认禁止,
-     * 避免远端改错 host/token 后把自己锁在门外。 */
+    /* HTTP(配置页)和 BLE(本地配网)允许改网络/MQTT/BT/UART/管理员字段;
+     * MQTT 下发默认禁止这些本地/身份相关域,避免远端改错 host/token、
+     * 改 Wi-Fi、改 UART/BT 或替换管理员用户名后把自己锁在门外。
+     * 注意:GPIO 控制和 data_route 仍按现有产品策略允许 MQTT。 */
     if (source != APP_CMD_SOURCE_MQTT) {
         return true;
     }
@@ -54,9 +56,12 @@ static bool app_cmd_patch_allowed(app_cmd_source_t source, const cJSON *params)
     cJSON_ArrayForEach(item, params) {
         const cfg_field_t *f = config_apply_field(item->string != NULL ? item->string : "");
 
-        if (f != NULL && (f->domain == CFG_DOMAIN_NET || f->domain == CFG_DOMAIN_MQTT)) {
-            ESP_LOGW(TAG, "remote patch rejected (guard): field '%s' in net/mqtt domain",
-                     item->string);
+        if (f != NULL &&
+            (f->domain == CFG_DOMAIN_NET || f->domain == CFG_DOMAIN_MQTT ||
+             f->domain == CFG_DOMAIN_BT || f->domain == CFG_DOMAIN_UART ||
+             f->domain == CFG_DOMAIN_WEB_AUTH)) {
+            ESP_LOGW(TAG, "remote patch rejected (guard): field '%s' domain=%d",
+                     item->string, (int)f->domain);
             return false;
         }
     }
@@ -710,7 +715,9 @@ esp_err_t app_cmd_execute_ex(const cJSON *frame, app_cmd_source_t source,
             unsigned sent = 0;
             esp_err_t uart_err;
 
-            if (!cJSON_IsString(data_item) || data_item->valuestring == NULL) {
+            if (source == APP_CMD_SOURCE_MQTT) {
+                err = "guard_rejected";
+            } else if (!cJSON_IsString(data_item) || data_item->valuestring == NULL) {
                 err = "params_required";
             } else {
                 uart_err = app_uart_send_data(encoding, data_item->valuestring, &sent);
@@ -731,7 +738,9 @@ esp_err_t app_cmd_execute_ex(const cJSON *frame, app_cmd_source_t source,
                                             : NULL;
             bool enabled;
 
-            if (!cJSON_IsBool(enabled_item) && !cJSON_IsNumber(enabled_item)) {
+            if (source == APP_CMD_SOURCE_MQTT) {
+                err = "guard_rejected";
+            } else if (!cJSON_IsBool(enabled_item) && !cJSON_IsNumber(enabled_item)) {
                 err = "params_required";
             } else {
                 enabled = cJSON_IsBool(enabled_item) ? cJSON_IsTrue(enabled_item)

@@ -396,14 +396,14 @@ bool app_ble_gatts_notify(const uint8_t *data, size_t len, void *ctx)
     return true;
 }
 
-bool app_ble_gatts_cmd_notify(const uint8_t *data, size_t len)
+int app_ble_gatts_cmd_notify(const uint8_t *data, size_t len)
 {
     size_t offset = 0;
     uint16_t chunk;
 
     if (!s_connected || !s_cmd_subscribed || s_cmd_tx_val_handle == 0 ||
         data == NULL || len == 0) {
-        return false;
+        return -1;
     }
     chunk = (s_mtu > 3) ? (uint16_t)(s_mtu - 3) : 20;
     if (chunk > NUS_NOTIFY_CHUNK_CAP) {
@@ -416,11 +416,11 @@ bool app_ble_gatts_cmd_notify(const uint8_t *data, size_t len)
             n = chunk;
         }
         if (!app_ble_gatts_notify_chunk(s_cmd_tx_val_handle, data + offset, n)) {
-            return offset > 0;
+            return (int)offset;
         }
         offset += n;
     }
-    return true;
+    return (int)len;
 }
 
 bool app_ble_gatts_connected(void)

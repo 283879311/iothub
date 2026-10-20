@@ -32,8 +32,10 @@ void app_ble_gatts_reset(void);
 /* TX 特征发送(notify,按协商 MTU 分片);返回 false = 未送出 */
 bool app_ble_gatts_notify(const uint8_t *data, size_t len, void *ctx);
 
-/* CMD TX 特征发送(命令回包,按协商 MTU 分片) */
-bool app_ble_gatts_cmd_notify(const uint8_t *data, size_t len);
+/* CMD TX 特征发送(命令回包,按协商 MTU 分片)。
+ * 返回实际发送字节数；<0 表示未连接/未开始/参数错误。
+ * 返回 0 或小于 len 表示失败/只送出前缀，调用方不能当作完整成功。 */
+int app_ble_gatts_cmd_notify(const uint8_t *data, size_t len);
 
 bool app_ble_gatts_connected(void);
 uint16_t app_ble_gatts_mtu(void);

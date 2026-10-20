@@ -25,8 +25,12 @@ static const char *TAG = "ble_cmd";
 #define BLE_CMD_QUEUE_DEPTH 8
 #define BLE_CMD_TOKEN_TTL_MS 600000
 
+#define BLE_CMD_ITEM_LINE  0
+#define BLE_CMD_ITEM_ERROR 1
+
 typedef struct {
     uint16_t len;
+    uint8_t kind;
     char buf[BLE_CMD_LINE_MAX + 1];
 } ble_cmd_line_t;
 
@@ -87,10 +91,11 @@ static bool app_ble_cmd_json_complete(const char *s, size_t len)
 
 static void app_ble_cmd_queue_line(void)
 {
-    ble_cmd_line_t line;
+    ble_cmd_line_t line = {0};
 
     s_line[s_line_len] = '\0';
     line.len = (uint16_t)s_line_len;
+    line.kind = BLE_CMD_ITEM_LINE;
     memcpy(line.buf, s_line, s_line_len + 1);
     if (s_line_len > 0 && s_cmd_queue != NULL) {
         if (xQueueSend(s_cmd_queue, &line, 0) != pdTRUE) {
@@ -100,6 +105,22 @@ static void app_ble_cmd_queue_line(void)
         }
     }
     s_line_len = 0;
+}
+
+/* 超长命令不能静默丢弃：GATT 回调只投递错误项，由 CMD 任务回包。 */
+static void app_ble_cmd_queue_error(const char *error)
+{
+    ble_cmd_line_t line = {0};
+
+    if (s_cmd_queue == NULL) {
+        return;
+    }
+    line.kind = BLE_CMD_ITEM_ERROR;
+    snprintf(line.buf, sizeof(line.buf), "%s", error != NULL ? error : "cmd_error");
+    line.len = (uint16_t)strlen(line.buf);
+    if (xQueueSend(s_cmd_queue, &line, 0) != pdTRUE) {
+        ESP_LOGW(TAG, "cmd queue full, error response dropped (%s)", line.buf);
+    }
 }
 
 /* CMD 特征写回调:GATT 回调上下文,只做行重组 + 入队,绝不执行命令 */
@@ -120,12 +141,14 @@ void app_ble_cmd_on_write(const uint8_t *data, size_t len)
             continue;
         }
         if (s_line_len >= BLE_CMD_LINE_MAX) {
-            /* 行超长:整行丢弃,等下一个换行复位 */
+            /* 行超长:整行丢弃,等下一个换行复位;必须回一个错误，
+             * 否则客户端只能等到超时，无法区分“没收到”和“命令非法”。 */
             s_line_len = 0;
             while (i < len && data[i] != '\n') {
                 i++;
             }
-            ESP_LOGW(TAG, "cmd line too long, dropped");
+            ESP_LOGW(TAG, "cmd line too long, rejected");
+            app_ble_cmd_queue_error("line_too_long");
             continue;
         }
         s_line[s_line_len++] = (char)ch;
@@ -154,7 +177,10 @@ static uint32_t s_cmd_notify_fail;
 static void app_ble_cmd_send(const cJSON *resp)
 {
     char *body;
-    bool sent = false;
+    size_t body_len;
+    bool complete = false;
+    bool partial = false;
+    int partial_bytes = 0;
     int attempt;
 
     if (resp == NULL) {
@@ -164,20 +190,35 @@ static void app_ble_cmd_send(const cJSON *resp)
     if (body == NULL) {
         return;
     }
-    /* 1.3-76:notify 失败(msys 暂空/拥塞/未订阅)短重试 3 次,10ms 间隔;
-     * 官方 NimBLE 的 ble_gatts_notify_custom 没有等待 buffer 的选项,
-     * 只能在应用层重试;响应很小,不会出现前缀重复问题。 */
-    for (attempt = 0; attempt < 3 && !sent; attempt++) {
-        sent = app_ble_gatts_cmd_notify((const uint8_t *)body, strlen(body));
-        if (!sent) {
-            vTaskDelay(pdMS_TO_TICKS(10));
+    body_len = strlen(body);
+
+    /* 仅在“一个字节都没送出”时重试(msys 暂空/拥塞/未订阅)。
+     * 已送出前缀后不重试：从头重发会在客户端造成重复/拼接 JSON；
+     * 也不能把部分发送当完整成功，记录 truncated 计数供诊断。 */
+    for (attempt = 0; attempt < 3 && !complete; attempt++) {
+        int sent = app_ble_gatts_cmd_notify((const uint8_t *)body, body_len);
+
+        if (sent >= 0 && (size_t)sent == body_len) {
+            complete = true;
+            break;
         }
+        if (sent > 0) {
+            partial = true;
+            partial_bytes = sent;
+            break;
+        }
+        vTaskDelay(pdMS_TO_TICKS(10));
     }
-    if (!sent) {
+    if (!complete) {
         s_cmd_notify_fail++;
         if ((s_cmd_notify_fail % 8u) == 1u) {
-            ESP_LOGW(TAG, "cmd notify failed after retries (total=%u)",
-                     (unsigned)s_cmd_notify_fail);
+            if (partial) {
+                ESP_LOGW(TAG, "cmd notify truncated: sent=%d/%u (total=%u)",
+                         partial_bytes, (unsigned)body_len, (unsigned)s_cmd_notify_fail);
+            } else {
+                ESP_LOGW(TAG, "cmd notify failed after retries (total=%u)",
+                         (unsigned)s_cmd_notify_fail);
+            }
         }
     }
     cJSON_free(body);
@@ -357,6 +398,17 @@ static void app_ble_cmd_task(void *arg)
     (void)arg;
     for (;;) {
         if (xQueueReceive(s_cmd_queue, &line, portMAX_DELAY) != pdTRUE) {
+            continue;
+        }
+        if (line.kind == BLE_CMD_ITEM_ERROR) {
+            cJSON *resp = cJSON_CreateObject();
+
+            if (resp != NULL) {
+                cJSON_AddBoolToObject(resp, "ok", false);
+                cJSON_AddStringToObject(resp, "error", line.buf);
+                app_ble_cmd_send(resp);
+                cJSON_Delete(resp);
+            }
             continue;
         }
         app_ble_cmd_handle_line(line.buf, (size_t)line.len);

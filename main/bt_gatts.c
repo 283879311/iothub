@@ -342,13 +342,13 @@ bool app_ble_gatts_notify(const uint8_t *data, size_t len, void *ctx)
 }
 
 /* CMD TX 特征发送(命令回包,1.3-32):与数据 TX 同款 MTU-3 分片,物理上独立特征 */
-bool app_ble_gatts_cmd_notify(const uint8_t *data, size_t len)
+int app_ble_gatts_cmd_notify(const uint8_t *data, size_t len)
 {
     size_t offset = 0;
     uint16_t chunk;
 
     if (!s_connected || s_congested || !s_started || data == NULL || len == 0) {
-        return false;
+        return -1;
     }
     chunk = (uint16_t)((s_mtu > 3) ? (s_mtu - 3) : 20);
     while (offset < len) {
@@ -362,11 +362,11 @@ bool app_ble_gatts_cmd_notify(const uint8_t *data, size_t len)
                                           (uint16_t)n, (uint8_t *)(data + offset), false);
         if (err != ESP_OK) {
             ESP_LOGW(TAG, "cmd notify failed: %s", esp_err_to_name(err));
-            return offset > 0;
+            return (int)offset;
         }
         offset += n;
     }
-    return true;
+    return (int)len;
 }
 
 bool app_ble_gatts_connected(void)
