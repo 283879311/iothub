@@ -2,7 +2,23 @@
 
 > 适用对象：iothub 固件 BLE CMD 通道、微信小程序/App BLE 客户端。
 > 基线：`feature/shared-config-cmd`，G0 代码 `972f5dd`、G1 代码 `b50426e`。
+> 文档修订：1.1（补充事务结果语义、协议探测、安全门槛、网络边界、页面/联调分级）。
+> 协议版本：v1.0。
 > **本文件是目标接口合同，不是当前固件全部已实现的证明。**
+
+### 0.0 开发前 P0 前置条件
+
+1. **v1.0 固件适配层尚未实现。**
+   小程序可以按本规范开发页面和通信层，但联调目标必须是已实现 v1.0 适配的固件；当前 v0 只用于联调 v0 能力，不能把 v1 命令当作已可用。
+
+2. **BLE 链路安全尚未验收。**
+   `login` token、TTL 和限频只是应用层保护，不是链路加密/绑定。链路安全专项完成前，敏感写操作在生产策略下必须关闭；`device.info.security` 会报告 `l2_ready`/`sensitive_writes_allowed`，客户端必须据此禁用对应页面入口。
+
+3. **页面可开发 ≠ 设备可联调。**
+   本文件会分别标注“页面可开发”“固件接口已实现”“可联调”；未标“可联调”的功能只能做 UI/协议桩，不能进入验收。
+
+4. **事务未完成不得留下半提交状态。**
+   配置保存、运行态应用、回滚的错误码和顺序见 6.3；`success` 只表示约定的全部成功条件已满足。
 
 ## 0. 当前状态与兼容声明
 
@@ -116,6 +132,47 @@ v1.0 的 `version/cmd/args/data/error object/operation.event` **尚未实现**�
 }
 ```
 
+## 2.5 v0/v1 探测与降级
+
+v1.0 请求不能直接发给只能理解 v0 的固件并期待正常执行。客户端必须先探测：
+
+1. 连接、发现 NUS、订阅 CMD TX。
+2. 发送无 token 的 v1.0 探测：
+
+```json
+{"id":"probe-1","version":"1.0","cmd":"device.info","args":{}}
+```
+
+3. 判定：
+   - 收到 v1 对象响应且 `data.protocol_versions` 包含 `"1.0"`：使用 v1.0。
+   - 收到 v0 字符串错误（如 `auth_required`、`unknown_method`）或无法解析为 v1 响应：当前固件不支持 v1，改用 v0；不要继续发送 v1 的 `network.*`、`operation.*`。
+   - 收到 `unsupported_version` 对象错误：明确降级到 v0，或提示用户升级固件；不能把 v1 命令自动改写成 v0 继续执行。
+
+4. 一旦选定方言，整个连接只使用该方言；不要对单条命令失败再猜测另一种方言。
+5. v0 没有 `device.info`；探测失败后，登录并读取 `getStatus` 作为旧固件状态来源。
+
+`device.info` 必须是无副作用、无需 token 的只读命令，且返回安全能力：
+
+```json
+{
+  "id": "probe-1",
+  "ok": true,
+  "data": {
+    "device_id": "IOT-65D8",
+    "firmware": "1.3",
+    "protocol_versions": ["1.0"],
+    "security": {
+      "link_encrypted": false,
+      "bonded": false,
+      "l2_ready": false,
+      "sensitive_writes_allowed": false
+    }
+  }
+}
+```
+
+客户端必须在发送敏感命令前检查 `sensitive_writes_allowed`；该字段为 false 时只能展示只读/低风险功能，不能把登录成功当成已具备链路安全。
+
 ## 3. 错误码
 
 ### 3.1 v1.0 通用错误码
@@ -129,6 +186,7 @@ v1.0 的 `version/cmd/args/data/error object/operation.event` **尚未实现**�
 | `unauthorized` | 未登录、token 无效或过期 |
 | `forbidden` | 已认证但当前来源无权执行 |
 | `busy` | 同领域有互斥操作 |
+| `conflict` | 同一 `idempotency_key` 对应不同参数，或状态冲突 |
 | `rate_limited` | 超过命令频率限制 |
 | `not_found` | 对象不存在 |
 | `operation_not_found` | operation_id 不存在或已清理 |
@@ -168,11 +226,28 @@ v0 客户端继续收到原字符串；v1 适配层负责映射，不能把 v1 �
 - **未实现**：目标命令不存在。
 - **仅目标**：设计已冻结，代码未开始。
 
+### 4.0 v1 正式名与 v0 现有名映射
+
+| v1 正式名 | v0 现有名 | 迁移规则 |
+| --- | --- | --- |
+| `auth.login` | `login` | 仅 v1 适配层映射；登录不需要 token |
+| `device.status` | `getStatus` | `getStatus` 只是摘要；v1 `device.status` 需补 MQTT/BLE/资源字段 |
+| `gpio.status` | `io.get` | `io.get` 保留为兼容别名 |
+| `network.profile.list` | `network.profiles` | v1 只暴露列表；旧名保留一个版本周期 |
+| `network.reconnect` | `network.restart` | 旧名保留；语义必须按 v1 重新定义 |
+| `auth.admin.set` | `web.auth.set` | 旧名只做适配；v1 必须包含会话失效 |
+| `config.get` | `config.get` | 名称相同；v1 响应外壳从 `result` 变为 `data` |
+| `config.set` | `config.set` | v1 使用 `{patch}`；v0 直接把 `params` 当 patch |
+| `network.scan` | `network.scan` | v0 同步；v1 目标为异步 operation |
+| `device.info` | 无 | v1 新增探测/安全能力入口 |
+
+v1 客户端只使用正式名；旧名只用于 v0 兼容，不在小程序中新增使用。
+
 ### A. 设备信息与状态
 
 | cmd | args | 当前 | v1 状态 | 说明 |
 | --- | --- | --- | --- | --- |
-| `device.info` | `{}` | ❌ | 未实现 | 型号、固件版本、设备 ID、支持的协议版本；用于探测 v1.0 是否可用 |
+| `device.info` | `{}` | ❌ | 未实现 | 无 token、无副作用的探测入口；返回型号、固件版本、设备 ID、`protocol_versions` 和 `security` |
 | `device.status` | `{}` | `getStatus` 部分 | 未实现 | 网络/BLE/MQTT/堆/分区摘要；MQTT 状态单独字段 |
 | `network.status` | `{}` | 无正式命令 | 未实现 | STA 状态、SSID、IP、RSSI、失败原因、候选操作 |
 | `gpio.status` | `{}` | `io.get` 部分 | 未实现 | 引脚、输入/输出、策略、io_seq/source |
@@ -184,9 +259,9 @@ v0 客户端继续收到原字符串；v1 适配层负责映射，不能把 v1 �
 | --- | --- | --- | --- | --- |
 | `network.scan` | `{}` | ✅ v0 同步 | v1 异步目标 | 扫描结果含 ssid/rssi/auth_mode；不得回密码 |
 | `network.profile.list` | `{}` | ✅ v0 `network.profiles` | v1适配 | 只返回 SSID、`password_set` |
-| `network.profile.delete` | `{ssid}` | 🟡 v0 | v1适配 | 删除当前 profile 的行为需定义 |
-| `network.validate` | `{ssid,password,static?}` | ❌ | 未实现 | 只校验，不连接、不落盘 |
-| `network.tryconnect` | `{ssid,password,static?,idempotency_key?}` | ❌ | 未实现 | 启动候选；返回 `operation_id` |
+| `network.profile.delete` | `{ssid}` | 🟡 v0 | v1适配 | 删除当前正在使用的 SSID 返回 `busy`，要求先切换 |
+| `network.validate` | `{ssid,password?,use_saved?,static?}` | ❌ | 未实现 | 只校验，不连接、不落盘 |
+| `network.tryconnect` | `{ssid,password?,use_saved?,static?,idempotency_key?}` | ❌ | 未实现 | 启动候选；返回 `operation_id`；`use_saved=true` 时复用设备已保存 profile |
 | `network.cancel` | `{operation_id}` | ❌ | 未实现 | 幂等取消；`committing` 不承诺撤销 |
 | `network.apply` | `{operation_id,idempotency_key?}` | ❌ | 未实现 | 只接受 `got_ip` 的候选 |
 | `network.reconnect` | `{}` | 🟡 v0 `network.restart` | v1 目标 | 用当前正式配置重连 |
@@ -243,6 +318,7 @@ v0 客户端继续收到原字符串；v1 适配层负责映射，不能把 v1 �
   "properties": {
     "ssid": {"type": "string", "minLength": 1, "maxLength": 32},
     "password": {"type": "string", "maxLength": 64},
+    "use_saved": {"type": "boolean", "default": false},
     "idempotency_key": {"type": "string", "minLength": 8, "maxLength": 64},
     "static": {
       "type": "object",
@@ -313,6 +389,11 @@ network.validate
 - 同一时间只允许一个活动候选；新 `tryconnect` 不得静默覆盖旧候选。
 - 老候选/旧连接事件不得完成或提交新候选。
 - MQTT 重连与网络提交分开报告；`success` 不代表 MQTT 已连接。
+- **开放网络**：`ssid` 仍必填，`password` 可为空；`validate` 只检查空口令与开放网络的组合是否合法，实际认证结果由 `tryconnect` 返回。设备不能把空口令直接当成“无需认证”而跳过候选。
+- **已有 profile 复用**：`use_saved=true` 时必须同时提供匹配的 `ssid`，设备从本地 profile 取口令；找不到 profile 返回 `not_found`，不得回传口令。`use_saved=true` 与显式 `password` 同时出现时返回 `invalid_argument`，不能静默选择其中一套。
+- **静态 IP**：`static.enabled=true` 时 `ip/gateway/netmask` 必填，DNS 可选；`validate` 校验地址/掩码/网关同一网段；`tryconnect` 必须实际应用候选静态配置并等待 IP；`apply` 只提交同一份已验证 plan。
+- **取消恢复**：`connecting`/`got_ip` 取消后恢复旧 STA 驱动配置并重新连接旧网络；`committing` 取消返回当前状态，不承诺撤销 NVS 写入；重复取消幂等。
+- **profile 删除当前网络**：删除正在使用的 profile 返回 `busy`，要求先切换到其他 profile；不得静默断开当前连接。
 
 ### 6.2 示例
 
@@ -350,6 +431,49 @@ network.validate
 {"id":"req-0106","version":"1.0","cmd":"network.cancel","args":{"operation_id":"op-try-01"}}
 ```
 
+### 6.3 事务结果与回滚语义
+
+网络 `apply` 的目标顺序：
+
+```text
+校验 operation（属于当前设备/候选代次/state=got_ip）
+  → 保存旧主配置快照 + 旧 profile 快照
+  → 写主配置
+  → 写 profile
+  → 运行态确认（候选已获得 IP，标记正式配置）
+  → success
+```
+
+任一步失败都尝试恢复旧快照和旧网络；只有全部目标条件满足才返回 `success`，不允许“部分保存 + 报告成功”。
+
+| 结果 | 触发条件 | operation 状态 | error.code | 可留下的状态 |
+| --- | --- | --- | --- | --- |
+| `success` | 主配置、profile、运行态确认全部成功 | `success` | — | 新配置 |
+| `network_failed` | 候选连接/获得 IP 失败 | `failed` | `network_failed` | 旧配置不变 |
+| `storage_failed` | NVS 写主配置或 profile 失败，且旧主配置和旧 profile 恢复成功 | `failed` | `storage_failed` | 旧配置和旧 profile |
+| `apply_failed` | NVS 写入成功，但运行态确认/切换失败，且回滚成功 | `failed` | `apply_failed` | 旧配置和旧 profile |
+| `rollback_failed` | 上述失败后，旧配置/profile/网络恢复自身失败 | `failed` | `rollback_failed` | 可能半提交；必须报告 `original_error` |
+| `cancelled` | 在可取消状态成功取消并恢复 | `cancelled` | — | 旧配置 |
+| `expired` | 候选超时且恢复成功 | `expired` | `operation_expired` | 旧配置 |
+
+`operation.get` 的 `data` 至少包含：
+
+```json
+{
+  "operation_id": "op-try-01",
+  "state": "failed",
+  "error_code": "rollback_failed",
+  "original_error": "storage_failed",
+  "rollback": "failed",
+  "committed": false
+}
+```
+
+- `rollback`：`none` / `old_config` / `old_profile` / `old_config_and_profile` / `failed`。
+- `committed`：只有主配置和 profile 都确认提交后才为 true。
+- `apply_failed` 与 `rollback_failed` 不能混用：前者表示回滚成功、最终仍是旧配置；后者表示回滚失败，设备可能处于半提交状态。
+- 其他域：UART 固定“校验 → 应用硬件 → 持久化 → 保存失败回滚硬件”；硬件应用失败不写 NVS。MQTT 保存成功但 broker 连不上只算“配置已保存、连接待恢复”，不返回 `apply_failed`。
+
 ## 7. 异步操作与通知
 
 状态集合：
@@ -358,6 +482,26 @@ network.validate
 accepted → connecting → got_ip → committing → success
                 ↘ failed / cancelled / expired
 ```
+
+### 7.1 各类 operation 的合法状态
+
+| operation type | 合法状态 | 终态/保留 | 重复提交/查询 |
+| --- | --- | --- | --- |
+| `network_scan` | `accepted → running → success/failed` | 结果保留 5 分钟 | 同 `idempotency_key` 返回同一 operation；否则同一时间只允许一个 scan，冲突返回 `busy` |
+| `network_tryconnect` | `accepted → connecting → got_ip → cancelled/expired`；失败 `failed` | 候选 300s，终态保留 10 分钟 | 同 key 返回同一候选；新 key 且已有活动候选返回 `busy` |
+| `network_apply` | `accepted → committing → success/failed` | 终态保留 10 分钟 | 同 operation_id 重复 apply 返回当前状态，不重复提交 |
+| `network_reconnect` | `accepted → connecting → success/failed` | 终态保留 10 分钟 | 同 key 去重；不产生候选代次 |
+| 同步命令（config.set 等） | 无 operation | — | 同值/同 key 由幂等规则处理 |
+
+补充：
+
+- `network_tryconnect` 的 `got_ip` 是候选状态，不是提交成功；只有 `network_apply` 成功后才是正式网络。
+- `network_apply` 只接受 `got_ip` 且未过期的候选；`committing` 之后 `cancel` 不能承诺撤销。
+- `operation.get` 对终态只读，不重新执行；终态状态不可逆。
+- `operation_id` 在设备本次上电期间唯一，不复用；v1 默认不跨重启保留，重启后查询返回 `operation_not_found`。
+- 相同 `idempotency_key` 不同参数返回 `conflict`；`details.reason` 可填 `idempotency_mismatch`。
+- `event_seq` 在同一 operation 内单调递增；客户端忽略小于等于已处理序号的事件。
+- 终态之后不再发送状态变化事件；查询是最终兜底。
 
 | 字段 | 说明 |
 | --- | --- |
@@ -441,6 +585,27 @@ network, mqtt, bluetooth, uart, gpio, web
 
 BLE 登录 token 只证明应用层身份，不是链路加密/绑定。敏感操作最终需要 L2 安全专项；当前 `SM_LVL=0` 不具备该保证。
 
+### 9.1 链路安全未完成前的使用限制
+
+`device.info.security` 是客户端判断权限的依据，不是装饰字段：
+
+| 字段 | 含义 |
+| --- | --- |
+| `link_encrypted` | 当前 BLE 链路是否已加密 |
+| `bonded` | 是否完成绑定/可信设备 |
+| `l2_ready` | 是否满足 L2 敏感操作门槛 |
+| `sensitive_writes_allowed` | 当前是否允许敏感写操作 |
+
+当前固件应为 `false/false/false/false`。在此状态下：
+
+- 生产策略**禁止**：`network.tryconnect/apply/cancel`（携带 Wi-Fi 凭据）、MQTT host/token 修改、`auth.admin.set`、`provisioning.pin.set`、`system.reboot`、`factory.reset`，以及任何会改变正式网络/身份的写操作。
+- 允许：设备/网络/GPIO/UART 只读状态、`network.scan`、GPIO/LED 控制、`uart.send`（按现有策略）。
+- `auth.login` 会把管理员口令送到未加密链路；生产环境必须等 L2 或物理配网窗口，实验室/研发模式才允许。
+- 实验室模式必须在 `device.info` 中明确标记为非生产安全状态；不能把实验室联调结果当成量产结论。
+- 在 L2 验收完成前，Web/SoftAP 不能删除；BLE 还不能作为唯一的生产配置通道。
+
+客户端必须根据 `sensitive_writes_allowed` 隐藏/禁用敏感入口，不能把“登录成功”当成“已具备链路安全”。
+
 ## 10. 微信小程序交互流程
 
 1. 扫描：按服务 UUID `6E400001-...` 和广播名 `IotHubBLE-*` 过滤，展示 RSSI。
@@ -460,6 +625,34 @@ BLE 登录 token 只证明应用层身份，不是链路加密/绑定。敏感�
 - 响应/通知按完整 JSON 重组；按 `id` 或 `operation_id` 关联。
 - 同一连接建议串行发送命令；设备限频约 5 次/秒。
 
+### 10.1 页面可开发 vs 设备可联调
+
+| 功能 | 页面可开发 | 固件接口已实现 | 可联调 |
+| --- | --- | --- | --- |
+| 扫描/连接/订阅/分片 | 是 | 是（v0 NUS） | 是（v0） |
+| 登录/token/断连失效 | 是 | 是（v0 `login`） | 是（v0） |
+| 设备/网络状态 | 是 | 部分（`getStatus`/`config.get`） | 只到 v0 摘要 |
+| Wi-Fi 扫描/profile 列表 | 是 | 是（v0） | 是（v0 扫描/列表） |
+| Wi-Fi validate/tryconnect/apply/cancel | 是（按 v1.0 合同做桩） | 否 | 否 |
+| config.get/set | 是 | 部分（v0 直接 patch） | 只到 v0 能力，v1 外壳未实现 |
+| UART 发送 | 是 | 是（v0） | 是（v0） |
+| UART 配置 | 是 | 否 | 否 |
+| GPIO 控制/状态 | 是 | 控制是；完整 status 否 | 控制可 v0，status 待补 |
+| operation 中心/通知 | 是（按 v1.0 合同做桩） | 否 | 否 |
+| 管理员/PIN/维护 | 是（UI 可设计） | 管理员部分、PIN 部分；维护否 | 安全门槛未过，不联调 |
+| BLE 链路安全信息 | 是 | 否（`device.info.security` 待实现） | 否 |
+
+页面验收补充：
+
+- 连接中/已连接/断连/重连状态必须可见，不能只显示“成功”。
+- 扫描空结果、扫描超时、无权限、蓝牙关闭必须有独立提示。
+- 登录过期或断连后必须回到认证态并清空 token。
+- 同一命令重复点击必须串行或禁用；必须按 `id` 匹配响应。
+- operation 通知丢失后必须能通过 `operation.get` 恢复；不能只依赖 Notify。
+- 配置失败必须区分网络失败、保存失败、应用失败和回滚失败。
+- 客户端日志不得记录 Wi-Fi 口令、token、PIN、管理员口令；只记录 `id/cmd/state/error.code`。
+- 页面开发完成不等于固件可联调；上表“可联调”列为“否”的功能只能使用 mock，不得进入验收。
+
 ## 11. 验收用例
 
 | 用例 | 期望 | 当前状态 |
@@ -470,6 +663,13 @@ BLE 登录 token 只证明应用层身份，不是链路加密/绑定。敏感�
 | 分片中途失败 | 有 truncated 诊断，不伪报成功 | G1 代码，待实测 |
 | MQTT 调用网络/UART/loopback/BT 修改 | `forbidden` | G1 代码，待实测 |
 | BLE 登录/断连 token 失效 | 断连后重新登录 | ✅ 现有 |
+| v1 探测发到 v0 固件 | 识别为 v0，不继续发 v1 网络命令 | ❌ 适配层未实现 |
+| v1 `unsupported_version` | 降级 v0 或提示升级，不误解为 v0 成功 | ❌ |
+| 开放网络空口令 | validate/tryconnect 按开放网络处理，认证失败明确返回 | ❌ |
+| `use_saved=true` 复用 profile | 找到 profile 才试连；找不到 `not_found`；不回传口令 | ❌ |
+| 静态 IP 地址/掩码/网关非法 | `invalid_argument`，不进入试连 | ❌ |
+| 同一 operation 重复 apply/cancel | 返回当前状态，不重复提交 | ❌ |
+| `sensitive_writes_allowed=false` | 敏感写命令 `forbidden`，客户端隐藏入口 | ❌ 安全专项未实现 |
 | `network.tryconnect` 错误密码 | `failed`，不进入 got_ip | ❌ |
 | `network.tryconnect` AP 不存在 | `network_failed`/明确原因 | ❌ |
 | 候选获得 IP 后才可 apply | apply 成功；否则拒绝 | ❌ |
@@ -484,9 +684,11 @@ BLE 登录 token 只证明应用层身份，不是链路加密/绑定。敏感�
 
 ## 12. 实施边界
 
-- v1.0 封装、`operation_id`、网络候选状态机尚未实现；小程序不得把本规范中的目标命令当作已可用接口。
+- 本文档修订 1.1，协议版本仍为 v1.0。
+- v1.0 封装、v0/v1 探测适配、`device.info.security`、`operation_id`、网络候选状态机尚未实现；小程序不得把本规范中的目标命令当作已可用接口。
+- 页面可以按本规范开发，但“可联调”列标为“否”的功能只能使用 mock，不得进入验收。
 - G1 代码已提交（`b50426e`），运行态验收未完成。
 - G0 代码已提交（`972f5dd`），硬件验收因 B 板串口设备消失未完成。
 - G2–G5 尚未开始；Web/SoftAP 不删除。
-- BLE 安全（D5）独立专项，不能因为 token/限频存在就认为链路安全。
+- BLE 安全（D5）独立专项，不能因为 token/限频存在就认为链路安全；`sensitive_writes_allowed=false` 时生产敏感写操作必须拒绝。
 - 不使用官方 `network_provisioning` 作为产品路径；`probe/ble-prov` 仅为实验分支。
