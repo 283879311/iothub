@@ -319,6 +319,7 @@ static const char *app_ble_cmd_v1_error_code(const char *v0)
         strcmp(v0, "invalid_param") == 0 ||
         strcmp(v0, "invalid_argument") == 0 ||
         strcmp(v0, "invalid_old_password") == 0 ||
+        strcmp(v0, "domain_not_supported") == 0 ||
         strcmp(v0, "password_too_short") == 0) {
         return "invalid_argument";
     }

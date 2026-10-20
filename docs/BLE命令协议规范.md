@@ -8,8 +8,8 @@
 
 ### 0.0 开发前 P0 前置条件
 
-1. **v1.0 固件适配层尚未实现。**
-   小程序可以按本规范开发页面和通信层，但联调目标必须是已实现 v1.0 适配的固件；当前 v0 只用于联调 v0 能力，不能把 v1 命令当作已可用。
+1. **v1.0 适配层只实现了现有命令子集。**
+   `device.info`、`auth.login`、`config.get/set`、`network.profile.list/delete`、GPIO、`uart.send`、`data.loopback`、`auth.admin.set`、`provisioning.pin.set` 已可用 v1.0 外壳；`network.scan/validate/tryconnect/apply/cancel/status`、`operation.*`、`config.validate`、状态类命令仍未实现。未实现命令返回 `unknown_command`，不得在客户端伪装成功。
 
 2. **BLE 链路安全尚未验收。**
    `login` token、TTL 和限频只是应用层保护，不是链路加密/绑定。链路安全专项完成前，敏感写操作在生产策略下必须关闭；`device.info.security` 会报告 `l2_ready`/`sensitive_writes_allowed`，客户端必须据此禁用对应页面入口。
@@ -35,12 +35,12 @@
 {"id":1,"ok":false,"error":"invalid_config"}
 ```
 
-v1.0 的 `version/cmd/args/data/error object/operation.event` **尚未实现**。必须先完成固件适配层，小程序才能使用 v1.0；在此之前只能用 v0 做联调。
+v1.0 的 `version/cmd/args/data/error object` 已对现有命令子集实现；`operation.event` 和网络事务命令尚未实现。未列出的 v1 命令返回 `unknown_command`，不能用 v0 结果冒充。
 
 | 方言 | 请求标识 | 成功响应 | 错误响应 | 当前状态 |
 | --- | --- | --- | --- | --- |
 | v0 legacy | 无 `version`，`method`/`params` | `result` | 字符串 `error` | ✅ 当前固件 |
-| v1.0 | `version:"1.0"`，`cmd`/`args` | `data` | 对象 `error` | ❌ 目标，需适配层 |
+| v1.0 子集 | `version:"1.0"`，`cmd`/`args` | `data` | 对象 `error` | 🟡 已实现现有命令子集；网络事务/operation 未实现 |
 
 固件适配层目标：收到 v1.0 请求时，把 `cmd` 映射到现有 `method`、`args` 映射到 `params`；响应再转换为 `data`/对象错误。不得改变现有 v0 客户端的行为。
 
@@ -247,7 +247,7 @@ v1 客户端只使用正式名；旧名只用于 v0 兼容，不在小程序中�
 
 | cmd | args | 当前 | v1 状态 | 说明 |
 | --- | --- | --- | --- | --- |
-| `device.info` | `{}` | ❌ | 未实现 | 无 token、无副作用的探测入口；返回型号、固件版本、设备 ID、`protocol_versions` 和 `security` |
+| `device.info` | `{}` | ✅ v1 | 已实现 | 无 token、无副作用探测；返回型号、固件、设备 ID、`protocol_versions`、`security` |
 | `device.status` | `{}` | `getStatus` 部分 | 未实现 | 网络/BLE/MQTT/堆/分区摘要；MQTT 状态单独字段 |
 | `network.status` | `{}` | 无正式命令 | 未实现 | STA 状态、SSID、IP、RSSI、失败原因、候选操作 |
 | `gpio.status` | `{}` | `io.get` 部分 | 未实现 | 引脚、输入/输出、策略、io_seq/source |
@@ -258,8 +258,8 @@ v1 客户端只使用正式名；旧名只用于 v0 兼容，不在小程序中�
 | cmd | args | 当前 | v1 状态 | 说明 |
 | --- | --- | --- | --- | --- |
 | `network.scan` | `{}` | ✅ v0 同步 | v1 异步目标 | 扫描结果含 ssid/rssi/auth_mode；不得回密码 |
-| `network.profile.list` | `{}` | ✅ v0 `network.profiles` | v1适配 | 只返回 SSID、`password_set` |
-| `network.profile.delete` | `{ssid}` | 🟡 v0 | v1适配 | 删除当前正在使用的 SSID 返回 `busy`，要求先切换 |
+| `network.profile.list` | `{}` | ✅ v1 映射 v0 `network.profiles` | 已适配 | 只返回 SSID、`password_set` |
+| `network.profile.delete` | `{ssid}` | ✅ v1 映射 v0 | 已适配 | 当前 v0 行为尚未实现“使用中返回 busy” |
 | `network.validate` | `{ssid,password?,use_saved?,static?}` | ❌ | 未实现 | 只校验，不连接、不落盘 |
 | `network.tryconnect` | `{ssid,password?,use_saved?,static?,idempotency_key?}` | ❌ | 未实现 | 启动候选；返回 `operation_id`；`use_saved=true` 时复用设备已保存 profile |
 | `network.cancel` | `{operation_id}` | ❌ | 未实现 | 幂等取消；`committing` 不承诺撤销 |
@@ -270,9 +270,9 @@ v1 客户端只使用正式名；旧名只用于 v0 兼容，不在小程序中�
 
 | cmd | args | 当前 | v1 状态 | 说明 |
 | --- | --- | --- | --- | --- |
-| `config.get` | `{domains?: ["network","mqtt","bluetooth","uart","gpio","web"]}` | ✅ v0 | v1适配 | 只返回配置；运行态走 status 命令 |
+| `config.get` | `{domains?: ["network","mqtt","bluetooth","uart","gpio","web"]}` | ✅ v1 子集 | 已适配 | 只返回配置；运行态走 status 命令 |
 | `config.validate` | `{patch:{...}}` | ❌ | 未实现 | 通用字段/跨字段校验 |
-| `config.set` | `{patch:{...},idempotency_key?}` | 🟡 v0 直接 patch | v1适配 | v0 使用 `params` 直接作 patch；v1 统一 `patch` |
+| `config.set` | `{patch:{...},idempotency_key?}` | 🟡 v1 子集 | 已适配但受限 | v1 拒绝 network 字段和 `idempotency_key`；UART 域仍不可用 |
 | UART 参数 | 包含在 `config.set` 的 UART 域 | ❌ | 未实现 | 必须走 `config_apply` + 硬件回滚 |
 
 ### D. 异步操作
@@ -286,19 +286,19 @@ v1 客户端只使用正式名；旧名只用于 v0 兼容，不在小程序中�
 
 | cmd | args | 当前 | v1 状态 |
 | --- | --- | --- | --- |
-| `auth.login` | `{username,password}` | ✅ v0 `login` | v1适配 |
-| `auth.admin.set` | `{old_password,new_password,new_username?}` | 🟡 v0 `web.auth.set` | v1适配；需作废旧会话 |
-| `provisioning.pin.set` | `{pin,password}` | ✅ HTTP 实测 | v1适配；BLE 未验 |
+| `auth.login` | `{username,password}` | ✅ v1 映射 `login` | 已适配 |
+| `auth.admin.set` | `{old_password,new_password,new_username?}` | ✅ v1 映射 `web.auth.set` | 已适配；仍不作废旧会话 |
+| `provisioning.pin.set` | `{pin,password}` | ✅ v1 映射 | 已适配；HTTP 实测，BLE 未验 |
 
 ### F. GPIO / UART / 数据面
 
 | cmd | args | 当前 | v1 状态 |
 | --- | --- | --- | --- |
-| `led.set` / `led.toggle` | `{value}` / `{}` | ✅ v0 | v1适配 |
-| `relay.set` / `relay.toggle` | `{value}` / `{}` | ✅ v0 | v1适配 |
-| `io.set` | `{relay_on?,led_on?}` | ✅ v0 | v1适配 |
-| `uart.send` | `{encoding:"text"/"hex",data}` | ✅ v0 | v1适配 |
-| `data.loopback` | `{enabled}` | ✅ v0 | v1适配；仅本地 |
+| `led.set` / `led.toggle` | `{value}` / `{}` | ✅ v1 子集 | 已适配 |
+| `relay.set` / `relay.toggle` | `{value}` / `{}` | ✅ v1 子集 | 已适配 |
+| `io.set` | `{relay_on?,led_on?}` | ✅ v1 子集 | 已适配 |
+| `uart.send` | `{encoding:"text"/"hex",data}` | ✅ v1 子集 | 已适配 |
+| `data.loopback` | `{enabled}` | ✅ v1 子集 | 已适配；仅本地 |
 
 ### G. 维护
 
@@ -663,8 +663,9 @@ BLE 登录 token 只证明应用层身份，不是链路加密/绑定。敏感�
 | 分片中途失败 | 有 truncated 诊断，不伪报成功 | G1 代码，待实测 |
 | MQTT 调用网络/UART/loopback/BT 修改 | `forbidden` | G1 代码，待实测 |
 | BLE 登录/断连 token 失效 | 断连后重新登录 | ✅ 现有 |
-| v1 探测发到 v0 固件 | 识别为 v0，不继续发 v1 网络命令 | ❌ 适配层未实现 |
-| v1 `unsupported_version` | 降级 v0 或提示升级，不误解为 v0 成功 | ❌ |
+| v1 探测发到 v0 固件 | 识别为 v0，不继续发 v1 网络命令 | ❌ 旧固件无 device.info |
+| v1 `device.info` 到当前 v1 子集固件 | 返回 `protocol_versions:["1.0"]` 和安全 false | 🟡 已实现，待手机实测 |
+| v1 `unsupported_version` | 降级 v0 或提示升级，不误解为 v0 成功 | 🟡 适配层已实现，待实测 |
 | 开放网络空口令 | validate/tryconnect 按开放网络处理，认证失败明确返回 | ❌ |
 | `use_saved=true` 复用 profile | 找到 profile 才试连；找不到 `not_found`；不回传口令 | ❌ |
 | 静态 IP 地址/掩码/网关非法 | `invalid_argument`，不进入试连 | ❌ |
@@ -685,7 +686,9 @@ BLE 登录 token 只证明应用层身份，不是链路加密/绑定。敏感�
 ## 12. 实施边界
 
 - 本文档修订 1.1，协议版本仍为 v1.0。
-- v1.0 封装、v0/v1 探测适配、`device.info.security`、`operation_id`、网络候选状态机尚未实现；小程序不得把本规范中的目标命令当作已可用接口。
+- v1.0 适配层已实现现有命令子集（提交 `3dff417`）：`device.info`、`auth.login`、`config.get/set`、`network.profile.list/delete`、GPIO、`uart.send`、`data.loopback`、`auth.admin.set`、`provisioning.pin.set`；网络事务、`operation_id`、`operation.event` 仍未实现。
+- 未列入 v1 白名单的命令返回 `unknown_command`；小程序不得把本规范中的目标命令当作已可用接口。
+- `config.set` 的 v1 适配当前拒绝 network 字段和 `idempotency_key`，UART 域仍不可用；这些限制在 G2/G3/G5 前保持。
 - 页面可以按本规范开发，但“可联调”列标为“否”的功能只能使用 mock，不得进入验收。
 - G1 代码已提交（`b50426e`），运行态验收未完成。
 - G0 代码已提交（`972f5dd`），硬件验收因 B 板串口设备消失未完成。
