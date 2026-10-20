@@ -81,6 +81,11 @@ esp_err_t app_config_save_wifi_profile(const char *ssid, const char *password);
 esp_err_t app_config_delete_wifi_profile(const char *ssid);
 esp_err_t app_config_clear_wifi_profiles(void);
 
+/* G2：主配置 + Wi-Fi profile 的旧快照。保存/恢复完成后需 discard。 */
+esp_err_t app_config_snapshot_save(void);
+esp_err_t app_config_snapshot_restore(void);
+void app_config_snapshot_discard(void);
+
 /* GPIO 输出上次状态(仅"状态记忆"策略使用):
  * 独立 NVS 键,不随主配置 blob 写入;读失败返回 false(调用方回退安全关闭)。 */
 bool app_config_load_output_last(bool relay, bool *on);

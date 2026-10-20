@@ -44,3 +44,6 @@ typedef enum {
 
 app_wifi_try_result_t app_wifi_try_connect(const char *ssid, const char *password,
                                            uint32_t timeout_ms);
+/* G2 候选：必须等待候选获得 IP 才返回 APP_WIFI_TRY_OK。 */
+app_wifi_try_result_t app_wifi_try_connect_ip(const char *ssid, const char *password,
+                                              uint32_t timeout_ms);

@@ -44,6 +44,7 @@ static bool s_wifi_pmf_required_tried = false;
 /* 试连验证状态(1.3-37):试连期间事件处理器只记结果、不跑正常自动重连逻辑 */
 static bool s_tryconnect_active = false;
 static bool s_tryconnect_connecting = false;
+static bool s_tryconnect_require_ip = false;
 static app_wifi_try_result_t s_tryconnect_result = APP_WIFI_TRY_TIMEOUT;
 static EventGroupHandle_t s_tryconnect_events = NULL;
 static StaticEventGroup_t s_tryconnect_events_buf;
@@ -1085,11 +1086,26 @@ static void app_wifi_event_handler(void *arg, esp_event_base_t event_base, int32
         case WIFI_EVENT_STA_CONNECTED: {
             bool use_static = false;
 
-            /* 试连验证:连接成功即记结果,跳过一切正常运行逻辑 */
+            /* 试连验证:普通试连以关联成功为准;G2 候选必须继续等 DHCP/IP */
             if (s_tryconnect_active && s_tryconnect_connecting) {
-                s_tryconnect_result = APP_WIFI_TRY_OK;
-                if (s_tryconnect_events != NULL) {
-                    xEventGroupSetBits(s_tryconnect_events, APP_WIFI_TRY_DONE_BIT);
+                if (!s_tryconnect_require_ip) {
+                    s_tryconnect_result = APP_WIFI_TRY_OK;
+                    if (s_tryconnect_events != NULL) {
+                        xEventGroupSetBits(s_tryconnect_events, APP_WIFI_TRY_DONE_BIT);
+                    }
+                    break;
+                }
+                {
+                    esp_err_t stop_err = esp_netif_dhcpc_stop(s_sta_netif);
+                    esp_err_t start_err;
+
+                    if (stop_err != ESP_OK && stop_err != ESP_ERR_ESP_NETIF_DHCP_ALREADY_STOPPED) {
+                        ESP_LOGW(TAG, "tryconnect: dhcpc_stop: %s", esp_err_to_name(stop_err));
+                    }
+                    start_err = esp_netif_dhcpc_start(s_sta_netif);
+                    if (start_err != ESP_OK && start_err != ESP_ERR_ESP_NETIF_DHCP_ALREADY_STARTED) {
+                        ESP_LOGW(TAG, "tryconnect: dhcpc_start: %s", esp_err_to_name(start_err));
+                    }
                 }
                 break;
             }
@@ -1238,6 +1254,12 @@ static void app_wifi_event_handler(void *arg, esp_event_base_t event_base, int32
 
         /* 试连验证:拿 IP 属候选连接,不写运行时状态/不回写 profile */
         if (s_tryconnect_active) {
+            if (s_tryconnect_require_ip) {
+                s_tryconnect_result = APP_WIFI_TRY_OK;
+                if (s_tryconnect_events != NULL) {
+                    xEventGroupSetBits(s_tryconnect_events, APP_WIFI_TRY_DONE_BIT);
+                }
+            }
             return;
         }
 
@@ -1510,8 +1532,8 @@ esp_err_t app_wifi_perform_scan(void)
  * 期间事件处理器只记结果(见 s_tryconnect_active 分支),结束无条件恢复旧配置,
  * 再交回常规自动重连路径回到原状态。调用方(HTTP handler)会阻塞等待结果。
  * ------------------------------------------------------------------------- */
-app_wifi_try_result_t app_wifi_try_connect(const char *ssid, const char *password,
-                                           uint32_t timeout_ms)
+static app_wifi_try_result_t app_wifi_try_connect_common(const char *ssid, const char *password,
+                                                         uint32_t timeout_ms, bool require_ip)
 {
     wifi_config_t old_cfg = {0};
     wifi_config_t candidate = {0};
@@ -1586,6 +1608,7 @@ app_wifi_try_result_t app_wifi_try_connect(const char *ssid, const char *passwor
 
     xEventGroupClearBits(events, APP_WIFI_TRY_DONE_BIT);
     s_tryconnect_result = APP_WIFI_TRY_TIMEOUT;
+    s_tryconnect_require_ip = require_ip;
     s_tryconnect_active = true;
     s_tryconnect_connecting = false;
     s_wifi_sta_connecting = true;   /* 抑制 boot monitor 的自动调度 */
@@ -1601,6 +1624,7 @@ app_wifi_try_result_t app_wifi_try_connect(const char *ssid, const char *passwor
         ESP_LOGW(TAG, "tryconnect: set_config/connect failed: %s", esp_err_to_name(err));
         s_tryconnect_active = false;
         s_tryconnect_connecting = false;
+        s_tryconnect_require_ip = false;
         s_wifi_sta_connecting = false;
         (void)esp_wifi_set_config(WIFI_IF_STA, &old_cfg);
         app_wifi_schedule_connect_task(pdMS_TO_TICKS(400));
@@ -1616,14 +1640,28 @@ app_wifi_try_result_t app_wifi_try_connect(const char *ssid, const char *passwor
     esp_wifi_disconnect();
     s_tryconnect_active = false;
     s_tryconnect_connecting = false;
+    s_tryconnect_require_ip = false;
     s_wifi_sta_connecting = false;
     if (esp_wifi_set_config(WIFI_IF_STA, &old_cfg) != ESP_OK) {
         ESP_LOGW(TAG, "tryconnect: restore sta config failed");
     }
     app_wifi_schedule_connect_task(pdMS_TO_TICKS(400));
 
-    ESP_LOGI(TAG, "tryconnect ssid='%s' result=%d", ssid, (int)s_tryconnect_result);
+    ESP_LOGI(TAG, "tryconnect ssid='%s' result=%d require_ip=%d",
+             ssid, (int)s_tryconnect_result, require_ip ? 1 : 0);
     return s_tryconnect_result;
+}
+
+app_wifi_try_result_t app_wifi_try_connect(const char *ssid, const char *password,
+                                           uint32_t timeout_ms)
+{
+    return app_wifi_try_connect_common(ssid, password, timeout_ms, false);
+}
+
+app_wifi_try_result_t app_wifi_try_connect_ip(const char *ssid, const char *password,
+                                              uint32_t timeout_ms)
+{
+    return app_wifi_try_connect_common(ssid, password, timeout_ms, true);
 }
 
 static void app_wifi_restart_task_fn(void *arg)

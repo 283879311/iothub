@@ -257,6 +257,7 @@ static bool app_ble_cmd_v1_allowed(const char *cmd)
         "auth.login",
         "config.get",
         "config.set",
+        "network.status",
         "network.profile.list",
         "network.profile.delete",
         "led.set",

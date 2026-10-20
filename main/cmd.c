@@ -15,6 +15,7 @@
 #include "data_pipe.h"
 #include "esp_app_desc.h"
 #include "esp_random.h"
+#include "esp_timer.h"
 #include "identity.h"
 #include "mqtt.h"
 #include "prov_pin.h"
@@ -24,11 +25,80 @@
 
 static const char *TAG = "cmd";
 
+extern app_config_t s_config;
+
 static const char *const k_config_domains[] = {
     "network", "mqtt", "bluetooth", "uart", "gpio", "web",
 };
 
-extern app_config_t s_config;
+#define APP_NET_TRIAL_TTL_MS (300 * 1000)
+
+typedef struct {
+    bool valid;
+    char id[20];
+    char ssid[33];
+    char password[65];
+    int64_t expires_ms;
+} app_cmd_net_trial_t;
+
+static app_cmd_net_trial_t s_net_trial;
+
+static void app_cmd_net_trial_clear(void)
+{
+    memset(&s_net_trial, 0, sizeof(s_net_trial));
+}
+
+static bool app_cmd_net_trial_ready(const char *trial_id)
+{
+    int64_t now = esp_timer_get_time() / 1000;
+
+    if (!s_net_trial.valid || now >= s_net_trial.expires_ms) {
+        if (s_net_trial.valid) {
+            app_cmd_net_trial_clear();
+        }
+        return false;
+    }
+    return trial_id == NULL || strcmp(trial_id, s_net_trial.id) == 0;
+}
+
+static cJSON *app_cmd_build_network_status(void)
+{
+    cJSON *root = cJSON_CreateObject();
+    cJSON *trial;
+
+    if (root == NULL) {
+        return NULL;
+    }
+    app_wifi_runtime_lock();
+    cJSON_AddBoolToObject(root, "sta_connected", s_wifi.sta_connected);
+    cJSON_AddBoolToObject(root, "sta_has_ip", s_wifi.sta_has_ip);
+    cJSON_AddStringToObject(root, "sta_ip", s_wifi.sta_ip);
+    cJSON_AddStringToObject(root, "last_disconnect", s_wifi.last_disconnect);
+    app_wifi_runtime_unlock();
+
+    app_config_lock();
+    cJSON_AddStringToObject(root, "sta_ssid", s_config.sta_ssid);
+    cJSON_AddBoolToObject(root, "password_set", s_config.sta_password[0] != '\0');
+    cJSON_AddStringToObject(root, "mode", app_network_mode_to_string(s_config.net_mode));
+    app_config_unlock();
+
+    app_mqtt_lock();
+    cJSON_AddBoolToObject(root, "mqtt_connected", s_mqtt.connected);
+    cJSON_AddStringToObject(root, "mqtt_last_error", s_mqtt.last_error);
+    app_mqtt_unlock();
+
+    trial = cJSON_AddObjectToObject(root, "trial");
+    if (trial != NULL) {
+        if (app_cmd_net_trial_ready(NULL)) {
+            cJSON_AddStringToObject(trial, "trial_id", s_net_trial.id);
+            cJSON_AddStringToObject(trial, "state", "got_ip");
+            cJSON_AddStringToObject(trial, "ssid", s_net_trial.ssid);
+        } else {
+            cJSON_AddStringToObject(trial, "state", "idle");
+        }
+    }
+    return root;
+}
 
 /* ---------------------------------------------------------------------------
  * 护栏:云端/BLE 命令面可改网络参数的开关 —— 默认关闭(改错会自断通道,只能现场恢复)。
@@ -786,6 +856,159 @@ esp_err_t app_cmd_execute_ex(const cJSON *frame, app_cmd_source_t source,
                     err = "out_of_memory";
                 } else {
                     cJSON_AddBoolToObject(resp, "loopback", enabled);
+                }
+            }
+        } else if (strcmp(m, "network.status") == 0) {
+            resp = app_cmd_build_network_status();
+            if (resp == NULL) {
+                err = "out_of_memory";
+            }
+        } else if (strcmp(m, "network.tryconnect") == 0) {
+            const cJSON *ssid_item = cJSON_IsObject(params)
+                                         ? cJSON_GetObjectItemCaseSensitive(params, "ssid")
+                                         : NULL;
+            const cJSON *pass_item = cJSON_IsObject(params)
+                                         ? cJSON_GetObjectItemCaseSensitive(params, "password")
+                                         : NULL;
+            app_wifi_try_result_t result;
+            const char *ssid;
+            const char *password;
+
+            if (source == APP_CMD_SOURCE_MQTT) {
+                err = "guard_rejected";
+            } else if (!cJSON_IsString(ssid_item) || ssid_item->valuestring == NULL ||
+                       ssid_item->valuestring[0] == '\0') {
+                err = "params_required";
+            } else if (s_net_trial.valid && app_cmd_net_trial_ready(NULL)) {
+                err = "busy";
+            } else {
+                app_cmd_net_trial_clear();
+                ssid = ssid_item->valuestring;
+                password = cJSON_IsString(pass_item) && pass_item->valuestring != NULL
+                               ? pass_item->valuestring : "";
+                ESP_LOGI(TAG, "network.tryconnect ssid='%s'", ssid);
+                result = app_wifi_try_connect_ip(ssid, password, 15000);
+                switch (result) {
+                case APP_WIFI_TRY_OK:
+                    snprintf(s_net_trial.id, sizeof(s_net_trial.id), "trial-%08X",
+                             (unsigned)esp_random());
+                    snprintf(s_net_trial.ssid, sizeof(s_net_trial.ssid), "%s", ssid);
+                    snprintf(s_net_trial.password, sizeof(s_net_trial.password), "%s", password);
+                    s_net_trial.expires_ms = esp_timer_get_time() / 1000 + APP_NET_TRIAL_TTL_MS;
+                    s_net_trial.valid = true;
+                    resp = cJSON_CreateObject();
+                    if (resp == NULL) {
+                        app_cmd_net_trial_clear();
+                        err = "out_of_memory";
+                    } else {
+                        cJSON_AddStringToObject(resp, "trial_id", s_net_trial.id);
+                        cJSON_AddStringToObject(resp, "state", "got_ip");
+                        cJSON_AddStringToObject(resp, "ssid", s_net_trial.ssid);
+                    }
+                    break;
+                case APP_WIFI_TRY_WRONG_PASSWORD:
+                    err = "wrong_password";
+                    break;
+                case APP_WIFI_TRY_AP_NOT_FOUND:
+                    err = "ap_not_found";
+                    break;
+                case APP_WIFI_TRY_TIMEOUT:
+                    err = "connect_timeout";
+                    break;
+                case APP_WIFI_TRY_BUSY:
+                    err = "busy";
+                    break;
+                case APP_WIFI_TRY_INVALID_ARG:
+                    err = "invalid_param";
+                    break;
+                default:
+                    err = "connect_failed";
+                    break;
+                }
+            }
+        } else if (strcmp(m, "network.apply") == 0) {
+            const cJSON *trial_item = cJSON_IsObject(params)
+                                          ? cJSON_GetObjectItemCaseSensitive(params, "trial_id")
+                                          : NULL;
+
+            if (source == APP_CMD_SOURCE_MQTT) {
+                err = "guard_rejected";
+            } else if (!cJSON_IsString(trial_item) || trial_item->valuestring == NULL ||
+                       !app_cmd_net_trial_ready(trial_item->valuestring)) {
+                err = "trial_invalid";
+            } else if (app_config_snapshot_save() != ESP_OK) {
+                app_cmd_net_trial_clear();
+                err = "storage_failed";
+            } else {
+                cJSON *patch = cJSON_CreateObject();
+                cJSON *changed = NULL;
+                cfg_effect_t effect = CFG_EFFECT_NONE;
+                esp_err_t apply_err = ESP_FAIL;
+
+                if (patch != NULL) {
+                    cJSON_AddStringToObject(patch, "sta_ssid", s_net_trial.ssid);
+                    cJSON_AddStringToObject(patch, "sta_password", s_net_trial.password);
+                    apply_err = config_apply_patch(patch, &changed, &effect);
+                    cJSON_Delete(patch);
+                    cJSON_Delete(changed);
+                }
+                if (apply_err != ESP_OK) {
+                    app_config_snapshot_discard();
+                    app_cmd_net_trial_clear();
+                    err = apply_err == ESP_ERR_INVALID_ARG ? "invalid_config" : "save_failed";
+                } else {
+                    esp_err_t profile_err = app_config_save_wifi_profile(s_net_trial.ssid,
+                                                                          s_net_trial.password);
+
+                    if (profile_err != ESP_OK) {
+                        esp_err_t restore_err = app_config_snapshot_restore();
+
+                        app_cmd_net_trial_clear();
+                        err = restore_err == ESP_OK ? "storage_failed" : "rollback_failed";
+                    } else if (!app_wifi_schedule_restart()) {
+                        esp_err_t restore_err = app_config_snapshot_restore();
+
+                        app_cmd_net_trial_clear();
+                        err = restore_err == ESP_OK ? "apply_failed" : "rollback_failed";
+                    } else {
+                        char trial_id[sizeof(s_net_trial.id)];
+
+                        snprintf(trial_id, sizeof(trial_id), "%s", s_net_trial.id);
+                        app_config_snapshot_discard();
+                        app_cmd_net_trial_clear();
+                        resp = cJSON_CreateObject();
+                        if (resp == NULL) {
+                            err = "out_of_memory";
+                        } else {
+                            cJSON_AddStringToObject(resp, "trial_id", trial_id);
+                            cJSON_AddStringToObject(resp, "state", "success");
+                            cJSON_AddBoolToObject(resp, "saved", true);
+                            cJSON_AddBoolToObject(resp, "applied", true);
+                        }
+                    }
+                }
+            }
+        } else if (strcmp(m, "network.cancel") == 0) {
+            const cJSON *trial_item = cJSON_IsObject(params)
+                                          ? cJSON_GetObjectItemCaseSensitive(params, "trial_id")
+                                          : NULL;
+
+            if (source == APP_CMD_SOURCE_MQTT) {
+                err = "guard_rejected";
+            } else if (!cJSON_IsString(trial_item) || trial_item->valuestring == NULL ||
+                       !app_cmd_net_trial_ready(trial_item->valuestring)) {
+                err = "not_found";
+            } else {
+                char trial_id[sizeof(s_net_trial.id)];
+
+                snprintf(trial_id, sizeof(trial_id), "%s", s_net_trial.id);
+                app_cmd_net_trial_clear();
+                resp = cJSON_CreateObject();
+                if (resp == NULL) {
+                    err = "out_of_memory";
+                } else {
+                    cJSON_AddStringToObject(resp, "trial_id", trial_id);
+                    cJSON_AddStringToObject(resp, "state", "cancelled");
                 }
             }
         } else if (strcmp(m, "network.profiles") == 0) {

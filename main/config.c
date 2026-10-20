@@ -29,6 +29,15 @@ typedef struct {
     app_wifi_profile_t profiles[APP_WIFI_PROFILE_MAX];
 } app_wifi_profiles_blob_t;
 
+/* G2 事务快照：只允许一个活动事务，固定内存，不动态分配。 */
+typedef struct {
+    bool valid;
+    app_config_t config;
+    app_wifi_profiles_blob_t profiles;
+} app_config_snapshot_blob_t;
+
+static app_config_snapshot_blob_t s_config_snapshot;
+
 /*
  * Legacy config structs — field layout by version:
  *
@@ -892,6 +901,69 @@ esp_err_t app_config_clear_wifi_profiles(void)
     }
     app_wifi_profiles_unlock();
     return err;
+}
+
+esp_err_t app_config_snapshot_save(void)
+{
+    nvs_handle_t nvs_handle;
+    esp_err_t err;
+
+    app_config_lock();
+    app_wifi_profiles_lock();
+    s_config_snapshot.valid = false;
+    s_config_snapshot.config = s_config;
+    app_config_init_wifi_profiles(&s_config_snapshot.profiles);
+
+    err = nvs_open(APP_NAMESPACE, NVS_READONLY, &nvs_handle);
+    if (err == ESP_ERR_NVS_NOT_FOUND) {
+        err = ESP_OK;   /* 没有任何已保存 profile：快照为空列表 */
+    } else if (err == ESP_OK) {
+        err = app_config_load_wifi_profiles_blob(nvs_handle, &s_config_snapshot.profiles);
+        nvs_close(nvs_handle);
+    }
+    if (err == ESP_OK) {
+        s_config_snapshot.valid = true;
+    }
+    app_wifi_profiles_unlock();
+    app_config_unlock();
+    return err;
+}
+
+esp_err_t app_config_snapshot_restore(void)
+{
+    nvs_handle_t nvs_handle;
+    esp_err_t err;
+
+    app_config_lock();
+    app_wifi_profiles_lock();
+    if (!s_config_snapshot.valid) {
+        app_wifi_profiles_unlock();
+        app_config_unlock();
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    err = app_config_save(&s_config_snapshot.config);
+    if (err == ESP_OK) {
+        err = nvs_open(APP_NAMESPACE, NVS_READWRITE, &nvs_handle);
+        if (err == ESP_OK) {
+            err = app_config_store_wifi_profiles_blob(nvs_handle, &s_config_snapshot.profiles);
+            nvs_close(nvs_handle);
+        }
+    }
+    if (err == ESP_OK) {
+        s_config_snapshot.valid = false;
+        app_wifi_mark_profiles_dirty();
+    }
+    app_wifi_profiles_unlock();
+    app_config_unlock();
+    return err;
+}
+
+void app_config_snapshot_discard(void)
+{
+    app_config_lock();
+    s_config_snapshot.valid = false;
+    app_config_unlock();
 }
 
 bool app_config_load_output_last(bool relay, bool *on)
