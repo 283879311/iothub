@@ -48,14 +48,22 @@ void app_main(void)
 
     ESP_LOGI(TAG, "[boot-4] app_bootstrap_load_config");
     app_bootstrap_load_config();
-    ESP_LOGI(TAG, "[boot-4c] config_apply_init");
+    ESP_LOGI(TAG, "[boot-4a] config_apply_init");
     config_apply_init();
 
-    /* 释放未选模式的 BT 栈内存(内部按 bt_mode 判断:BLE 常驻时自动跳过)。
-     * 注:BLE 配网已按产品决策移除,无凭据设备改由 SoftAP 强制门户配网,
-     * 因此不再需要"配网态保留整栈"的特殊分支。 */
-    ESP_LOGI(TAG, "[boot-4b] app_bt_release_unused_memory");
+    /* BLE 是 Web/SoftAP 删除后的唯一本地管理通道：先收敛为 peripheral，
+     * 并在 Wi-Fi/OTA/HTTP 之前启动，Wi-Fi 初始化失败不影响 BLE。 */
+    ESP_LOGI(TAG, "[boot-4b] app_config_force_ble_peripheral");
+    app_config_force_ble_peripheral();
+    ESP_LOGI(TAG, "[boot-4c] app_bt_release_unused_memory");
     app_bt_release_unused_memory();
+    ESP_LOGI(TAG, "[boot-4d] app_bt_apply_config (always-on peripheral)");
+    if (app_bt_apply_config() != ESP_OK) {
+        char bt_last_error[64];
+        app_bt_get_status(NULL, bt_last_error, sizeof(bt_last_error));
+        ESP_LOGW(TAG, "Bluetooth init failed (last_error=%s)", bt_last_error);
+    }
+
     ESP_LOGI(TAG, "[boot-5] app_configure_gpio");
     app_configure_gpio();
     ESP_LOGI(TAG, "[boot-6] app_ota_mount_fs");
@@ -65,12 +73,6 @@ void app_main(void)
     ESP_LOGI(TAG, "[boot-7c] app_captive_init");
     app_captive_init();
 
-    ESP_LOGI(TAG, "[boot-8] app_bt_apply_config");
-    if (app_bt_apply_config() != ESP_OK) {
-        char bt_last_error[64];
-        app_bt_get_status(NULL, bt_last_error, sizeof(bt_last_error));
-        ESP_LOGW(TAG, "Bluetooth init skipped (last_error=%s)", bt_last_error);
-    }
     ESP_LOGI(TAG, "[boot-9] app_uart_apply_config");
     if (app_uart_apply_config() != ESP_OK) {
         ESP_LOGW(TAG, "UART init skipped");

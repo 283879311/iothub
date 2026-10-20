@@ -72,6 +72,8 @@ typedef struct {
 } app_config_t;
 
 void app_config_set_defaults(app_config_t *config);
+/* 产品基线：BLE 始终为 Peripheral；旧 off/central 配置收敛并持久化。 */
+void app_config_force_ble_peripheral(void);
 esp_err_t app_config_save(const app_config_t *config);
 void app_config_load(app_config_t *config);
 esp_err_t app_config_load_wifi_profiles(app_wifi_profile_t *profiles, size_t max_profiles, size_t *profile_count);

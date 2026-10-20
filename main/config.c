@@ -185,6 +185,8 @@ typedef struct {
 
 static const char *TAG = "iothub";
 
+extern app_config_t s_config;
+
 static SemaphoreHandle_t s_config_lock = NULL;
 static SemaphoreHandle_t s_wifi_runtime_lock = NULL;
 static SemaphoreHandle_t s_wifi_profiles_lock = NULL;
@@ -391,7 +393,8 @@ void app_config_set_defaults(app_config_t *config)
     config->relay_active_high = 1;
     config->led_active_high = 1;
     config->input_active_low = 1;
-    config->bt_mode = 0;
+    config->bt_mode = BT_MODE_BLE;
+    config->bt_role = BT_ROLE_PERIPHERAL;
     config->net_mode = 0;
     config->mqtt_port = 1883;
     config->uart_parity_mode = UART_PARITY_DISABLE;
@@ -428,6 +431,34 @@ static inline void app_config_mark_current_version(app_config_t *config)
     if (config != NULL) {
         config->version = APP_CONFIG_VERSION;
     }
+}
+
+/* 产品基线：BLE 永远是 Peripheral。旧配置的 off/central 在启动时收敛为
+ * peripheral；只改 RAM 不够，必须持久化，否则每次启动都会重复迁移。 */
+void app_config_force_ble_peripheral(void)
+{
+    bool changed = false;
+
+    app_config_lock();
+    if (s_config.bt_role != BT_ROLE_PERIPHERAL) {
+        s_config.bt_role = BT_ROLE_PERIPHERAL;
+        changed = true;
+    }
+    if (s_config.bt_mode != BT_MODE_BLE) {
+        s_config.bt_mode = BT_MODE_BLE;
+        changed = true;
+    }
+    if (changed) {
+        esp_err_t err = app_config_save(&s_config);
+
+        if (err == ESP_OK) {
+            ESP_LOGW(TAG, "BLE role forced to peripheral and persisted");
+        } else {
+            ESP_LOGE(TAG, "BLE role forced to peripheral, save failed: %s",
+                     esp_err_to_name(err));
+        }
+    }
+    app_config_unlock();
 }
 
 esp_err_t app_config_save(const app_config_t *config)

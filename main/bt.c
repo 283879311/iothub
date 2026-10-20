@@ -237,6 +237,7 @@ void app_bt_release_unused_memory(void)
 {
     static bool s_released = false;
     uint8_t bt_mode;
+    uint8_t bt_role;
     size_t free_before;
     size_t free_after;
     esp_err_t err;
@@ -248,11 +249,14 @@ void app_bt_release_unused_memory(void)
 
     app_config_lock();
     bt_mode = s_config.bt_mode;
+    bt_role = s_config.bt_role;
     app_config_unlock();
 
-    if (bt_mode == BT_MODE_BLE) {
-        ESP_LOGI(TAG, "BT memory release skipped (mode=%s, BLE-only build)",
-                 app_bt_mode_to_string(bt_mode));
+    /* BLE 常态开启：peripheral 或兼容 BLE 模式都不能释放 BTDM。
+     * 旧 off/central 配置已由 app_config_force_ble_peripheral() 收敛。 */
+    if (bt_mode == BT_MODE_BLE || bt_role == BT_ROLE_PERIPHERAL) {
+        ESP_LOGI(TAG, "BT memory release skipped (mode=%s role=%u, BLE always-on)",
+                 app_bt_mode_to_string(bt_mode), (unsigned)bt_role);
         return;
     }
 
@@ -403,21 +407,14 @@ esp_err_t app_bt_apply_config(void)
 {
     app_bt_stop();
 
-    if (s_config.bt_role == BT_ROLE_CENTRAL) {
-        return app_bt_start_central();
+    /* 产品基线：BLE 始终为 Peripheral。central/off 仅保留代码兼容，
+     * 不在运行时生效；旧配置由 config 层收敛并持久化。 */
+    app_config_force_ble_peripheral();
+    if (s_config.bt_role != BT_ROLE_PERIPHERAL) {
+        ESP_LOGE(TAG, "BLE role could not be forced to peripheral (role=%u)",
+                 (unsigned)s_config.bt_role);
     }
-    if (s_config.bt_role == BT_ROLE_PERIPHERAL || s_config.bt_mode == BT_MODE_BLE) {
-        return app_bt_start_ble();
-    }
-    if (s_config.bt_role != BT_ROLE_OFF) {
-        app_config_lock();
-        s_config.bt_role = BT_ROLE_OFF;
-        (void)app_config_save(&s_config);
-        app_config_unlock();
-        ESP_LOGW(TAG, "Legacy bt_role coerced to off");
-    }
-    app_bt_status_set_error("");
-    return ESP_OK;
+    return app_bt_start_ble();
 }
 
 #else
@@ -431,6 +428,7 @@ void app_bt_release_unused_memory(void)
 {
     static bool s_released = false;
     uint8_t bt_mode;
+    uint8_t bt_role;
     size_t free_before;
     size_t free_after;
     esp_err_t err;
@@ -442,11 +440,14 @@ void app_bt_release_unused_memory(void)
 
     app_config_lock();
     bt_mode = s_config.bt_mode;
+    bt_role = s_config.bt_role;
     app_config_unlock();
 
-    if (bt_mode == BT_MODE_BLE) {
-        ESP_LOGI(TAG, "BT memory release skipped (mode=%s, BLE-only build)",
-                 app_bt_mode_to_string(bt_mode));
+    /* BLE 常态开启：peripheral 或兼容 BLE 模式都不能释放 BTDM。
+     * 旧 off/central 配置已由 app_config_force_ble_peripheral() 收敛。 */
+    if (bt_mode == BT_MODE_BLE || bt_role == BT_ROLE_PERIPHERAL) {
+        ESP_LOGI(TAG, "BT memory release skipped (mode=%s role=%u, BLE always-on)",
+                 app_bt_mode_to_string(bt_mode), (unsigned)bt_role);
         return;
     }
 
@@ -730,30 +731,13 @@ esp_err_t app_bt_apply_config(void)
 {
     app_bt_stop();
 
-    /* bt_role(v8)是权威字段,必须先于兼容字段 bt_mode 判定 ——
-     * bluetooth_put_handler 会把 bt_mode 同步成"非 off 即 BLE",
-     * 若沿用旧的"bt_mode==BLE 先判",central 配置会永远落回从机(实测复现:
-     * 配置=central、运行=ble)。 */
-    if (s_config.bt_role == BT_ROLE_CENTRAL) {
-        return app_bt_start_central();
+    /* 产品基线：BLE 始终为 Peripheral。central/off 仅保留代码兼容，
+     * 不在运行时生效；旧配置由 config 层收敛并持久化。 */
+    app_config_force_ble_peripheral();
+    if (s_config.bt_role != BT_ROLE_PERIPHERAL) {
+        ESP_LOGE(TAG, "BLE role could not be forced to peripheral (role=%u)",
+                 (unsigned)s_config.bt_role);
     }
-    if (s_config.bt_role == BT_ROLE_PERIPHERAL || s_config.bt_mode == BT_MODE_BLE) {
-        if (s_config.bt_role != BT_ROLE_PERIPHERAL) {
-            /* 兼容:旧 UI/接口只写 bt_mode(=1 表示 BLE)而 bt_role 仍为默认值时,
-             * 按"从角色"处理,避免升级后原有蓝牙配置失效 */
-            ESP_LOGW(TAG, "legacy bt_mode=ble detected, treating as peripheral");
-        }
-        return app_bt_start_ble();
-    }
-    /* OFF,或历史遗留/非法值(如旧 SPP=2 以外的值)一律按关闭处理并纠正落盘 */
-    if (s_config.bt_role != BT_ROLE_OFF) {
-        app_config_lock();
-        s_config.bt_role = BT_ROLE_OFF;
-        (void)app_config_save(&s_config);
-        app_config_unlock();
-        ESP_LOGW(TAG, "Legacy bt_role coerced to off");
-    }
-    app_bt_status_set_error("");
-    return ESP_OK;
+    return app_bt_start_ble();
 }
 #endif /* CONFIG_BT_NIMBLE_ENABLED */
