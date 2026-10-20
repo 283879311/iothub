@@ -9,7 +9,7 @@
 ### 0.0 开发前 P0 前置条件
 
 1. **v1.0 适配层只实现了现有命令子集。**
-   `device.info`、`auth.login`、`config.get/set`、`network.profile.list/delete`、GPIO、`uart.send`、`data.loopback`、`auth.admin.set`、`provisioning.pin.set` 已可用 v1.0 外壳；`network.scan/validate/tryconnect/apply/cancel/status`、`operation.*`、`config.validate`、状态类命令仍未实现。未实现命令返回 `unknown_command`，不得在客户端伪装成功。
+   `device.info`、`auth.login`、`config.get/set`、`network.profile.list/delete`、GPIO、`uart.send`、`data.loopback`、`auth.admin.set`、`provisioning.pin.set` 已可用 v1.0 外壳；其中 `device.info`、`auth.login`、`config.get` 已通过手机实测。`network.scan/validate/tryconnect/apply/cancel/status`、`operation.*`、`config.validate`、状态类命令仍未实现。未实现命令返回 `unknown_command`，不得在客户端伪装成功。
 
 2. **BLE 链路安全尚未验收。**
    `login` token、TTL 和限频只是应用层保护，不是链路加密/绑定。链路安全专项完成前，敏感写操作在生产策略下必须关闭；`device.info.security` 会报告 `l2_ready`/`sensitive_writes_allowed`，客户端必须据此禁用对应页面入口。
@@ -664,7 +664,8 @@ BLE 登录 token 只证明应用层身份，不是链路加密/绑定。敏感�
 | MQTT 调用网络/UART/loopback/BT 修改 | `forbidden` | G1 代码，待实测 |
 | BLE 登录/断连 token 失效 | 断连后重新登录 | ✅ 现有 |
 | v1 探测发到 v0 固件 | 识别为 v0，不继续发 v1 网络命令 | ❌ 旧固件无 device.info |
-| v1 `device.info` 到当前 v1 子集固件 | 返回 `protocol_versions:["1.0"]` 和安全 false | 🟡 已实现，待手机实测 |
+| v1 `device.info` 到当前 v1 子集固件 | 返回 `protocol_versions:["1.0"]` 和安全 false | ✅ 手机实测 |
+| v1 `auth.login` / `config.get` | 返回 `data` 外壳和 token/配置 | ✅ 手机实测 |
 | v1 `unsupported_version` | 降级 v0 或提示升级，不误解为 v0 成功 | 🟡 适配层已实现，待实测 |
 | 开放网络空口令 | validate/tryconnect 按开放网络处理，认证失败明确返回 | ❌ |
 | `use_saved=true` 复用 profile | 找到 profile 才试连；找不到 `not_found`；不回传口令 | ❌ |
@@ -686,7 +687,7 @@ BLE 登录 token 只证明应用层身份，不是链路加密/绑定。敏感�
 ## 12. 实施边界
 
 - 本文档修订 1.1，协议版本仍为 v1.0。
-- v1.0 适配层已实现现有命令子集（提交 `3dff417`）：`device.info`、`auth.login`、`config.get/set`、`network.profile.list/delete`、GPIO、`uart.send`、`data.loopback`、`auth.admin.set`、`provisioning.pin.set`；网络事务、`operation_id`、`operation.event` 仍未实现。
+- v1.0 适配层已实现现有命令子集（提交 `3dff417`）：`device.info`、`auth.login`、`config.get/set`、`network.profile.list/delete`、GPIO、`uart.send`、`data.loopback`、`auth.admin.set`、`provisioning.pin.set`；`device.info`、`auth.login`、`config.get` 已手机实测。网络事务、`operation_id`、`operation.event` 仍未实现。
 - 未列入 v1 白名单的命令返回 `unknown_command`；小程序不得把本规范中的目标命令当作已可用接口。
 - `config.set` 的 v1 适配当前拒绝 network 字段和 `idempotency_key`，UART 域仍不可用；这些限制在 G2/G3/G5 前保持。
 - 页面可以按本规范开发，但“可联调”列标为“否”的功能只能使用 mock，不得进入验收。
