@@ -249,7 +249,7 @@ v1 客户端只使用正式名；旧名只用于 v0 兼容，不在小程序中�
 | --- | --- | --- | --- | --- |
 | `device.info` | `{}` | ✅ v1 | 已实现 | 无 token、无副作用探测；返回型号、固件、设备 ID、`protocol_versions`、`security` |
 | `device.status` | `{}` | `getStatus` 部分 | 未实现 | 网络/BLE/MQTT/堆/分区摘要；MQTT 状态单独字段 |
-| `network.status` | `{}` | 无正式命令 | 未实现 | STA 状态、SSID、IP、RSSI、失败原因、候选操作 |
+| `network.status` | `{}` | ✅ v0/v1 | 已实现 | STA 状态、SSID、IP、失败原因、MQTT 状态、trial 摘要；RSSI 待补 |
 | `gpio.status` | `{}` | `io.get` 部分 | 未实现 | 引脚、输入/输出、策略、io_seq/source |
 | `uart.runtime` | `{}` | HTTP UART GET | 未实现 | UART 参数、驱动状态、统计 |
 
@@ -261,9 +261,9 @@ v1 客户端只使用正式名；旧名只用于 v0 兼容，不在小程序中�
 | `network.profile.list` | `{}` | ✅ v1 映射 v0 `network.profiles` | 已适配 | 只返回 SSID、`password_set` |
 | `network.profile.delete` | `{ssid}` | ✅ v1 映射 v0 | 已适配 | 当前 v0 行为尚未实现“使用中返回 busy” |
 | `network.validate` | `{ssid,password?,use_saved?,static?}` | ❌ | 未实现 | 只校验，不连接、不落盘 |
-| `network.tryconnect` | `{ssid,password?,use_saved?,static?,idempotency_key?}` | ❌ | 未实现 | 启动候选；返回 `operation_id`；`use_saved=true` 时复用设备已保存 profile |
-| `network.cancel` | `{operation_id}` | ❌ | 未实现 | 幂等取消；`committing` 不承诺撤销 |
-| `network.apply` | `{operation_id,idempotency_key?}` | ❌ | 未实现 | 只接受 `got_ip` 的候选 |
+| `network.tryconnect` | `{ssid,password?}` | 🟡 v0 同步 | v1 未适配 | 同步阻塞最多 15s；返回 `trial_id`，不是 `operation_id`；`use_saved/static` 未实现 |
+| `network.cancel` | `{trial_id}` | 🟡 v0 同步 | v1 未适配 | 仅丢弃已恢复的候选 trial；不是异步取消 |
+| `network.apply` | `{trial_id}` | 🟡 v0 同步 | v1 未适配 | 只接受当前有效 got_ip trial；快照提交/回滚 |
 | `network.reconnect` | `{}` | 🟡 v0 `network.restart` | v1 目标 | 用当前正式配置重连 |
 
 ### C. 统一配置
@@ -365,6 +365,8 @@ v1 客户端只使用正式名；旧名只用于 v0 兼容，不在小程序中�
 ```
 
 ## 6. 网络配置事务
+
+> **G2 中间态（2026-10-20，提交 `82cef42`）**：固件已实现同步 `network.tryconnect/apply/cancel/status`，但使用 `trial_id`，尚未实现 `operation_id`/Notify；v1 适配层只开放 `network.status`，`tryconnect/apply/cancel` 仍返回 `unknown_command`。下面的 `operation_id` 流程是 G3 目标，不是当前 v0 命令格式。
 
 推荐流程，客户端必须按此执行：
 
@@ -672,13 +674,13 @@ BLE 登录 token 只证明应用层身份，不是链路加密/绑定。敏感�
 | 静态 IP 地址/掩码/网关非法 | `invalid_argument`，不进入试连 | ❌ |
 | 同一 operation 重复 apply/cancel | 返回当前状态，不重复提交 | ❌ |
 | `sensitive_writes_allowed=false` | 敏感写命令 `forbidden`，客户端隐藏入口 | ❌ 安全专项未实现 |
-| `network.tryconnect` 错误密码 | `failed`，不进入 got_ip | ❌ |
-| `network.tryconnect` AP 不存在 | `network_failed`/明确原因 | ❌ |
-| 候选获得 IP 后才可 apply | apply 成功；否则拒绝 | ❌ |
-| 旧候选事件不提交新候选 | 拒绝旧 operation | ❌ |
-| apply 时主配置成功/profile 失败 | 恢复旧快照或 `rollback_failed` | ❌ |
-| cancel 在 connecting/got_ip | 恢复旧网络 | ❌ |
-| cancel 在 committing | 返回提交中，不假装取消 | ❌ |
+| `network.tryconnect` 错误密码 | `failed`，不进入 got_ip | 🟡 G2 代码，待实测 |
+| `network.tryconnect` AP 不存在 | `network_failed`/明确原因 | 🟡 G2 代码，待实测 |
+| 候选获得 IP 后才可 apply | apply 成功；否则拒绝 | 🟡 G2 代码，待实测 |
+| 旧候选事件不提交新候选 | 拒绝旧 operation | ❌ G4 事件代次未实现 |
+| apply 时主配置成功/profile 失败 | 恢复旧快照或 `rollback_failed` | 🟡 G2 快照代码，待故障注入 |
+| cancel 在 connecting/got_ip | 恢复旧网络 | 🟡 trial 丢弃；异步取消待 G3 |
+| cancel 在 committing | 返回提交中，不假装取消 | ❌ 同步 apply 中命令无法并发 |
 | operation.get 重复查询 | 不重复执行 | ❌ |
 | UART config 硬件应用失败 | 不落盘，返回 apply_failed | ❌ |
 | BLE 常态开启、Wi-Fi 失败仍可连接 | G0 验收 | 代码已编译，硬件待验 |
@@ -690,6 +692,8 @@ BLE 登录 token 只证明应用层身份，不是链路加密/绑定。敏感�
 - v1.0 适配层已实现现有命令子集（提交 `3dff417`）：`device.info`、`auth.login`、`config.get/set`、`network.profile.list/delete`、GPIO、`uart.send`、`data.loopback`、`auth.admin.set`、`provisioning.pin.set`；`device.info`、`auth.login`、`config.get` 已手机实测。网络事务、`operation_id`、`operation.event` 仍未实现。
 - 未列入 v1 白名单的命令返回 `unknown_command`；小程序不得把本规范中的目标命令当作已可用接口。
 - `config.set` 的 v1 适配当前拒绝 network 字段和 `idempotency_key`，UART 域仍不可用；这些限制在 G2/G3/G5 前保持。
+- G2 同步网络事务已实现（提交 `82cef42`）：`network.status`、同步 `tryconnect`（等待 IP）、`apply`（旧配置/profile 快照、失败回滚）、`cancel`（trial 丢弃）；使用 `trial_id`，不是 `operation_id`，v1 适配层只开放 `network.status`。
+- G2 的 MQTT 候选 IP 隔离、事件代次、异步取消/Notify 尚未实现，属于 G3/G4。
 - 页面可以按本规范开发，但“可联调”列标为“否”的功能只能使用 mock，不得进入验收。
 - G1 代码已提交（`b50426e`），运行态验收未完成。
 - G0 代码已提交（`972f5dd`），硬件验收因 B 板串口设备消失未完成。
