@@ -26,10 +26,10 @@
 | Peripheral | 已实现：广播、GATT Server、命令/数据特征、断连后恢复广播 |
 | Central | 已实现但产品不使用：扫描/连接其他 NUS 设备，走 central 数据面 |
 | 角色选择 | `bt_role=off/central/peripheral`；`bt_mode=BLE` 兼容旧配置 |
-| 默认角色 | 出厂默认 `bt_role=0`（off），恢复出厂后 BLE 不启动 |
+| 默认角色 | G0 后默认 `bt_role=PERIPHERAL`；旧 off/central 启动时收敛；B 板启动已验证 role=1 |
 | 广播名 | 正常固件 `IotHubBLE-<MAC 后4位>` |
 | 断连恢复 | `app_ble_gatts_nimble_on_disconnect()` 调用 `app_bt_restart_advertising()` |
-| 启动位置 | BLE 在 Wi-Fi、captive、OTA 挂载之后初始化（`main.c`），Wi-Fi 失败会阻断 BLE |
+| 启动位置 | G0 后 BLE 在 Wi-Fi/captive/OTA 之前初始化；B 板日志已确认先广播后启动 Wi-Fi |
 
 ### 1.3 命令协议与认证
 
@@ -152,7 +152,7 @@ network.validate
 
 | 能力 | 当前 | 目标 | 关卡 |
 | --- | --- | --- | --- |
-| 常态 Peripheral | 默认 off，启动在 Wi-Fi 后 | 强制 Peripheral，先于 Wi-Fi | G6/always-on 前置 |
+| 常态 Peripheral | G0 代码：默认/旧配置收敛 Peripheral，启动在 Wi-Fi 前；B 板启动验证通过 | 完整验收 off/central 迁移、Wi-Fi 失败、恢复出厂 | G0/G6 |
 | Central | 编译并可按配置启动 | 产品不使用；裁剪需实测 | 资源专项 |
 | 网络状态 | `getStatus` 摘要 | `network.status` 完整状态 | 状态命令 |
 | 网络试连/提交 | 直接 `config.set` 落盘 | validate/tryconnect/apply/cancel | G2–G4 |
