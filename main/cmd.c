@@ -13,7 +13,9 @@
 #include "config_apply.h"
 #include "constants.h"
 #include "data_pipe.h"
+#include "esp_app_desc.h"
 #include "esp_random.h"
+#include "identity.h"
 #include "mqtt.h"
 #include "prov_pin.h"
 #include "state.h"
@@ -285,6 +287,34 @@ static cJSON *app_cmd_build_get_config(const cJSON *domains)
     return root;
 }
 
+/* v1.0 探测入口：无副作用，不暴露凭据；security 事实先如实报告 false。 */
+static cJSON *app_cmd_build_device_info(void)
+{
+    const esp_app_desc_t *desc = esp_app_get_description();
+    cJSON *root = cJSON_CreateObject();
+    cJSON *versions;
+    cJSON *security;
+
+    if (root == NULL) {
+        return NULL;
+    }
+    cJSON_AddStringToObject(root, "model", desc != NULL ? desc->project_name : "iothub");
+    cJSON_AddStringToObject(root, "firmware", desc != NULL ? desc->version : "");
+    cJSON_AddStringToObject(root, "device_id", app_get_hostname());
+    versions = cJSON_AddArrayToObject(root, "protocol_versions");
+    if (versions != NULL) {
+        cJSON_AddItemToArray(versions, cJSON_CreateString("1.0"));
+    }
+    security = cJSON_AddObjectToObject(root, "security");
+    if (security != NULL) {
+        cJSON_AddBoolToObject(security, "link_encrypted", false);
+        cJSON_AddBoolToObject(security, "bonded", false);
+        cJSON_AddBoolToObject(security, "l2_ready", false);
+        cJSON_AddBoolToObject(security, "sensitive_writes_allowed", false);
+    }
+    return root;
+}
+
 /* 普通结果(含 success 外壳):changed 移交所有权 */
 static cJSON *app_cmd_build_success(cJSON *changed, cfg_effect_t effect)
 {
@@ -454,6 +484,11 @@ esp_err_t app_cmd_execute_ex(const cJSON *frame, app_cmd_source_t source,
                 } else {
                     app_cmd_add_txn_fields(resp, effect);
                 }
+            }
+        } else if (strcmp(m, "device.info") == 0) {
+            resp = app_cmd_build_device_info();
+            if (resp == NULL) {
+                err = "out_of_memory";
             }
         } else if (strcmp(m, "getConfig") == 0 || strcmp(m, "config.get") == 0) {
             const cJSON *domains = cJSON_IsObject(params)

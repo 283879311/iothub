@@ -13,6 +13,7 @@
 #include "ble_cmd.h"
 #include "bt_gatts.h"
 #include "cmd.h"
+#include "config_apply.h"
 #include "http_priv.h"
 #include "ota.h"
 
@@ -248,6 +249,175 @@ static bool app_ble_cmd_authed(const cJSON *frame)
            strcmp(tok->valuestring, s_token) == 0;
 }
 
+/* v1.0 适配层：只暴露已有 handler，未实现的网络事务/operation 不伪造。 */
+static bool app_ble_cmd_v1_allowed(const char *cmd)
+{
+    static const char *const allowed[] = {
+        "device.info",
+        "auth.login",
+        "config.get",
+        "config.set",
+        "network.profile.list",
+        "network.profile.delete",
+        "led.set",
+        "led.toggle",
+        "relay.set",
+        "relay.toggle",
+        "io.set",
+        "uart.send",
+        "data.loopback",
+        "auth.admin.set",
+        "provisioning.pin.set",
+    };
+    size_t i;
+
+    if (cmd == NULL) {
+        return false;
+    }
+    for (i = 0; i < sizeof(allowed) / sizeof(allowed[0]); i++) {
+        if (strcmp(cmd, allowed[i]) == 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static const char *app_ble_cmd_v1_map(const char *cmd)
+{
+    if (strcmp(cmd, "auth.login") == 0) {
+        return "login";
+    }
+    if (strcmp(cmd, "network.profile.list") == 0) {
+        return "network.profiles";
+    }
+    if (strcmp(cmd, "auth.admin.set") == 0) {
+        return "web.auth.set";
+    }
+    return cmd;
+}
+
+static const char *app_ble_cmd_v1_error_code(const char *v0)
+{
+    if (v0 == NULL) {
+        return "internal_error";
+    }
+    if (strcmp(v0, "unknown_command") == 0 ||
+        strcmp(v0, "unknown_method") == 0) {
+        return "unknown_command";
+    }
+    if (strcmp(v0, "line_too_long") == 0) {
+        return "line_too_long";
+    }
+    if (strcmp(v0, "invalid_json") == 0) {
+        return "invalid_json";
+    }
+    if (strcmp(v0, "unsupported_version") == 0) {
+        return "unsupported_version";
+    }
+    if (strcmp(v0, "params_required") == 0 ||
+        strcmp(v0, "invalid_config") == 0 ||
+        strcmp(v0, "invalid_param") == 0 ||
+        strcmp(v0, "invalid_argument") == 0 ||
+        strcmp(v0, "invalid_old_password") == 0 ||
+        strcmp(v0, "password_too_short") == 0) {
+        return "invalid_argument";
+    }
+    if (strcmp(v0, "auth_required") == 0 ||
+        strcmp(v0, "invalid_credentials") == 0 ||
+        strcmp(v0, "unauthorized") == 0) {
+        return "unauthorized";
+    }
+    if (strcmp(v0, "guard_rejected") == 0 ||
+        strcmp(v0, "forbidden") == 0) {
+        return "forbidden";
+    }
+    if (strcmp(v0, "busy") == 0) {
+        return "busy";
+    }
+    if (strcmp(v0, "conflict") == 0) {
+        return "conflict";
+    }
+    if (strcmp(v0, "rate_limited") == 0) {
+        return "rate_limited";
+    }
+    if (strcmp(v0, "internal_error") == 0) {
+        return "internal_error";
+    }
+    if (strcmp(v0, "not_found") == 0) {
+        return "not_found";
+    }
+    if (strcmp(v0, "save_failed") == 0 ||
+        strcmp(v0, "storage_failed") == 0) {
+        return "storage_failed";
+    }
+    if (strcmp(v0, "wifi_scan_failed") == 0 ||
+        strcmp(v0, "network_failed") == 0) {
+        return "network_failed";
+    }
+    if (strcmp(v0, "restart_failed") == 0 ||
+        strcmp(v0, "apply_failed") == 0) {
+        return "apply_failed";
+    }
+    return "internal_error";
+}
+
+static void app_ble_cmd_wrap_v1(cJSON **resp, const char *id, bool has_id)
+{
+    cJSON *r = resp != NULL ? *resp : NULL;
+    cJSON *outer;
+    const cJSON *ok_item;
+
+    if (r == NULL) {
+        r = cJSON_CreateObject();
+        if (r != NULL) {
+            cJSON_AddBoolToObject(r, "ok", false);
+            cJSON_AddStringToObject(r, "error", "internal_error");
+        }
+    }
+    if (r == NULL) {
+        return;
+    }
+
+    ok_item = cJSON_GetObjectItemCaseSensitive(r, "ok");
+    if (cJSON_IsBool(ok_item) && !cJSON_IsTrue(ok_item)) {
+        const cJSON *err_item = cJSON_GetObjectItemCaseSensitive(r, "error");
+        const char *v0 = cJSON_IsString(err_item) ? err_item->valuestring : "internal_error";
+        cJSON *err_obj = cJSON_CreateObject();
+        cJSON *error = cJSON_CreateObject();
+
+        if (err_obj == NULL || error == NULL) {
+            cJSON_Delete(err_obj);
+            cJSON_Delete(error);
+            cJSON_Delete(r);
+            *resp = NULL;
+            return;
+        }
+        if (has_id) {
+            cJSON_AddStringToObject(err_obj, "id", id != NULL ? id : "");
+        }
+        cJSON_AddBoolToObject(err_obj, "ok", false);
+        cJSON_AddStringToObject(error, "code", app_ble_cmd_v1_error_code(v0));
+        cJSON_AddStringToObject(error, "message", v0);
+        cJSON_AddItemToObject(err_obj, "error", error);
+        cJSON_Delete(r);
+        *resp = err_obj;
+        return;
+    }
+
+    outer = cJSON_CreateObject();
+    if (outer == NULL) {
+        cJSON_Delete(r);
+        *resp = NULL;
+        return;
+    }
+    if (has_id) {
+        cJSON_AddStringToObject(outer, "id", id != NULL ? id : "");
+    }
+    cJSON_AddBoolToObject(outer, "ok", true);
+    cJSON_AddItemToObject(outer, "data", r);
+    *resp = outer;
+}
+
 static void app_ble_cmd_handle_line(const char *line, size_t len)
 {
     cJSON *frame = NULL;
@@ -255,8 +425,15 @@ static void app_ble_cmd_handle_line(const char *line, size_t len)
     cJSON *params = NULL;
     cJSON *resp = NULL;
     cJSON *id_item = NULL;
+    const cJSON *version_item = NULL;
+    const cJSON *cmd_item = NULL;
+    const cJSON *args_item = NULL;
     int64_t id = -1;
     bool has_id = false;
+    bool v1_envelope = false;
+    bool v1 = false;
+    bool v1_has_id = false;
+    char v1_id[65] = {0};
     app_cmd_result_t out = {0};
     const char *err = NULL;
     bool reboot_after_response = false;
@@ -272,16 +449,126 @@ static void app_ble_cmd_handle_line(const char *line, size_t len)
         goto done;
     }
 
+    version_item = cJSON_GetObjectItemCaseSensitive(frame, "version");
+    if (cJSON_IsString(version_item) && version_item->valuestring != NULL) {
+        v1_envelope = true;
+        v1 = strcmp(version_item->valuestring, "1.0") == 0;
+    }
+
     id_item = cJSON_GetObjectItemCaseSensitive(frame, "id");
-    if (cJSON_IsNumber(id_item)) {
+    if (v1_envelope) {
+        if (cJSON_IsString(id_item) && id_item->valuestring != NULL) {
+            snprintf(v1_id, sizeof(v1_id), "%s", id_item->valuestring);
+            v1_has_id = true;
+        } else if (cJSON_IsNumber(id_item)) {
+            snprintf(v1_id, sizeof(v1_id), "%lld", (long long)id_item->valuedouble);
+            v1_has_id = true;
+        }
+    }
+    if (!v1_envelope && cJSON_IsNumber(id_item)) {
         id = (int64_t)id_item->valuedouble;
         has_id = true;
     }
 
-    method = cJSON_GetObjectItemCaseSensitive(frame, "method");
-    params = cJSON_GetObjectItemCaseSensitive(frame, "params");
-    if (cJSON_IsString(method) && method->valuestring != NULL) {
-        ESP_LOGI(TAG, "rx method=%s id=%lld", method->valuestring, (long long)id);
+    if (v1_envelope) {
+        if (!v1) {
+            resp = cJSON_CreateObject();
+            if (resp != NULL) {
+                cJSON_AddBoolToObject(resp, "ok", false);
+                cJSON_AddStringToObject(resp, "error", "unsupported_version");
+            }
+            goto wrap;
+        }
+        if (!v1_has_id) {
+            resp = cJSON_CreateObject();
+            if (resp != NULL) {
+                cJSON_AddBoolToObject(resp, "ok", false);
+                cJSON_AddStringToObject(resp, "error", "invalid_argument");
+            }
+            goto wrap;
+        }
+        cmd_item = cJSON_GetObjectItemCaseSensitive(frame, "cmd");
+        args_item = cJSON_GetObjectItemCaseSensitive(frame, "args");
+        if (!cJSON_IsString(cmd_item) || cmd_item->valuestring == NULL ||
+            !cJSON_IsObject(args_item) ||
+            !app_ble_cmd_v1_allowed(cmd_item->valuestring)) {
+            resp = cJSON_CreateObject();
+            if (resp != NULL) {
+                cJSON_AddBoolToObject(resp, "ok", false);
+                cJSON_AddStringToObject(resp, "error",
+                                        (cJSON_IsString(cmd_item) &&
+                                         app_ble_cmd_v1_allowed(cmd_item->valuestring))
+                                            ? "invalid_argument" : "unknown_command");
+            }
+            goto wrap;
+        }
+
+        {
+            const char *mapped = app_ble_cmd_v1_map(cmd_item->valuestring);
+            cJSON *normalized = NULL;
+
+            if (strcmp(cmd_item->valuestring, "config.set") == 0) {
+                const cJSON *patch = cJSON_GetObjectItemCaseSensitive(args_item, "patch");
+
+                if (!cJSON_IsObject(patch)) {
+                    resp = cJSON_CreateObject();
+                    if (resp != NULL) {
+                        cJSON_AddBoolToObject(resp, "ok", false);
+                        cJSON_AddStringToObject(resp, "error", "invalid_argument");
+                    }
+                    goto wrap;
+                }
+                if (cJSON_GetObjectItemCaseSensitive(args_item, "idempotency_key") != NULL) {
+                    resp = cJSON_CreateObject();
+                    if (resp != NULL) {
+                        cJSON_AddBoolToObject(resp, "ok", false);
+                        cJSON_AddStringToObject(resp, "error", "invalid_argument");
+                    }
+                    goto wrap;
+                }
+                {
+                    const cJSON *item = NULL;
+
+                    cJSON_ArrayForEach(item, patch) {
+                        const cfg_field_t *f = config_apply_field(
+                            item->string != NULL ? item->string : "");
+
+                        if (f != NULL && f->domain == CFG_DOMAIN_NET) {
+                            resp = cJSON_CreateObject();
+                            if (resp != NULL) {
+                                cJSON_AddBoolToObject(resp, "ok", false);
+                                cJSON_AddStringToObject(resp, "error", "invalid_argument");
+                            }
+                            goto wrap;
+                        }
+                    }
+                }
+                normalized = cJSON_Duplicate(patch, 1);
+            } else {
+                normalized = cJSON_Duplicate(args_item, 1);
+            }
+            if (normalized == NULL) {
+                resp = cJSON_CreateObject();
+                if (resp != NULL) {
+                    cJSON_AddBoolToObject(resp, "ok", false);
+                    cJSON_AddStringToObject(resp, "error", "internal_error");
+                }
+                goto wrap;
+            }
+            cJSON_DeleteItemFromObjectCaseSensitive(frame, "method");
+            cJSON_DeleteItemFromObjectCaseSensitive(frame, "params");
+            cJSON_AddStringToObject(frame, "method", mapped);
+            cJSON_AddItemToObject(frame, "params", normalized);
+            method = cJSON_GetObjectItemCaseSensitive(frame, "method");
+            params = cJSON_GetObjectItemCaseSensitive(frame, "params");
+            ESP_LOGI(TAG, "rx v1 cmd=%s id=%s", cmd_item->valuestring, v1_id);
+        }
+    } else {
+        method = cJSON_GetObjectItemCaseSensitive(frame, "method");
+        params = cJSON_GetObjectItemCaseSensitive(frame, "params");
+        if (cJSON_IsString(method) && method->valuestring != NULL) {
+            ESP_LOGI(TAG, "rx method=%s id=%lld", method->valuestring, (long long)id);
+        }
     }
 
     /* 限频:5 次/秒(与 MQTT RPC 同决策,2026-10-15)。
@@ -331,8 +618,10 @@ static void app_ble_cmd_handle_line(const char *line, size_t len)
         goto wrap;
     }
 
-    /* 其余命令:必须先 login 拿 token */
-    if (!app_ble_cmd_authed(frame)) {
+    /* 其余命令:必须先 login 拿 token。device.info 是 v1 无 token 探测入口。 */
+    if (!(v1_envelope && cmd_item != NULL && cJSON_IsString(cmd_item) &&
+          strcmp(cmd_item->valuestring, "device.info") == 0) &&
+        !app_ble_cmd_authed(frame)) {
         resp = cJSON_CreateObject();
         if (resp != NULL) {
             cJSON_AddBoolToObject(resp, "ok", false);
@@ -359,9 +648,10 @@ static void app_ble_cmd_handle_line(const char *line, size_t len)
     reboot_after_response = out.reboot_after_response;
 
 wrap:
-    /* 统一包 {"id":N,"ok":true,"result":{...}} 外壳(错误响应已自带 ok=false) */
-    if (has_id && resp != NULL && cJSON_HasObjectItem(resp, "ok")) {
-        /* 已含 ok 外壳(错误路径):补 id */
+    if (v1_envelope) {
+        app_ble_cmd_wrap_v1(&resp, v1_id, v1_has_id);
+    } else if (has_id && resp != NULL && cJSON_HasObjectItem(resp, "ok")) {
+        /* v0:已含 ok 外壳(错误路径):补 id */
         if (cJSON_GetObjectItemCaseSensitive(resp, "id") == NULL) {
             cJSON_AddNumberToObject(resp, "id", (double)id);
         }
