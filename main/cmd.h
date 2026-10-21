@@ -37,3 +37,6 @@ typedef struct {
 esp_err_t app_cmd_execute_ex(const cJSON *frame, app_cmd_source_t source,
                              cJSON **resp_out, app_cmd_result_t *out,
                              const char **err_msg);
+
+/* BLE 断连:作废属于 BLE 会话的网络候选 trial,避免无会话时遗留可 apply 的凭据。 */
+void app_cmd_net_on_ble_disconnect(void);

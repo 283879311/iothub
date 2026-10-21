@@ -35,6 +35,7 @@ static const char *const k_config_domains[] = {
 
 typedef struct {
     bool valid;
+    app_cmd_source_t owner;
     char id[20];
     char ssid[33];
     char password[65];
@@ -46,6 +47,14 @@ static app_cmd_net_trial_t s_net_trial;
 static void app_cmd_net_trial_clear(void)
 {
     memset(&s_net_trial, 0, sizeof(s_net_trial));
+}
+
+void app_cmd_net_on_ble_disconnect(void)
+{
+    if (s_net_trial.valid && s_net_trial.owner == APP_CMD_SOURCE_BLE) {
+        app_cmd_net_trial_clear();
+        ESP_LOGI(TAG, "network trial cleared on BLE disconnect");
+    }
 }
 
 static bool app_cmd_net_trial_ready(const char *trial_id)
@@ -890,11 +899,20 @@ esp_err_t app_cmd_execute_ex(const cJSON *frame, app_cmd_source_t source,
                 result = app_wifi_try_connect_ip(ssid, password, 15000);
                 switch (result) {
                 case APP_WIFI_TRY_OK:
+                    /* tryconnect 是同步阻塞的:等待期间 BLE 可能已断开。
+                     * 此时若仍把候选留在 RAM,会形成"无会话但可 apply"的遗留事务;
+                     * 直接丢弃候选,连接已恢复的正式配置不受影响。 */
+                    if (source == APP_CMD_SOURCE_BLE && !app_ble_gatts_connected()) {
+                        ESP_LOGW(TAG, "network.tryconnect: BLE disconnected, discard candidate");
+                        err = "cancelled";
+                        break;
+                    }
                     snprintf(s_net_trial.id, sizeof(s_net_trial.id), "trial-%08X",
                              (unsigned)esp_random());
                     snprintf(s_net_trial.ssid, sizeof(s_net_trial.ssid), "%s", ssid);
                     snprintf(s_net_trial.password, sizeof(s_net_trial.password), "%s", password);
                     s_net_trial.expires_ms = esp_timer_get_time() / 1000 + APP_NET_TRIAL_TTL_MS;
+                    s_net_trial.owner = source;
                     s_net_trial.valid = true;
                     resp = cJSON_CreateObject();
                     if (resp == NULL) {

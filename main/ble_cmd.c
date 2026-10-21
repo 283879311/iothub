@@ -170,6 +170,7 @@ void app_ble_cmd_on_disconnect(void)
     s_token_expire_ms = 0;
     s_last_cmd_ms = 0;
     s_line_len = 0;
+    app_cmd_net_on_ble_disconnect();
     ESP_LOGI(TAG, "cmd session token invalidated (disconnect)");
 }
 
