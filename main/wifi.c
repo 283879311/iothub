@@ -49,7 +49,8 @@ static app_wifi_try_result_t s_tryconnect_result = APP_WIFI_TRY_TIMEOUT;
 static EventGroupHandle_t s_tryconnect_events = NULL;
 static StaticEventGroup_t s_tryconnect_events_buf;
 static portMUX_TYPE s_tryconnect_mux = portMUX_INITIALIZER_UNLOCKED;
-#define APP_WIFI_TRY_DONE_BIT BIT0
+#define APP_WIFI_TRY_DONE_BIT   BIT0
+#define APP_WIFI_TRY_OLD_DISC_BIT BIT1
 
 #define APP_WIFI_PROFILE_ATTEMPTED_MASK_BITS ((unsigned)(sizeof(s_wifi_attempted_mask) * 8U))
 
@@ -1150,9 +1151,15 @@ static void app_wifi_event_handler(void *arg, esp_event_base_t event_base, int32
             bool need_schedule_connect = false;
             bool do_retry_direct = false;
 
-            /* 试连验证:旧链路拆除的断开事件忽略(s_tryconnect_connecting=false),
+            /* 试连验证:旧链路拆除的断开事件单独标记,不能算候选失败;
              * 候选连接失败才记结果;无论如何都跳过正常重连逻辑 */
             if (s_tryconnect_active) {
+                if (!s_tryconnect_connecting) {
+                    if (s_tryconnect_events != NULL) {
+                        xEventGroupSetBits(s_tryconnect_events, APP_WIFI_TRY_OLD_DISC_BIT);
+                    }
+                    break;
+                }
                 if (s_tryconnect_connecting) {
                     switch (disconnected->reason) {
                     case 15:  /* 4WAY_HANDSHAKE_TIMEOUT:口令错误最常见 */
@@ -1252,9 +1259,10 @@ static void app_wifi_event_handler(void *arg, esp_event_base_t event_base, int32
         int active_profile_snapshot;
         size_t profile_count_snapshot;
 
-        /* 试连验证:拿 IP 属候选连接,不写运行时状态/不回写 profile */
+        /* 试连验证:拿 IP 属候选连接,不写运行时状态/不回写 profile。
+         * 必须处于候选 connecting 阶段,避免旧连接的迟到 IP 事件误判成功。 */
         if (s_tryconnect_active) {
-            if (s_tryconnect_require_ip) {
+            if (s_tryconnect_require_ip && s_tryconnect_connecting) {
                 s_tryconnect_result = APP_WIFI_TRY_OK;
                 if (s_tryconnect_events != NULL) {
                     xEventGroupSetBits(s_tryconnect_events, APP_WIFI_TRY_DONE_BIT);
@@ -1627,14 +1635,38 @@ static app_wifi_try_result_t app_wifi_try_connect_common(const char *ssid, const
         return APP_WIFI_TRY_CONNECT_FAILED;
     }
 
-    xEventGroupClearBits(events, APP_WIFI_TRY_DONE_BIT);
-    s_tryconnect_result = APP_WIFI_TRY_TIMEOUT;
-    s_tryconnect_require_ip = require_ip;
-    s_tryconnect_active = true;
-    s_tryconnect_connecting = false;
-    s_wifi_sta_connecting = true;   /* 抑制 boot monitor 的自动调度 */
+    {
+        bool old_connected;
 
-    esp_wifi_disconnect();
+        app_wifi_runtime_lock();
+        old_connected = s_wifi.sta_connected;
+        app_wifi_runtime_unlock();
+
+        xEventGroupClearBits(events, APP_WIFI_TRY_DONE_BIT | APP_WIFI_TRY_OLD_DISC_BIT);
+        s_tryconnect_result = APP_WIFI_TRY_TIMEOUT;
+        s_tryconnect_require_ip = require_ip;
+        s_tryconnect_active = true;
+        s_tryconnect_connecting = false;
+        s_wifi_sta_connecting = true;   /* 抑制 boot monitor 的自动调度 */
+
+        esp_wifi_disconnect();
+        if (old_connected &&
+            xEventGroupWaitBits(events, APP_WIFI_TRY_OLD_DISC_BIT, pdTRUE, pdFALSE,
+                                pdMS_TO_TICKS(2000)) == 0) {
+            /* 旧链路断开事件没来,继续候选会把迟到事件误算成候选失败。 */
+            ESP_LOGW(TAG, "tryconnect: old link disconnect not observed, abort");
+            s_tryconnect_active = false;
+            s_tryconnect_connecting = false;
+            s_tryconnect_require_ip = false;
+            s_wifi_sta_connecting = false;
+            (void)esp_wifi_set_config(WIFI_IF_STA, &old_cfg);
+            if (mode_switched) {
+                (void)esp_wifi_set_mode(old_wifi_mode);
+            }
+            app_wifi_schedule_connect_task(pdMS_TO_TICKS(400));
+            return APP_WIFI_TRY_CONNECT_FAILED;
+        }
+    }
     err = esp_wifi_set_config(WIFI_IF_STA, &candidate);
     if (err == ESP_OK) {
         s_tryconnect_connecting = true;
