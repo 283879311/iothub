@@ -13,6 +13,7 @@
 #include "diag.h"
 #include "http.h"
 #include "mqtt.h"
+#include "operation.h"
 #include "ota.h"
 #include "state.h"
 #include "uart.h"
@@ -50,6 +51,10 @@ void app_main(void)
     app_bootstrap_load_config();
     ESP_LOGI(TAG, "[boot-4a] config_apply_init");
     config_apply_init();
+    ESP_LOGI(TAG, "[boot-4a2] app_operation_init");
+    if (app_operation_init() != ESP_OK) {
+        ESP_LOGW(TAG, "operation table init skipped");
+    }
 
     /* BLE 是 Web/SoftAP 删除后的唯一本地管理通道：先收敛为 peripheral，
      * 并在 Wi-Fi/OTA/HTTP 之前启动，Wi-Fi 初始化失败不影响 BLE。 */
@@ -108,4 +113,9 @@ void app_main(void)
     ESP_LOGI(TAG, "iothub phase-4 ready: mode=%s, AP SSID='%s', open http://192.168.8.1 when AP is enabled",
              app_network_mode_to_string(s_config.net_mode),
              s_config.ap_ssid);
+
+#ifdef APP_OPERATION_SELFTEST
+    ESP_LOGI(TAG, "[boot-14] operation selftest");
+    app_operation_selftest_start();
+#endif
 }
