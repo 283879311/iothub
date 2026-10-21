@@ -948,6 +948,8 @@ esp_err_t app_cmd_execute_ex(const cJSON *frame, app_cmd_source_t source,
                 if (patch != NULL) {
                     cJSON_AddStringToObject(patch, "sta_ssid", s_net_trial.ssid);
                     cJSON_AddStringToObject(patch, "sta_password", s_net_trial.password);
+                    /* 试连候选走 DHCP；提交必须与已验证 plan 一致，不能沿用旧静态 IP。 */
+                    cJSON_AddBoolToObject(patch, "sta_use_static", false);
                     apply_err = config_apply_patch(patch, &changed, &effect);
                     cJSON_Delete(patch);
                     cJSON_Delete(changed);
