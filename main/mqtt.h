@@ -23,3 +23,11 @@ void app_mqtt_on_io_change(void);
 uint32_t app_mqtt_tele_shed_count(void);
 void app_mqtt_lock(void);
 void app_mqtt_unlock(void);
+
+/* G3: operation 活动期间延迟可重建型 MQTT restart。
+ * begin 在已有 rebuild 正在执行时返回 ESP_ERR_INVALID_STATE；end 幂等。
+ * 多个 schedule 请求在 defer 期间合并为一个 pending 请求；超过 15 秒自动放行。 */
+esp_err_t app_mqtt_defer_restart_begin(void);
+void app_mqtt_defer_restart_end(void);
+bool app_mqtt_restart_is_deferred(void);
+bool app_mqtt_restart_is_pending(void);

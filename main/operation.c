@@ -11,11 +11,8 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
-#include "operation.h"
-
-#ifdef APP_OPERATION_LIFECYCLE_TEST
 #include "mqtt.h"
-#endif
+#include "operation.h"
 
 static const char *TAG = "operation";
 
@@ -144,6 +141,7 @@ esp_err_t app_operation_start(app_operation_owner_t owner, const char *idem_key,
     int64_t now_ms;
     app_operation_t *slot = NULL;
     size_t i;
+    bool defer_started = false;
 
     if (out != NULL) {
         *out = NULL;
@@ -158,11 +156,24 @@ esp_err_t app_operation_start(app_operation_owner_t owner, const char *idem_key,
         got_ip_ttl_ms = APP_OPERATION_DEFAULT_GOT_IP_TTL_MS;
     }
 
+    /* 网络 operation 开始前先与 MQTT rebuild 协调；如已有 rebuild 在跑则
+     * 明确返回 busy，不能先受理再面对并发峰值。内部测试 operation 不参与。 */
+    if (owner != APP_OPERATION_OWNER_INTERNAL) {
+        esp_err_t defer_err = app_mqtt_defer_restart_begin();
+        if (defer_err != ESP_OK) {
+            return defer_err;
+        }
+        defer_started = true;
+    }
+
     now_ms = app_operation_now_ms();
     portENTER_CRITICAL(&s_ops_mux);
     app_operation_reclaim_terminal_locked(now_ms);
     if (app_operation_has_active_locked()) {
         portEXIT_CRITICAL(&s_ops_mux);
+        if (defer_started) {
+            app_mqtt_defer_restart_end();
+        }
         return ESP_ERR_INVALID_STATE;   /* busy */
     }
     for (i = 0; i < APP_OPERATION_MAX_SLOTS; i++) {
@@ -173,6 +184,9 @@ esp_err_t app_operation_start(app_operation_owner_t owner, const char *idem_key,
     }
     if (slot == NULL) {
         portEXIT_CRITICAL(&s_ops_mux);
+        if (defer_started) {
+            app_mqtt_defer_restart_end();
+        }
         return ESP_ERR_NO_MEM;          /* terminal slots still retained */
     }
 
@@ -199,6 +213,9 @@ esp_err_t app_operation_start(app_operation_owner_t owner, const char *idem_key,
         slot->used = false;
         slot->state = APP_OP_FREE;
         portEXIT_CRITICAL(&s_ops_mux);
+        if (defer_started) {
+            app_mqtt_defer_restart_end();
+        }
         return ESP_ERR_NO_MEM;
     }
 
@@ -216,11 +233,13 @@ esp_err_t app_operation_set_state(app_operation_t *op, app_op_state_t state,
                                   app_operation_error_t error)
 {
     int64_t now_ms;
+    bool terminal;
 
     if (!app_operation_valid(op)) {
         return ESP_ERR_INVALID_ARG;
     }
     now_ms = app_operation_now_ms();
+    terminal = app_op_state_is_terminal(state);
 
     portENTER_CRITICAL(&s_ops_mux);
     if (!app_operation_valid(op)) {
@@ -237,11 +256,14 @@ esp_err_t app_operation_set_state(app_operation_t *op, app_op_state_t state,
         op->deadline_ms = now_ms + op->got_ip_ttl_ms;
     } else if (state == APP_OP_COMMITTING) {
         op->deadline_ms = 0;   /* committing 不可取消、不按候选 TTL 过期 */
-    } else if (app_op_state_is_terminal(state)) {
+    } else if (terminal) {
         op->deadline_ms = 0;
         op->terminal_ms = now_ms;
     }
     portEXIT_CRITICAL(&s_ops_mux);
+    if (terminal) {
+        app_mqtt_defer_restart_end();
+    }
     return ESP_OK;
 }
 
@@ -251,6 +273,7 @@ esp_err_t app_operation_cancel(app_operation_t *op)
     void *ctx = NULL;
     uint8_t generation;
     bool need_cleanup = false;
+    bool terminal = false;
 
     if (!app_operation_valid(op)) {
         return ESP_ERR_INVALID_ARG;
@@ -284,8 +307,12 @@ esp_err_t app_operation_cancel(app_operation_t *op)
             op->deadline_ms = 0;
             op->terminal_ms = app_operation_now_ms();
             op->expiring = false;
+            terminal = true;
         }
         portEXIT_CRITICAL(&s_ops_mux);
+        if (terminal) {
+            app_mqtt_defer_restart_end();
+        }
         return ESP_FAIL;
     }
 
@@ -295,9 +322,13 @@ esp_err_t app_operation_cancel(app_operation_t *op)
         op->error = APP_OPERATION_ERR_CANCELLED;
         op->deadline_ms = 0;
         op->terminal_ms = app_operation_now_ms();
+        terminal = true;
     }
     op->expiring = false;
     portEXIT_CRITICAL(&s_ops_mux);
+    if (terminal) {
+        app_mqtt_defer_restart_end();
+    }
     return ESP_OK;
 }
 
@@ -359,6 +390,8 @@ static void app_operation_run_pending(void)
     ESP_LOGI(TAG, "run %s -> connecting", op->id);
     err = run_fn(op, ctx);
     if (err != ESP_OK) {
+        bool failed = false;
+
         ESP_LOGW(TAG, "run %s failed: %s", op->id, esp_err_to_name(err));
         portENTER_CRITICAL(&s_ops_mux);
         if (op->used && app_op_state_is_active(op->state)) {
@@ -366,8 +399,12 @@ static void app_operation_run_pending(void)
             op->error = APP_OPERATION_ERR_INTERNAL;
             op->deadline_ms = 0;
             op->terminal_ms = app_operation_now_ms();
+            failed = true;
         }
         portEXIT_CRITICAL(&s_ops_mux);
+        if (failed) {
+            app_mqtt_defer_restart_end();
+        }
     }
 }
 
@@ -405,16 +442,24 @@ static void app_operation_expire_one(void)
         cleanup_ok = cleanup(op, ctx);
     }
 
-    portENTER_CRITICAL(&s_ops_mux);
-    if (op->used && op->generation == generation && app_op_state_is_active(op->state)) {
-        op->state = cleanup_ok ? APP_OP_EXPIRED : APP_OP_FAILED;
-        op->error = cleanup_ok ? APP_OPERATION_ERR_TIMEOUT
-                               : APP_OPERATION_ERR_CLEANUP_FAILED;
-        op->deadline_ms = 0;
-        op->terminal_ms = app_operation_now_ms();
+    {
+        bool expired = false;
+
+        portENTER_CRITICAL(&s_ops_mux);
+        if (op->used && op->generation == generation && app_op_state_is_active(op->state)) {
+            op->state = cleanup_ok ? APP_OP_EXPIRED : APP_OP_FAILED;
+            op->error = cleanup_ok ? APP_OPERATION_ERR_TIMEOUT
+                                   : APP_OPERATION_ERR_CLEANUP_FAILED;
+            op->deadline_ms = 0;
+            op->terminal_ms = app_operation_now_ms();
+            expired = true;
+        }
+        op->expiring = false;
+        portEXIT_CRITICAL(&s_ops_mux);
+        if (expired) {
+            app_mqtt_defer_restart_end();
+        }
     }
-    op->expiring = false;
-    portEXIT_CRITICAL(&s_ops_mux);
     ESP_LOGW(TAG, "expire %s cleanup=%s", op->id,
              cleanup_ok ? "ok" : "failed");
 }
@@ -647,6 +692,19 @@ static void app_operation_lifecycle_log(const char *phase, size_t min_free_seen,
                  ? "PASS" : "FAIL");
 }
 
+static void app_operation_lifecycle_update_min(size_t *min_free, size_t *min_largest)
+{
+    size_t free_now = esp_get_free_heap_size();
+    size_t largest_now = heap_caps_get_largest_free_block(MALLOC_CAP_DEFAULT);
+
+    if (free_now < *min_free) {
+        *min_free = free_now;
+    }
+    if (largest_now < *min_largest) {
+        *min_largest = largest_now;
+    }
+}
+
 static void app_operation_lifecycle_test_run(void)
 {
     app_operation_t *op = NULL;
@@ -680,10 +738,14 @@ static void app_operation_lifecycle_test_run(void)
         return;
     }
 
-    err = app_operation_start(APP_OPERATION_OWNER_INTERNAL, "lifecycle",
+    err = app_operation_start(APP_OPERATION_OWNER_BLE, "lifecycle",
                               5000, 10000, app_operation_lifecycle_run,
                               NULL, NULL, &op);
+    app_operation_lifecycle_update_min(&min_free_seen, &min_largest_seen);
     app_operation_lifecycle_log("after_start", min_free_seen, min_largest_seen);
+    ESP_LOGI(TAG, "lifecycle defer after_start: deferred=%d pending=%d",
+             (int)app_mqtt_restart_is_deferred(),
+             (int)app_mqtt_restart_is_pending());
     if (err != ESP_OK) {
         ESP_LOGW(TAG, "lifecycle worker create/start failed: %s", esp_err_to_name(err));
         return;
@@ -692,10 +754,14 @@ static void app_operation_lifecycle_test_run(void)
     if (!app_operation_lifecycle_wait(op, APP_OP_GOT_IP, 2000)) {
         ESP_LOGW(TAG, "lifecycle did not reach got_ip");
     }
+    app_operation_lifecycle_update_min(&min_free_seen, &min_largest_seen);
     app_operation_lifecycle_log("got_ip", min_free_seen, min_largest_seen);
 
-    /* 让 operation 活动与 MQTT 重连重叠，采样 5 秒内的最低水位。 */
+    /* operation 活动期间请求 MQTT restart：应被 defer/合并，不产生重建峰值。 */
     (void)app_mqtt_schedule_restart();
+    ESP_LOGI(TAG, "lifecycle defer after_schedule: deferred=%d pending=%d",
+             (int)app_mqtt_restart_is_deferred(),
+             (int)app_mqtt_restart_is_pending());
     for (int i = 0; i < 20; i++) {
         size_t free_now = esp_get_free_heap_size();
         size_t largest_now = heap_caps_get_largest_free_block(MALLOC_CAP_DEFAULT);
@@ -709,14 +775,33 @@ static void app_operation_lifecycle_test_run(void)
         vTaskDelay(pdMS_TO_TICKS(250));
     }
     app_operation_lifecycle_log("mqtt_overlap", min_free_seen, min_largest_seen);
+    ESP_LOGI(TAG, "lifecycle defer after_overlap: deferred=%d pending=%d",
+             (int)app_mqtt_restart_is_deferred(),
+             (int)app_mqtt_restart_is_pending());
 
     err = app_operation_cancel(op);
+    app_operation_lifecycle_update_min(&min_free_seen, &min_largest_seen);
     app_operation_lifecycle_log("cancelled", min_free_seen, min_largest_seen);
-    ESP_LOGI(TAG, "lifecycle cancel: %s state=%s",
-             esp_err_to_name(err), app_op_state_name(app_operation_state(op)));
+    ESP_LOGI(TAG, "lifecycle cancel: %s state=%s defer=%d pending=%d",
+             esp_err_to_name(err), app_op_state_name(app_operation_state(op)),
+             (int)app_mqtt_restart_is_deferred(),
+             (int)app_mqtt_restart_is_pending());
 
-    vTaskDelay(pdMS_TO_TICKS(3000));
-    app_operation_lifecycle_log("idle", min_free_seen, min_largest_seen);
+    /* 终态释放 defer 后，延迟 restart 仍可能形成峰值；完整采样 20 秒，
+     * 覆盖 MQTT 退避重连和再次分配的峰值。 */
+    for (int i = 0; i < 80; i++) {
+        size_t free_now = esp_get_free_heap_size();
+        size_t largest_now = heap_caps_get_largest_free_block(MALLOC_CAP_DEFAULT);
+
+        if (free_now < min_free_seen) {
+            min_free_seen = free_now;
+        }
+        if (largest_now < min_largest_seen) {
+            min_largest_seen = largest_now;
+        }
+        vTaskDelay(pdMS_TO_TICKS(250));
+    }
+    app_operation_lifecycle_log("post_restart", min_free_seen, min_largest_seen);
 
     if (s_worker != NULL) {
         hw_bytes = (size_t)uxTaskGetStackHighWaterMark(s_worker) * sizeof(StackType_t);

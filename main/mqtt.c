@@ -908,6 +908,148 @@ static bool app_mqtt_schedule_boost(void)
 #define APP_MQTT_BACKOFF_MAX_STEP 6
 static uint8_t s_restart_backoff_step = 0;
 
+/* G3 operation 冲突协调：只延迟客户端重建，不延迟连接状态记录/stop。 */
+#define APP_MQTT_RESTART_DEFER_MAX_MS 15000
+static bool s_restart_deferred = false;
+static bool s_restart_pending = false;
+static uint8_t s_restart_defer_depth = 0;
+static bool s_restart_active = false;
+static esp_timer_handle_t s_restart_defer_timer = NULL;
+
+static void app_mqtt_defer_timeout(void *arg);
+
+static bool app_mqtt_defer_timer_ensure(void)
+{
+    const esp_timer_create_args_t args = {
+        .callback = app_mqtt_defer_timeout,
+        .name = "mqtt_defer",
+    };
+    esp_err_t err;
+
+    if (s_restart_defer_timer != NULL) {
+        return true;
+    }
+    err = esp_timer_create(&args, &s_restart_defer_timer);
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "defer timer create failed: %s", esp_err_to_name(err));
+        s_restart_defer_timer = NULL;
+        return false;
+    }
+    return true;
+}
+
+static void app_mqtt_defer_timeout(void *arg)
+{
+    bool pending = false;
+
+    (void)arg;
+    app_mqtt_lock();
+    if (s_restart_deferred) {
+        s_restart_deferred = false;
+        s_restart_defer_depth = 0;
+        pending = s_restart_pending;
+        s_restart_pending = false;
+    }
+    app_mqtt_unlock();
+    if (pending) {
+        ESP_LOGW(TAG, "restart defer timeout: release pending restart");
+        (void)app_mqtt_schedule_restart();
+    }
+}
+
+bool app_mqtt_restart_is_deferred(void)
+{
+    bool deferred;
+
+    app_mqtt_lock();
+    deferred = s_restart_deferred;
+    app_mqtt_unlock();
+    return deferred;
+}
+
+bool app_mqtt_restart_is_pending(void)
+{
+    bool pending;
+
+    app_mqtt_lock();
+    pending = s_restart_pending;
+    app_mqtt_unlock();
+    return pending;
+}
+
+esp_err_t app_mqtt_defer_restart_begin(void)
+{
+    bool first = false;
+
+    if (!s_mqtt.started) {
+        return ESP_OK;
+    }
+    if (!app_mqtt_defer_timer_ensure()) {
+        return ESP_ERR_NO_MEM;
+    }
+
+    app_mqtt_lock();
+    if (s_restart_active) {
+        app_mqtt_unlock();
+        return ESP_ERR_INVALID_STATE;   /* 已有 rebuild 在跑，operation 需稍后重试 */
+    }
+    s_restart_defer_depth++;
+    if (s_restart_defer_depth == 1) {
+        s_restart_deferred = true;
+        first = true;
+    }
+    app_mqtt_unlock();
+
+    if (first) {
+        esp_err_t err;
+
+        (void)esp_timer_stop(s_restart_defer_timer);
+        err = esp_timer_start_once(s_restart_defer_timer,
+                                   (uint64_t)APP_MQTT_RESTART_DEFER_MAX_MS * 1000ULL);
+        if (err != ESP_OK) {
+            app_mqtt_lock();
+            if (s_restart_defer_depth > 0) {
+                s_restart_defer_depth--;
+            }
+            if (s_restart_defer_depth == 0) {
+                s_restart_deferred = false;
+            }
+            app_mqtt_unlock();
+            return err;
+        }
+        ESP_LOGI(TAG, "restart deferred (max %ums)", APP_MQTT_RESTART_DEFER_MAX_MS);
+    }
+    return ESP_OK;
+}
+
+void app_mqtt_defer_restart_end(void)
+{
+    bool last = false;
+    bool pending = false;
+
+    app_mqtt_lock();
+    if (s_restart_defer_depth > 0) {
+        s_restart_defer_depth--;
+    }
+    if (s_restart_defer_depth == 0 && s_restart_deferred) {
+        s_restart_deferred = false;
+        last = true;
+        pending = s_restart_pending;
+        s_restart_pending = false;
+    }
+    app_mqtt_unlock();
+
+    if (last) {
+        if (s_restart_defer_timer != NULL) {
+            (void)esp_timer_stop(s_restart_defer_timer);
+        }
+        ESP_LOGI(TAG, "restart defer end pending=%d", (int)pending);
+        if (pending) {
+            (void)app_mqtt_schedule_restart();
+        }
+    }
+}
+
 static uint32_t app_mqtt_backoff_delay_ms(uint8_t step)
 {
     /* 1.3-36 调整:原 {200ms,1s,2s,4s,8s,16s,30s} 在 broker 不可达时前 2 分钟
@@ -1358,6 +1500,13 @@ static void app_mqtt_restart_task_fn(void *arg)
         while (app_http_serving_page()) {
             vTaskDelay(pdMS_TO_TICKS(200));
         }
+        if (app_mqtt_restart_is_deferred()) {
+            app_mqtt_lock();
+            s_restart_pending = true;
+            app_mqtt_unlock();
+            ESP_LOGI(TAG, "restart attempt deferred/merged");
+            continue;
+        }
         /* 1.3-44:内存深紧张时推迟连接尝试 —— esp-mqtt 建客户端 + TCP + 订阅
          * 一次要吃掉 ~6KB 堆;在 largest 已跌破页面发送门槛时硬连,会把水位
          * 砸穿并让页面/数据面连锁失败。有界等待(≤5s):水位恢复即走;持续
@@ -1373,9 +1522,15 @@ static void app_mqtt_restart_task_fn(void *arg)
             }
         }
         ESP_LOGW(TAG, "mqtt restart attempt (backoff step %u)", (unsigned)s_restart_backoff_step);
+        app_mqtt_lock();
+        s_restart_active = true;
+        app_mqtt_unlock();
         if (app_mqtt_apply_config() != ESP_OK) {
             ESP_LOGE(TAG, "MQTT apply config failed");
         }
+        app_mqtt_lock();
+        s_restart_active = false;
+        app_mqtt_unlock();
     }
 }
 
@@ -1385,6 +1540,12 @@ bool app_mqtt_schedule_restart(void)
     BaseType_t rt;
     app_mqtt_ensure_runtime_init();
     app_mqtt_lock();
+    if (s_restart_deferred) {
+        s_restart_pending = true;
+        app_mqtt_unlock();
+        ESP_LOGI(TAG, "restart request deferred/merged");
+        return true;
+    }
     h = (TaskHandle_t)s_mqtt.restart_task;
     if (h != NULL) {
         app_mqtt_unlock();
