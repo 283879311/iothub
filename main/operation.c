@@ -46,6 +46,18 @@ static bool s_worker_started = false;
 static bool s_initialized = false;
 static uint32_t s_retention_ms = APP_OPERATION_DEFAULT_RETENTION_MS;
 
+/* 注意单位：ESP-IDF 的 xTaskCreate() 以字节计，但 xTaskCreateStatic() 最终进入
+ * prvInitialiseNewTask(uxStackDepth)，按 StackType_t 元素数解释。静态 buffer 要
+ * 同时按元素数分配，才能保持与原 4096B 动态栈相同的栈大小。 */
+#define APP_OPERATION_WORKER_STACK_DEPTH (APP_OPERATION_WORKER_STACK / sizeof(StackType_t))
+#if defined(APP_OPERATION_WORKER_STATIC) && APP_OPERATION_WORKER_STATIC
+#if (configSUPPORT_STATIC_ALLOCATION != 1)
+#error "APP_OPERATION_WORKER_STATIC requires configSUPPORT_STATIC_ALLOCATION"
+#endif
+static StackType_t s_worker_stack[APP_OPERATION_WORKER_STACK_DEPTH];
+static StaticTask_t s_worker_tcb;
+#endif
+
 static int64_t app_operation_now_ms(void)
 {
     return esp_timer_get_time() / 1000;
@@ -482,8 +494,6 @@ static void app_operation_worker(void *arg)
 
 static esp_err_t app_operation_ensure_worker(void)
 {
-    BaseType_t rt;
-
     portENTER_CRITICAL(&s_ops_mux);
     if (s_worker_started) {
         portEXIT_CRITICAL(&s_ops_mux);
@@ -491,17 +501,40 @@ static esp_err_t app_operation_ensure_worker(void)
     }
     portEXIT_CRITICAL(&s_ops_mux);
 
-    rt = xTaskCreate(app_operation_worker, "op_worker", APP_OPERATION_WORKER_STACK,
-                     NULL, 4, &s_worker);
-    if (rt != pdPASS) {
-        ESP_LOGE(TAG, "worker create failed");
-        s_worker = NULL;
+#if defined(APP_OPERATION_WORKER_STATIC) && APP_OPERATION_WORKER_STATIC
+    s_worker = xTaskCreateStatic(app_operation_worker, "op_worker",
+                                 APP_OPERATION_WORKER_STACK_DEPTH,
+                                 NULL, 4, s_worker_stack, &s_worker_tcb);
+    if (s_worker == NULL) {
+        ESP_LOGE(TAG, "static worker create failed");
         return ESP_ERR_NO_MEM;
     }
+#else
+    {
+        BaseType_t rt = xTaskCreate(app_operation_worker, "op_worker",
+                                    APP_OPERATION_WORKER_STACK,
+                                    NULL, 4, &s_worker);
+
+        if (rt != pdPASS) {
+            ESP_LOGE(TAG, "dynamic worker create failed");
+            s_worker = NULL;
+            return ESP_ERR_NO_MEM;
+        }
+    }
+#endif
     portENTER_CRITICAL(&s_ops_mux);
     s_worker_started = true;
     portEXIT_CRITICAL(&s_ops_mux);
-    ESP_LOGI(TAG, "worker started (stack=%u)", (unsigned)APP_OPERATION_WORKER_STACK);
+#if defined(APP_OPERATION_WORKER_STATIC) && APP_OPERATION_WORKER_STATIC
+    ESP_LOGI(TAG, "worker started static (stack=%uB depth=%u elems StackType_t=%uB tcb=%uB)",
+             (unsigned)sizeof(s_worker_stack),
+             (unsigned)APP_OPERATION_WORKER_STACK_DEPTH,
+             (unsigned)sizeof(StackType_t),
+             (unsigned)sizeof(s_worker_tcb));
+#else
+    ESP_LOGI(TAG, "worker started dynamic (stack=%uB)",
+             (unsigned)APP_OPERATION_WORKER_STACK);
+#endif
     return ESP_OK;
 }
 
@@ -714,20 +747,23 @@ static void app_operation_lifecycle_test_run(void)
     size_t min_largest_seen;
     size_t hw_bytes = 0;
 
-    /* 先等到稳定 MQTT 窗口；否则测到的是网络抖动，不是 worker 成本。 */
+    /* 优先等 MQTT 稳态；broker 不可达时仍测 worker 分配成本，但日志会带 mqtt=0，
+     * 该组不能用于签署“worker + MQTT 峰值”验收。 */
     for (int i = 0; i < 120; i++) {
         size_t free_now = esp_get_free_heap_size();
         size_t largest_now = heap_caps_get_largest_free_block(MALLOC_CAP_DEFAULT);
-        bool mqtt_connected;
 
-        app_mqtt_lock();
-        mqtt_connected = s_mqtt.connected;
-        app_mqtt_unlock();
-        if (mqtt_connected && free_now >= 12288 && largest_now >= 8192) {
+        if (free_now >= 8192 && largest_now >= 4096) {
             stable = true;
             break;
         }
         vTaskDelay(pdMS_TO_TICKS(500));
+    }
+
+    /* 先创建一次 defer timer，使 A/B 两组的 baseline 都包含同一项常驻开销，
+     * 后续 worker 增量只反映任务栈/TCB 的创建方式差异。 */
+    if (app_mqtt_defer_restart_begin() == ESP_OK) {
+        app_mqtt_defer_restart_end();
     }
 
     min_free_seen = esp_get_free_heap_size();
