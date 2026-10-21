@@ -1537,6 +1537,8 @@ static app_wifi_try_result_t app_wifi_try_connect_common(const char *ssid, const
 {
     wifi_config_t old_cfg = {0};
     wifi_config_t candidate = {0};
+    wifi_mode_t old_wifi_mode = WIFI_MODE_NULL;
+    bool mode_switched = false;
     uint16_t scan_count;
     bool ssid_seen = false;
     EventGroupHandle_t events;
@@ -1581,6 +1583,22 @@ static app_wifi_try_result_t app_wifi_try_connect_common(const char *ssid, const
         ESP_LOGW(TAG, "tryconnect: get sta config failed");
         return APP_WIFI_TRY_CONNECT_FAILED;
     }
+    if (esp_wifi_get_mode(&old_wifi_mode) != ESP_OK) {
+        ESP_LOGW(TAG, "tryconnect: get wifi mode failed");
+        return APP_WIFI_TRY_CONNECT_FAILED;
+    }
+
+    /* 纯 AP 模式下 STA 接口未启用，候选试连必须临时切到 APSTA；
+     * 结束后恢复原模式，不能把设备永久留在 APSTA。 */
+    if (old_wifi_mode == WIFI_MODE_AP) {
+        err = esp_wifi_set_mode(WIFI_MODE_APSTA);
+        if (err != ESP_OK) {
+            ESP_LOGW(TAG, "tryconnect: switch AP->APSTA failed: %s", esp_err_to_name(err));
+            return APP_WIFI_TRY_CONNECT_FAILED;
+        }
+        mode_switched = true;
+        ESP_LOGI(TAG, "tryconnect: temporary APSTA enabled (old mode=%d)", (int)old_wifi_mode);
+    }
 
     app_copy_fixed_bytes(candidate.sta.ssid, sizeof(candidate.sta.ssid), ssid);
     app_copy_fixed_bytes(candidate.sta.password, sizeof(candidate.sta.password), password);
@@ -1603,6 +1621,9 @@ static app_wifi_try_result_t app_wifi_try_connect_common(const char *ssid, const
         events = created;
     }
     if (events == NULL) {
+        if (mode_switched) {
+            (void)esp_wifi_set_mode(old_wifi_mode);
+        }
         return APP_WIFI_TRY_CONNECT_FAILED;
     }
 
@@ -1627,6 +1648,9 @@ static app_wifi_try_result_t app_wifi_try_connect_common(const char *ssid, const
         s_tryconnect_require_ip = false;
         s_wifi_sta_connecting = false;
         (void)esp_wifi_set_config(WIFI_IF_STA, &old_cfg);
+        if (mode_switched) {
+            (void)esp_wifi_set_mode(old_wifi_mode);
+        }
         app_wifi_schedule_connect_task(pdMS_TO_TICKS(400));
         return APP_WIFI_TRY_CONNECT_FAILED;
     }
@@ -1644,6 +1668,15 @@ static app_wifi_try_result_t app_wifi_try_connect_common(const char *ssid, const
     s_wifi_sta_connecting = false;
     if (esp_wifi_set_config(WIFI_IF_STA, &old_cfg) != ESP_OK) {
         ESP_LOGW(TAG, "tryconnect: restore sta config failed");
+    }
+    if (mode_switched) {
+        esp_err_t mode_err = esp_wifi_set_mode(old_wifi_mode);
+        if (mode_err != ESP_OK) {
+            ESP_LOGW(TAG, "tryconnect: restore wifi mode failed: %s",
+                     esp_err_to_name(mode_err));
+        } else {
+            ESP_LOGI(TAG, "tryconnect: restored wifi mode=%d", (int)old_wifi_mode);
+        }
     }
     app_wifi_schedule_connect_task(pdMS_TO_TICKS(400));
 
