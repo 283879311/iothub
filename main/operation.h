@@ -74,3 +74,7 @@ const char *app_operation_error_name(app_operation_error_t error);
 void app_operation_selftest_start(void);
 void app_operation_set_test_retention_ms(uint32_t ms);
 #endif
+
+#ifdef APP_OPERATION_LIFECYCLE_TEST
+void app_operation_lifecycle_test_start(void);
+#endif

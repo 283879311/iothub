@@ -118,4 +118,8 @@ void app_main(void)
     ESP_LOGI(TAG, "[boot-14] operation selftest");
     app_operation_selftest_start();
 #endif
+#ifdef APP_OPERATION_LIFECYCLE_TEST
+    ESP_LOGI(TAG, "[boot-14b] operation worker lifecycle test");
+    app_operation_lifecycle_test_start();
+#endif
 }

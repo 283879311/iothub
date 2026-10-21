@@ -13,6 +13,10 @@
 
 #include "operation.h"
 
+#ifdef APP_OPERATION_LIFECYCLE_TEST
+#include "mqtt.h"
+#endif
+
 static const char *TAG = "operation";
 
 #define APP_OPERATION_DEFAULT_ACCEPTED_TTL_MS 20000
@@ -594,3 +598,162 @@ void app_operation_selftest_start(void)
 }
 
 #endif /* APP_OPERATION_SELFTEST */
+
+#ifdef APP_OPERATION_LIFECYCLE_TEST
+
+static esp_err_t app_operation_lifecycle_run(app_operation_t *op, void *ctx)
+{
+    (void)ctx;
+    vTaskDelay(pdMS_TO_TICKS(300));
+    return app_operation_set_state(op, APP_OP_GOT_IP, APP_OPERATION_ERR_NONE);
+}
+
+static bool app_operation_lifecycle_wait(app_operation_t *op, app_op_state_t want,
+                                         uint32_t timeout_ms)
+{
+    TickType_t deadline = xTaskGetTickCount() + pdMS_TO_TICKS(timeout_ms);
+
+    while ((int32_t)(xTaskGetTickCount() - deadline) < 0) {
+        if (app_operation_state(op) == want) {
+            return true;
+        }
+        vTaskDelay(pdMS_TO_TICKS(20));
+    }
+    return app_operation_state(op) == want;
+}
+
+static void app_operation_lifecycle_log(const char *phase, size_t min_free_seen,
+                                        size_t min_largest_seen)
+{
+    size_t free_now = esp_get_free_heap_size();
+    size_t largest_now = heap_caps_get_largest_free_block(MALLOC_CAP_DEFAULT);
+    size_t min_now = esp_get_minimum_free_heap_size();
+    bool mqtt_connected;
+
+    app_mqtt_lock();
+    mqtt_connected = s_mqtt.connected;
+    app_mqtt_unlock();
+
+    ESP_LOGI(TAG,
+             "lifecycle %s free=%u largest=%u min=%u phase_min_free=%u phase_min_largest=%u "
+             "mqtt=%d shed=%u gate=%s",
+             phase,
+             (unsigned)free_now, (unsigned)largest_now, (unsigned)min_now,
+             (unsigned)(min_free_seen != 0 ? min_free_seen : free_now),
+             (unsigned)(min_largest_seen != 0 ? min_largest_seen : largest_now),
+             (int)mqtt_connected, (unsigned)app_mqtt_tele_shed_count(),
+             ((min_free_seen != 0 ? min_free_seen : free_now) >= 8192 &&
+              (min_largest_seen != 0 ? min_largest_seen : largest_now) >= 6144)
+                 ? "PASS" : "FAIL");
+}
+
+static void app_operation_lifecycle_test_run(void)
+{
+    app_operation_t *op = NULL;
+    esp_err_t err;
+    bool stable = false;
+    size_t min_free_seen;
+    size_t min_largest_seen;
+    size_t hw_bytes = 0;
+
+    /* 先等到稳定 MQTT 窗口；否则测到的是网络抖动，不是 worker 成本。 */
+    for (int i = 0; i < 120; i++) {
+        size_t free_now = esp_get_free_heap_size();
+        size_t largest_now = heap_caps_get_largest_free_block(MALLOC_CAP_DEFAULT);
+        bool mqtt_connected;
+
+        app_mqtt_lock();
+        mqtt_connected = s_mqtt.connected;
+        app_mqtt_unlock();
+        if (mqtt_connected && free_now >= 12288 && largest_now >= 8192) {
+            stable = true;
+            break;
+        }
+        vTaskDelay(pdMS_TO_TICKS(500));
+    }
+
+    min_free_seen = esp_get_free_heap_size();
+    min_largest_seen = heap_caps_get_largest_free_block(MALLOC_CAP_DEFAULT);
+    app_operation_lifecycle_log("baseline", min_free_seen, min_largest_seen);
+    if (!stable) {
+        ESP_LOGW(TAG, "lifecycle SKIP: stable MQTT window not reached");
+        return;
+    }
+
+    err = app_operation_start(APP_OPERATION_OWNER_INTERNAL, "lifecycle",
+                              5000, 10000, app_operation_lifecycle_run,
+                              NULL, NULL, &op);
+    app_operation_lifecycle_log("after_start", min_free_seen, min_largest_seen);
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "lifecycle worker create/start failed: %s", esp_err_to_name(err));
+        return;
+    }
+
+    if (!app_operation_lifecycle_wait(op, APP_OP_GOT_IP, 2000)) {
+        ESP_LOGW(TAG, "lifecycle did not reach got_ip");
+    }
+    app_operation_lifecycle_log("got_ip", min_free_seen, min_largest_seen);
+
+    /* 让 operation 活动与 MQTT 重连重叠，采样 5 秒内的最低水位。 */
+    (void)app_mqtt_schedule_restart();
+    for (int i = 0; i < 20; i++) {
+        size_t free_now = esp_get_free_heap_size();
+        size_t largest_now = heap_caps_get_largest_free_block(MALLOC_CAP_DEFAULT);
+
+        if (free_now < min_free_seen) {
+            min_free_seen = free_now;
+        }
+        if (largest_now < min_largest_seen) {
+            min_largest_seen = largest_now;
+        }
+        vTaskDelay(pdMS_TO_TICKS(250));
+    }
+    app_operation_lifecycle_log("mqtt_overlap", min_free_seen, min_largest_seen);
+
+    err = app_operation_cancel(op);
+    app_operation_lifecycle_log("cancelled", min_free_seen, min_largest_seen);
+    ESP_LOGI(TAG, "lifecycle cancel: %s state=%s",
+             esp_err_to_name(err), app_op_state_name(app_operation_state(op)));
+
+    vTaskDelay(pdMS_TO_TICKS(3000));
+    app_operation_lifecycle_log("idle", min_free_seen, min_largest_seen);
+
+    if (s_worker != NULL) {
+        hw_bytes = (size_t)uxTaskGetStackHighWaterMark(s_worker) * sizeof(StackType_t);
+        ESP_LOGI(TAG, "lifecycle worker stack high-water=%uB (free=%uB)",
+                 (unsigned)hw_bytes, (unsigned)(APP_OPERATION_WORKER_STACK - hw_bytes));
+    }
+    ESP_LOGI(TAG, "lifecycle done; worker remains resident (deletion not implemented)");
+}
+
+static void app_operation_lifecycle_timer(void *arg)
+{
+    (void)arg;
+    app_operation_lifecycle_test_run();
+}
+
+void app_operation_lifecycle_test_start(void)
+{
+    static esp_timer_handle_t timer;
+    const esp_timer_create_args_t args = {
+        .callback = app_operation_lifecycle_timer,
+        .name = "op_lifecycle",
+    };
+    esp_err_t err;
+
+    if (timer != NULL) {
+        return;
+    }
+    err = esp_timer_create(&args, &timer);
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "lifecycle timer create failed: %s", esp_err_to_name(err));
+        return;
+    }
+    /* 让 app_main 返回、MQTT 先进入稳态，再在已有 esp_timer 任务里测量。 */
+    err = esp_timer_start_once(timer, 30ULL * 1000000ULL);
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "lifecycle timer start failed: %s", esp_err_to_name(err));
+    }
+}
+
+#endif /* APP_OPERATION_LIFECYCLE_TEST */

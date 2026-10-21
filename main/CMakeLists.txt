@@ -1,5 +1,6 @@
 option(APP_BLE_PEER_TEST "Build the A/B four-characteristic central test harness (default OFF)" OFF)
 option(APP_OPERATION_SELFTEST "Build G3 operation table/worker selftest (default OFF)" OFF)
+option(APP_OPERATION_LIFECYCLE_TEST "Build G3 worker lifecycle/memory measurement (default OFF)" OFF)
 
 idf_component_register(
     SRCS "main.c" "app_captive.c" "ble_cmd.c" "bootstrap.c" "bt.c" "bt_gattc.c" "bt_gattc_nimble.c" "bt_gatts.c" "bt_gatts_nimble.c" "cmd.c" "common.c" "config.c" "config_apply.c" "data_pipe.c" "diag.c" "form_url.c" "http_core.c" "http_io.c" "http_mqtt.c" "http_network.c" "http_ota.c" "http_uart.c" "http_utils.c" "identity.c" "json_escape.c" "mem_guard.c" "mqtt.c" "operation.c" "operation_state.c" "ota.c" "prov_pin.c" "state.c" "status.c" "transport_ble.c" "uart.c" "uart_console.c" "wifi.c"
@@ -27,6 +28,9 @@ if(APP_BLE_PEER_TEST)
 endif()
 if(APP_OPERATION_SELFTEST)
     target_compile_definitions(${COMPONENT_LIB} PRIVATE APP_OPERATION_SELFTEST=1)
+endif()
+if(APP_OPERATION_LIFECYCLE_TEST)
+    target_compile_definitions(${COMPONENT_LIB} PRIVATE APP_OPERATION_LIFECYCLE_TEST=1)
 endif()
 
 set(APP_WEB_SOURCE_DIR "${CMAKE_CURRENT_LIST_DIR}/../web")
