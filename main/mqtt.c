@@ -955,20 +955,28 @@ static void app_mqtt_event_handler(void *handler_args, esp_event_base_t base, in
         ESP_LOGI(TAG, "MQTT connected: subscribed RPC + shared attrs, requested initial attrs");
         app_mqtt_schedule_boost();
         break;
-    case MQTT_EVENT_DISCONNECTED:
+    case MQTT_EVENT_DISCONNECTED: {
+        bool is_current_client;
+
         s_mqtt_connecting = false;
         app_mqtt_lock();
         s_mqtt.connected = false;
+        /* 重连流程会先把 s_mqtt.client 置 NULL 再 stop/destroy 旧客户端；
+         * 旧客户端随后补发的 DISCONNECTED 不能再次触发 restart，否则
+         * "stop 旧客户端 -> 收旧事件 -> 调度重连 -> 再 stop" 会形成自激循环。 */
+        is_current_client = (event != NULL && event->client == s_mqtt.client);
         app_mqtt_unlock();
         app_copy_string(s_mqtt.last_error, sizeof(s_mqtt.last_error), "disconnected");
-        ESP_LOGW(TAG, "MQTT_EVENT_DISCONNECTED");
+        ESP_LOGW(TAG, "MQTT_EVENT_DISCONNECTED%s",
+                 is_current_client ? "" : " (stale client, ignored)");
         /* 已关闭客户端内建自动重连 → 由应用层按退避重连(问题与版本优化.md 1.3-10)。
          * 仅在 STA 仍有 IP 时才调度:STA 掉线的情况由 WIFI_EVENT 处理器统一处理,
          * 避免"网络已断还在猛重连"的风暴。 */
-        if (s_wifi.sta_has_ip) {
+        if (is_current_client && s_wifi.sta_has_ip) {
             (void)app_mqtt_schedule_restart();
         }
         break;
+    }
     case MQTT_EVENT_PUBLISHED:
         app_mqtt_lock();
         s_mqtt.last_msg_id = event->msg_id;
