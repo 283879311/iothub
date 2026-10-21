@@ -747,13 +747,17 @@ static void app_operation_lifecycle_test_run(void)
     size_t min_largest_seen;
     size_t hw_bytes = 0;
 
-    /* 优先等 MQTT 稳态；broker 不可达时仍测 worker 分配成本，但日志会带 mqtt=0，
-     * 该组不能用于签署“worker + MQTT 峰值”验收。 */
+    /* 等 MQTT 已连接且尚有最低可运行空间；静态 worker 的 4KB 在 .bss，
+     * MQTT 连接后 baseline 可能已低于门槛，但仍必须测出并如实判 FAIL。 */
     for (int i = 0; i < 120; i++) {
         size_t free_now = esp_get_free_heap_size();
         size_t largest_now = heap_caps_get_largest_free_block(MALLOC_CAP_DEFAULT);
+        bool mqtt_connected;
 
-        if (free_now >= 8192 && largest_now >= 4096) {
+        app_mqtt_lock();
+        mqtt_connected = s_mqtt.connected;
+        app_mqtt_unlock();
+        if (mqtt_connected && free_now >= 4096 && largest_now >= 2048) {
             stable = true;
             break;
         }
