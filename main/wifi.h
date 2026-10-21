@@ -47,3 +47,9 @@ app_wifi_try_result_t app_wifi_try_connect(const char *ssid, const char *passwor
 /* G2 候选：必须等待候选获得 IP 才返回 APP_WIFI_TRY_OK。 */
 app_wifi_try_result_t app_wifi_try_connect_ip(const char *ssid, const char *password,
                                               uint32_t timeout_ms);
+
+/* 网络候选 trial 未决期间，禁止 GOT_IP 把“当前自动连接的 profile”回写主配置。
+ * 否则 tryconnect 恢复后 auto_connect 选中另一张网，会绕过 apply 直接覆盖正式配置。
+ * 超时自动失效，不依赖调用方一定来 resume。 */
+void app_wifi_suppress_profile_writeback(uint32_t duration_ms);
+void app_wifi_resume_profile_writeback(void);

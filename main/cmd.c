@@ -47,6 +47,8 @@ static app_cmd_net_trial_t s_net_trial;
 static void app_cmd_net_trial_clear(void)
 {
     memset(&s_net_trial, 0, sizeof(s_net_trial));
+    /* trial 结束(取消/过期/apply/断连)后恢复正常 profile 回写。 */
+    app_wifi_resume_profile_writeback();
 }
 
 void app_cmd_net_on_ble_disconnect(void)
@@ -914,6 +916,9 @@ esp_err_t app_cmd_execute_ex(const cJSON *frame, app_cmd_source_t source,
                     s_net_trial.expires_ms = esp_timer_get_time() / 1000 + APP_NET_TRIAL_TTL_MS;
                     s_net_trial.owner = source;
                     s_net_trial.valid = true;
+                    /* trial 未决期间禁止 auto_connect 把别的 profile 回写主配置；
+                     * 只有 apply 才能提交候选。TTL 到期自动失效。 */
+                    app_wifi_suppress_profile_writeback(APP_NET_TRIAL_TTL_MS);
                     resp = cJSON_CreateObject();
                     if (resp == NULL) {
                         app_cmd_net_trial_clear();

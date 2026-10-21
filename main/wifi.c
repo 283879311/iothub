@@ -73,6 +73,35 @@ static bool s_wifi_fast_path_pending = false;
 static SemaphoreHandle_t s_wifi_restart_lock = NULL;
 static StaticSemaphore_t s_wifi_restart_lock_buf;
 static portMUX_TYPE s_wifi_restart_lock_mux = portMUX_INITIALIZER_UNLOCKED;
+/* 网络候选 trial 未决时抑制 profile→主配置回写；0 表示不抑制。 */
+static int64_t s_profile_writeback_suppress_until_ms = 0;
+
+void app_wifi_suppress_profile_writeback(uint32_t duration_ms)
+{
+    app_wifi_runtime_lock();
+    s_profile_writeback_suppress_until_ms =
+        esp_timer_get_time() / 1000 + (int64_t)duration_ms;
+    app_wifi_runtime_unlock();
+}
+
+void app_wifi_resume_profile_writeback(void)
+{
+    app_wifi_runtime_lock();
+    s_profile_writeback_suppress_until_ms = 0;
+    app_wifi_runtime_unlock();
+}
+
+static bool app_wifi_profile_writeback_suppressed(void)
+{
+    bool suppressed;
+    int64_t now_ms = esp_timer_get_time() / 1000;
+
+    app_wifi_runtime_lock();
+    suppressed = (s_profile_writeback_suppress_until_ms != 0 &&
+                  now_ms < s_profile_writeback_suppress_until_ms);
+    app_wifi_runtime_unlock();
+    return suppressed;
+}
 
 _Static_assert(sizeof(s_wifi.scan_records_storage) >=
                    sizeof(wifi_ap_record_t) * WIFI_SCAN_LIST_SIZE,
@@ -1304,7 +1333,9 @@ static void app_wifi_event_handler(void *arg, esp_event_base_t event_base, int32
         active_profile_snapshot = s_wifi_active_profile_index;
         profile_count_snapshot = s_wifi_profile_count;
         app_wifi_profiles_unlock();
-        if (active_profile_snapshot >= 0 &&
+        if (app_wifi_profile_writeback_suppressed()) {
+            ESP_LOGI(TAG, "profile writeback suppressed by pending network trial");
+        } else if (active_profile_snapshot >= 0 &&
             (size_t)active_profile_snapshot < profile_count_snapshot) {
             char profile_ssid[33];
             char profile_password[65];
