@@ -9,7 +9,7 @@
 ### 0.0 开发前 P0 前置条件
 
 1. **v1.0 适配层只实现了现有命令子集。**
-   `device.info`、`auth.login`、`config.get/set`、`network.profile.list/delete`、GPIO、`uart.send`、`data.loopback`、`auth.admin.set`、`provisioning.pin.set` 已可用 v1.0 外壳；其中 `device.info`、`auth.login`、`config.get` 已通过手机实测。`network.scan/validate/tryconnect/apply/cancel/status`、`operation.*`、`config.validate`、状态类命令仍未实现。未实现命令返回 `unknown_command`，不得在客户端伪装成功。
+   `device.info`、`auth.login`、`config.get/set`、`network.profile.list/delete`、GPIO、`uart.send`、`data.loopback`、`auth.admin.set`、`provisioning.pin.set` 已可用 v1.0 外壳；其中 `device.info`、`auth.login`、`config.get` 已通过手机实测。`network.scan` 已通过 v1 映射 v0；`network.validate/tryconnect/apply/cancel/status`、`operation.*`、`config.validate`、状态类命令仍未实现。未实现命令返回 `unknown_command`，不得在客户端伪装成功。
 
 2. **BLE 链路安全尚未验收。**
    `login` token、TTL 和限频只是应用层保护，不是链路加密/绑定。链路安全专项完成前，敏感写操作在生产策略下必须关闭；`device.info.security` 会报告 `l2_ready`/`sensitive_writes_allowed`，客户端必须据此禁用对应页面入口。
@@ -257,7 +257,7 @@ v1 客户端只使用正式名；旧名只用于 v0 兼容，不在小程序中�
 
 | cmd | args | 当前 | v1 状态 | 说明 |
 | --- | --- | --- | --- | --- |
-| `network.scan` | `{}` | ✅ v0 同步 | v1 异步目标 | 扫描结果含 ssid/rssi/auth_mode；不得回密码 |
+| `network.scan` | `{}` | ✅ v0 同步 | ✅ v1 映射 v0（暂同步） | 扫描结果含 ssid/rssi/auth_mode/bssid；不得回密码；异步化留 G3 |
 | `network.profile.list` | `{}` | ✅ v1 映射 v0 `network.profiles` | 已适配 | 只返回 SSID、`password_set` |
 | `network.profile.delete` | `{ssid}` | ✅ v1 映射 v0 | 已适配 | 当前 v0 行为尚未实现“使用中返回 busy” |
 | `network.validate` | `{ssid,password?,use_saved?,static?}` | ❌ | 未实现 | 只校验，不连接、不落盘 |
