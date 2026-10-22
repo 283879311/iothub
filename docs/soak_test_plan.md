@@ -36,7 +36,7 @@
 - Ubuntu 22.04/24.04，**非 VM**；内核 6.x；有线以太网接到设备同一路由器（192.168.1.0/24）。
 - **真实蓝牙适配器**（内置或 USB dongle）：支持 LE central + peripheral；`bluetoothctl list` / `btmgmt info` 能看到控制器。
 - USB：至少 2 个板载串口（console）+ 1 个 3.3V USB-TTL（UART1 数据）；建议带供电的 USB Hub，线材可靠。
-- 电源：A/B/C 板用稳定 5V；B/C 建议外部 5V 供电，USB 只作数据（两块板历史上出现过 USB I/O error / 整板掉电迹象；C 即旧 6BBC）。
+- 电源：A/B 板用稳定 5V；建议外部 5V 供电，USB 只作数据。旧 6BBC 已决定废弃，不再接入测试床。
 
 ### 1.2 设备
 
@@ -44,7 +44,7 @@
 | --- | --- | --- | --- |
 | A C8E4 | 192.168.1.213 | peripheral + MQTT | 静态 IP；console `/dev/ttyUSB0` |
 | B 65D8 | 192.168.1.42 | peripheral + MQTT | 新板 MAC `10:97:BD:D3:65:D9`；静态 IP；console `/dev/ttyUSB1`；旧 B 6BBC 已更换（1.3-80） |
-| C 6BBC | DHCP（当前 192.168.43.33） | peripheral + MQTT | 旧 B 板，MAC `94:b5:55:f7:6b:bc`；历史上有 USB I/O error/整板掉电/低负载性能异常，仅作压力/回归板；MQTT `139.9.93.245:21883`，token 只存 NVS，不写入仓库 |
+| 废弃 6BBC | — | — | MAC `94:b5:55:f7:6b:bc`；已确认板级异常（USB I/O error/整板掉电/低负载性能异常），**不再作为 B/C 或任何测试/验收板**；历史数据只作故障对照 |
 
 - 默认固件 NimBLE；Bluedroid 为回退 profile。
 - B 当前 STA-only；若开 AP+STA 兜底，注意内存余量（页面负载下更紧）。
