@@ -36,18 +36,18 @@
 - Ubuntu 22.04/24.04，**非 VM**；内核 6.x；有线以太网接到设备同一路由器（192.168.1.0/24）。
 - **真实蓝牙适配器**（内置或 USB dongle）：支持 LE central + peripheral；`bluetoothctl list` / `btmgmt info` 能看到控制器。
 - USB：至少 2 个板载串口（console）+ 1 个 3.3V USB-TTL（UART1 数据）；建议带供电的 USB Hub，线材可靠。
-- 电源：A/B 板用稳定 5V；建议外部 5V 供电，USB 只作数据。旧 6BBC 已决定废弃，不再接入测试床。
+- 电源：A/C 板用稳定 5V；建议外部 5V 供电，USB 只作数据。旧 B 6BBC 已决定废弃，不再接入测试床。
 
 ### 1.2 设备
 
 | 板 | 地址 | 当前角色 | 备注 |
 | --- | --- | --- | --- |
 | A C8E4 | 192.168.1.213 | peripheral + MQTT | 静态 IP；console `/dev/ttyUSB0` |
-| B 65D8 | 192.168.1.42 | peripheral + MQTT | 新板 MAC `10:97:BD:D3:65:D9`；静态 IP；console `/dev/ttyUSB1`；旧 B 6BBC 已更换（1.3-80） |
+| C 65D8 | DHCP（当前 192.168.1.121） | peripheral + MQTT | 当前唯一可靠板；MAC `10:97:BD:D3:65:D9`；STA-only；console `/dev/ttyUSB0`；MQTT `139.9.93.245:21883`，token 只存 NVS |
 | 废弃 6BBC | — | — | MAC `94:b5:55:f7:6b:bc`；已确认板级异常（USB I/O error/整板掉电/低负载性能异常），**不再作为 B/C 或任何测试/验收板**；历史数据只作故障对照 |
 
 - 默认固件 NimBLE；Bluedroid 为回退 profile。
-- B 当前 STA-only；若开 AP+STA 兜底，注意内存余量（页面负载下更紧）。
+- C 当前 STA-only；AP 已关闭，不得把 APSTA 当作正常稳态。
 - 设备端页面轮询已收敛为状态 10s、UART 控制台仅视口内 10s；HTTP 单登录接管 + 空闲 3 分钟回收已生效（1.3-72/73）。
 
 ## 2. 接线
