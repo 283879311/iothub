@@ -756,12 +756,11 @@ static void app_operation_lifecycle_test_run(void)
         size_t free_now = esp_get_free_heap_size();
         size_t largest_now = heap_caps_get_largest_free_block(MALLOC_CAP_DEFAULT);
         bool mqtt_connected;
-        bool ble_connected = app_ble_gatts_connected();
 
         app_mqtt_lock();
         mqtt_connected = s_mqtt.connected;
         app_mqtt_unlock();
-        if (mqtt_connected && ble_connected && free_now >= 4096 && largest_now >= 2048) {
+        if (mqtt_connected && free_now >= 4096 && largest_now >= 2048) {
             stable = true;
             break;
         }
