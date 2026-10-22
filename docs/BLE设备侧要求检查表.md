@@ -16,15 +16,15 @@
 | # | 要求 | 状态 | 固件现状与缺口 | 建议 |
 | --- | --- | --- | --- | --- |
 | 1 | MTU/单包短写（按 20B 设计） | ✅ | CMD RX 支持任意短写并做 512B 行重组；Notify 按 `mtu-3` 分片，MTU 未协商时回退 20B | 小程序按 20B 写入即可 |
-| 1b | 分片间 20–50ms 间隔 | ❌ | `app_ble_gatts_cmd_notify()` 逐片连续发送，无延时 | 在 CMD TX 每片之间加 20–50ms（建议 20ms），扫描/长响应尤其需要 |
+| 1b | 分片间 20–50ms 间隔 | 🟡 | 已改为独立 `ble_cmd_tx` 任务，CMD TX 每片之间 20ms；命令任务不再被发送阻塞。真机 Android/iOS 长响应尚未复测 | 真机连续 10 次长响应验证 |
 | 2 | 固定 128-bit UUID / Service 稳定 | ✅ | NUS Service 与 4 个特征值固定 128-bit，见 `bt_gatts_nimble.c` | 不要按设备随机化 |
-| 2b | 广播携带 Service UUID 以便 `services` 过滤 | ❌ | 当前 ADV 只有 flags/name/tx_power，**没有 `uuids128`**；`wx.startBluetoothDevicesDiscovery({services})` 无法命中 | 在 ADV 中加入 NUS Service UUID；31B 放不下完整长名，需要短名 + Scan Response |
+| 2b | 广播携带 Service UUID 以便 `services` 过滤 | 🟡 | 代码已在 ADV 加入 NUS 128-bit UUID，ADV=flags 3B + UUID 18B + 短名 9B = 30B；待小程序 `services` 过滤真机验证 | 用微信小程序按 Service UUID 扫描验证 |
 | 3 | 写特征支持 Write With/Without Response | ✅ | CMD RX 与 DATA RX 都是 `WRITE | WRITE_NO_RSP` | 小程序可优先用 With Response |
 | 4 | 必须有 Notify 特征 | ✅ | CMD TX、DATA TX 都是 `NOTIFY`；需客户端订阅 | 小程序先开 notify 再发命令 |
 | 4b | indicate 可选 | 🟡 | 只有 notify，没有 indicate | 当前协议有 `id` + 查询，不必强加 indicate |
-| 5 | 设备名可识别（iOS） | ✅ | ADV 带完整 `localName`（如 `IotHubBLE-65D8`），且 complete name | 加 Service UUID 后需保留短名/Scan Response，避免被挤掉 |
+| 5 | 设备名可识别（iOS） | 🟡 | ADV 改为短名 `IH-65D8`，完整名 `IotHubBLE-65D8` 进 Scan Response；待 iOS 实测 | iOS 微信扫描确认名称 |
 | 6 | ADV ≤31B | ✅ | 当前 flags+name+tx_power 约 19B | 加 UUID 后必须重新分配：短名进 ADV，完整名进 Scan Response |
-| 6b | Scan Response | ❌ | 未配置 `ble_gap_adv_rsp_set_fields` | 建议放完整设备名/产品短码 |
+| 6b | Scan Response | 🟡 | 已配置 Scan Response：完整名 `IotHubBLE-65D8` + tx power；待 iOS 名称显示验证 | 用 iOS 微信小程序扫描验证 |
 | 7 | 业务主键不用平台 deviceId | ✅ | `device.info.device_id` 使用主机名 `IotHub-XXXX`，来自 MAC 后缀 | 小程序用 `device_id`，不要用 iOS UUID/Android MAC |
 
 ## B. 连接与配对
@@ -64,9 +64,29 @@
 
 ## E. 当前最需要改的固件点
 
-### P0：ADV 加入 Service UUID
+### P0 实现状态（2026-10-22，提交 `f05836f`）
 
-现状：`bt.c` 的 `app_bt_nimble_start_adv()` 只设置：
+已实现代码：
+
+- ADV：flags + NUS 128-bit UUID + 短名 `IH-65D8`，合计约 30B；
+- Scan Response：完整名 `IotHubBLE-65D8` + tx power；
+- CMD TX：独立 `ble_cmd_tx` 任务 + 队列，分片间 20ms；命令任务只入队；
+- 保留 auth、operation 状态机、幂等、MQTT defer、JSON 重组不变；
+- NimBLE 与 Bluedroid 回退均编译通过。
+
+**真机验证未完成**：烧录时 C 板 USB 设备从宿主机消失（`/dev/ttyUSB0` 不存在，`lsusb` 无 CH340），需要重新接入后验证：
+
+1. 微信小程序按 Service UUID 能扫到设备；
+2. iOS 扫描显示 `IotHubBLE-65D8`；
+3. 连续 10 次长响应完整；
+4. 分片期间 `operation.get` 仍可响应；
+5. G3 第二轮回归。
+
+以下是原 P0 分析，保留作记录。
+
+### P0-1：ADV 加入 Service UUID
+
+原现状：`bt.c` 的 `app_bt_nimble_start_adv()` 只设置：
 
 ```c
 flags
