@@ -74,7 +74,7 @@
 - 保留 auth、operation 状态机、幂等、MQTT defer、JSON 重组不变；
 - NimBLE 与 Bluedroid 回退均编译通过。
 
-**真机验证未完成**：烧录时 C 板 USB 设备从宿主机消失（`/dev/ttyUSB0` 不存在，`lsusb` 无 CH340），需要重新接入后验证：
+**真机验证未完成**：C 板 USB 已恢复并烧录 P0 固件，启动日志确认 ADV/Scan Response 字段设置成功（无 `adv set fields failed` / `scan response set fields failed`）。仍需手机/小程序验证：
 
 1. 微信小程序按 Service UUID 能扫到设备；
 2. iOS 扫描显示 `IotHubBLE-65D8`；
