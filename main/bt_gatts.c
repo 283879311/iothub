@@ -12,6 +12,8 @@
 #include "esp_gatts_api.h"
 #endif
 #include "esp_log.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 
 #include "bt.h"
 #include "ble_cmd.h"
@@ -365,6 +367,10 @@ int app_ble_gatts_cmd_notify(const uint8_t *data, size_t len)
             return (int)offset;
         }
         offset += n;
+        if (offset < len) {
+            /* 与 NimBLE 路径一致：20ms 片间隔降低小程序通知丢包。 */
+            vTaskDelay(pdMS_TO_TICKS(20));
+        }
     }
     return (int)len;
 }

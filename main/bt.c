@@ -111,6 +111,9 @@ static bool s_central_mode = false;
 
 #include "host/ble_gap.h"
 #include "host/ble_hs.h"
+
+/* NUS Service UUID 与 bt_gatts_nimble.c 共用同一常量，避免广播与 GATT 不一致。 */
+extern const ble_uuid128_t g_ble_nus_svc_uuid;
 #include "nimble/nimble_port.h"
 #include "nimble/nimble_port_freertos.h"
 
@@ -274,24 +277,56 @@ void app_bt_release_unused_memory(void)
     }
 }
 
+static void app_bt_nimble_build_short_name(char *out, size_t out_size)
+{
+    const char *full = s_config.bt_device_name;
+    size_t len = strlen(full);
+    const char *suffix = (len >= 4) ? full + len - 4 : full;
+
+    snprintf(out, out_size, "IH-%.4s", suffix);
+}
+
 static int app_bt_nimble_start_adv(void)
 {
-    struct ble_hs_adv_fields fields = {0};
+    struct ble_hs_adv_fields adv = {0};
+    struct ble_hs_adv_fields rsp = {0};
+    char short_name[10];
+    size_t full_len;
     int rc;
 
-    fields.flags = BLE_HS_ADV_F_DISC_GEN | BLE_HS_ADV_F_BREDR_UNSUP;
-    fields.name = (const uint8_t *)s_config.bt_device_name;
-    fields.name_len = (uint8_t)strlen(s_config.bt_device_name);
-    fields.name_is_complete = 1;
-    fields.tx_pwr_lvl_is_present = 1;
-    fields.tx_pwr_lvl = 0;
+    app_bt_nimble_build_short_name(short_name, sizeof(short_name));
 
-    rc = ble_gap_adv_set_fields(&fields);
+    /* ADV: flags(3) + UUID128(18) + shortened name(2+7)=30B，留 1B 余量。
+     * 不把 tx power 放 ADV；完整名和 tx power 放 Scan Response。 */
+    adv.flags = BLE_HS_ADV_F_DISC_GEN | BLE_HS_ADV_F_BREDR_UNSUP;
+    adv.uuids128 = &g_ble_nus_svc_uuid;
+    adv.num_uuids128 = 1;
+    adv.uuids128_is_complete = 1;
+    adv.name = (const uint8_t *)short_name;
+    adv.name_len = (uint8_t)strlen(short_name);
+    adv.name_is_complete = 0;
+
+    rc = ble_gap_adv_set_fields(&adv);
     if (rc != 0) {
         ESP_LOGE(TAG, "adv set fields failed: %d", rc);
         app_bt_status_set_errorf("adv_fields:%d", rc);
         return rc;
     }
+
+    full_len = strlen(s_config.bt_device_name);
+    if (full_len > 27) {
+        full_len = 27;   /* Scan Response: name(2+N)+tx_power(2) <=31 */
+    }
+    rsp.name = (const uint8_t *)s_config.bt_device_name;
+    rsp.name_len = (uint8_t)full_len;
+    rsp.name_is_complete = (full_len == strlen(s_config.bt_device_name)) ? 1 : 0;
+    rsp.tx_pwr_lvl_is_present = 1;
+    rsp.tx_pwr_lvl = 0;
+    rc = ble_gap_adv_rsp_set_fields(&rsp);
+    if (rc != 0) {
+        ESP_LOGW(TAG, "scan response set fields failed: %d", rc);
+    }
+
     rc = ble_gap_adv_start(BLE_OWN_ADDR_PUBLIC, NULL, BLE_HS_FOREVER,
                            &s_nimble_adv_params, app_bt_nimble_gap_cb, NULL);
     if (rc != 0) {

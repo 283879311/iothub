@@ -24,6 +24,7 @@ static const char *TAG = "ble_cmd";
  * 兼容只发送 ASCII 文本、不带行结束符的通用 BLE 串口 App。 */
 #define BLE_CMD_LINE_MAX 512
 #define BLE_CMD_QUEUE_DEPTH 8
+#define BLE_CMD_TX_QUEUE_DEPTH 8
 #define BLE_CMD_TOKEN_TTL_MS 600000
 
 #define BLE_CMD_ITEM_LINE  0
@@ -40,6 +41,18 @@ static size_t s_line_len = 0;
 static QueueHandle_t s_cmd_queue = NULL;
 static StaticQueue_t s_cmd_queue_buf;
 static uint8_t s_cmd_queue_storage[BLE_CMD_QUEUE_DEPTH * sizeof(ble_cmd_line_t)];
+
+/* CMD TX 独立发送队列：命令任务只入队，20ms 分片间隔由发送任务承担，
+ * 避免长响应期间阻塞 operation.get/取消命令。 */
+typedef struct {
+    char *body;
+    size_t len;
+} ble_cmd_tx_msg_t;
+
+static QueueHandle_t s_tx_queue = NULL;
+static StaticQueue_t s_tx_queue_buf;
+static uint8_t s_tx_queue_storage[BLE_CMD_TX_QUEUE_DEPTH * sizeof(ble_cmd_tx_msg_t)];
+static bool s_tx_ready = false;
 
 /* 短时 token:连接级鉴权(login 用 web 同源口令换 token,后续命令带 token) */
 static char s_token[33];
@@ -170,29 +183,24 @@ void app_ble_cmd_on_disconnect(void)
     s_token_expire_ms = 0;
     s_last_cmd_ms = 0;
     s_line_len = 0;
+    if (s_tx_queue != NULL) {
+        ble_cmd_tx_msg_t msg;
+        while (xQueueReceive(s_tx_queue, &msg, 0) == pdTRUE) {
+            cJSON_free(msg.body);
+        }
+    }
     app_cmd_net_on_ble_disconnect();
     ESP_LOGI(TAG, "cmd session token invalidated (disconnect)");
 }
 
 static uint32_t s_cmd_notify_fail;
 
-static void app_ble_cmd_send(const cJSON *resp)
+static void app_ble_cmd_tx_one(const char *body, size_t body_len)
 {
-    char *body;
-    size_t body_len;
     bool complete = false;
     bool partial = false;
     int partial_bytes = 0;
     int attempt;
-
-    if (resp == NULL) {
-        return;
-    }
-    body = cJSON_PrintUnformatted(resp);
-    if (body == NULL) {
-        return;
-    }
-    body_len = strlen(body);
 
     /* 仅在“一个字节都没送出”时重试(msys 暂空/拥塞/未订阅)。
      * 已送出前缀后不重试：从头重发会在客户端造成重复/拼接 JSON；
@@ -222,6 +230,49 @@ static void app_ble_cmd_send(const cJSON *resp)
                          (unsigned)s_cmd_notify_fail);
             }
         }
+    }
+}
+
+static void app_ble_cmd_tx_task(void *arg)
+{
+    ble_cmd_tx_msg_t msg;
+
+    (void)arg;
+    for (;;) {
+        if (xQueueReceive(s_tx_queue, &msg, portMAX_DELAY) != pdTRUE) {
+            continue;
+        }
+        app_ble_cmd_tx_one(msg.body, msg.len);
+        cJSON_free(msg.body);
+    }
+}
+
+static void app_ble_cmd_send(const cJSON *resp)
+{
+    char *body;
+    size_t body_len;
+    ble_cmd_tx_msg_t msg;
+
+    if (resp == NULL) {
+        return;
+    }
+    body = cJSON_PrintUnformatted(resp);
+    if (body == NULL) {
+        return;
+    }
+    body_len = strlen(body);
+    msg.body = body;
+    msg.len = body_len;
+
+    if (s_tx_ready && s_tx_queue != NULL &&
+        xQueueSend(s_tx_queue, &msg, pdMS_TO_TICKS(50)) == pdTRUE) {
+        return;
+    }
+    if (!s_tx_ready) {
+        /* TX 任务未就绪时退回同步发送，保证命令仍有响应。 */
+        app_ble_cmd_tx_one(body, body_len);
+    } else {
+        ESP_LOGW(TAG, "cmd tx queue full, response dropped");
     }
     cJSON_free(body);
 }
@@ -734,6 +785,17 @@ esp_err_t app_ble_cmd_start(void)
 {
     if (s_cmd_queue != NULL) {
         return ESP_OK;
+    }
+    if (s_tx_queue == NULL) {
+        s_tx_queue = xQueueCreateStatic(BLE_CMD_TX_QUEUE_DEPTH, sizeof(ble_cmd_tx_msg_t),
+                                        s_tx_queue_storage, &s_tx_queue_buf);
+        if (s_tx_queue == NULL) {
+            ESP_LOGW(TAG, "cmd tx queue create failed; using synchronous responses");
+        } else if (xTaskCreate(app_ble_cmd_tx_task, "ble_cmd_tx", 3072, NULL, 3, NULL) != pdPASS) {
+            ESP_LOGW(TAG, "cmd tx task create failed; using synchronous responses");
+        } else {
+            s_tx_ready = true;
+        }
     }
     s_cmd_queue = xQueueCreateStatic(BLE_CMD_QUEUE_DEPTH, sizeof(ble_cmd_line_t),
                                      s_cmd_queue_storage, &s_cmd_queue_buf);

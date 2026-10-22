@@ -34,7 +34,7 @@
 static const char *TAG = "bt_gatts";
 
 /* Nordic UART Service(UUID 小端字节序,与 bt_gatts.c 同一组常量) */
-static const ble_uuid128_t nus_svc_uuid = BLE_UUID128_INIT(
+const ble_uuid128_t g_ble_nus_svc_uuid = BLE_UUID128_INIT(
     0x9E, 0xCA, 0xDC, 0x24, 0x0E, 0xE5, 0xA9, 0xE0,
     0x93, 0xF3, 0xA3, 0xB5, 0x01, 0x00, 0x40, 0x6E);
 static const ble_uuid128_t nus_rx_uuid = BLE_UUID128_INIT(
@@ -183,7 +183,7 @@ static const struct ble_gatt_chr_def nus_chars[] = {
 static const struct ble_gatt_svc_def nus_svcs[] = {
     {
         .type = BLE_GATT_SVC_TYPE_PRIMARY,
-        .uuid = &nus_svc_uuid.u,
+        .uuid = &g_ble_nus_svc_uuid.u,
         .characteristics = nus_chars,
     },
     { 0 }
@@ -419,6 +419,10 @@ int app_ble_gatts_cmd_notify(const uint8_t *data, size_t len)
             return (int)offset;
         }
         offset += n;
+        if (offset < len) {
+            /* 小程序无法主动协商 MTU；20ms 片间隔降低 Android 侧通知丢包。 */
+            vTaskDelay(pdMS_TO_TICKS(20));
+        }
     }
     return (int)len;
 }
