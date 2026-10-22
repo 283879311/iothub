@@ -971,6 +971,9 @@ esp_err_t app_cmd_execute_ex(const cJSON *frame, app_cmd_source_t source,
                 if (patch != NULL) {
                     cJSON_AddStringToObject(patch, "sta_ssid", s_net_trial.ssid);
                     cJSON_AddStringToObject(patch, "sta_password", s_net_trial.password);
+                    /* BLE-only 配网：提交必须是 STA，不能把 AP-only 旧配置推断成 APSTA。
+                     * AP/Web 正在退出，apply 后不应继续保留 AP 的常驻内存开销。 */
+                    cJSON_AddStringToObject(patch, "net_mode", "sta");
                     /* 试连候选走 DHCP；提交必须与已验证 plan 一致，不能沿用旧静态 IP。 */
                     cJSON_AddBoolToObject(patch, "sta_use_static", false);
                     apply_err = config_apply_patch(patch, &changed, &effect);
