@@ -11,6 +11,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
+#include "bt_gatts.h"
 #include "mqtt.h"
 #include "operation.h"
 
@@ -707,6 +708,7 @@ static void app_operation_lifecycle_log(const char *phase, size_t min_free_seen,
     size_t largest_now = heap_caps_get_largest_free_block(MALLOC_CAP_DEFAULT);
     size_t min_now = esp_get_minimum_free_heap_size();
     bool mqtt_connected;
+    bool ble_connected = app_ble_gatts_connected();
 
     app_mqtt_lock();
     mqtt_connected = s_mqtt.connected;
@@ -714,12 +716,13 @@ static void app_operation_lifecycle_log(const char *phase, size_t min_free_seen,
 
     ESP_LOGI(TAG,
              "lifecycle %s free=%u largest=%u min=%u phase_min_free=%u phase_min_largest=%u "
-             "mqtt=%d shed=%u gate=%s",
+             "mqtt=%d ble=%d shed=%u gate=%s",
              phase,
              (unsigned)free_now, (unsigned)largest_now, (unsigned)min_now,
              (unsigned)(min_free_seen != 0 ? min_free_seen : free_now),
              (unsigned)(min_largest_seen != 0 ? min_largest_seen : largest_now),
-             (int)mqtt_connected, (unsigned)app_mqtt_tele_shed_count(),
+             (int)mqtt_connected, (int)ble_connected,
+             (unsigned)app_mqtt_tele_shed_count(),
              ((min_free_seen != 0 ? min_free_seen : free_now) >= 8192 &&
               (min_largest_seen != 0 ? min_largest_seen : largest_now) >= 6144)
                  ? "PASS" : "FAIL");
@@ -753,11 +756,12 @@ static void app_operation_lifecycle_test_run(void)
         size_t free_now = esp_get_free_heap_size();
         size_t largest_now = heap_caps_get_largest_free_block(MALLOC_CAP_DEFAULT);
         bool mqtt_connected;
+        bool ble_connected = app_ble_gatts_connected();
 
         app_mqtt_lock();
         mqtt_connected = s_mqtt.connected;
         app_mqtt_unlock();
-        if (mqtt_connected && free_now >= 4096 && largest_now >= 2048) {
+        if (mqtt_connected && ble_connected && free_now >= 4096 && largest_now >= 2048) {
             stable = true;
             break;
         }
