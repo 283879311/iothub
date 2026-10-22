@@ -1596,6 +1596,29 @@ static app_wifi_try_result_t app_wifi_try_connect_common(const char *ssid, const
         return APP_WIFI_TRY_BUSY;
     }
 
+    if (esp_wifi_get_config(WIFI_IF_STA, &old_cfg) != ESP_OK) {
+        ESP_LOGW(TAG, "tryconnect: get sta config failed");
+        return APP_WIFI_TRY_CONNECT_FAILED;
+    }
+    if (esp_wifi_get_mode(&old_wifi_mode) != ESP_OK) {
+        ESP_LOGW(TAG, "tryconnect: get wifi mode failed");
+        return APP_WIFI_TRY_CONNECT_FAILED;
+    }
+
+    /* 纯 AP 模式下 STA 接口未启用，候选试连必须临时切到 APSTA；
+     * 必须在扫描**之前**切换，否则 app_wifi_perform_scan() 结束时会恢复 AP，
+     * 随后 set_config(STA) 返回 ESP_ERR_WIFI_MODE（65D8 AP-only 板实测）。
+     * 结束后恢复原模式，不能把设备永久留在 APSTA。 */
+    if (old_wifi_mode == WIFI_MODE_AP) {
+        err = esp_wifi_set_mode(WIFI_MODE_APSTA);
+        if (err != ESP_OK) {
+            ESP_LOGW(TAG, "tryconnect: switch AP->APSTA failed: %s", esp_err_to_name(err));
+            return APP_WIFI_TRY_CONNECT_FAILED;
+        }
+        mode_switched = true;
+        ESP_LOGI(TAG, "tryconnect: temporary APSTA enabled (old mode=%d)", (int)old_wifi_mode);
+    }
+
     /* 预检(方案 C):扫描确认 SSID 在场。隐藏网络扫不到 —— 属预期限制,前端文案说明 */
     if (app_wifi_perform_scan() == ESP_OK) {
         app_wifi_runtime_lock();
@@ -1614,29 +1637,11 @@ static app_wifi_try_result_t app_wifi_try_connect_common(const char *ssid, const
         }
         if (!ssid_seen) {
             ESP_LOGW(TAG, "tryconnect: ssid '%s' not in scan results", ssid);
+            if (mode_switched) {
+                (void)esp_wifi_set_mode(old_wifi_mode);
+            }
             return APP_WIFI_TRY_AP_NOT_FOUND;
         }
-    }
-
-    if (esp_wifi_get_config(WIFI_IF_STA, &old_cfg) != ESP_OK) {
-        ESP_LOGW(TAG, "tryconnect: get sta config failed");
-        return APP_WIFI_TRY_CONNECT_FAILED;
-    }
-    if (esp_wifi_get_mode(&old_wifi_mode) != ESP_OK) {
-        ESP_LOGW(TAG, "tryconnect: get wifi mode failed");
-        return APP_WIFI_TRY_CONNECT_FAILED;
-    }
-
-    /* 纯 AP 模式下 STA 接口未启用，候选试连必须临时切到 APSTA；
-     * 结束后恢复原模式，不能把设备永久留在 APSTA。 */
-    if (old_wifi_mode == WIFI_MODE_AP) {
-        err = esp_wifi_set_mode(WIFI_MODE_APSTA);
-        if (err != ESP_OK) {
-            ESP_LOGW(TAG, "tryconnect: switch AP->APSTA failed: %s", esp_err_to_name(err));
-            return APP_WIFI_TRY_CONNECT_FAILED;
-        }
-        mode_switched = true;
-        ESP_LOGI(TAG, "tryconnect: temporary APSTA enabled (old mode=%d)", (int)old_wifi_mode);
     }
 
     app_copy_fixed_bytes(candidate.sta.ssid, sizeof(candidate.sta.ssid), ssid);
