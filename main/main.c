@@ -1,5 +1,6 @@
 #include <stdbool.h>
 
+#include "esp_heap_caps.h"
 #include "esp_log.h"
 #include "esp_wifi.h"
 #include "nvs_flash.h"
@@ -22,6 +23,19 @@
 static const char *TAG = "iothub";
 
 app_config_t s_config;
+
+/* 归因用：分别记录 total heap 与 internal 8-bit 的 free/largest。ESP32 无 PSRAM
+ * 时两组通常相同，但保留口径，避免以后引入其他内存能力时混淆。 */
+static void app_log_mem_phase(const char *phase)
+{
+    ESP_LOGI(TAG,
+             "mem %-18s total_free=%u internal_free=%u internal_largest=%u total_largest=%u",
+             phase,
+             (unsigned)esp_get_free_heap_size(),
+             (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT),
+             (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT),
+             (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_DEFAULT));
+}
 
 void app_main(void)
 {
@@ -68,6 +82,7 @@ void app_main(void)
         app_bt_get_status(NULL, bt_last_error, sizeof(bt_last_error));
         ESP_LOGW(TAG, "Bluetooth init failed (last_error=%s)", bt_last_error);
     }
+    app_log_mem_phase("after_ble");
 
     ESP_LOGI(TAG, "[boot-5] app_configure_gpio");
     app_configure_gpio();
@@ -75,8 +90,14 @@ void app_main(void)
     ESP_ERROR_CHECK(app_ota_mount_fs(true));
     ESP_LOGI(TAG, "[boot-7] app_start_wifi");
     app_start_wifi();
+    app_log_mem_phase("after_wifi");
+#ifndef APP_CAPTIVE_DISABLED
     ESP_LOGI(TAG, "[boot-7c] app_captive_init");
     app_captive_init();
+    app_log_mem_phase("after_captive");
+#else
+    ESP_LOGW(TAG, "[boot-7c] captive disabled for memory attribution");
+#endif
 
     ESP_LOGI(TAG, "[boot-9] app_uart_apply_config");
     if (app_uart_apply_config() != ESP_OK) {
@@ -100,8 +121,14 @@ void app_main(void)
     if (app_factory_reset_start_task() != ESP_OK) {
         ESP_LOGW(TAG, "Factory reset button task init skipped");
     }
+    app_log_mem_phase("before_http");
+#ifndef APP_HTTP_DISABLED
     ESP_LOGI(TAG, "[boot-12] app_http_start_webserver");
     app_http_start_webserver();
+    app_log_mem_phase("after_http");
+#else
+    ESP_LOGW(TAG, "[boot-12] HTTP disabled for memory attribution");
+#endif
     ESP_LOGI(TAG, "[boot-13] app_ota_confirm_running_image");
     app_ota_confirm_running_image();
     /* 诊断:堆水位 + AP/STA 信道 + AP 客户端数,启动即打一行,之后每 30s 一行 */
@@ -109,6 +136,7 @@ void app_main(void)
     if (app_diag_start() != ESP_OK) {
         ESP_LOGW(TAG, "Diagnostics task init skipped");
     }
+    app_log_mem_phase("after_diag");
 
     ESP_LOGI(TAG, "iothub phase-4 ready: mode=%s, AP SSID='%s', open http://192.168.8.1 when AP is enabled",
              app_network_mode_to_string(s_config.net_mode),
