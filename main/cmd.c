@@ -59,6 +59,8 @@ typedef struct {
 static app_cmd_net_async_job_t s_net_async;
 static bool s_net_async_apply_internal = false;
 
+static cJSON *app_cmd_net_operation_status(const char *operation_id, const char **err_out);
+
 static void app_cmd_net_async_clear_job(void)
 {
     memset(&s_net_async, 0, sizeof(s_net_async));
@@ -230,6 +232,19 @@ static bool app_cmd_net_tryconnect_async(const cJSON *params, app_cmd_source_t s
         *err_out = "params_required";
         return false;
     }
+    if (idem_key != NULL) {
+        app_operation_owner_t owner =
+            source == APP_CMD_SOURCE_BLE ? APP_OPERATION_OWNER_BLE : APP_OPERATION_OWNER_HTTP;
+        app_operation_t *existing = app_operation_find_by_key(owner, idem_key);
+        if (existing != NULL) {
+            cJSON *resp = app_cmd_net_operation_status(app_operation_id(existing), err_out);
+            if (resp == NULL) {
+                return false;
+            }
+            *resp_out = resp;
+            return true;
+        }
+    }
     if (s_net_async.active) {
         app_operation_t *existing = s_net_async.op;
         if (existing != NULL && idem_key != NULL &&
@@ -345,6 +360,19 @@ static bool app_cmd_net_apply_async(const cJSON *params, cJSON **resp_out,
         *err_out = "not_found";
         return false;
     }
+    if (status.state == APP_OP_SUCCESS) {
+        cJSON *resp = cJSON_CreateObject();
+        if (resp == NULL) {
+            *err_out = "out_of_memory";
+            return false;
+        }
+        cJSON_AddStringToObject(resp, "operation_id", status.id);
+        cJSON_AddStringToObject(resp, "state", "success");
+        cJSON_AddBoolToObject(resp, "saved", true);
+        cJSON_AddBoolToObject(resp, "applied", true);
+        *resp_out = resp;
+        return true;
+    }
     if (status.state != APP_OP_GOT_IP) {
         *err_out = "operation_state";
         return false;
@@ -430,6 +458,17 @@ static bool app_cmd_net_cancel_async(const cJSON *params, cJSON **resp_out,
     if (op == NULL || !app_operation_get_status(op, &status)) {
         *err_out = "not_found";
         return false;
+    }
+    if (status.state == APP_OP_CANCELLED) {
+        cJSON *resp = cJSON_CreateObject();
+        if (resp == NULL) {
+            *err_out = "out_of_memory";
+            return false;
+        }
+        cJSON_AddStringToObject(resp, "operation_id", status.id);
+        cJSON_AddStringToObject(resp, "state", "cancelled");
+        *resp_out = resp;
+        return true;
     }
     if (!app_op_state_can_cancel(status.state)) {
         *err_out = "operation_state";
