@@ -5,14 +5,12 @@
 #include "esp_wifi.h"
 #include "nvs_flash.h"
 
-#include "app_captive.h"
 #include "bootstrap.h"
 #include "bt.h"
 #include "config.h"
 #include "config_apply.h"
 #include "data_pipe.h"
 #include "diag.h"
-#include "http.h"
 #include "mqtt.h"
 #include "operation.h"
 #include "ota.h"
@@ -86,18 +84,9 @@ void app_main(void)
 
     ESP_LOGI(TAG, "[boot-5] app_configure_gpio");
     app_configure_gpio();
-    ESP_LOGI(TAG, "[boot-6] app_ota_mount_fs");
-    ESP_ERROR_CHECK(app_ota_mount_fs(true));
     ESP_LOGI(TAG, "[boot-7] app_start_wifi");
     app_start_wifi();
     app_log_mem_phase("after_wifi");
-#ifndef APP_CAPTIVE_DISABLED
-    ESP_LOGI(TAG, "[boot-7c] app_captive_init");
-    app_captive_init();
-    app_log_mem_phase("after_captive");
-#else
-    ESP_LOGW(TAG, "[boot-7c] captive disabled for memory attribution");
-#endif
 
     ESP_LOGI(TAG, "[boot-9] app_uart_apply_config");
     if (app_uart_apply_config() != ESP_OK) {
@@ -121,14 +110,6 @@ void app_main(void)
     if (app_factory_reset_start_task() != ESP_OK) {
         ESP_LOGW(TAG, "Factory reset button task init skipped");
     }
-    app_log_mem_phase("before_http");
-#ifndef APP_HTTP_DISABLED
-    ESP_LOGI(TAG, "[boot-12] app_http_start_webserver");
-    app_http_start_webserver();
-    app_log_mem_phase("after_http");
-#else
-    ESP_LOGW(TAG, "[boot-12] HTTP disabled for memory attribution");
-#endif
     ESP_LOGI(TAG, "[boot-13] app_ota_confirm_running_image");
     app_ota_confirm_running_image();
     /* 诊断:堆水位 + AP/STA 信道 + AP 客户端数,启动即打一行,之后每 30s 一行 */
@@ -138,7 +119,7 @@ void app_main(void)
     }
     app_log_mem_phase("after_diag");
 
-    ESP_LOGI(TAG, "iothub phase-4 ready: mode=%s, AP SSID='%s', open http://192.168.8.1 when AP is enabled",
+    ESP_LOGI(TAG, "iothub phase-4 ready: mode=%s, AP SSID='%s' (BLE-only management)",
              app_network_mode_to_string(s_config.net_mode),
              s_config.ap_ssid);
 

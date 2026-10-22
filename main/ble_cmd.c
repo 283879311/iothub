@@ -14,7 +14,7 @@
 #include "bt_gatts.h"
 #include "cmd.h"
 #include "config_apply.h"
-#include "http_priv.h"
+#include "auth.h"
 #include "ota.h"
 
 static const char *TAG = "ble_cmd";
@@ -598,7 +598,7 @@ static void app_ble_cmd_handle_line(const char *line, size_t len)
         const cJSON *u = cJSON_IsObject(params) ? cJSON_GetObjectItemCaseSensitive(params, "username") : NULL;
         const cJSON *p = cJSON_IsObject(params) ? cJSON_GetObjectItemCaseSensitive(params, "password") : NULL;
         bool ok = cJSON_IsString(u) && cJSON_IsString(p) &&
-                  app_http_check_credentials(u->valuestring, p->valuestring);
+                  app_auth_check_credentials(u->valuestring, p->valuestring);
 
         if (ok) {
             app_ble_cmd_issue_token(s_token, sizeof(s_token));

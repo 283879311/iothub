@@ -17,7 +17,6 @@
 #include "constants.h"
 #include "data_pipe.h"
 #include "diag.h"
-#include "http_priv.h"
 #include "mem_guard.h"
 #include "mqtt.h"
 
@@ -78,12 +77,10 @@ static void app_diag_dump(void)
              (unsigned)dp_stats.yielded);
 }
 
-/* 1.3-30 批 1 核绑定可见性:启动时打印 wifi/tcpip/httpd 三个任务的落核。
- * xTaskGetCoreID 对未钉核任务返回 tskNO_AFFINITY(-1),对钉核任务返回核号。
- * 预期(本批 A+B+C):wifi=1 tcpip=1 httpd=1;BT 控制器/主机按官方要求仍钉 core 0。 */
+/* 1.3-30 批 1 核绑定可见性:启动时打印 wifi/tcpip 任务的落核。 */
 static void app_diag_dump_core_affinity(void)
 {
-    static const char *names[] = {"wifi", "tcpip", "httpd"};
+    static const char *names[] = {"wifi", "tcpip"};
     char line[96];
     size_t used = 0;
     int n;
@@ -149,41 +146,6 @@ static void app_diag_dump_core_idle(void)
 #endif
 }
 
-/* 存储自检(诊断用,1.3-36 后续):开机读一次 config.html.gz,
- * 区分"littlefs 读坏"与"httpd 上下文问题"。
- * 1.3-89:页面发送或内存非 normal 时不打开文件 —— 自检本身要占 FILE/FD,
- * 在低堆期会和页面发送抢最后一个可分配块;跳过只损失一次诊断,不影响业务。 */
-static void app_diag_storage_selftest(void)
-{
-    static uint32_t s_skip_count;
-    app_mem_level_t level = app_mem_level();
-    FILE *f;
-    char buf[64];
-    size_t got;
-
-    if (app_http_serving_page() || level != APP_MEM_NORMAL) {
-        s_skip_count++;
-        if (s_skip_count <= 3u || (s_skip_count % 20u) == 0u) {
-            ESP_LOGW(TAG,
-                     "storage selftest skipped #%u: page=%d level=%s free=%u largest=%u",
-                     (unsigned)s_skip_count, app_http_serving_page() ? 1 : 0,
-                     app_mem_level_str(level),
-                     (unsigned)esp_get_free_heap_size(),
-                     (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_DEFAULT));
-        }
-        return;
-    }
-    f = fopen(APP_BASE_PATH "/config.html.gz", "rb");
-    if (f == NULL) {
-        ESP_LOGE(TAG, "storage selftest: fopen failed");
-        return;
-    }
-    got = fread(buf, 1, sizeof(buf), f);
-    ESP_LOGI(TAG, "storage selftest: first_read=%u ferror=%d feof=%d",
-             (unsigned)got, ferror(f), feof(f));
-    fclose(f);
-}
-
 /* ===========================================================================
  * 1.3-44 全开稳态的"事后现场"两件套(不需要人盯串口)
  * ------------------------------------------------------------------------- */
@@ -200,7 +162,6 @@ typedef struct {
     bool ble_adv;
     bool ble_conn;
     bool mqtt_conn;
-    bool page;
 } diag_heap_low_t;
 
 static diag_heap_low_t s_heap_low;
@@ -228,13 +189,12 @@ static void app_diag_sample_heap(void)
     s_heap_low.mqtt_conn = s_mqtt.connected;
     app_mqtt_unlock();
     s_heap_low.outbox = app_mqtt_outbox_size();
-    s_heap_low.page = app_http_serving_page();
-    ESP_LOGW(TAG, "heap new low: free=%u largest=%u t=%us ble_adv=%d ble_conn=%d mqtt=%d page=%d outbox=%d",
+    ESP_LOGW(TAG, "heap new low: free=%u largest=%u t=%us ble_adv=%d ble_conn=%d mqtt=%d outbox=%d",
              (unsigned)s_heap_low.free_min,
              (unsigned)s_heap_low.largest_at_min,
              (unsigned)s_heap_low.uptime_s,
              (int)s_heap_low.ble_adv, (int)s_heap_low.ble_conn,
-             (int)s_heap_low.mqtt_conn, (int)s_heap_low.page, s_heap_low.outbox);
+             (int)s_heap_low.mqtt_conn, s_heap_low.outbox);
 }
 
 /* ---- 任务栈高水位(10 分钟一次/开机 60s 一次) ----
@@ -255,10 +215,10 @@ static const char *const s_stack_watch[] = {
     /* BT 栈(全开稳态的头号嫌疑;名字经 libbt.a 符号实查) */
     "btController", "BTU_TASK", "BTC_TASK", "hciT",
     /* 网络与服务 */
-    "wifi", "tcpip", "httpd", "http_reaper", "captive_dns",
+    "wifi", "tcpip",
     /* 应用任务(15 字符上限;过长者用被 FreeRTOS 截断后的名字) */
     "mqtt_task", "mqtt_telemetry", "mqtt_boost", "mqtt_restart",
-    "data_pipe", "ble_cmd", "uart_console", "app_diag",
+    "data_pipe", "ble_cmd", "app_diag",
     "wifi_auto_conne", "wifi_restart", "wifi_boot_monit",
     "ip_conflict", "ota_confirm", "factory_reset_b", "main",
     /* IDF 常驻 */
@@ -319,7 +279,6 @@ static void app_diag_task(void *arg)
     (void)arg;
 
     app_diag_dump_core_affinity();
-    app_diag_storage_selftest();
     app_diag_dump();
     for (;;) {
         /* 1.3-44:基准节拍 1s(堆低谷采样);每 30s 例行 dump/空闲率;
@@ -328,8 +287,7 @@ static void app_diag_task(void *arg)
         sec++;
         app_diag_sample_heap();
         if ((sec % 30u) == 0u) {
-            app_diag_storage_selftest();
-            app_diag_dump_core_idle();
+                    app_diag_dump_core_idle();
             app_diag_dump();
         }
         if ((sec % 600u) == 0u || sec == 60u) {

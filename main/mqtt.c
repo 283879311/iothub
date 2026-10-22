@@ -28,7 +28,6 @@
 #include "config_apply.h"
 #include "constants.h"
 #include "data_pipe.h"
-#include "http_priv.h"
 #include "mem_guard.h"
 #include "mqtt.h"
 #include "ota.h"
@@ -77,29 +76,23 @@ int app_mqtt_outbox_size(void)
 }
 
 /* 1.3-89:低优先级 state/attributes 的有界让路。
- * 页面发送期间/outbox 积压时只延后可合并的状态，置 IO 事件表示"还有最新值待发"；
+ * outbox 积压时只延后可合并的状态，置 IO 事件表示"还有最新值待发"；
  * RPC 响应仍走各自的直接 publish，不经过此闸门。 */
 #define APP_MQTT_LOW_PRIO_OUTBOX_LIMIT 2048
-static uint32_t s_low_prio_page_defer;
 static uint32_t s_low_prio_outbox_defer;
 
 static bool app_mqtt_low_prio_defer(void)
 {
-    bool page = app_http_serving_page();
-    int outbox = page ? -1 : app_mqtt_outbox_size();
-    uint32_t *counter;
-    const char *reason;
+    int outbox = app_mqtt_outbox_size();
 
-    if (!page && outbox <= APP_MQTT_LOW_PRIO_OUTBOX_LIMIT) {
+    if (outbox <= APP_MQTT_LOW_PRIO_OUTBOX_LIMIT) {
         return false;
     }
-    counter = page ? &s_low_prio_page_defer : &s_low_prio_outbox_defer;
-    (*counter)++;
-    reason = page ? "page" : "outbox";
-    if (*counter <= 3u || (*counter % 20u) == 0u) {
+    s_low_prio_outbox_defer++;
+    if (s_low_prio_outbox_defer <= 3u || (s_low_prio_outbox_defer % 20u) == 0u) {
         ESP_LOGW(TAG,
-                 "low-prio publish deferred #%u (%s): outbox=%d free=%u largest=%u",
-                 (unsigned)*counter, reason, outbox,
+                 "low-prio publish deferred #%u (outbox): outbox=%d free=%u largest=%u",
+                 (unsigned)s_low_prio_outbox_defer, outbox,
                  (unsigned)esp_get_free_heap_size(),
                  (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_DEFAULT));
     }
@@ -1493,12 +1486,6 @@ static void app_mqtt_restart_task_fn(void *arg)
             app_mqtt_unlock();
             vTaskDelete(NULL);
             return;
-        }
-        /* 1.3-36:配置页流式发送期间推迟重连 —— 连接尝试的 ~6KB 堆抖动
-         * 会把 20KB 页面掐成半截(实测 free 4KB→2KB、页面 503/0B)。
-         * 页面流自带 2s send 超时兜底,标志不会无限置位。 */
-        while (app_http_serving_page()) {
-            vTaskDelay(pdMS_TO_TICKS(200));
         }
         if (app_mqtt_restart_is_deferred()) {
             app_mqtt_lock();

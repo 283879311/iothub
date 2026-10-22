@@ -12,10 +12,8 @@
 
 #include "common.h"
 #include "config.h"
-#include "http_utils.h"
 #include "state.h"
 #include "uart.h"
-#include "uart_console.h"
 #include "uart_internal.h"
 
 static const char *TAG = "uart";
@@ -24,18 +22,13 @@ extern app_config_t s_config;
 
 uart_runtime_t s_uart = {0};
 static SemaphoreHandle_t s_uart_op_mutex = NULL;
-static SemaphoreHandle_t s_json_mutex = NULL;
 static StaticSemaphore_t s_uart_op_mutex_buf;
-static StaticSemaphore_t s_json_mutex_buf;
 
 /* 1.3-76:UART TX ring buffer。原 tx_buffer_size=0 时 uart_write_bytes 会
  * 阻塞到数据全部发出(官方 UART 文档),data_pipe 任务被拖住 → 队列 overrun。
  * 2048 > UART_HW_FIFO_LEN,ISR 后台搬 FIFO;发送前用 free_size 做非阻塞背压。 */
 #define UART_DRV_TX_BUF_SIZE 2048
 
-static char s_escaped_tx_data[UART_TX_BUFFER_SIZE * 2];
-static char s_escaped_tx_preview[UART_TX_PREVIEW_SIZE * 2];
-static char s_escaped_tx_hex[UART_TX_HEX_TEXT_SIZE * 2];
 
 static void app_uart_set_apply_error(const char *error_key)
 {
@@ -264,8 +257,6 @@ void app_uart_init(void)
 {
     /* 静态创建不会失败,锁在启动单线程期就绪 */
     s_uart_op_mutex = xSemaphoreCreateRecursiveMutexStatic(&s_uart_op_mutex_buf);
-    s_json_mutex = xSemaphoreCreateMutexStatic(&s_json_mutex_buf);
-    app_uart_console_init();
 }
 
 void app_uart_build_frame(char *buffer, size_t buffer_size,
@@ -307,92 +298,6 @@ uart_parity_t app_uart_parity_from_string(const char *value)
 void app_uart_reset_runtime_state(void)
 {
     app_uart_set_apply_error("");
-    app_uart_console_reset();
-}
-
-esp_err_t app_uart_send_runtime_json(httpd_req_t *req, const char *message)
-{
-    char frame[8];
-    int64_t last_send_age_ms = -1;
-    uint32_t tx_sequence = 0;
-    unsigned last_bytes_sent = 0;
-    int64_t last_send_at_ms = 0;
-    char last_tx_encoding[16];
-    bool driver_installed = false;
-    esp_err_t result;
-    bool json_locked = false;
-
-    if (s_json_mutex != NULL) {
-        if (xSemaphoreTake(s_json_mutex, pdMS_TO_TICKS(500)) != pdTRUE) {
-            return app_http_send_json_text(req, "503 Service Unavailable",
-                                       "{\"status\":\"error\",\"message\":\"json_buffer_busy\"}");
-        }
-        json_locked = true;
-    }
-
-    app_uart_build_frame(frame, sizeof(frame),
-                         s_config.uart_data_bits,
-                         (uart_parity_t)s_config.uart_parity_mode,
-                         s_config.uart_stop_bits);
-
-    s_escaped_tx_data[0] = '\0';
-    s_escaped_tx_preview[0] = '\0';
-    s_escaped_tx_hex[0] = '\0';
-    last_tx_encoding[0] = '\0';
-
-    if (!app_uart_lock(pdMS_TO_TICKS(200))) {
-        if (json_locked && s_json_mutex != NULL) {
-            xSemaphoreGive(s_json_mutex);
-        }
-        return app_http_send_json_text(req, "503 Service Unavailable",
-                                   "{\"status\":\"error\",\"message\":\"uart_busy\"}");
-    }
-    app_json_escape_string(s_escaped_tx_data, sizeof(s_escaped_tx_data), s_uart.last_tx_data);
-    app_json_escape_string(s_escaped_tx_preview, sizeof(s_escaped_tx_preview), s_uart.last_tx_preview);
-    app_json_escape_string(s_escaped_tx_hex, sizeof(s_escaped_tx_hex), s_uart.last_tx_hex);
-    if (s_uart.last_send_at_ms > 0) {
-        int64_t now_ms = esp_timer_get_time() / 1000;
-        last_send_age_ms = now_ms > s_uart.last_send_at_ms ? (now_ms - s_uart.last_send_at_ms) : 0;
-    }
-    tx_sequence = s_uart.tx_sequence;
-    last_bytes_sent = s_uart.last_bytes_sent;
-    last_send_at_ms = s_uart.last_send_at_ms;
-    driver_installed = s_uart.driver_installed;
-    app_copy_string(last_tx_encoding, sizeof(last_tx_encoding),
-                    s_uart.last_tx_encoding[0] != '\0' ? s_uart.last_tx_encoding : "");
-    app_uart_unlock();
-
-    result = app_http_send_jsonf(req, NULL,
-                           "{\"status\":\"ok\",\"message\":\"%s\","
-                           "\"rx_gpio\":%ld,\"tx_gpio\":%ld,\"baudrate\":%u,"
-                           "\"data_bits\":%u,\"stop_bits\":%u,\"parity\":\"%s\","
-                            "\"frame\":\"%s\",\"driver_installed\":%s,"
-                            "\"tx_sequence\":%u,\"last_bytes_sent\":%u,"
-                            "\"last_send_at_ms\":%lld,\"last_send_age_ms\":%lld,"
-                            "\"last_payload_encoding\":\"%s\",\"last_payload_data\":\"%s\","
-                              "\"last_payload_preview\":\"%s\",\"last_payload_hex\":\"%s\"}",
-                           message != NULL ? message : "",
-                           (long)app_uart_rx_gpio(),
-                           (long)app_uart_tx_gpio(),
-                           s_config.uart_baudrate,
-                           (unsigned)s_config.uart_data_bits,
-                           (unsigned)s_config.uart_stop_bits,
-                           app_uart_parity_to_string((uart_parity_t)s_config.uart_parity_mode),
-                           frame,
-                            driver_installed ? "true" : "false",
-                            (unsigned)tx_sequence,
-                            last_bytes_sent,
-                            (long long)last_send_at_ms,
-                            (long long)last_send_age_ms,
-                            last_tx_encoding,
-                            s_escaped_tx_data,
-                            s_escaped_tx_preview,
-                              s_escaped_tx_hex);
-
-    if (json_locked && s_json_mutex != NULL) {
-        xSemaphoreGive(s_json_mutex);
-    }
-    return result;
 }
 
 static esp_err_t app_uart_apply_config_values(uint32_t baudrate, uint8_t data_bits,
@@ -469,8 +374,7 @@ static esp_err_t app_uart_apply_config_values(uint32_t baudrate, uint8_t data_bi
 
         s_uart.driver_installed = true;
         app_uart_set_apply_error("");
-        app_uart_console_reset();
-        uart_flush_input(UART_PORT);
+            uart_flush_input(UART_PORT);
         app_uart_unlock();
         return ESP_OK;
     }
@@ -485,135 +389,6 @@ esp_err_t app_uart_apply_config(void)
                                         s_config.uart_data_bits,
                                         (uart_parity_t)s_config.uart_parity_mode,
                                         s_config.uart_stop_bits);
-}
-
-esp_err_t app_uart_handle_config_request(httpd_req_t *req, const char *body)
-{
-    uint32_t old_baudrate;
-    uint8_t old_parity_mode;
-    uint8_t old_data_bits;
-    uint8_t old_stop_bits;
-    uint32_t new_baudrate;
-    uint8_t new_parity_mode;
-    uint8_t new_data_bits;
-    uint8_t new_stop_bits;
-
-    char apply_error[48];
-    char value[64];
-    uint32_t baudrate;
-    uint16_t short_value;
-    bool save_ok;
-
-    app_config_lock();
-    old_baudrate = s_config.uart_baudrate;
-    old_parity_mode = s_config.uart_parity_mode;
-    old_data_bits = s_config.uart_data_bits;
-    old_stop_bits = s_config.uart_stop_bits;
-    app_config_unlock();
-    new_baudrate = old_baudrate;
-    new_parity_mode = old_parity_mode;
-    new_data_bits = old_data_bits;
-    new_stop_bits = old_stop_bits;
-
-    if (app_json_find_u32(body, "baudrate", &baudrate) && baudrate > 0) {
-        new_baudrate = baudrate;
-    }
-    if (app_json_find_string(body, "parity", value, sizeof(value))) {
-        new_parity_mode = (uint8_t)app_uart_parity_from_string(value);
-    }
-    if (app_json_find_u16(body, "data_bits", &short_value)) {
-        if (!app_uart_data_bits_valid((uint8_t)short_value)) {
-            return app_http_send_json_text(req, "400 Bad Request",
-                                       "{\"status\":\"error\",\"message\":\"invalid_uart_data_bits\"}");
-        }
-        new_data_bits = (uint8_t)short_value;
-    }
-    if (app_json_find_u16(body, "stop_bits", &short_value)) {
-        if (!app_uart_stop_bits_valid((uint8_t)short_value)) {
-            return app_http_send_json_text(req, "400 Bad Request",
-                                       "{\"status\":\"error\",\"message\":\"invalid_uart_stop_bits\"}");
-        }
-        new_stop_bits = (uint8_t)short_value;
-    }
-
-    if (app_uart_apply_config_values(new_baudrate, new_data_bits,
-                                     (uart_parity_t)new_parity_mode,
-                                     new_stop_bits) != ESP_OK) {
-        app_copy_string(apply_error, sizeof(apply_error), app_uart_get_apply_error());
-        if (app_uart_apply_config_values(old_baudrate, old_data_bits,
-                                         (uart_parity_t)old_parity_mode,
-                                         old_stop_bits) != ESP_OK) {
-            return app_http_send_json_text(req, "500 Internal Server Error",
-                                       "{\"status\":\"error\",\"message\":\"uart_restore_failed\"}");
-        }
-        app_uart_set_apply_error(apply_error);
-        return app_http_send_jsonf(req, "500 Internal Server Error",
-                               "{\"status\":\"error\",\"message\":\"%s\"}",
-                               apply_error);
-    }
-    app_config_lock();
-    {
-        app_config_t snapshot = s_config;
-        snapshot.uart_baudrate = new_baudrate;
-        snapshot.uart_parity_mode = new_parity_mode;
-        snapshot.uart_data_bits = new_data_bits;
-        snapshot.uart_stop_bits = new_stop_bits;
-        save_ok = (app_config_save(&snapshot) == ESP_OK);
-        if (save_ok) {
-            s_config.uart_baudrate = new_baudrate;
-            s_config.uart_parity_mode = new_parity_mode;
-            s_config.uart_data_bits = new_data_bits;
-            s_config.uart_stop_bits = new_stop_bits;
-        }
-    }
-    app_config_unlock();
-
-    if (!save_ok) {
-        if (app_uart_apply_config_values(old_baudrate, old_data_bits,
-                                         (uart_parity_t)old_parity_mode,
-                                         old_stop_bits) != ESP_OK) {
-            return app_http_send_json_text(req, "500 Internal Server Error",
-                                       "{\"status\":\"error\",\"message\":\"uart_restore_failed\"}");
-        }
-        return app_http_send_json_text(req, "500 Internal Server Error",
-                                   "{\"status\":\"error\",\"message\":\"config_save_failed\"}");
-    }
-    return app_uart_send_runtime_json(req, "uart_runtime");
-}
-
-esp_err_t app_uart_handle_send_request(httpd_req_t *req, const char *body)
-{
-    char data[UART_TX_BUFFER_SIZE];
-    char encoding[8] = "plain";
-    unsigned written = 0;
-    esp_err_t err;
-
-    if (!s_uart.driver_installed) {
-        return app_http_send_json_text(req, "503 Service Unavailable",
-                                   "{\"status\":\"error\",\"message\":\"uart_not_ready\"}");
-    }
-    if (!app_json_find_string(body, "data", data, sizeof(data))) {
-        return app_http_send_json_text(req, "400 Bad Request",
-                                   "{\"status\":\"error\",\"message\":\"uart_data_required\"}");
-    }
-    app_json_find_string(body, "encoding", encoding, sizeof(encoding));
-    err = app_uart_send_data(encoding, data, &written);
-    if (err == ESP_ERR_TIMEOUT) {
-        return app_http_send_json_text(req, "503 Service Unavailable",
-                                   "{\"status\":\"error\",\"message\":\"uart_busy\"}");
-    }
-    if (err == ESP_ERR_INVALID_STATE) {
-        return app_http_send_json_text(req, "503 Service Unavailable",
-                                   "{\"status\":\"error\",\"message\":\"uart_not_ready\"}");
-    }
-    if (err != ESP_OK) {
-        return app_http_send_json_text(req, "500 Internal Server Error",
-                                   "{\"status\":\"error\",\"message\":\"uart_send_failed\"}");
-    }
-
-    return app_http_send_jsonf(req, NULL,
-                           "{\"status\":\"ok\",\"bytes_sent\":%u}",
-                           written);
 }
 
 esp_err_t app_uart_send_data(const char *encoding, const char *data, unsigned *bytes_sent)

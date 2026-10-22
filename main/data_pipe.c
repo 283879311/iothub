@@ -6,7 +6,6 @@
 #include "freertos/task.h"
 
 #include "data_pipe.h"
-#include "http_priv.h"
 #include "mem_guard.h"
 
 static const char *TAG = "data_pipe";
@@ -60,10 +59,7 @@ static void data_pipe_task(void *arg)
          * dropped/overrun 承担,计数 yielded 供 diag 观测)。
          * 256B/帧 × 5ms ≈ 51KB/s,高于 UART1 115200 波特率(≈11.5KB/s),
          * 正常数据速率下让渡不构成瓶颈。 */
-        if (app_http_serving_page()) {
-            vTaskDelay(pdMS_TO_TICKS(5));
-            s_stats.yielded++;
-        } else if (app_mem_level() == APP_MEM_CRITICAL) {
+        if (app_mem_level() == APP_MEM_CRITICAL) {
             vTaskDelay(pdMS_TO_TICKS(10));
             s_stats.yielded++;
         }
