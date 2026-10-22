@@ -43,6 +43,7 @@ static bool s_wifi_pmf_required_tried = false;
 
 /* 试连验证状态(1.3-37):试连期间事件处理器只记结果、不跑正常自动重连逻辑 */
 static bool s_tryconnect_active = false;
+static volatile bool s_tryconnect_cancel_requested = false;
 static bool s_tryconnect_connecting = false;
 static bool s_tryconnect_require_ip = false;
 static app_wifi_try_result_t s_tryconnect_result = APP_WIFI_TRY_TIMEOUT;
@@ -1681,6 +1682,7 @@ static app_wifi_try_result_t app_wifi_try_connect_common(const char *ssid, const
         xEventGroupClearBits(events, APP_WIFI_TRY_DONE_BIT | APP_WIFI_TRY_OLD_DISC_BIT);
         s_tryconnect_result = APP_WIFI_TRY_TIMEOUT;
         s_tryconnect_require_ip = require_ip;
+        s_tryconnect_cancel_requested = false;
         s_tryconnect_active = true;
         s_tryconnect_connecting = false;
         s_wifi_sta_connecting = true;   /* 抑制 boot monitor 的自动调度 */
@@ -1723,9 +1725,30 @@ static app_wifi_try_result_t app_wifi_try_connect_common(const char *ssid, const
         return APP_WIFI_TRY_CONNECT_FAILED;
     }
 
-    if (xEventGroupWaitBits(events, APP_WIFI_TRY_DONE_BIT, pdTRUE, pdFALSE,
-                            pdMS_TO_TICKS(timeout_ms)) == 0) {
-        s_tryconnect_result = APP_WIFI_TRY_TIMEOUT;
+    {
+        int64_t deadline = app_wifi_now_ms() + (int64_t)timeout_ms;
+        bool cancelled = false;
+        bool done = false;
+
+        while (app_wifi_now_ms() < deadline) {
+            int64_t remaining = deadline - app_wifi_now_ms();
+            TickType_t wait_ticks = pdMS_TO_TICKS(remaining > 100 ? 100 : remaining);
+            EventBits_t bits = xEventGroupWaitBits(events, APP_WIFI_TRY_DONE_BIT,
+                                                   pdTRUE, pdFALSE, wait_ticks);
+            if ((bits & APP_WIFI_TRY_DONE_BIT) != 0) {
+                done = true;
+                break;
+            }
+            if (s_tryconnect_cancel_requested) {
+                cancelled = true;
+                break;
+            }
+        }
+        if (cancelled) {
+            s_tryconnect_result = APP_WIFI_TRY_CANCELLED;
+        } else if (!done) {
+            s_tryconnect_result = APP_WIFI_TRY_TIMEOUT;
+        }
     }
 
     /* 无条件恢复:断开候选连接,放回旧配置,交回常规自动重连 */
@@ -1733,6 +1756,7 @@ static app_wifi_try_result_t app_wifi_try_connect_common(const char *ssid, const
     s_tryconnect_active = false;
     s_tryconnect_connecting = false;
     s_tryconnect_require_ip = false;
+    s_tryconnect_cancel_requested = false;
     s_wifi_sta_connecting = false;
     if (esp_wifi_set_config(WIFI_IF_STA, &old_cfg) != ESP_OK) {
         ESP_LOGW(TAG, "tryconnect: restore sta config failed");
@@ -1763,6 +1787,15 @@ app_wifi_try_result_t app_wifi_try_connect_ip(const char *ssid, const char *pass
                                               uint32_t timeout_ms)
 {
     return app_wifi_try_connect_common(ssid, password, timeout_ms, true);
+}
+
+bool app_wifi_try_cancel(void)
+{
+    if (!s_tryconnect_active) {
+        return false;
+    }
+    s_tryconnect_cancel_requested = true;
+    return true;
 }
 
 static void app_wifi_restart_task_fn(void *arg)

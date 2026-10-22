@@ -18,6 +18,7 @@
 #include "esp_timer.h"
 #include "identity.h"
 #include "mqtt.h"
+#include "operation.h"
 #include "prov_pin.h"
 #include "state.h"
 #include "uart.h"
@@ -37,12 +38,52 @@ typedef struct {
     bool valid;
     app_cmd_source_t owner;
     char id[20];
+    char operation_id[20];
     char ssid[33];
     char password[65];
     int64_t expires_ms;
 } app_cmd_net_trial_t;
 
 static app_cmd_net_trial_t s_net_trial;
+
+typedef struct {
+    bool active;
+    app_cmd_source_t owner;
+    char idem_key[65];
+    char ssid[33];
+    char password[65];
+    char operation_id[20];
+    app_operation_t *op;
+} app_cmd_net_async_job_t;
+
+static app_cmd_net_async_job_t s_net_async;
+static bool s_net_async_apply_internal = false;
+
+static void app_cmd_net_async_clear_job(void)
+{
+    memset(&s_net_async, 0, sizeof(s_net_async));
+}
+
+static bool app_cmd_net_store_trial(const char *ssid, const char *password,
+                                    app_cmd_source_t source, const char *operation_id)
+{
+    if (source == APP_CMD_SOURCE_BLE && !app_ble_gatts_connected()) {
+        return false;
+    }
+    snprintf(s_net_trial.id, sizeof(s_net_trial.id), "trial-%08X",
+             (unsigned)esp_random());
+    snprintf(s_net_trial.ssid, sizeof(s_net_trial.ssid), "%s", ssid);
+    snprintf(s_net_trial.password, sizeof(s_net_trial.password), "%s", password);
+    if (operation_id != NULL) {
+        snprintf(s_net_trial.operation_id, sizeof(s_net_trial.operation_id), "%s",
+                 operation_id);
+    }
+    s_net_trial.expires_ms = esp_timer_get_time() / 1000 + APP_NET_TRIAL_TTL_MS;
+    s_net_trial.owner = source;
+    s_net_trial.valid = true;
+    app_wifi_suppress_profile_writeback(APP_NET_TRIAL_TTL_MS);
+    return true;
+}
 
 static void app_cmd_net_trial_clear(void)
 {
@@ -53,6 +94,22 @@ static void app_cmd_net_trial_clear(void)
 
 void app_cmd_net_on_ble_disconnect(void)
 {
+    if (s_net_async.active && s_net_async.op != NULL &&
+        s_net_async.owner == APP_CMD_SOURCE_BLE) {
+        app_operation_status_t status;
+
+        if (app_operation_get_status(s_net_async.op, &status)) {
+            if (app_op_state_can_cancel(status.state)) {
+                (void)app_operation_cancel(s_net_async.op);
+                ESP_LOGI(TAG, "async network operation cancelled on BLE disconnect");
+                return;
+            }
+            if (status.state == APP_OP_COMMITTING) {
+                /* 已进入提交阶段：让提交完成，结果可在重连后查询。 */
+                return;
+            }
+        }
+    }
     if (s_net_trial.valid && s_net_trial.owner == APP_CMD_SOURCE_BLE) {
         app_cmd_net_trial_clear();
         ESP_LOGI(TAG, "network trial cleared on BLE disconnect");
@@ -70,6 +127,329 @@ static bool app_cmd_net_trial_ready(const char *trial_id)
         return false;
     }
     return trial_id == NULL || strcmp(trial_id, s_net_trial.id) == 0;
+}
+
+
+static bool app_cmd_net_async_cleanup(app_operation_t *op, void *ctx)
+{
+    (void)ctx;
+    if (op == NULL) {
+        return false;
+    }
+    if (app_operation_state(op) == APP_OP_CONNECTING) {
+        (void)app_wifi_try_cancel();
+    }
+    if (s_net_trial.valid &&
+        strcmp(s_net_trial.operation_id, app_operation_id(op)) == 0) {
+        app_cmd_net_trial_clear();
+    }
+    app_cmd_net_async_clear_job();
+    return true;
+}
+
+static app_operation_error_t app_cmd_net_wifi_error(app_wifi_try_result_t result)
+{
+    switch (result) {
+    case APP_WIFI_TRY_WRONG_PASSWORD: return APP_OPERATION_ERR_WRONG_PASSWORD;
+    case APP_WIFI_TRY_AP_NOT_FOUND:   return APP_OPERATION_ERR_AP_NOT_FOUND;
+    case APP_WIFI_TRY_TIMEOUT:        return APP_OPERATION_ERR_TIMEOUT;
+    case APP_WIFI_TRY_CANCELLED:      return APP_OPERATION_ERR_CANCELLED;
+    case APP_WIFI_TRY_OK:
+    case APP_WIFI_TRY_CONNECT_FAILED:
+    case APP_WIFI_TRY_BUSY:
+    case APP_WIFI_TRY_INVALID_ARG:
+    default:                          return APP_OPERATION_ERR_CONNECT_FAILED;
+    }
+}
+
+static esp_err_t app_cmd_net_async_run(app_operation_t *op, void *ctx)
+{
+    app_cmd_net_async_job_t *job = ctx;
+    app_wifi_try_result_t result;
+    char ssid[33];
+    char password[65];
+    app_cmd_source_t owner;
+
+    if (op == NULL || job == NULL || !job->active) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    snprintf(ssid, sizeof(ssid), "%s", job->ssid);
+    snprintf(password, sizeof(password), "%s", job->password);
+    owner = job->owner;
+    ESP_LOGI(TAG, "async tryconnect ssid='%s' op=%s", ssid,
+             app_operation_id(op));
+    result = app_wifi_try_connect_ip(ssid, password, 15000);
+
+    /* cancel/expire 可能在 tryconnect 返回前已把 operation 置终态。 */
+    if (app_operation_state(op) != APP_OP_CONNECTING) {
+        app_cmd_net_async_clear_job();
+        return ESP_OK;
+    }
+    if (result == APP_WIFI_TRY_OK) {
+        if (!app_cmd_net_store_trial(ssid, password, owner,
+                                     app_operation_id(op))) {
+            app_cmd_net_async_clear_job();
+            return app_operation_set_state(op, APP_OP_CANCELLED,
+                                           APP_OPERATION_ERR_CANCELLED);
+        }
+        return app_operation_set_state(op, APP_OP_GOT_IP,
+                                       APP_OPERATION_ERR_NONE);
+    }
+
+    app_cmd_net_async_clear_job();
+    if (result == APP_WIFI_TRY_CANCELLED) {
+        return app_operation_set_state(op, APP_OP_CANCELLED,
+                                       APP_OPERATION_ERR_CANCELLED);
+    }
+    return app_operation_set_state(op, APP_OP_FAILED,
+                                   app_cmd_net_wifi_error(result));
+}
+
+static bool app_cmd_net_tryconnect_async(const cJSON *params, app_cmd_source_t source,
+                                          cJSON **resp_out, const char **err_out)
+{
+    const cJSON *ssid_item = cJSON_IsObject(params)
+                                 ? cJSON_GetObjectItemCaseSensitive(params, "ssid")
+                                 : NULL;
+    const cJSON *pass_item = cJSON_IsObject(params)
+                                 ? cJSON_GetObjectItemCaseSensitive(params, "password")
+                                 : NULL;
+    const cJSON *key_item = cJSON_IsObject(params)
+                                ? cJSON_GetObjectItemCaseSensitive(params, "idempotency_key")
+                                : NULL;
+    const char *idem_key = cJSON_IsString(key_item) ? key_item->valuestring : NULL;
+    app_operation_t *op = NULL;
+    esp_err_t err;
+
+    if (source == APP_CMD_SOURCE_MQTT) {
+        *err_out = "guard_rejected";
+        return false;
+    }
+    if (!cJSON_IsString(ssid_item) || ssid_item->valuestring == NULL ||
+        ssid_item->valuestring[0] == '\0') {
+        *err_out = "params_required";
+        return false;
+    }
+    if (s_net_async.active) {
+        app_operation_t *existing = s_net_async.op;
+        if (existing != NULL && idem_key != NULL &&
+            strcmp(s_net_async.idem_key, idem_key) == 0) {
+            app_operation_status_t status;
+            cJSON *resp;
+            if (!app_operation_get_status(existing, &status)) {
+                *err_out = "not_found";
+                return false;
+            }
+            resp = cJSON_CreateObject();
+            if (resp == NULL) {
+                *err_out = "out_of_memory";
+                return false;
+            }
+            cJSON_AddStringToObject(resp, "operation_id", status.id);
+            cJSON_AddStringToObject(resp, "state", app_op_state_name(status.state));
+            *resp_out = resp;
+            return true;
+        }
+        *err_out = "busy";
+        return false;
+    }
+    if (s_net_trial.valid && app_cmd_net_trial_ready(NULL)) {
+        *err_out = "busy";
+        return false;
+    }
+
+    memset(&s_net_async, 0, sizeof(s_net_async));
+    s_net_async.active = true;
+    s_net_async.owner = source;
+    snprintf(s_net_async.ssid, sizeof(s_net_async.ssid), "%s", ssid_item->valuestring);
+    if (cJSON_IsString(pass_item) && pass_item->valuestring != NULL) {
+        snprintf(s_net_async.password, sizeof(s_net_async.password), "%s",
+                 pass_item->valuestring);
+    }
+    if (idem_key != NULL) {
+        snprintf(s_net_async.idem_key, sizeof(s_net_async.idem_key), "%s", idem_key);
+    }
+
+    err = app_operation_start(
+        source == APP_CMD_SOURCE_BLE ? APP_OPERATION_OWNER_BLE : APP_OPERATION_OWNER_HTTP,
+        idem_key, 20000, 300000, app_cmd_net_async_run,
+        app_cmd_net_async_cleanup, &s_net_async, &op);
+    if (err != ESP_OK) {
+        app_cmd_net_async_clear_job();
+        *err_out = (err == ESP_ERR_INVALID_STATE) ? "busy" : "no_slot";
+        return false;
+    }
+    s_net_async.op = op;
+    snprintf(s_net_async.operation_id, sizeof(s_net_async.operation_id), "%s",
+             app_operation_id(op));
+
+    {
+        cJSON *resp = cJSON_CreateObject();
+        if (resp == NULL) {
+            *err_out = "out_of_memory";
+            return false;
+        }
+        cJSON_AddStringToObject(resp, "operation_id", s_net_async.operation_id);
+        cJSON_AddStringToObject(resp, "state", "accepted");
+        *resp_out = resp;
+    }
+    return true;
+}
+
+static cJSON *app_cmd_net_operation_status(const char *operation_id, const char **err_out)
+{
+    app_operation_t *op;
+    app_operation_status_t status;
+    cJSON *resp;
+
+    op = app_operation_find(operation_id);
+    if (op == NULL || !app_operation_get_status(op, &status)) {
+        *err_out = "not_found";
+        return NULL;
+    }
+    resp = cJSON_CreateObject();
+    if (resp == NULL) {
+        *err_out = "out_of_memory";
+        return NULL;
+    }
+    cJSON_AddStringToObject(resp, "operation_id", status.id);
+    cJSON_AddStringToObject(resp, "state", app_op_state_name(status.state));
+    cJSON_AddStringToObject(resp, "error", app_operation_error_name(status.error));
+    if (s_net_trial.valid && strcmp(s_net_trial.operation_id, status.id) == 0) {
+        cJSON_AddStringToObject(resp, "trial_id", s_net_trial.id);
+        cJSON_AddStringToObject(resp, "ssid", s_net_trial.ssid);
+    }
+    return resp;
+}
+
+static bool app_cmd_net_apply_async(const cJSON *params, cJSON **resp_out,
+                                    const char **err_out)
+{
+    const cJSON *op_item = cJSON_IsObject(params)
+                               ? cJSON_GetObjectItemCaseSensitive(params, "operation_id")
+                               : NULL;
+    app_operation_t *op;
+    app_operation_status_t status;
+    cJSON *frame = NULL;
+    cJSON *inner = NULL;
+    app_cmd_result_t out = {0};
+    const char *inner_err = NULL;
+    bool ok = false;
+
+    if (!cJSON_IsString(op_item) || op_item->valuestring == NULL) {
+        *err_out = "params_required";
+        return false;
+    }
+    op = app_operation_find(op_item->valuestring);
+    if (op == NULL || !app_operation_get_status(op, &status)) {
+        *err_out = "not_found";
+        return false;
+    }
+    if (status.state != APP_OP_GOT_IP) {
+        *err_out = "operation_state";
+        return false;
+    }
+    if (!s_net_trial.valid || strcmp(s_net_trial.operation_id, status.id) != 0 ||
+        !app_cmd_net_trial_ready(s_net_trial.id)) {
+        *err_out = "trial_invalid";
+        return false;
+    }
+    if (app_operation_set_state(op, APP_OP_COMMITTING,
+                                APP_OPERATION_ERR_NONE) != ESP_OK) {
+        *err_out = "operation_state";
+        return false;
+    }
+
+    frame = cJSON_CreateObject();
+    if (frame != NULL) {
+        cJSON *p = cJSON_CreateObject();
+        if (p != NULL) {
+            cJSON_AddStringToObject(p, "trial_id", s_net_trial.id);
+            cJSON_AddStringToObject(frame, "method", "network.apply");
+            cJSON_AddItemToObject(frame, "params", p);
+            s_net_async_apply_internal = true;
+            if (app_cmd_execute_ex(frame, APP_CMD_SOURCE_BLE, &inner, &out,
+                                   &inner_err) == ESP_OK && inner != NULL) {
+                ok = true;
+            }
+            s_net_async_apply_internal = false;
+        }
+    }
+    cJSON_Delete(inner);
+    cJSON_Delete(frame);
+    if (ok) {
+        (void)app_operation_set_state(op, APP_OP_SUCCESS, APP_OPERATION_ERR_NONE);
+        app_cmd_net_async_clear_job();
+        {
+            cJSON *resp = cJSON_CreateObject();
+            if (resp == NULL) {
+                *err_out = "out_of_memory";
+                return false;
+            }
+            cJSON_AddStringToObject(resp, "operation_id", status.id);
+            cJSON_AddStringToObject(resp, "state", "success");
+            cJSON_AddBoolToObject(resp, "saved", true);
+            cJSON_AddBoolToObject(resp, "applied", true);
+            *resp_out = resp;
+        }
+        return true;
+    }
+
+    {
+        app_operation_error_t error = APP_OPERATION_ERR_CONNECT_FAILED;
+        if (inner_err != NULL) {
+            if (strcmp(inner_err, "storage_failed") == 0) {
+                error = APP_OPERATION_ERR_STORAGE_FAILED;
+            } else if (strcmp(inner_err, "rollback_failed") == 0) {
+                error = APP_OPERATION_ERR_ROLLBACK_FAILED;
+            } else if (strcmp(inner_err, "save_failed") == 0) {
+                error = APP_OPERATION_ERR_STORAGE_FAILED;
+            }
+        }
+        (void)app_operation_set_state(op, APP_OP_FAILED, error);
+        app_cmd_net_async_clear_job();
+        *err_out = inner_err != NULL ? inner_err : "apply_failed";
+    }
+    return false;
+}
+
+static bool app_cmd_net_cancel_async(const cJSON *params, cJSON **resp_out,
+                                     const char **err_out)
+{
+    const cJSON *op_item = cJSON_IsObject(params)
+                               ? cJSON_GetObjectItemCaseSensitive(params, "operation_id")
+                               : NULL;
+    app_operation_t *op;
+    app_operation_status_t status;
+
+    if (!cJSON_IsString(op_item) || op_item->valuestring == NULL) {
+        *err_out = "params_required";
+        return false;
+    }
+    op = app_operation_find(op_item->valuestring);
+    if (op == NULL || !app_operation_get_status(op, &status)) {
+        *err_out = "not_found";
+        return false;
+    }
+    if (!app_op_state_can_cancel(status.state)) {
+        *err_out = "operation_state";
+        return false;
+    }
+    if (app_operation_cancel(op) != ESP_OK) {
+        *err_out = "operation_state";
+        return false;
+    }
+    {
+        cJSON *resp = cJSON_CreateObject();
+        if (resp == NULL) {
+            *err_out = "out_of_memory";
+            return false;
+        }
+        cJSON_AddStringToObject(resp, "operation_id", status.id);
+        cJSON_AddStringToObject(resp, "state", "cancelled");
+        *resp_out = resp;
+    }
+    return true;
 }
 
 static cJSON *app_cmd_build_network_status(void)
@@ -874,6 +1254,27 @@ esp_err_t app_cmd_execute_ex(const cJSON *frame, app_cmd_source_t source,
             if (resp == NULL) {
                 err = "out_of_memory";
             }
+        } else if (strcmp(m, "network.tryconnect.async") == 0) {
+            if (!app_cmd_net_tryconnect_async(params, source, &resp, &err)) {
+                /* resp/err 已由 helper 设置 */
+            }
+        } else if (strcmp(m, "network.apply.async") == 0) {
+            if (!app_cmd_net_apply_async(params, &resp, &err)) {
+                /* resp/err 已由 helper 设置 */
+            }
+        } else if (strcmp(m, "network.cancel.async") == 0) {
+            if (!app_cmd_net_cancel_async(params, &resp, &err)) {
+                /* resp/err 已由 helper 设置 */
+            }
+        } else if (strcmp(m, "operation.get") == 0) {
+            const cJSON *op_item = cJSON_IsObject(params)
+                                       ? cJSON_GetObjectItemCaseSensitive(params, "operation_id")
+                                       : NULL;
+            if (!cJSON_IsString(op_item) || op_item->valuestring == NULL) {
+                err = "params_required";
+            } else {
+                resp = app_cmd_net_operation_status(op_item->valuestring, &err);
+            }
         } else if (strcmp(m, "network.tryconnect") == 0) {
             const cJSON *ssid_item = cJSON_IsObject(params)
                                          ? cJSON_GetObjectItemCaseSensitive(params, "ssid")
@@ -890,7 +1291,7 @@ esp_err_t app_cmd_execute_ex(const cJSON *frame, app_cmd_source_t source,
             } else if (!cJSON_IsString(ssid_item) || ssid_item->valuestring == NULL ||
                        ssid_item->valuestring[0] == '\0') {
                 err = "params_required";
-            } else if (s_net_trial.valid && app_cmd_net_trial_ready(NULL)) {
+            } else if (s_net_async.active || (s_net_trial.valid && app_cmd_net_trial_ready(NULL))) {
                 err = "busy";
             } else {
                 app_cmd_net_trial_clear();
@@ -904,21 +1305,11 @@ esp_err_t app_cmd_execute_ex(const cJSON *frame, app_cmd_source_t source,
                     /* tryconnect 是同步阻塞的:等待期间 BLE 可能已断开。
                      * 此时若仍把候选留在 RAM,会形成"无会话但可 apply"的遗留事务;
                      * 直接丢弃候选,连接已恢复的正式配置不受影响。 */
-                    if (source == APP_CMD_SOURCE_BLE && !app_ble_gatts_connected()) {
+                    if (!app_cmd_net_store_trial(ssid, password, source, NULL)) {
                         ESP_LOGW(TAG, "network.tryconnect: BLE disconnected, discard candidate");
                         err = "cancelled";
                         break;
                     }
-                    snprintf(s_net_trial.id, sizeof(s_net_trial.id), "trial-%08X",
-                             (unsigned)esp_random());
-                    snprintf(s_net_trial.ssid, sizeof(s_net_trial.ssid), "%s", ssid);
-                    snprintf(s_net_trial.password, sizeof(s_net_trial.password), "%s", password);
-                    s_net_trial.expires_ms = esp_timer_get_time() / 1000 + APP_NET_TRIAL_TTL_MS;
-                    s_net_trial.owner = source;
-                    s_net_trial.valid = true;
-                    /* trial 未决期间禁止 auto_connect 把别的 profile 回写主配置；
-                     * 只有 apply 才能提交候选。TTL 到期自动失效。 */
-                    app_wifi_suppress_profile_writeback(APP_NET_TRIAL_TTL_MS);
                     resp = cJSON_CreateObject();
                     if (resp == NULL) {
                         app_cmd_net_trial_clear();
@@ -956,6 +1347,8 @@ esp_err_t app_cmd_execute_ex(const cJSON *frame, app_cmd_source_t source,
 
             if (source == APP_CMD_SOURCE_MQTT) {
                 err = "guard_rejected";
+            } else if (s_net_async.active && !s_net_async_apply_internal) {
+                err = "busy";
             } else if (!cJSON_IsString(trial_item) || trial_item->valuestring == NULL ||
                        !app_cmd_net_trial_ready(trial_item->valuestring)) {
                 err = "trial_invalid";
@@ -1023,6 +1416,8 @@ esp_err_t app_cmd_execute_ex(const cJSON *frame, app_cmd_source_t source,
 
             if (source == APP_CMD_SOURCE_MQTT) {
                 err = "guard_rejected";
+            } else if (s_net_async.active) {
+                err = "busy";
             } else if (!cJSON_IsString(trial_item) || trial_item->valuestring == NULL ||
                        !app_cmd_net_trial_ready(trial_item->valuestring)) {
                 err = "not_found";

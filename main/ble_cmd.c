@@ -260,6 +260,10 @@ static bool app_ble_cmd_v1_allowed(const char *cmd)
         "config.set",
         "network.status",
         "network.scan",
+        "network.tryconnect",
+        "network.apply",
+        "network.cancel",
+        "operation.get",
         "network.profile.list",
         "network.profile.delete",
         "led.set",
@@ -287,6 +291,15 @@ static bool app_ble_cmd_v1_allowed(const char *cmd)
 
 static const char *app_ble_cmd_v1_map(const char *cmd)
 {
+    if (strcmp(cmd, "network.tryconnect") == 0) {
+        return "network.tryconnect.async";
+    }
+    if (strcmp(cmd, "network.apply") == 0) {
+        return "network.apply.async";
+    }
+    if (strcmp(cmd, "network.cancel") == 0) {
+        return "network.cancel.async";
+    }
     if (strcmp(cmd, "auth.login") == 0) {
         return "login";
     }
@@ -347,8 +360,16 @@ static const char *app_ble_cmd_v1_error_code(const char *v0)
     if (strcmp(v0, "internal_error") == 0) {
         return "internal_error";
     }
-    if (strcmp(v0, "not_found") == 0) {
-        return "not_found";
+    if (strcmp(v0, "not_found") == 0 ||
+        strcmp(v0, "operation_state") == 0 ||
+        strcmp(v0, "trial_invalid") == 0 ||
+        strcmp(v0, "wrong_password") == 0 ||
+        strcmp(v0, "ap_not_found") == 0 ||
+        strcmp(v0, "connect_failed") == 0 ||
+        strcmp(v0, "no_slot") == 0 ||
+        strcmp(v0, "expired") == 0 ||
+        strcmp(v0, "rollback_failed") == 0) {
+        return v0;
     }
     if (strcmp(v0, "save_failed") == 0 ||
         strcmp(v0, "storage_failed") == 0) {

@@ -27,6 +27,13 @@ typedef enum {
     APP_OPERATION_ERR_TIMEOUT,
     APP_OPERATION_ERR_CANCELLED,
     APP_OPERATION_ERR_NOT_FOUND,
+    APP_OPERATION_ERR_WRONG_PASSWORD,
+    APP_OPERATION_ERR_AP_NOT_FOUND,
+    APP_OPERATION_ERR_CONNECT_FAILED,
+    APP_OPERATION_ERR_TRIAL_INVALID,
+    APP_OPERATION_ERR_OPERATION_STATE,
+    APP_OPERATION_ERR_STORAGE_FAILED,
+    APP_OPERATION_ERR_ROLLBACK_FAILED,
 } app_operation_error_t;
 
 typedef struct app_operation app_operation_t;
@@ -68,6 +75,8 @@ esp_err_t app_operation_cancel(app_operation_t *op);
 bool app_operation_get_status(const app_operation_t *op, app_operation_status_t *out);
 const char *app_operation_id(const app_operation_t *op);
 app_op_state_t app_operation_state(const app_operation_t *op);
+app_operation_t *app_operation_find(const char *operation_id);
+app_operation_t *app_operation_find_by_key(app_operation_owner_t owner, const char *idem_key);
 const char *app_operation_error_name(app_operation_error_t error);
 
 #ifdef APP_OPERATION_SELFTEST

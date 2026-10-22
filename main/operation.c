@@ -70,6 +70,43 @@ static bool app_operation_valid(const app_operation_t *op)
            op->used;
 }
 
+app_operation_t *app_operation_find(const char *operation_id)
+{
+    app_operation_t *found = NULL;
+
+    if (operation_id == NULL || operation_id[0] == '\0') {
+        return NULL;
+    }
+    portENTER_CRITICAL(&s_ops_mux);
+    for (size_t i = 0; i < APP_OPERATION_MAX_SLOTS; i++) {
+        if (s_ops[i].used && strcmp(s_ops[i].id, operation_id) == 0) {
+            found = &s_ops[i];
+            break;
+        }
+    }
+    portEXIT_CRITICAL(&s_ops_mux);
+    return found;
+}
+
+app_operation_t *app_operation_find_by_key(app_operation_owner_t owner, const char *idem_key)
+{
+    app_operation_t *found = NULL;
+
+    if (idem_key == NULL || idem_key[0] == '\0') {
+        return NULL;
+    }
+    portENTER_CRITICAL(&s_ops_mux);
+    for (size_t i = 0; i < APP_OPERATION_MAX_SLOTS; i++) {
+        if (s_ops[i].used && s_ops[i].owner == owner &&
+            strcmp(s_ops[i].idem_key, idem_key) == 0) {
+            found = &s_ops[i];
+            break;
+        }
+    }
+    portEXIT_CRITICAL(&s_ops_mux);
+    return found;
+}
+
 const char *app_operation_id(const app_operation_t *op)
 {
     return app_operation_valid(op) ? op->id : "";
@@ -91,6 +128,13 @@ const char *app_operation_error_name(app_operation_error_t error)
     case APP_OPERATION_ERR_TIMEOUT:        return "timeout";
     case APP_OPERATION_ERR_CANCELLED:      return "cancelled";
     case APP_OPERATION_ERR_NOT_FOUND:      return "not_found";
+    case APP_OPERATION_ERR_WRONG_PASSWORD: return "wrong_password";
+    case APP_OPERATION_ERR_AP_NOT_FOUND:   return "ap_not_found";
+    case APP_OPERATION_ERR_CONNECT_FAILED: return "connect_failed";
+    case APP_OPERATION_ERR_TRIAL_INVALID:  return "trial_invalid";
+    case APP_OPERATION_ERR_OPERATION_STATE:return "operation_state";
+    case APP_OPERATION_ERR_STORAGE_FAILED: return "storage_failed";
+    case APP_OPERATION_ERR_ROLLBACK_FAILED:return "rollback_failed";
     default:                               return "unknown";
     }
 }
