@@ -31,7 +31,6 @@ typedef struct {
     bool sta_connected;
     bool sta_has_ip;
     bool startup_connect_active;
-    bool startup_fallback_to_ap;
     bool sta_ip_conflict;       /* 静态 IP 冲突检测结果(ARP 探测,见 wifi.c) */
     uint8_t sta_retries;
     int64_t startup_connect_deadline_ms;

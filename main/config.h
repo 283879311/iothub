@@ -34,8 +34,12 @@ typedef struct {
     uint8_t uart_stop_bits;
     uint16_t mqtt_port;
     uint32_t uart_baudrate;
-    char ap_ssid[33];
-    char ap_password[65];
+    /* AP runtime/schema removed (BLE/serial rescue only). These bytes stay in
+     * the same positions to keep the v11 NVS blob layout compatible with old
+     * devices; they are never exposed or used. app_config_scrub_legacy_ap()
+     * zeros and persists them after load. */
+    char reserved_ap_ssid[33];
+    char reserved_ap_password[65];
     char sta_ssid[33];
     char sta_password[65];
     char bt_device_name[33];
@@ -76,6 +80,9 @@ void app_config_set_defaults(app_config_t *config);
 void app_config_force_ble_peripheral(void);
 esp_err_t app_config_save(const app_config_t *config);
 void app_config_load(app_config_t *config);
+/* Zero the legacy AP bytes retained in the v11 layout; returns true if changed
+ * so the caller can persist the cleanup. Old NVS blobs keep their byte layout. */
+bool app_config_scrub_legacy_ap(app_config_t *config);
 esp_err_t app_config_load_wifi_profiles(app_wifi_profile_t *profiles, size_t max_profiles, size_t *profile_count);
 esp_err_t app_config_save_wifi_profile(const char *ssid, const char *password);
 esp_err_t app_config_delete_wifi_profile(const char *ssid);

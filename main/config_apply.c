@@ -128,9 +128,8 @@ static esp_err_t cfg_validate_mqtt_port(const cJSON *value, const char *field,
     return ESP_OK;
 }
 
-/* net_mode:HTTP 前端传**字符串**("ap"/"sta"/"apsta"),命令面可传数字 0/1/2 —— 两者都接受。
- * 注意:校验器在 empty_keeps 之前执行,字符串分支必须显式白名单,不能依赖
- * from_string() 的"未知回落默认值"行为(否则非法值会被静默接受)。 */
+/* net_mode:HTTP/Web 已删除,AP/APSTA 没有配置通道,只接受 STA。
+ * 旧配置的 AP/APSTA 在 app_start_wifi() 启动时迁移为 STA。 */
 static esp_err_t cfg_validate_net_mode(const cJSON *value, const char *field,
                                        char *err, size_t err_size)
 {
@@ -139,16 +138,14 @@ static esp_err_t cfg_validate_net_mode(const cJSON *value, const char *field,
     if (cJSON_IsString(value)) {
         const char *s = cJSON_GetStringValue(value);
 
-        if (s == NULL || (strcasecmp(s, "ap") != 0 && strcasecmp(s, "sta") != 0 &&
-                          strcasecmp(s, "apsta") != 0)) {
-            snprintf(err, err_size, "%s must be ap/sta/apsta or 0/1/2", field);
+        if (s == NULL || strcasecmp(s, "sta") != 0) {
+            snprintf(err, err_size, "%s must be sta (AP mode removed)", field);
             return ESP_ERR_INVALID_ARG;
         }
         return ESP_OK;
     }
-    if (!cfg_coerce_uint(value, 255, &mode) ||
-        (mode != NET_MODE_AP && mode != NET_MODE_STA && mode != NET_MODE_APSTA)) {
-        snprintf(err, err_size, "%s must be ap/sta/apsta or 0/1/2", field);
+    if (!cfg_coerce_uint(value, 255, &mode) || mode != NET_MODE_STA) {
+        snprintf(err, err_size, "%s must be sta (AP mode removed)", field);
         return ESP_ERR_INVALID_ARG;
     }
     return ESP_OK;
@@ -172,18 +169,14 @@ static bool cfg_special_net_mode(app_config_t *dst, const cJSON *value)
     return true;
 }
 
-/* net 域一致性推断(1.3-04 实测缺陷):设备处于"纯 AP"时,用户在门户里只填了上游 SSID
- * (模式下拉仍是默认 AP)→ SSID/口令全部落盘,但 STA 永不启动、也没有任何报错,
- * 现象就是"填了 SSID 拿不到 IP"。
- * 规则:本次 patch 触及 net 域 且 结果态 sta_ssid 非空 且 模式不含 STA
- *       → 自动升级为 AP+STA(保留 AP,便于继续从 AP 侧访问/回退)。
- * 想显式保持纯 AP:提交 mode="ap" + sta_ssid_clear=true。 */
+/* AP/APSTA runtime/config channel removed: any retained old-config or old-client
+ * net_mode converges to STA. STA is the only supported mode. */
 static bool cfg_net_infer_sta_mode(app_config_t *cfg)
 {
-    if (cfg->sta_ssid[0] == '\0' || app_network_mode_has_sta(cfg->net_mode)) {
+    if (cfg->net_mode == NET_MODE_STA) {
         return false;
     }
-    cfg->net_mode = app_network_mode_has_ap(cfg->net_mode) ? NET_MODE_APSTA : NET_MODE_STA;
+    cfg->net_mode = NET_MODE_STA;
     return true;
 }
 
@@ -210,12 +203,6 @@ static esp_err_t cfg_validate_wifi_password(const cJSON *value, const char *fiel
 static bool cfg_validate_net_cross(const app_config_t *old_cfg, const app_config_t *new_cfg,
                                    char *err, size_t err_size)
 {
-    if (new_cfg->ap_ssid[0] != '\0' &&
-        strcmp(old_cfg->ap_ssid, new_cfg->ap_ssid) != 0 &&
-        strlen(new_cfg->ap_password) < 8) {
-        snprintf(err, err_size, "ap_password required when changing ap_ssid");
-        return false;
-    }
     if (new_cfg->sta_ssid[0] != '\0' &&
         strcmp(old_cfg->sta_ssid, new_cfg->sta_ssid) != 0 &&
         strlen(new_cfg->sta_password) < 8) {
@@ -413,18 +400,12 @@ static bool cfg_special_str_clear(char *dst, size_t dst_size, const cJSON *value
     return true;
 }
 
-static bool cfg_special_ap_password_clear(app_config_t *dst, const cJSON *value)
-{
-    return cfg_special_str_clear(dst->ap_password, sizeof(dst->ap_password), value);
-}
-
 static bool cfg_special_sta_password_clear(app_config_t *dst, const cJSON *value)
 {
     return cfg_special_str_clear(dst->sta_password, sizeof(dst->sta_password), value);
 }
 
-/* 显式清空 STA SSID:前端"留空 = 保持",清空必须走伪字段;
- * 与 mode="ap" 配合才能显式保持纯 AP(见 cfg_net_infer_sta_mode) */
+/* 显式清空 STA SSID:前端"留空 = 保持",清空必须走伪字段。 */
 static bool cfg_special_sta_ssid_clear(app_config_t *dst, const cJSON *value)
 {
     return cfg_special_str_clear(dst->sta_ssid, sizeof(dst->sta_ssid), value);
@@ -492,18 +473,11 @@ static const cfg_field_t s_fields[] = {
     {.field = "net_mode", .alias = "mode", .type = CFG_T_U8, .offset = CFG_OFF(net_mode),
      .domain = CFG_DOMAIN_NET, .effect = CFG_EFFECT_REBOOT, .validate = cfg_validate_net_mode,
      .special = cfg_special_net_mode},
-    {.field = "ap_ssid", .type = CFG_T_STR, .offset = CFG_OFF(ap_ssid), .size = CFG_LEN(ap_ssid),
-     .domain = CFG_DOMAIN_NET, .effect = CFG_EFFECT_REBOOT, .empty_keeps = true},
-    {.field = "ap_password", .type = CFG_T_STR, .offset = CFG_OFF(ap_password), .size = CFG_LEN(ap_password),
-     .domain = CFG_DOMAIN_NET, .effect = CFG_EFFECT_REBOOT, .empty_keeps = true,
-     .validate = cfg_validate_wifi_password},
     {.field = "sta_ssid", .type = CFG_T_STR, .offset = CFG_OFF(sta_ssid), .size = CFG_LEN(sta_ssid),
      .domain = CFG_DOMAIN_NET, .effect = CFG_EFFECT_REBOOT, .empty_keeps = true},
     {.field = "sta_password", .type = CFG_T_STR, .offset = CFG_OFF(sta_password), .size = CFG_LEN(sta_password),
      .domain = CFG_DOMAIN_NET, .effect = CFG_EFFECT_REBOOT, .empty_keeps = true,
      .validate = cfg_validate_wifi_password},
-    {.field = "ap_password_clear", .type = CFG_T_BOOL8, .offset = CFG_OFF(ap_password),
-     .domain = CFG_DOMAIN_NET, .effect = CFG_EFFECT_REBOOT, .special = cfg_special_ap_password_clear},
     {.field = "sta_password_clear", .type = CFG_T_BOOL8, .offset = CFG_OFF(sta_password),
      .domain = CFG_DOMAIN_NET, .effect = CFG_EFFECT_REBOOT, .special = cfg_special_sta_password_clear},
     {.field = "sta_ssid_clear", .type = CFG_T_BOOL8, .offset = CFG_OFF(sta_ssid),
@@ -798,7 +772,7 @@ esp_err_t config_apply_patch(const cJSON *patch, cJSON **changed_out, cfg_effect
         }
         if (f->domain == CFG_DOMAIN_NET) {
             /* 提交即视为"用户正在配置网络":即使值与现状相同也要做一致性推断
-             * (否则"SSID 已存但模式为纯 AP"这一坏状态按保存也无法自愈) */
+             * (旧 NVS/旧客户端可能残留非 STA 模式,需在 net patch 时收敛) */
             net_touched = true;
         }
         err_msg[0] = '\0';
@@ -823,7 +797,7 @@ esp_err_t config_apply_patch(const cJSON *patch, cJSON **changed_out, cfg_effect
     /* net 域一致性推断(见 cfg_net_infer_sta_mode):只在本次 patch 触及 net 域时执行
      * ("触及"= 提交了 net 域字段,含值未变的情形),避免"只改 GPIO 却把历史遗留的 net_mode 顺手改掉" */
     if (net_touched && cfg_net_infer_sta_mode(&s_next)) {
-        ESP_LOGW(TAG, "net_mode %u -> %u: sta_ssid '%s' saved without STA mode, auto-enable STA (AP+STA)",
+        ESP_LOGW(TAG, "net_mode %u -> %u: retained non-STA mode converged to STA (sta_ssid='%s')",
                  (unsigned)s_config.net_mode, (unsigned)s_next.net_mode, s_next.sta_ssid);
         any_change = true;
         domain_changed[CFG_DOMAIN_NET] = true;

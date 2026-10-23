@@ -1,0 +1,1188 @@
+{
+  "timestamp": "2026-10-23T13:04:04.800",
+  "target_address_arg": null,
+  "ssid_arg": "TQ2017",
+  "tests": {
+    "scan": {
+      "name": "1-2_SCAN_FILTER_AND_NAME",
+      "pass": true,
+      "filtered_hits": [
+        {
+          "address": "B0:A7:32:28:C8:E6",
+          "name": "IotHubBLE-C8E4",
+          "local_name": "IotHubBLE-C8E4",
+          "rssi": -54,
+          "tx_power": 0,
+          "service_uuids": [
+            "6e400001-b5a3-f393-e0a9-e50e24dcca9e"
+          ],
+          "service_data": {},
+          "manufacturer_data": {},
+          "connectable": null
+        }
+      ],
+      "target": {
+        "address": "B0:A7:32:28:C8:E6",
+        "name": "IotHubBLE-C8E4",
+        "local_name": "IotHubBLE-C8E4",
+        "rssi": -54,
+        "tx_power": 0,
+        "service_uuids": [
+          "6e400001-b5a3-f393-e0a9-e50e24dcca9e"
+        ],
+        "service_data": {},
+        "manufacturer_data": {},
+        "connectable": null
+      },
+      "unfiltered": [
+        {
+          "address": "B0:A7:32:28:C8:E6",
+          "name": "IotHubBLE-C8E4",
+          "local_name": "IotHubBLE-C8E4",
+          "rssi": -50,
+          "tx_power": 0,
+          "service_uuids": [
+            "6e400001-b5a3-f393-e0a9-e50e24dcca9e"
+          ],
+          "service_data": {},
+          "manufacturer_data": {},
+          "connectable": null
+        }
+      ],
+      "name_transition": {
+        "rc": 124,
+        "lines": [
+          "[NEW] Device B0:A7:32:28:C8:E6 IotHubBLE-C8E4"
+        ],
+        "names": [
+          "IotHubBLE-C8E4"
+        ]
+      },
+      "bluez_name": "IotHubBLE-C8E4",
+      "adv_has_nus_uuid": true,
+      "short_name_seen": false,
+      "full_name_seen": true,
+      "phone_ui_verified": false,
+      "note": "BlueZ filtered scan hit + NUS UUID + full name observed. Short name IH-C8E4 was not separately exposed by BlueZ (it merges ADV+scan response); actual iOS/Android WeChat name display was not tested on a phone.",
+      "p0_item2_status": "device-side payload verified; phone UI unverified"
+    },
+    "long_scan": {
+      "name": "3_LONG_RESPONSES_10X",
+      "pass": true,
+      "runs": [
+        {
+          "i": 1,
+          "requested_id": "scan1-6",
+          "response_id": "scan1-6",
+          "json_complete": true,
+          "ok": true,
+          "error": null,
+          "count": 7,
+          "aps": 7,
+          "ssids": [
+            "CMCC-502",
+            "CMCC-GhyE",
+            "ChinaNet-eykP",
+            "TP-LINK_BFBD",
+            "CU_Gb5G",
+            "CU_2MWf",
+            "ChinaNGB-UM8Qvf"
+          ],
+          "bytes": 558,
+          "frags": 3,
+          "frag_sizes": [
+            253,
+            253,
+            52
+          ],
+          "latency_ms": 5113.1,
+          "attempts": 1
+        },
+        {
+          "i": 2,
+          "requested_id": "scan2-7",
+          "response_id": "scan2-7",
+          "json_complete": true,
+          "ok": true,
+          "error": null,
+          "count": 7,
+          "aps": 7,
+          "ssids": [
+            "CMCC-502",
+            "CMCC-GhyE",
+            "ChinaNet-eykP",
+            "TP-LINK_BFBD",
+            "CU_2MWf",
+            "CU_Gb5G",
+            "ChinaNGB-UM8Qvf"
+          ],
+          "bytes": 558,
+          "frags": 3,
+          "frag_sizes": [
+            253,
+            253,
+            52
+          ],
+          "latency_ms": 5094.6,
+          "attempts": 1
+        },
+        {
+          "i": 3,
+          "requested_id": "scan3-8",
+          "response_id": "scan3-8",
+          "json_complete": true,
+          "ok": true,
+          "error": null,
+          "count": 6,
+          "aps": 6,
+          "ssids": [
+            "CMCC-502",
+            "CMCC-GhyE",
+            "ChinaNet-eykP",
+            "TP-LINK_BFBD",
+            "CMCC-xYA7",
+            "CU_Gb5G"
+          ],
+          "bytes": 485,
+          "frags": 2,
+          "frag_sizes": [
+            253,
+            232
+          ],
+          "latency_ms": 4980.2,
+          "attempts": 1
+        },
+        {
+          "i": 4,
+          "requested_id": "scan4-9",
+          "response_id": "scan4-9",
+          "json_complete": true,
+          "ok": true,
+          "error": null,
+          "count": 8,
+          "aps": 8,
+          "ssids": [
+            "CMCC-502",
+            "CMCC-GhyE",
+            "ChinaNet-eykP",
+            "TP-LINK_BFBD",
+            "CU_2MWf",
+            "CU_Gb5G",
+            "ChinaNGB-UM8Qvf",
+            "CMCC-eyyX"
+          ],
+          "bytes": 627,
+          "frags": 3,
+          "frag_sizes": [
+            253,
+            253,
+            121
+          ],
+          "latency_ms": 5063.3,
+          "attempts": 1
+        },
+        {
+          "i": 5,
+          "requested_id": "scan5-10",
+          "response_id": "scan5-10",
+          "json_complete": true,
+          "ok": true,
+          "error": null,
+          "count": 6,
+          "aps": 6,
+          "ssids": [
+            "CMCC-502",
+            "CMCC-GhyE",
+            "ChinaNet-eykP",
+            "TP-LINK_BFBD",
+            "CU_Gb5G",
+            "ChinaNGB-UM8Qvf"
+          ],
+          "bytes": 492,
+          "frags": 2,
+          "frag_sizes": [
+            253,
+            239
+          ],
+          "latency_ms": 5091.6,
+          "attempts": 1
+        },
+        {
+          "i": 6,
+          "requested_id": "scan6-11",
+          "response_id": "scan6-11",
+          "json_complete": true,
+          "ok": true,
+          "error": null,
+          "count": 6,
+          "aps": 6,
+          "ssids": [
+            "CMCC-502",
+            "CMCC-GhyE",
+            "ChinaNet-eykP",
+            "TP-LINK_BFBD",
+            "CU_Gb5G",
+            "ChinaNGB-UM8Qvf"
+          ],
+          "bytes": 492,
+          "frags": 2,
+          "frag_sizes": [
+            253,
+            239
+          ],
+          "latency_ms": 5065.3,
+          "attempts": 1
+        },
+        {
+          "i": 7,
+          "requested_id": "scan7-12",
+          "response_id": "scan7-12",
+          "json_complete": true,
+          "ok": true,
+          "error": null,
+          "count": 7,
+          "aps": 7,
+          "ssids": [
+            "CMCC-502",
+            "CMCC-GhyE",
+            "ChinaNet-eykP",
+            "TP-LINK_BFBD",
+            "CU_2MWf",
+            "CU_Gb5G",
+            "ChinaNGB-UM8Qvf"
+          ],
+          "bytes": 559,
+          "frags": 3,
+          "frag_sizes": [
+            253,
+            253,
+            53
+          ],
+          "latency_ms": 5024.0,
+          "attempts": 1
+        },
+        {
+          "i": 8,
+          "requested_id": "scan8-14",
+          "response_id": "scan8-14",
+          "json_complete": true,
+          "ok": true,
+          "error": null,
+          "count": 8,
+          "aps": 8,
+          "ssids": [
+            "CMCC-502",
+            "CMCC-GhyE",
+            "ChinaNet-eykP",
+            "TP-LINK_BFBD",
+            "CMCC-xYA7",
+            "CU_2MWf",
+            "CU_Gb5G",
+            "ChinaNet-NnTp"
+          ],
+          "bytes": 626,
+          "frags": 3,
+          "frag_sizes": [
+            253,
+            253,
+            120
+          ],
+          "latency_ms": 5137.2,
+          "attempts": 1
+        },
+        {
+          "i": 9,
+          "requested_id": "scan9-15",
+          "response_id": "scan9-15",
+          "json_complete": true,
+          "ok": true,
+          "error": null,
+          "count": 7,
+          "aps": 7,
+          "ssids": [
+            "CMCC-502",
+            "CMCC-GhyE",
+            "ChinaNet-eykP",
+            "TP-LINK_BFBD",
+            "CU_2MWf",
+            "CU_Gb5G",
+            "ChinaNGB-UM8Qvf"
+          ],
+          "bytes": 559,
+          "frags": 3,
+          "frag_sizes": [
+            253,
+            253,
+            53
+          ],
+          "latency_ms": 5109.2,
+          "attempts": 1
+        },
+        {
+          "i": 10,
+          "requested_id": "scan10-16",
+          "response_id": "scan10-16",
+          "json_complete": true,
+          "ok": true,
+          "error": null,
+          "count": 8,
+          "aps": 8,
+          "ssids": [
+            "CMCC-502",
+            "CMCC-GhyE",
+            "ChinaNet-eykP",
+            "TP-LINK_BFBD",
+            "CMCC-xYA7",
+            "CU_Gb5G",
+            "CU_2MWf",
+            "ChinaNGB-UM8Qvf"
+          ],
+          "bytes": 629,
+          "frags": 3,
+          "frag_sizes": [
+            253,
+            253,
+            123
+          ],
+          "latency_ms": 5063.9,
+          "attempts": 1
+        }
+      ],
+      "disconnects": [],
+      "reconnects_total": 1,
+      "count": 10,
+      "all_complete": true,
+      "all_scan_ok": true,
+      "all_ids_match": true,
+      "all_multi_fragment": true,
+      "bytes_min": 485,
+      "bytes_max": 629,
+      "frags_max": 3,
+      "reconnects": 1,
+      "host_reconnect_note": "One host-side link loss occurred during scan 7; the harness reconnected and retried. All 10 responses are complete JSON with matching ids; no truncation."
+    },
+    "long_config": {
+      "name": "3b_CONFIG_GET_10X",
+      "pass": true,
+      "runs": [
+        {
+          "i": 1,
+          "requested_id": "cfg1-17",
+          "response_id": "cfg1-17",
+          "json_complete": true,
+          "ok": true,
+          "error": null,
+          "bytes": 1182,
+          "frags": 5,
+          "frag_sizes": [
+            253,
+            253,
+            253,
+            253,
+            170
+          ],
+          "latency_ms": 316.2,
+          "attempts": 1
+        },
+        {
+          "i": 2,
+          "requested_id": "cfg2-18",
+          "response_id": "cfg2-18",
+          "json_complete": true,
+          "ok": true,
+          "error": null,
+          "bytes": 1182,
+          "frags": 5,
+          "frag_sizes": [
+            253,
+            253,
+            253,
+            253,
+            170
+          ],
+          "latency_ms": 155.9,
+          "attempts": 1
+        },
+        {
+          "i": 3,
+          "requested_id": "cfg3-19",
+          "response_id": "cfg3-19",
+          "json_complete": true,
+          "ok": true,
+          "error": null,
+          "bytes": 1182,
+          "frags": 5,
+          "frag_sizes": [
+            253,
+            253,
+            253,
+            253,
+            170
+          ],
+          "latency_ms": 157.8,
+          "attempts": 1
+        },
+        {
+          "i": 4,
+          "requested_id": "cfg4-20",
+          "response_id": "cfg4-20",
+          "json_complete": true,
+          "ok": true,
+          "error": null,
+          "bytes": 1182,
+          "frags": 5,
+          "frag_sizes": [
+            253,
+            253,
+            253,
+            253,
+            170
+          ],
+          "latency_ms": 276.4,
+          "attempts": 1
+        },
+        {
+          "i": 5,
+          "requested_id": "cfg5-21",
+          "response_id": "cfg5-21",
+          "json_complete": true,
+          "ok": true,
+          "error": null,
+          "bytes": 1182,
+          "frags": 5,
+          "frag_sizes": [
+            253,
+            253,
+            253,
+            253,
+            170
+          ],
+          "latency_ms": 180.2,
+          "attempts": 1
+        },
+        {
+          "i": 6,
+          "requested_id": "cfg6-22",
+          "response_id": "cfg6-22",
+          "json_complete": true,
+          "ok": true,
+          "error": null,
+          "bytes": 1182,
+          "frags": 5,
+          "frag_sizes": [
+            253,
+            253,
+            253,
+            253,
+            170
+          ],
+          "latency_ms": 147.2,
+          "attempts": 1
+        },
+        {
+          "i": 7,
+          "requested_id": "cfg7-23",
+          "response_id": "cfg7-23",
+          "json_complete": true,
+          "ok": true,
+          "error": null,
+          "bytes": 1182,
+          "frags": 5,
+          "frag_sizes": [
+            253,
+            253,
+            253,
+            253,
+            170
+          ],
+          "latency_ms": 265.2,
+          "attempts": 1
+        },
+        {
+          "i": 8,
+          "requested_id": "cfg8-24",
+          "response_id": "cfg8-24",
+          "json_complete": true,
+          "ok": true,
+          "error": null,
+          "bytes": 1182,
+          "frags": 5,
+          "frag_sizes": [
+            253,
+            253,
+            253,
+            253,
+            170
+          ],
+          "latency_ms": 150.4,
+          "attempts": 1
+        },
+        {
+          "i": 9,
+          "requested_id": "cfg9-25",
+          "response_id": "cfg9-25",
+          "json_complete": true,
+          "ok": true,
+          "error": null,
+          "bytes": 1182,
+          "frags": 5,
+          "frag_sizes": [
+            253,
+            253,
+            253,
+            253,
+            170
+          ],
+          "latency_ms": 118.3,
+          "attempts": 1
+        },
+        {
+          "i": 10,
+          "requested_id": "cfg10-26",
+          "response_id": "cfg10-26",
+          "json_complete": true,
+          "ok": true,
+          "error": null,
+          "bytes": 1183,
+          "frags": 5,
+          "frag_sizes": [
+            253,
+            253,
+            253,
+            253,
+            171
+          ],
+          "latency_ms": 214.0,
+          "attempts": 1
+        }
+      ],
+      "disconnects": [],
+      "reconnects_total": 0,
+      "all_complete": true,
+      "bytes_min": 1182,
+      "bytes_max": 1183,
+      "frags_max": 5,
+      "reconnects": 0
+    },
+    "operation": {
+      "name": "4_OPERATION_GET_DURING_FRAGMENTATION",
+      "pass": true,
+      "tryconnect": {
+        "id": "tc-27",
+        "ok": true,
+        "operation_id": "op-E16A53332022A60F",
+        "state": "accepted",
+        "error": null,
+        "latency_ms": 253.6
+      },
+      "duplicate_same_key": {
+        "ok": true,
+        "operation_id": "op-E16A53332022A60F",
+        "state": "connecting",
+        "error": null,
+        "same_operation": true
+      },
+      "duplicate_different_key": {
+        "ok": false,
+        "error_code": "busy",
+        "state": null,
+        "operation_id": null
+      },
+      "long_response_started": true,
+      "fragmentation": {
+        "long_id": "long-30",
+        "long_ok": true,
+        "long_bytes": 1184,
+        "long_frags": 5,
+        "long_frag_sizes": [
+          253,
+          253,
+          253,
+          253,
+          172
+        ],
+        "long_latency_ms": 317.7,
+        "first_fragment_at_s": 105.408,
+        "opget_sent_at_s": 105.572,
+        "opget_rx_at_s": 105.681,
+        "opget_latency_ms": 108.9,
+        "opget_id": "opget-31",
+        "opget_state": "connecting",
+        "opget_error": null,
+        "opget_data": {
+          "operation_id": "op-E16A53332022A60F",
+          "state": "connecting",
+          "error": "none"
+        },
+        "sent_before_long_complete": false,
+        "opget_before_long_complete": false
+      },
+      "opget": {
+        "long_id": "long-30",
+        "long_ok": true,
+        "long_bytes": 1184,
+        "long_frags": 5,
+        "long_frag_sizes": [
+          253,
+          253,
+          253,
+          253,
+          172
+        ],
+        "long_latency_ms": 317.7,
+        "first_fragment_at_s": 105.408,
+        "opget_sent_at_s": 105.572,
+        "opget_rx_at_s": 105.681,
+        "opget_latency_ms": 108.9,
+        "opget_id": "opget-31",
+        "opget_state": "connecting",
+        "opget_error": null,
+        "opget_data": {
+          "operation_id": "op-E16A53332022A60F",
+          "state": "connecting",
+          "error": "none"
+        },
+        "sent_before_long_complete": false,
+        "opget_before_long_complete": false
+      },
+      "terminal": {
+        "state": "failed",
+        "error": "ap_not_found",
+        "data": {
+          "operation_id": "op-E16A53332022A60F",
+          "state": "failed",
+          "error": "ap_not_found"
+        },
+        "elapsed_s": 3.736,
+        "first_poll": {
+          "operation_id": "op-E16A53332022A60F",
+          "state": "connecting",
+          "error": "none"
+        }
+      },
+      "tryconnect_total_before_opget_s": 1.441,
+      "note": "operation.get returned state=connecting in 108.9ms, before the tryconnect ended (terminal ap_not_found at 3.736s); it did not wait for the 15s timeout. TQ2017 was absent, so apply success could not be exercised; apply/cancel correctly returned operation_state for the failed candidate. Because the 200ms command rate limit is longer than the ~100ms/5-fragment long response at MTU 256, operation.get was sent 0.046s after the long response completed (0.164s after its first fragment), not literally between fragments.",
+      "apply": {
+        "ok": false,
+        "state": null,
+        "error_code": "operation_state",
+        "error": "{\"code\": \"operation_state\", \"message\": \"operation_state\"}",
+        "data": null
+      },
+      "apply_duplicate": {
+        "ok": false,
+        "state": null,
+        "error_code": "operation_state"
+      },
+      "cancel": {
+        "ok": false,
+        "state": null,
+        "error_code": "operation_state",
+        "error": "{\"code\": \"operation_state\", \"message\": \"operation_state\"}",
+        "data": null
+      },
+      "cancel_duplicate": {
+        "ok": false,
+        "state": null,
+        "error_code": "operation_state"
+      },
+      "reconnects": 0,
+      "success_path_exercised": false
+    },
+    "wrong_password": {
+      "name": "5a_WRONG_PASSWORD",
+      "pass": false,
+      "tryconnect": {
+        "ok": true,
+        "operation_id": "op-88E51FFDA89FB609",
+        "state": "accepted",
+        "error": null
+      },
+      "terminal": {
+        "state": "failed",
+        "error": "ap_not_found",
+        "data": {
+          "operation_id": "op-88E51FFDA89FB609",
+          "state": "failed",
+          "error": "ap_not_found"
+        },
+        "elapsed_s": 5.131,
+        "first_poll": {
+          "operation_id": "op-88E51FFDA89FB609",
+          "state": "connecting",
+          "error": "none"
+        }
+      },
+      "cancel_after_failed": {
+        "ok": false,
+        "state": null,
+        "error_code": "operation_state"
+      },
+      "reconnects": 0,
+      "note": "This automated run used TQ2017, which is absent; terminal error was ap_not_found, not wrong_password. The real wrong-password check was run separately on visible CMCC-502."
+    },
+    "cancel_race": {
+      "name": "5b_CANCEL_RACE",
+      "pass": true,
+      "rounds": [
+        {
+          "i": 1,
+          "operation_id": "op-B0ADBA48BC61D109",
+          "cancel_ok": true,
+          "cancel_state": "cancelled",
+          "cancel_error": null,
+          "terminal_state": "cancelled",
+          "terminal_error": "cancelled",
+          "terminal_elapsed_s": 0.36,
+          "cancel_duplicate_ok": true,
+          "cancel_duplicate_state": "cancelled",
+          "cancel_duplicate_error": null,
+          "pass": true
+        },
+        {
+          "i": 2,
+          "operation_id": "op-B549A9628F8EF48A",
+          "cancel_ok": true,
+          "cancel_state": "cancelled",
+          "cancel_error": null,
+          "terminal_state": "cancelled",
+          "terminal_error": "cancelled",
+          "terminal_elapsed_s": 0.362,
+          "cancel_duplicate_ok": true,
+          "cancel_duplicate_state": "cancelled",
+          "cancel_duplicate_error": null,
+          "pass": true
+        }
+      ],
+      "reconnects": 1
+    },
+    "not_found": {
+      "name": "5c_NOT_FOUND",
+      "pass": true,
+      "operation_get": {
+        "ok": false,
+        "error_code": "not_found",
+        "error": "{\"code\": \"not_found\", \"message\": \"not_found\"}"
+      },
+      "apply": {
+        "ok": false,
+        "error_code": "not_found",
+        "error": "{\"code\": \"not_found\", \"message\": \"not_found\"}"
+      },
+      "cancel": {
+        "ok": false,
+        "error_code": "not_found",
+        "error": "{\"code\": \"not_found\", \"message\": \"not_found\"}"
+      },
+      "reconnects": 0
+    },
+    "final_config_set": {
+      "name": "6_FINAL_CONFIG_SET_NET_MODE_STA",
+      "pass": true,
+      "response": {
+        "id": 75,
+        "ok": true,
+        "result": {
+          "success": true,
+          "changed": [],
+          "effect": "none",
+          "relay_on": false,
+          "led_on": true,
+          "input_active": false,
+          "io_seq": 3,
+          "io_source": "input",
+          "saved": true,
+          "applied": true,
+          "restart_required": false,
+          "rollback": "none"
+        }
+      },
+      "ok": true,
+      "latency_ms": 202.2,
+      "still_connected_after_2s": true,
+      "verify_net_mode": "sta",
+      "reconnects": 0
+    }
+  },
+  "board": {
+    "address": "B0:A7:32:28:C8:E6",
+    "name": "IotHubBLE-C8E4",
+    "adv_local_name": "IotHubBLE-C8E4",
+    "mtu_size": 23,
+    "negotiated_mtu": 256,
+    "notify_payload_bytes": 253,
+    "bleak_mtu_property_note": "bleak on Linux reports 23; actual notify payload is 253 => ATT MTU 256"
+  },
+  "device_info": {
+    "id": "info-1",
+    "ok": true,
+    "data": {
+      "model": "iothub",
+      "firmware": "1.2",
+      "device_id": "IotHub-C8E4",
+      "protocol_versions": [
+        "1.0"
+      ],
+      "security": {
+        "link_encrypted": false,
+        "bonded": false,
+        "l2_ready": false,
+        "sensitive_writes_allowed": false
+      }
+    }
+  },
+  "network_status": {
+    "sta_connected": true,
+    "sta_has_ip": true,
+    "sta_ip": "192.168.1.213",
+    "last_disconnect": "none",
+    "sta_ssid": "CMCC-502",
+    "password_set": true,
+    "mode": "sta",
+    "mqtt_connected": true,
+    "mqtt_last_error": "",
+    "trial": {
+      "state": "idle"
+    }
+  },
+  "config_initial": {
+    "bytes": 1188,
+    "frags": 5,
+    "frag_sizes": [
+      253,
+      253,
+      253,
+      253,
+      176
+    ]
+  },
+  "profiles": {
+    "profiles": [
+      {
+        "ssid": "CMCC-502",
+        "password_set": true
+      },
+      {
+        "ssid": "TQ2017",
+        "password_set": true
+      }
+    ]
+  },
+  "wifi_after_apply": {
+    "ok": false,
+    "skipped": true,
+    "reason": "apply did not succeed; no network switch to wait for"
+  },
+  "reconnect_count": 2,
+  "p0_core_pass": true,
+  "phone_ui_verified": false,
+  "log": [
+    ">37.118s TX id=info-1 62B {\"id\": \"info-1\", \"version\": \"1.0\", \"cmd\": \"device.info\", \"args\": {}}",
+    "<37.238s> RX id=info-1 223B frags=1 sizes=[223] {\"id\": \"info-1\", \"ok\": true, \"data\": {\"model\": \"iothub\", \"firmware\": \"1.2\", \"device_id\": \"IotHub-C8E4\", \"protocol_versions\": [\"1.0\"], \"security\": {\"link_encrypted\": false, \"bonded\": false, \"l2_ready\": false, \"sensitive_writes_allowed\": false}}}",
+    "[info] {\"id\": \"info-1\", \"ok\": true, \"data\": {\"model\": \"iothub\", \"firmware\": \"1.2\", \"device_id\": \"IotHub-C8E4\", \"protocol_versions\": [\"1.0\"], \"security\": {\"link_encrypted\": false, \"bonded\": false, \"l2_ready\": false, \"sensitive_writes_allowed\": false}}}",
+    ">37.242s TX id=login-2 100B {\"id\": \"login-2\", \"version\": \"1.0\", \"cmd\": \"auth.login\", \"args\": {\"username\": \"admin\", \"password\": \"<redacted>\"}}",
+    "<37.549s> RX id=login-2 95B frags=1 sizes=[95] {\"id\": \"login-2\", \"ok\": true, \"data\": {\"token\": \"<redacted>\", \"expires_in\": 600}}",
+    "[auth] login ok (token redacted)",
+    ">37.803s TX id=status-3 110B {\"id\": \"status-3\", \"version\": \"1.0\", \"cmd\": \"network.status\", \"args\": {}, \"token\": \"<redacted>\"}",
+    "<37.868s> RX id=status-3 248B frags=1 sizes=[248] {\"id\": \"status-3\", \"ok\": true, \"data\": {\"sta_connected\": true, \"sta_has_ip\": true, \"sta_ip\": \"192.168.1.213\", \"last_disconnect\": \"none\", \"sta_ssid\": \"CMCC-502\", \"password_set\": true, \"mode\": \"sta\", \"mqtt_connected\": true, \"mqtt_last_error\": \"\", \"trial\": {\"state\": \"idle\"}}}",
+    "[status] {\"sta_connected\": true, \"sta_has_ip\": true, \"sta_ip\": \"192.168.1.213\", \"last_disconnect\": \"none\", \"sta_ssid\": \"CMCC-502\", \"password_set\": true, \"mode\": \"sta\", \"mqtt_connected\": true, \"mqtt_last_error\": \"\", \"trial\": {\"state\": \"idle\"}}",
+    ">38.123s TX id=cfg-initial-4 111B {\"id\": \"cfg-initial-4\", \"version\": \"1.0\", \"cmd\": \"config.get\", \"args\": {}, \"token\": \"<redacted>\"}",
+    "<38.287s> RX id=cfg-initial-4 1188B frags=5 sizes=[253, 253, 253, 253, 176] {\"id\": \"cfg-initial-4\", \"ok\": true, \"data\": {\"network\": {\"net_mode\": \"sta\", \"ap_ssid\": \"IotHub-C8E4\", \"ap_password_set\": false, \"sta_ssid\": \"CMCC-502\", \"sta_password_set\": true, \"sta_use_static\": true, \"sta_static_ip\": \"192.168.1.213\", \"sta_static_gateway\": \"192.168.1.1\", \"sta_static_netmask\": \"255.255.255.0\", \"sta_static_dns1\": \"192.168.1.1\", \"sta_static_dns2\": \"8.8.8.8\", \"sta_connected\": true, \"sta_has_ip\": true, \"sta_ip\": \"192.168.1.213\", \"last_disconnect\": \"none\", \"startup_fallback_to_ap\": false}, \"mqtt\": {\"mqtt_backend\": \"tb_selfhost\", \"mqtt_host\": \"117.131.99.2\", \"mqtt_port\": 21883, \"mqtt_use_tls\": false, \"mqtt_token_set\": true, \"connected\": true, \"publish_count\": 65, \"outbox\": 0, \"last_error\": \"\"}, \"bluetooth\": {\"bt_role\": \"ble\", \"bt_device_name\": \"IotHubBLE-C8E4\", \"runtime_mode\": \"ble\", \"adv_active\": false, \"connected\": true, \"last_error\": \"\"}, \"uart\": {\"uart_baudrate\": 115200, \"uart_data_bits\": 8, \"uart_stop_bits\": 1, \"uart_parity_mode\": \"none\", \"uart_rx_gpio\": 18, \"uart_tx_gpio\": 17}, \"gpio\": {\"relay_on\": false, \"led_on\": true, \"relay_power_policy\": 0, \"led_power_policy\": 0, \"relay_active_high\": true, \"led_active_high\": true, \"input_active_low\": true, \"input_active\": fals",
+    ">38.540s TX id=profiles-5 118B {\"id\": \"profiles-5\", \"version\": \"1.0\", \"cmd\": \"network.profile.list\", \"args\": {}, \"token\": \"<redacted>\"}",
+    "<38.673s> RX id=profiles-5 129B frags=1 sizes=[129] {\"id\": \"profiles-5\", \"ok\": true, \"data\": {\"profiles\": [{\"ssid\": \"CMCC-502\", \"password_set\": true}, {\"ssid\": \"TQ2017\", \"password_set\": true}]}}",
+    ">38.677s TX id=scan1-6 107B {\"id\": \"scan1-6\", \"version\": \"1.0\", \"cmd\": \"network.scan\", \"args\": {}, \"token\": \"<redacted>\"}",
+    "<43.993s> RX id=scan1-6 558B frags=3 sizes=[253, 253, 52] {\"id\": \"scan1-6\", \"ok\": true, \"data\": {\"status\": \"ok\", \"count\": 7, \"aps\": [{\"ssid\": \"CMCC-502\", \"rssi\": -65, \"auth\": 4, \"bssid\": \"5c:c0:a0:bd:f6:28\"}, {\"ssid\": \"CMCC-GhyE\", \"rssi\": -71, \"auth\": 7, \"bssid\": \"38:16:5a:4e:71:11\"}, {\"ssid\": \"ChinaNet-eykP\", \"rssi\": -77, \"auth\": 3, \"bssid\": \"38:9e:80:ee:4a:b1\"}, {\"ssid\": \"TP-LINK_BFBD\", \"rssi\": -80, \"auth\": 4, \"bssid\": \"0c:4b:54:0e:bf:bd\"}, {\"ssid\": \"CU_Gb5G\", \"rssi\": -87, \"auth\": 4, \"bssid\": \"50:42:89:e8:84:72\"}, {\"ssid\": \"CU_2MWf\", \"rssi\": -89, \"auth\": 3, \"bssid\": \"68:df:ce:15:74:50\"}, {\"ssid\": \"ChinaNGB-UM8Qvf\", \"rssi\": -94, \"auth\": 4, \"bssid\": \"a0:1c:87:fe:c8:b7\"}]}}",
+    "[long 1/10] complete=True id=scan1-6 ok=True bytes=558 frags=3 aps=7 latency=5113.1ms attempts=1",
+    ">44.244s TX id=scan2-7 107B {\"id\": \"scan2-7\", \"version\": \"1.0\", \"cmd\": \"network.scan\", \"args\": {}, \"token\": \"<redacted>\"}",
+    "<49.339s> RX id=scan2-7 558B frags=3 sizes=[253, 253, 52] {\"id\": \"scan2-7\", \"ok\": true, \"data\": {\"status\": \"ok\", \"count\": 7, \"aps\": [{\"ssid\": \"CMCC-502\", \"rssi\": -65, \"auth\": 4, \"bssid\": \"5c:c0:a0:bd:f6:28\"}, {\"ssid\": \"CMCC-GhyE\", \"rssi\": -70, \"auth\": 7, \"bssid\": \"38:16:5a:4e:71:11\"}, {\"ssid\": \"ChinaNet-eykP\", \"rssi\": -76, \"auth\": 3, \"bssid\": \"38:9e:80:ee:4a:b1\"}, {\"ssid\": \"TP-LINK_BFBD\", \"rssi\": -82, \"auth\": 4, \"bssid\": \"0c:4b:54:0e:bf:bd\"}, {\"ssid\": \"CU_2MWf\", \"rssi\": -88, \"auth\": 3, \"bssid\": \"68:df:ce:15:74:50\"}, {\"ssid\": \"CU_Gb5G\", \"rssi\": -89, \"auth\": 4, \"bssid\": \"50:42:89:e8:84:72\"}, {\"ssid\": \"ChinaNGB-UM8Qvf\", \"rssi\": -92, \"auth\": 4, \"bssid\": \"a0:1c:87:fe:c8:b7\"}]}}",
+    "[long 2/10] complete=True id=scan2-7 ok=True bytes=558 frags=3 aps=7 latency=5094.6ms attempts=1",
+    ">49.590s TX id=scan3-8 107B {\"id\": \"scan3-8\", \"version\": \"1.0\", \"cmd\": \"network.scan\", \"args\": {}, \"token\": \"<redacted>\"}",
+    "<54.571s> RX id=scan3-8 485B frags=2 sizes=[253, 232] {\"id\": \"scan3-8\", \"ok\": true, \"data\": {\"status\": \"ok\", \"count\": 6, \"aps\": [{\"ssid\": \"CMCC-502\", \"rssi\": -64, \"auth\": 4, \"bssid\": \"5c:c0:a0:bd:f6:28\"}, {\"ssid\": \"CMCC-GhyE\", \"rssi\": -70, \"auth\": 7, \"bssid\": \"38:16:5a:4e:71:11\"}, {\"ssid\": \"ChinaNet-eykP\", \"rssi\": -77, \"auth\": 3, \"bssid\": \"38:9e:80:ee:4a:b1\"}, {\"ssid\": \"TP-LINK_BFBD\", \"rssi\": -80, \"auth\": 4, \"bssid\": \"0c:4b:54:0e:bf:bd\"}, {\"ssid\": \"CMCC-xYA7\", \"rssi\": -85, \"auth\": 4, \"bssid\": \"b8:a1:4a:81:0f:09\"}, {\"ssid\": \"CU_Gb5G\", \"rssi\": -88, \"auth\": 4, \"bssid\": \"50:42:89:e8:84:72\"}]}}",
+    "[long 3/10] complete=True id=scan3-8 ok=True bytes=485 frags=2 aps=6 latency=4980.2ms attempts=1",
+    ">54.823s TX id=scan4-9 107B {\"id\": \"scan4-9\", \"version\": \"1.0\", \"cmd\": \"network.scan\", \"args\": {}, \"token\": \"<redacted>\"}",
+    "<59.886s> RX id=scan4-9 627B frags=3 sizes=[253, 253, 121] {\"id\": \"scan4-9\", \"ok\": true, \"data\": {\"status\": \"ok\", \"count\": 8, \"aps\": [{\"ssid\": \"CMCC-502\", \"rssi\": -65, \"auth\": 4, \"bssid\": \"5c:c0:a0:bd:f6:28\"}, {\"ssid\": \"CMCC-GhyE\", \"rssi\": -71, \"auth\": 7, \"bssid\": \"38:16:5a:4e:71:11\"}, {\"ssid\": \"ChinaNet-eykP\", \"rssi\": -76, \"auth\": 3, \"bssid\": \"38:9e:80:ee:4a:b1\"}, {\"ssid\": \"TP-LINK_BFBD\", \"rssi\": -81, \"auth\": 4, \"bssid\": \"0c:4b:54:0e:bf:bd\"}, {\"ssid\": \"CU_2MWf\", \"rssi\": -86, \"auth\": 3, \"bssid\": \"68:df:ce:15:74:50\"}, {\"ssid\": \"CU_Gb5G\", \"rssi\": -87, \"auth\": 4, \"bssid\": \"50:42:89:e8:84:72\"}, {\"ssid\": \"ChinaNGB-UM8Qvf\", \"rssi\": -92, \"auth\": 4, \"bssid\": \"a0:1c:87:fe:c8:b7\"}, {\"ssid\": \"CMCC-eyyX\", \"rssi\": -93, \"auth\": 7, \"bssid\": \"54:78:f0:de:62:0a\"}]}}",
+    "[long 4/10] complete=True id=scan4-9 ok=True bytes=627 frags=3 aps=8 latency=5063.3ms attempts=1",
+    ">60.137s TX id=scan5-10 108B {\"id\": \"scan5-10\", \"version\": \"1.0\", \"cmd\": \"network.scan\", \"args\": {}, \"token\": \"<redacted>\"}",
+    "<65.229s> RX id=scan5-10 492B frags=2 sizes=[253, 239] {\"id\": \"scan5-10\", \"ok\": true, \"data\": {\"status\": \"ok\", \"count\": 6, \"aps\": [{\"ssid\": \"CMCC-502\", \"rssi\": -65, \"auth\": 4, \"bssid\": \"5c:c0:a0:bd:f6:28\"}, {\"ssid\": \"CMCC-GhyE\", \"rssi\": -69, \"auth\": 7, \"bssid\": \"38:16:5a:4e:71:11\"}, {\"ssid\": \"ChinaNet-eykP\", \"rssi\": -77, \"auth\": 3, \"bssid\": \"38:9e:80:ee:4a:b1\"}, {\"ssid\": \"TP-LINK_BFBD\", \"rssi\": -81, \"auth\": 4, \"bssid\": \"0c:4b:54:0e:bf:bd\"}, {\"ssid\": \"CU_Gb5G\", \"rssi\": -87, \"auth\": 4, \"bssid\": \"50:42:89:e8:84:72\"}, {\"ssid\": \"ChinaNGB-UM8Qvf\", \"rssi\": -94, \"auth\": 4, \"bssid\": \"a0:1c:87:fe:c8:b7\"}]}}",
+    "[long 5/10] complete=True id=scan5-10 ok=True bytes=492 frags=2 aps=6 latency=5091.6ms attempts=1",
+    ">65.483s TX id=scan6-11 108B {\"id\": \"scan6-11\", \"version\": \"1.0\", \"cmd\": \"network.scan\", \"args\": {}, \"token\": \"<redacted>\"}",
+    "<70.549s> RX id=scan6-11 492B frags=2 sizes=[253, 239] {\"id\": \"scan6-11\", \"ok\": true, \"data\": {\"status\": \"ok\", \"count\": 6, \"aps\": [{\"ssid\": \"CMCC-502\", \"rssi\": -64, \"auth\": 4, \"bssid\": \"5c:c0:a0:bd:f6:28\"}, {\"ssid\": \"CMCC-GhyE\", \"rssi\": -72, \"auth\": 7, \"bssid\": \"38:16:5a:4e:71:11\"}, {\"ssid\": \"ChinaNet-eykP\", \"rssi\": -76, \"auth\": 3, \"bssid\": \"38:9e:80:ee:4a:b1\"}, {\"ssid\": \"TP-LINK_BFBD\", \"rssi\": -81, \"auth\": 4, \"bssid\": \"0c:4b:54:0e:bf:bd\"}, {\"ssid\": \"CU_Gb5G\", \"rssi\": -88, \"auth\": 4, \"bssid\": \"50:42:89:e8:84:72\"}, {\"ssid\": \"ChinaNGB-UM8Qvf\", \"rssi\": -90, \"auth\": 4, \"bssid\": \"a0:1c:87:fe:c8:b7\"}]}}",
+    "[long 6/10] complete=True id=scan6-11 ok=True bytes=492 frags=2 aps=6 latency=5065.3ms attempts=1",
+    ">70.801s TX id=scan7-12 108B {\"id\": \"scan7-12\", \"version\": \"1.0\", \"cmd\": \"network.scan\", \"args\": {}, \"token\": \"<redacted>\"}",
+    "[conn] link lost during id=scan7-12 (ConnectionLost: disconnected while waiting for response); reconnecting and retrying",
+    "[conn] reconnect #1 starting",
+    ">77.800s TX id=login-13 101B {\"id\": \"login-13\", \"version\": \"1.0\", \"cmd\": \"auth.login\", \"args\": {\"username\": \"admin\", \"password\": \"<redacted>\"}}",
+    "<77.875s> RX id=login-13 96B frags=1 sizes=[96] {\"id\": \"login-13\", \"ok\": true, \"data\": {\"token\": \"<redacted>\", \"expires_in\": 600}}",
+    "[auth] login ok (token redacted)",
+    "[conn] reconnect #1 ok",
+    ">77.878s TX id=scan7-12 108B {\"id\": \"scan7-12\", \"version\": \"1.0\", \"cmd\": \"network.scan\", \"args\": {}, \"token\": \"<redacted>\"}",
+    "<83.142s> RX id=scan7-12 559B frags=3 sizes=[253, 253, 53] {\"id\": \"scan7-12\", \"ok\": true, \"data\": {\"status\": \"ok\", \"count\": 7, \"aps\": [{\"ssid\": \"CMCC-502\", \"rssi\": -65, \"auth\": 4, \"bssid\": \"5c:c0:a0:bd:f6:28\"}, {\"ssid\": \"CMCC-GhyE\", \"rssi\": -72, \"auth\": 7, \"bssid\": \"38:16:5a:4e:71:11\"}, {\"ssid\": \"ChinaNet-eykP\", \"rssi\": -76, \"auth\": 3, \"bssid\": \"38:9e:80:ee:4a:b1\"}, {\"ssid\": \"TP-LINK_BFBD\", \"rssi\": -81, \"auth\": 4, \"bssid\": \"0c:4b:54:0e:bf:bd\"}, {\"ssid\": \"CU_2MWf\", \"rssi\": -87, \"auth\": 3, \"bssid\": \"68:df:ce:15:74:50\"}, {\"ssid\": \"CU_Gb5G\", \"rssi\": -87, \"auth\": 4, \"bssid\": \"50:42:89:e8:84:72\"}, {\"ssid\": \"ChinaNGB-UM8Qvf\", \"rssi\": -92, \"auth\": 4, \"bssid\": \"a0:1c:87:fe:c8:b7\"}]}}",
+    "[long 7/10] complete=True id=scan7-12 ok=True bytes=559 frags=3 aps=7 latency=5024.0ms attempts=1",
+    ">83.396s TX id=scan8-14 108B {\"id\": \"scan8-14\", \"version\": \"1.0\", \"cmd\": \"network.scan\", \"args\": {}, \"token\": \"<redacted>\"}",
+    "<88.534s> RX id=scan8-14 626B frags=3 sizes=[253, 253, 120] {\"id\": \"scan8-14\", \"ok\": true, \"data\": {\"status\": \"ok\", \"count\": 8, \"aps\": [{\"ssid\": \"CMCC-502\", \"rssi\": -65, \"auth\": 4, \"bssid\": \"5c:c0:a0:bd:f6:28\"}, {\"ssid\": \"CMCC-GhyE\", \"rssi\": -70, \"auth\": 7, \"bssid\": \"38:16:5a:4e:71:11\"}, {\"ssid\": \"ChinaNet-eykP\", \"rssi\": -76, \"auth\": 3, \"bssid\": \"38:9e:80:ee:4a:b1\"}, {\"ssid\": \"TP-LINK_BFBD\", \"rssi\": -80, \"auth\": 4, \"bssid\": \"0c:4b:54:0e:bf:bd\"}, {\"ssid\": \"CMCC-xYA7\", \"rssi\": -86, \"auth\": 4, \"bssid\": \"b8:a1:4a:81:0f:09\"}, {\"ssid\": \"CU_2MWf\", \"rssi\": -88, \"auth\": 3, \"bssid\": \"68:df:ce:15:74:50\"}, {\"ssid\": \"CU_Gb5G\", \"rssi\": -92, \"auth\": 4, \"bssid\": \"50:42:89:e8:84:72\"}, {\"ssid\": \"ChinaNet-NnTp\", \"rssi\": -94, \"auth\": 4, \"bssid\": \"a0:36:79:55:13:8d\"}]}}",
+    "[long 8/10] complete=True id=scan8-14 ok=True bytes=626 frags=3 aps=8 latency=5137.2ms attempts=1",
+    ">88.787s TX id=scan9-15 108B {\"id\": \"scan9-15\", \"version\": \"1.0\", \"cmd\": \"network.scan\", \"args\": {}, \"token\": \"<redacted>\"}",
+    "<93.897s> RX id=scan9-15 559B frags=3 sizes=[253, 253, 53] {\"id\": \"scan9-15\", \"ok\": true, \"data\": {\"status\": \"ok\", \"count\": 7, \"aps\": [{\"ssid\": \"CMCC-502\", \"rssi\": -65, \"auth\": 4, \"bssid\": \"5c:c0:a0:bd:f6:28\"}, {\"ssid\": \"CMCC-GhyE\", \"rssi\": -71, \"auth\": 7, \"bssid\": \"38:16:5a:4e:71:11\"}, {\"ssid\": \"ChinaNet-eykP\", \"rssi\": -75, \"auth\": 3, \"bssid\": \"38:9e:80:ee:4a:b1\"}, {\"ssid\": \"TP-LINK_BFBD\", \"rssi\": -83, \"auth\": 4, \"bssid\": \"0c:4b:54:0e:bf:bd\"}, {\"ssid\": \"CU_2MWf\", \"rssi\": -87, \"auth\": 3, \"bssid\": \"68:df:ce:15:74:50\"}, {\"ssid\": \"CU_Gb5G\", \"rssi\": -87, \"auth\": 4, \"bssid\": \"50:42:89:e8:84:72\"}, {\"ssid\": \"ChinaNGB-UM8Qvf\", \"rssi\": -91, \"auth\": 4, \"bssid\": \"a0:1c:87:fe:c8:b7\"}]}}",
+    "[long 9/10] complete=True id=scan9-15 ok=True bytes=559 frags=3 aps=7 latency=5109.2ms attempts=1",
+    ">94.151s TX id=scan10-16 109B {\"id\": \"scan10-16\", \"version\": \"1.0\", \"cmd\": \"network.scan\", \"args\": {}, \"token\": \"<redacted>\"}",
+    "<99.215s> RX id=scan10-16 629B frags=3 sizes=[253, 253, 123] {\"id\": \"scan10-16\", \"ok\": true, \"data\": {\"status\": \"ok\", \"count\": 8, \"aps\": [{\"ssid\": \"CMCC-502\", \"rssi\": -64, \"auth\": 4, \"bssid\": \"5c:c0:a0:bd:f6:28\"}, {\"ssid\": \"CMCC-GhyE\", \"rssi\": -70, \"auth\": 7, \"bssid\": \"38:16:5a:4e:71:11\"}, {\"ssid\": \"ChinaNet-eykP\", \"rssi\": -77, \"auth\": 3, \"bssid\": \"38:9e:80:ee:4a:b1\"}, {\"ssid\": \"TP-LINK_BFBD\", \"rssi\": -80, \"auth\": 4, \"bssid\": \"0c:4b:54:0e:bf:bd\"}, {\"ssid\": \"CMCC-xYA7\", \"rssi\": -85, \"auth\": 4, \"bssid\": \"b8:a1:4a:81:0f:09\"}, {\"ssid\": \"CU_Gb5G\", \"rssi\": -86, \"auth\": 4, \"bssid\": \"50:42:89:e8:84:72\"}, {\"ssid\": \"CU_2MWf\", \"rssi\": -89, \"auth\": 3, \"bssid\": \"68:df:ce:15:74:50\"}, {\"ssid\": \"ChinaNGB-UM8Qvf\", \"rssi\": -92, \"auth\": 4, \"bssid\": \"a0:1c:87:fe:c8:b7\"}]}}",
+    "[long 10/10] complete=True id=scan10-16 ok=True bytes=629 frags=3 aps=8 latency=5063.9ms attempts=1",
+    ">99.467s TX id=cfg1-17 105B {\"id\": \"cfg1-17\", \"version\": \"1.0\", \"cmd\": \"config.get\", \"args\": {}, \"token\": \"<redacted>\"}",
+    "<99.784s> RX id=cfg1-17 1182B frags=5 sizes=[253, 253, 253, 253, 170] {\"id\": \"cfg1-17\", \"ok\": true, \"data\": {\"network\": {\"net_mode\": \"sta\", \"ap_ssid\": \"IotHub-C8E4\", \"ap_password_set\": false, \"sta_ssid\": \"CMCC-502\", \"sta_password_set\": true, \"sta_use_static\": true, \"sta_static_ip\": \"192.168.1.213\", \"sta_static_gateway\": \"192.168.1.1\", \"sta_static_netmask\": \"255.255.255.0\", \"sta_static_dns1\": \"192.168.1.1\", \"sta_static_dns2\": \"8.8.8.8\", \"sta_connected\": true, \"sta_has_ip\": true, \"sta_ip\": \"192.168.1.213\", \"last_disconnect\": \"none\", \"startup_fallback_to_ap\": false}, \"mqtt\": {\"mqtt_backend\": \"tb_selfhost\", \"mqtt_host\": \"117.131.99.2\", \"mqtt_port\": 21883, \"mqtt_use_tls\": false, \"mqtt_token_set\": true, \"connected\": true, \"publish_count\": 71, \"outbox\": 0, \"last_error\": \"\"}, \"bluetooth\": {\"bt_role\": \"ble\", \"bt_device_name\": \"IotHubBLE-C8E4\", \"runtime_mode\": \"ble\", \"adv_active\": false, \"connected\": true, \"last_error\": \"\"}, \"uart\": {\"uart_baudrate\": 115200, \"uart_data_bits\": 8, \"uart_stop_bits\": 1, \"uart_parity_mode\": \"none\", \"uart_rx_gpio\": 18, \"uart_tx_gpio\": 17}, \"gpio\": {\"relay_on\": false, \"led_on\": true, \"relay_power_policy\": 0, \"led_power_policy\": 0, \"relay_active_high\": true, \"led_active_high\": true, \"input_active_low\": true, \"input_active\": false, \"io",
+    "[cfg 1/10] complete=True id=cfg1-17 bytes=1182 frags=5 latency=316.2ms attempts=1",
+    ">100.037s TX id=cfg2-18 105B {\"id\": \"cfg2-18\", \"version\": \"1.0\", \"cmd\": \"config.get\", \"args\": {}, \"token\": \"<redacted>\"}",
+    "<100.193s> RX id=cfg2-18 1182B frags=5 sizes=[253, 253, 253, 253, 170] {\"id\": \"cfg2-18\", \"ok\": true, \"data\": {\"network\": {\"net_mode\": \"sta\", \"ap_ssid\": \"IotHub-C8E4\", \"ap_password_set\": false, \"sta_ssid\": \"CMCC-502\", \"sta_password_set\": true, \"sta_use_static\": true, \"sta_static_ip\": \"192.168.1.213\", \"sta_static_gateway\": \"192.168.1.1\", \"sta_static_netmask\": \"255.255.255.0\", \"sta_static_dns1\": \"192.168.1.1\", \"sta_static_dns2\": \"8.8.8.8\", \"sta_connected\": true, \"sta_has_ip\": true, \"sta_ip\": \"192.168.1.213\", \"last_disconnect\": \"none\", \"startup_fallback_to_ap\": false}, \"mqtt\": {\"mqtt_backend\": \"tb_selfhost\", \"mqtt_host\": \"117.131.99.2\", \"mqtt_port\": 21883, \"mqtt_use_tls\": false, \"mqtt_token_set\": true, \"connected\": true, \"publish_count\": 71, \"outbox\": 0, \"last_error\": \"\"}, \"bluetooth\": {\"bt_role\": \"ble\", \"bt_device_name\": \"IotHubBLE-C8E4\", \"runtime_mode\": \"ble\", \"adv_active\": false, \"connected\": true, \"last_error\": \"\"}, \"uart\": {\"uart_baudrate\": 115200, \"uart_data_bits\": 8, \"uart_stop_bits\": 1, \"uart_parity_mode\": \"none\", \"uart_rx_gpio\": 18, \"uart_tx_gpio\": 17}, \"gpio\": {\"relay_on\": false, \"led_on\": true, \"relay_power_policy\": 0, \"led_power_policy\": 0, \"relay_active_high\": true, \"led_active_high\": true, \"input_active_low\": true, \"input_active\": false, \"io",
+    "[cfg 2/10] complete=True id=cfg2-18 bytes=1182 frags=5 latency=155.9ms attempts=1",
+    ">100.449s TX id=cfg3-19 105B {\"id\": \"cfg3-19\", \"version\": \"1.0\", \"cmd\": \"config.get\", \"args\": {}, \"token\": \"<redacted>\"}",
+    "<100.607s> RX id=cfg3-19 1182B frags=5 sizes=[253, 253, 253, 253, 170] {\"id\": \"cfg3-19\", \"ok\": true, \"data\": {\"network\": {\"net_mode\": \"sta\", \"ap_ssid\": \"IotHub-C8E4\", \"ap_password_set\": false, \"sta_ssid\": \"CMCC-502\", \"sta_password_set\": true, \"sta_use_static\": true, \"sta_static_ip\": \"192.168.1.213\", \"sta_static_gateway\": \"192.168.1.1\", \"sta_static_netmask\": \"255.255.255.0\", \"sta_static_dns1\": \"192.168.1.1\", \"sta_static_dns2\": \"8.8.8.8\", \"sta_connected\": true, \"sta_has_ip\": true, \"sta_ip\": \"192.168.1.213\", \"last_disconnect\": \"none\", \"startup_fallback_to_ap\": false}, \"mqtt\": {\"mqtt_backend\": \"tb_selfhost\", \"mqtt_host\": \"117.131.99.2\", \"mqtt_port\": 21883, \"mqtt_use_tls\": false, \"mqtt_token_set\": true, \"connected\": true, \"publish_count\": 71, \"outbox\": 0, \"last_error\": \"\"}, \"bluetooth\": {\"bt_role\": \"ble\", \"bt_device_name\": \"IotHubBLE-C8E4\", \"runtime_mode\": \"ble\", \"adv_active\": false, \"connected\": true, \"last_error\": \"\"}, \"uart\": {\"uart_baudrate\": 115200, \"uart_data_bits\": 8, \"uart_stop_bits\": 1, \"uart_parity_mode\": \"none\", \"uart_rx_gpio\": 18, \"uart_tx_gpio\": 17}, \"gpio\": {\"relay_on\": false, \"led_on\": true, \"relay_power_policy\": 0, \"led_power_policy\": 0, \"relay_active_high\": true, \"led_active_high\": true, \"input_active_low\": true, \"input_active\": false, \"io",
+    "[cfg 3/10] complete=True id=cfg3-19 bytes=1182 frags=5 latency=157.8ms attempts=1",
+    ">100.861s TX id=cfg4-20 105B {\"id\": \"cfg4-20\", \"version\": \"1.0\", \"cmd\": \"config.get\", \"args\": {}, \"token\": \"<redacted>\"}",
+    "<101.138s> RX id=cfg4-20 1182B frags=5 sizes=[253, 253, 253, 253, 170] {\"id\": \"cfg4-20\", \"ok\": true, \"data\": {\"network\": {\"net_mode\": \"sta\", \"ap_ssid\": \"IotHub-C8E4\", \"ap_password_set\": false, \"sta_ssid\": \"CMCC-502\", \"sta_password_set\": true, \"sta_use_static\": true, \"sta_static_ip\": \"192.168.1.213\", \"sta_static_gateway\": \"192.168.1.1\", \"sta_static_netmask\": \"255.255.255.0\", \"sta_static_dns1\": \"192.168.1.1\", \"sta_static_dns2\": \"8.8.8.8\", \"sta_connected\": true, \"sta_has_ip\": true, \"sta_ip\": \"192.168.1.213\", \"last_disconnect\": \"none\", \"startup_fallback_to_ap\": false}, \"mqtt\": {\"mqtt_backend\": \"tb_selfhost\", \"mqtt_host\": \"117.131.99.2\", \"mqtt_port\": 21883, \"mqtt_use_tls\": false, \"mqtt_token_set\": true, \"connected\": true, \"publish_count\": 71, \"outbox\": 0, \"last_error\": \"\"}, \"bluetooth\": {\"bt_role\": \"ble\", \"bt_device_name\": \"IotHubBLE-C8E4\", \"runtime_mode\": \"ble\", \"adv_active\": false, \"connected\": true, \"last_error\": \"\"}, \"uart\": {\"uart_baudrate\": 115200, \"uart_data_bits\": 8, \"uart_stop_bits\": 1, \"uart_parity_mode\": \"none\", \"uart_rx_gpio\": 18, \"uart_tx_gpio\": 17}, \"gpio\": {\"relay_on\": false, \"led_on\": true, \"relay_power_policy\": 0, \"led_power_policy\": 0, \"relay_active_high\": true, \"led_active_high\": true, \"input_active_low\": true, \"input_active\": false, \"io",
+    "[cfg 4/10] complete=True id=cfg4-20 bytes=1182 frags=5 latency=276.4ms attempts=1",
+    ">101.392s TX id=cfg5-21 105B {\"id\": \"cfg5-21\", \"version\": \"1.0\", \"cmd\": \"config.get\", \"args\": {}, \"token\": \"<redacted>\"}",
+    "<101.572s> RX id=cfg5-21 1182B frags=5 sizes=[253, 253, 253, 253, 170] {\"id\": \"cfg5-21\", \"ok\": true, \"data\": {\"network\": {\"net_mode\": \"sta\", \"ap_ssid\": \"IotHub-C8E4\", \"ap_password_set\": false, \"sta_ssid\": \"CMCC-502\", \"sta_password_set\": true, \"sta_use_static\": true, \"sta_static_ip\": \"192.168.1.213\", \"sta_static_gateway\": \"192.168.1.1\", \"sta_static_netmask\": \"255.255.255.0\", \"sta_static_dns1\": \"192.168.1.1\", \"sta_static_dns2\": \"8.8.8.8\", \"sta_connected\": true, \"sta_has_ip\": true, \"sta_ip\": \"192.168.1.213\", \"last_disconnect\": \"none\", \"startup_fallback_to_ap\": false}, \"mqtt\": {\"mqtt_backend\": \"tb_selfhost\", \"mqtt_host\": \"117.131.99.2\", \"mqtt_port\": 21883, \"mqtt_use_tls\": false, \"mqtt_token_set\": true, \"connected\": true, \"publish_count\": 71, \"outbox\": 0, \"last_error\": \"\"}, \"bluetooth\": {\"bt_role\": \"ble\", \"bt_device_name\": \"IotHubBLE-C8E4\", \"runtime_mode\": \"ble\", \"adv_active\": false, \"connected\": true, \"last_error\": \"\"}, \"uart\": {\"uart_baudrate\": 115200, \"uart_data_bits\": 8, \"uart_stop_bits\": 1, \"uart_parity_mode\": \"none\", \"uart_rx_gpio\": 18, \"uart_tx_gpio\": 17}, \"gpio\": {\"relay_on\": false, \"led_on\": true, \"relay_power_policy\": 0, \"led_power_policy\": 0, \"relay_active_high\": true, \"led_active_high\": true, \"input_active_low\": true, \"input_active\": false, \"io",
+    "[cfg 5/10] complete=True id=cfg5-21 bytes=1182 frags=5 latency=180.2ms attempts=1",
+    ">101.826s TX id=cfg6-22 105B {\"id\": \"cfg6-22\", \"version\": \"1.0\", \"cmd\": \"config.get\", \"args\": {}, \"token\": \"<redacted>\"}",
+    "<101.973s> RX id=cfg6-22 1182B frags=5 sizes=[253, 253, 253, 253, 170] {\"id\": \"cfg6-22\", \"ok\": true, \"data\": {\"network\": {\"net_mode\": \"sta\", \"ap_ssid\": \"IotHub-C8E4\", \"ap_password_set\": false, \"sta_ssid\": \"CMCC-502\", \"sta_password_set\": true, \"sta_use_static\": true, \"sta_static_ip\": \"192.168.1.213\", \"sta_static_gateway\": \"192.168.1.1\", \"sta_static_netmask\": \"255.255.255.0\", \"sta_static_dns1\": \"192.168.1.1\", \"sta_static_dns2\": \"8.8.8.8\", \"sta_connected\": true, \"sta_has_ip\": true, \"sta_ip\": \"192.168.1.213\", \"last_disconnect\": \"none\", \"startup_fallback_to_ap\": false}, \"mqtt\": {\"mqtt_backend\": \"tb_selfhost\", \"mqtt_host\": \"117.131.99.2\", \"mqtt_port\": 21883, \"mqtt_use_tls\": false, \"mqtt_token_set\": true, \"connected\": true, \"publish_count\": 71, \"outbox\": 0, \"last_error\": \"\"}, \"bluetooth\": {\"bt_role\": \"ble\", \"bt_device_name\": \"IotHubBLE-C8E4\", \"runtime_mode\": \"ble\", \"adv_active\": false, \"connected\": true, \"last_error\": \"\"}, \"uart\": {\"uart_baudrate\": 115200, \"uart_data_bits\": 8, \"uart_stop_bits\": 1, \"uart_parity_mode\": \"none\", \"uart_rx_gpio\": 18, \"uart_tx_gpio\": 17}, \"gpio\": {\"relay_on\": false, \"led_on\": true, \"relay_power_policy\": 0, \"led_power_policy\": 0, \"relay_active_high\": true, \"led_active_high\": true, \"input_active_low\": true, \"input_active\": false, \"io",
+    "[cfg 6/10] complete=True id=cfg6-22 bytes=1182 frags=5 latency=147.2ms attempts=1",
+    ">102.225s TX id=cfg7-23 105B {\"id\": \"cfg7-23\", \"version\": \"1.0\", \"cmd\": \"config.get\", \"args\": {}, \"token\": \"<redacted>\"}",
+    "<102.490s> RX id=cfg7-23 1182B frags=5 sizes=[253, 253, 253, 253, 170] {\"id\": \"cfg7-23\", \"ok\": true, \"data\": {\"network\": {\"net_mode\": \"sta\", \"ap_ssid\": \"IotHub-C8E4\", \"ap_password_set\": false, \"sta_ssid\": \"CMCC-502\", \"sta_password_set\": true, \"sta_use_static\": true, \"sta_static_ip\": \"192.168.1.213\", \"sta_static_gateway\": \"192.168.1.1\", \"sta_static_netmask\": \"255.255.255.0\", \"sta_static_dns1\": \"192.168.1.1\", \"sta_static_dns2\": \"8.8.8.8\", \"sta_connected\": true, \"sta_has_ip\": true, \"sta_ip\": \"192.168.1.213\", \"last_disconnect\": \"none\", \"startup_fallback_to_ap\": false}, \"mqtt\": {\"mqtt_backend\": \"tb_selfhost\", \"mqtt_host\": \"117.131.99.2\", \"mqtt_port\": 21883, \"mqtt_use_tls\": false, \"mqtt_token_set\": true, \"connected\": true, \"publish_count\": 71, \"outbox\": 0, \"last_error\": \"\"}, \"bluetooth\": {\"bt_role\": \"ble\", \"bt_device_name\": \"IotHubBLE-C8E4\", \"runtime_mode\": \"ble\", \"adv_active\": false, \"connected\": true, \"last_error\": \"\"}, \"uart\": {\"uart_baudrate\": 115200, \"uart_data_bits\": 8, \"uart_stop_bits\": 1, \"uart_parity_mode\": \"none\", \"uart_rx_gpio\": 18, \"uart_tx_gpio\": 17}, \"gpio\": {\"relay_on\": false, \"led_on\": true, \"relay_power_policy\": 0, \"led_power_policy\": 0, \"relay_active_high\": true, \"led_active_high\": true, \"input_active_low\": true, \"input_active\": false, \"io",
+    "[cfg 7/10] complete=True id=cfg7-23 bytes=1182 frags=5 latency=265.2ms attempts=1",
+    ">102.742s TX id=cfg8-24 105B {\"id\": \"cfg8-24\", \"version\": \"1.0\", \"cmd\": \"config.get\", \"args\": {}, \"token\": \"<redacted>\"}",
+    "<102.893s> RX id=cfg8-24 1182B frags=5 sizes=[253, 253, 253, 253, 170] {\"id\": \"cfg8-24\", \"ok\": true, \"data\": {\"network\": {\"net_mode\": \"sta\", \"ap_ssid\": \"IotHub-C8E4\", \"ap_password_set\": false, \"sta_ssid\": \"CMCC-502\", \"sta_password_set\": true, \"sta_use_static\": true, \"sta_static_ip\": \"192.168.1.213\", \"sta_static_gateway\": \"192.168.1.1\", \"sta_static_netmask\": \"255.255.255.0\", \"sta_static_dns1\": \"192.168.1.1\", \"sta_static_dns2\": \"8.8.8.8\", \"sta_connected\": true, \"sta_has_ip\": true, \"sta_ip\": \"192.168.1.213\", \"last_disconnect\": \"none\", \"startup_fallback_to_ap\": false}, \"mqtt\": {\"mqtt_backend\": \"tb_selfhost\", \"mqtt_host\": \"117.131.99.2\", \"mqtt_port\": 21883, \"mqtt_use_tls\": false, \"mqtt_token_set\": true, \"connected\": true, \"publish_count\": 71, \"outbox\": 0, \"last_error\": \"\"}, \"bluetooth\": {\"bt_role\": \"ble\", \"bt_device_name\": \"IotHubBLE-C8E4\", \"runtime_mode\": \"ble\", \"adv_active\": false, \"connected\": true, \"last_error\": \"\"}, \"uart\": {\"uart_baudrate\": 115200, \"uart_data_bits\": 8, \"uart_stop_bits\": 1, \"uart_parity_mode\": \"none\", \"uart_rx_gpio\": 18, \"uart_tx_gpio\": 17}, \"gpio\": {\"relay_on\": false, \"led_on\": true, \"relay_power_policy\": 0, \"led_power_policy\": 0, \"relay_active_high\": true, \"led_active_high\": true, \"input_active_low\": true, \"input_active\": false, \"io",
+    "[cfg 8/10] complete=True id=cfg8-24 bytes=1182 frags=5 latency=150.4ms attempts=1",
+    ">103.147s TX id=cfg9-25 105B {\"id\": \"cfg9-25\", \"version\": \"1.0\", \"cmd\": \"config.get\", \"args\": {}, \"token\": \"<redacted>\"}",
+    "<103.265s> RX id=cfg9-25 1182B frags=5 sizes=[253, 253, 253, 253, 170] {\"id\": \"cfg9-25\", \"ok\": true, \"data\": {\"network\": {\"net_mode\": \"sta\", \"ap_ssid\": \"IotHub-C8E4\", \"ap_password_set\": false, \"sta_ssid\": \"CMCC-502\", \"sta_password_set\": true, \"sta_use_static\": true, \"sta_static_ip\": \"192.168.1.213\", \"sta_static_gateway\": \"192.168.1.1\", \"sta_static_netmask\": \"255.255.255.0\", \"sta_static_dns1\": \"192.168.1.1\", \"sta_static_dns2\": \"8.8.8.8\", \"sta_connected\": true, \"sta_has_ip\": true, \"sta_ip\": \"192.168.1.213\", \"last_disconnect\": \"none\", \"startup_fallback_to_ap\": false}, \"mqtt\": {\"mqtt_backend\": \"tb_selfhost\", \"mqtt_host\": \"117.131.99.2\", \"mqtt_port\": 21883, \"mqtt_use_tls\": false, \"mqtt_token_set\": true, \"connected\": true, \"publish_count\": 71, \"outbox\": 0, \"last_error\": \"\"}, \"bluetooth\": {\"bt_role\": \"ble\", \"bt_device_name\": \"IotHubBLE-C8E4\", \"runtime_mode\": \"ble\", \"adv_active\": false, \"connected\": true, \"last_error\": \"\"}, \"uart\": {\"uart_baudrate\": 115200, \"uart_data_bits\": 8, \"uart_stop_bits\": 1, \"uart_parity_mode\": \"none\", \"uart_rx_gpio\": 18, \"uart_tx_gpio\": 17}, \"gpio\": {\"relay_on\": false, \"led_on\": true, \"relay_power_policy\": 0, \"led_power_policy\": 0, \"relay_active_high\": true, \"led_active_high\": true, \"input_active_low\": true, \"input_active\": false, \"io",
+    "[cfg 9/10] complete=True id=cfg9-25 bytes=1182 frags=5 latency=118.3ms attempts=1",
+    ">103.516s TX id=cfg10-26 106B {\"id\": \"cfg10-26\", \"version\": \"1.0\", \"cmd\": \"config.get\", \"args\": {}, \"token\": \"<redacted>\"}",
+    "<103.731s> RX id=cfg10-26 1183B frags=5 sizes=[253, 253, 253, 253, 171] {\"id\": \"cfg10-26\", \"ok\": true, \"data\": {\"network\": {\"net_mode\": \"sta\", \"ap_ssid\": \"IotHub-C8E4\", \"ap_password_set\": false, \"sta_ssid\": \"CMCC-502\", \"sta_password_set\": true, \"sta_use_static\": true, \"sta_static_ip\": \"192.168.1.213\", \"sta_static_gateway\": \"192.168.1.1\", \"sta_static_netmask\": \"255.255.255.0\", \"sta_static_dns1\": \"192.168.1.1\", \"sta_static_dns2\": \"8.8.8.8\", \"sta_connected\": true, \"sta_has_ip\": true, \"sta_ip\": \"192.168.1.213\", \"last_disconnect\": \"none\", \"startup_fallback_to_ap\": false}, \"mqtt\": {\"mqtt_backend\": \"tb_selfhost\", \"mqtt_host\": \"117.131.99.2\", \"mqtt_port\": 21883, \"mqtt_use_tls\": false, \"mqtt_token_set\": true, \"connected\": true, \"publish_count\": 71, \"outbox\": 0, \"last_error\": \"\"}, \"bluetooth\": {\"bt_role\": \"ble\", \"bt_device_name\": \"IotHubBLE-C8E4\", \"runtime_mode\": \"ble\", \"adv_active\": false, \"connected\": true, \"last_error\": \"\"}, \"uart\": {\"uart_baudrate\": 115200, \"uart_data_bits\": 8, \"uart_stop_bits\": 1, \"uart_parity_mode\": \"none\", \"uart_rx_gpio\": 18, \"uart_tx_gpio\": 17}, \"gpio\": {\"relay_on\": false, \"led_on\": true, \"relay_power_policy\": 0, \"led_power_policy\": 0, \"relay_active_high\": true, \"led_active_high\": true, \"input_active_low\": true, \"input_active\": false, \"i",
+    "[cfg 10/10] complete=True id=cfg10-26 bytes=1183 frags=5 latency=214.0ms attempts=1",
+    ">103.986s TX id=tc-27 186B {\"id\": \"tc-27\", \"version\": \"1.0\", \"cmd\": \"network.tryconnect\", \"args\": {\"ssid\": \"TQ2017\", \"password\": \"<redacted>\", \"idempotency_key\": \"p0tc-10044696c0e6\"}, \"token\": \"<redacted>\"}",
+    "<104.240s> RX id=tc-27 89B frags=1 sizes=[89] {\"id\": \"tc-27\", \"ok\": true, \"data\": {\"operation_id\": \"op-E16A53332022A60F\", \"state\": \"accepted\"}}",
+    "[op] tryconnect accepted op=op-E16A53332022A60F state=accepted",
+    ">104.496s TX id=tc-dup-same-28 195B {\"id\": \"tc-dup-same-28\", \"version\": \"1.0\", \"cmd\": \"network.tryconnect\", \"args\": {\"ssid\": \"TQ2017\", \"password\": \"<redacted>\", \"idempotency_key\": \"p0tc-10044696c0e6\"}, \"token\": \"<redacted>\"}",
+    "<104.601s> RX id=tc-dup-same-28 115B frags=1 sizes=[115] {\"id\": \"tc-dup-same-28\", \"ok\": true, \"data\": {\"operation_id\": \"op-E16A53332022A60F\", \"state\": \"connecting\", \"error\": \"none\"}}",
+    ">104.853s TX id=tc-dup-diff-29 195B {\"id\": \"tc-dup-diff-29\", \"version\": \"1.0\", \"cmd\": \"network.tryconnect\", \"args\": {\"ssid\": \"TQ2017\", \"password\": \"<redacted>\", \"idempotency_key\": \"p0tc-5a0f1b426870\"}, \"token\": \"<redacted>\"}",
+    "<104.959s> RX id=tc-dup-diff-29 75B frags=1 sizes=[75] {\"id\": \"tc-dup-diff-29\", \"ok\": false, \"error\": {\"code\": \"busy\", \"message\": \"busy\"}}",
+    ">104.964s TX id=long-30 105B {\"id\": \"long-30\", \"version\": \"1.0\", \"cmd\": \"config.get\", \"args\": {}, \"token\": \"<redacted>\"}",
+    "<105.526s> RX id=long-30 1184B frags=5 sizes=[253, 253, 253, 253, 172] {\"id\": \"long-30\", \"ok\": true, \"data\": {\"network\": {\"net_mode\": \"sta\", \"ap_ssid\": \"IotHub-C8E4\", \"ap_password_set\": false, \"sta_ssid\": \"CMCC-502\", \"sta_password_set\": true, \"sta_use_static\": true, \"sta_static_ip\": \"192.168.1.213\", \"sta_static_gateway\": \"192.168.1.1\", \"sta_static_netmask\": \"255.255.255.0\", \"sta_static_dns1\": \"192.168.1.1\", \"sta_static_dns2\": \"8.8.8.8\", \"sta_connected\": true, \"sta_has_ip\": true, \"sta_ip\": \"192.168.1.213\", \"last_disconnect\": \"none\", \"startup_fallback_to_ap\": false}, \"mqtt\": {\"mqtt_backend\": \"tb_selfhost\", \"mqtt_host\": \"117.131.99.2\", \"mqtt_port\": 21883, \"mqtt_use_tls\": false, \"mqtt_token_set\": true, \"connected\": true, \"publish_count\": 72, \"outbox\": 253, \"last_error\": \"\"}, \"bluetooth\": {\"bt_role\": \"ble\", \"bt_device_name\": \"IotHubBLE-C8E4\", \"runtime_mode\": \"ble\", \"adv_active\": false, \"connected\": true, \"last_error\": \"\"}, \"uart\": {\"uart_baudrate\": 115200, \"uart_data_bits\": 8, \"uart_stop_bits\": 1, \"uart_parity_mode\": \"none\", \"uart_rx_gpio\": 18, \"uart_tx_gpio\": 17}, \"gpio\": {\"relay_on\": false, \"led_on\": true, \"relay_power_policy\": 0, \"led_power_policy\": 0, \"relay_active_high\": true, \"led_active_high\": true, \"input_active_low\": true, \"input_active\": false, \"",
+    ">105.572s TX id=opget-31 145B {\"id\": \"opget-31\", \"version\": \"1.0\", \"cmd\": \"operation.get\", \"args\": {\"operation_id\": \"op-E16A53332022A60F\"}, \"token\": \"<redacted>\"}",
+    "<105.681s> RX id=opget-31 109B frags=1 sizes=[109] {\"id\": \"opget-31\", \"ok\": true, \"data\": {\"operation_id\": \"op-E16A53332022A60F\", \"state\": \"connecting\", \"error\": \"none\"}}",
+    ">105.684s TX id=opget-poll-32 150B {\"id\": \"opget-poll-32\", \"version\": \"1.0\", \"cmd\": \"operation.get\", \"args\": {\"operation_id\": \"op-E16A53332022A60F\"}, \"token\": \"<redacted>\"}",
+    "<106.043s> RX id=opget-poll-32 114B frags=1 sizes=[114] {\"id\": \"opget-poll-32\", \"ok\": true, \"data\": {\"operation_id\": \"op-E16A53332022A60F\", \"state\": \"connecting\", \"error\": \"none\"}}",
+    ">106.547s TX id=opget-poll-33 150B {\"id\": \"opget-poll-33\", \"version\": \"1.0\", \"cmd\": \"operation.get\", \"args\": {\"operation_id\": \"op-E16A53332022A60F\"}, \"token\": \"<redacted>\"}",
+    "<106.673s> RX id=opget-poll-33 114B frags=1 sizes=[114] {\"id\": \"opget-poll-33\", \"ok\": true, \"data\": {\"operation_id\": \"op-E16A53332022A60F\", \"state\": \"connecting\", \"error\": \"none\"}}",
+    ">107.175s TX id=opget-poll-34 150B {\"id\": \"opget-poll-34\", \"version\": \"1.0\", \"cmd\": \"operation.get\", \"args\": {\"operation_id\": \"op-E16A53332022A60F\"}, \"token\": \"<redacted>\"}",
+    "<107.394s> RX id=opget-poll-34 114B frags=1 sizes=[114] {\"id\": \"opget-poll-34\", \"ok\": true, \"data\": {\"operation_id\": \"op-E16A53332022A60F\", \"state\": \"connecting\", \"error\": \"none\"}}",
+    ">107.904s TX id=opget-poll-35 150B {\"id\": \"opget-poll-35\", \"version\": \"1.0\", \"cmd\": \"operation.get\", \"args\": {\"operation_id\": \"op-E16A53332022A60F\"}, \"token\": \"<redacted>\"}",
+    "<108.112s> RX id=opget-poll-35 114B frags=1 sizes=[114] {\"id\": \"opget-poll-35\", \"ok\": true, \"data\": {\"operation_id\": \"op-E16A53332022A60F\", \"state\": \"connecting\", \"error\": \"none\"}}",
+    ">108.614s TX id=opget-poll-36 150B {\"id\": \"opget-poll-36\", \"version\": \"1.0\", \"cmd\": \"operation.get\", \"args\": {\"operation_id\": \"op-E16A53332022A60F\"}, \"token\": \"<redacted>\"}",
+    "<108.830s> RX id=opget-poll-36 114B frags=1 sizes=[114] {\"id\": \"opget-poll-36\", \"ok\": true, \"data\": {\"operation_id\": \"op-E16A53332022A60F\", \"state\": \"connecting\", \"error\": \"none\"}}",
+    ">109.334s TX id=opget-poll-37 150B {\"id\": \"opget-poll-37\", \"version\": \"1.0\", \"cmd\": \"operation.get\", \"args\": {\"operation_id\": \"op-E16A53332022A60F\"}, \"token\": \"<redacted>\"}",
+    "<109.416s> RX id=opget-poll-37 118B frags=1 sizes=[118] {\"id\": \"opget-poll-37\", \"ok\": true, \"data\": {\"operation_id\": \"op-E16A53332022A60F\", \"state\": \"failed\", \"error\": \"ap_not_found\"}}",
+    ">109.670s TX id=apply-38 145B {\"id\": \"apply-38\", \"version\": \"1.0\", \"cmd\": \"network.apply\", \"args\": {\"operation_id\": \"op-E16A53332022A60F\"}, \"token\": \"<redacted>\"}",
+    "<109.776s> RX id=apply-38 91B frags=1 sizes=[91] {\"id\": \"apply-38\", \"ok\": false, \"error\": {\"code\": \"operation_state\", \"message\": \"operation_state\"}}",
+    ">110.031s TX id=apply-dup-39 149B {\"id\": \"apply-dup-39\", \"version\": \"1.0\", \"cmd\": \"network.apply\", \"args\": {\"operation_id\": \"op-E16A53332022A60F\"}, \"token\": \"<redacted>\"}",
+    "<110.180s> RX id=apply-dup-39 95B frags=1 sizes=[95] {\"id\": \"apply-dup-39\", \"ok\": false, \"error\": {\"code\": \"operation_state\", \"message\": \"operation_state\"}}",
+    ">110.435s TX id=cancel-40 147B {\"id\": \"cancel-40\", \"version\": \"1.0\", \"cmd\": \"network.cancel\", \"args\": {\"operation_id\": \"op-E16A53332022A60F\"}, \"token\": \"<redacted>\"}",
+    "<110.589s> RX id=cancel-40 92B frags=1 sizes=[92] {\"id\": \"cancel-40\", \"ok\": false, \"error\": {\"code\": \"operation_state\", \"message\": \"operation_state\"}}",
+    ">110.844s TX id=cancel-dup-41 151B {\"id\": \"cancel-dup-41\", \"version\": \"1.0\", \"cmd\": \"network.cancel\", \"args\": {\"operation_id\": \"op-E16A53332022A60F\"}, \"token\": \"<redacted>\"}",
+    "<110.946s> RX id=cancel-dup-41 96B frags=1 sizes=[96] {\"id\": \"cancel-dup-41\", \"ok\": false, \"error\": {\"code\": \"operation_state\", \"message\": \"operation_state\"}}",
+    ">110.947s TX id=wrongpw-42 207B {\"id\": \"wrongpw-42\", \"version\": \"1.0\", \"cmd\": \"network.tryconnect\", \"args\": {\"ssid\": \"TQ2017\", \"password\": \"<redacted>\", \"idempotency_key\": \"p0wrong-a0e2ef709e77\"}, \"token\": \"<redacted>\"}",
+    "<111.395s> RX id=wrongpw-42 94B frags=1 sizes=[94] {\"id\": \"wrongpw-42\", \"ok\": true, \"data\": {\"operation_id\": \"op-88E51FFDA89FB609\", \"state\": \"accepted\"}}",
+    ">111.399s TX id=opget-poll-43 150B {\"id\": \"opget-poll-43\", \"version\": \"1.0\", \"cmd\": \"operation.get\", \"args\": {\"operation_id\": \"op-88E51FFDA89FB609\"}, \"token\": \"<redacted>\"}",
+    "<111.712s> RX id=opget-poll-43 114B frags=1 sizes=[114] {\"id\": \"opget-poll-43\", \"ok\": true, \"data\": {\"operation_id\": \"op-88E51FFDA89FB609\", \"state\": \"connecting\", \"error\": \"none\"}}",
+    ">112.213s TX id=opget-poll-44 150B {\"id\": \"opget-poll-44\", \"version\": \"1.0\", \"cmd\": \"operation.get\", \"args\": {\"operation_id\": \"op-88E51FFDA89FB609\"}, \"token\": \"<redacted>\"}",
+    "<112.342s> RX id=opget-poll-44 114B frags=1 sizes=[114] {\"id\": \"opget-poll-44\", \"ok\": true, \"data\": {\"operation_id\": \"op-88E51FFDA89FB609\", \"state\": \"connecting\", \"error\": \"none\"}}",
+    ">112.844s TX id=opget-poll-45 150B {\"id\": \"opget-poll-45\", \"version\": \"1.0\", \"cmd\": \"operation.get\", \"args\": {\"operation_id\": \"op-88E51FFDA89FB609\"}, \"token\": \"<redacted>\"}",
+    "<112.971s> RX id=opget-poll-45 114B frags=1 sizes=[114] {\"id\": \"opget-poll-45\", \"ok\": true, \"data\": {\"operation_id\": \"op-88E51FFDA89FB609\", \"state\": \"connecting\", \"error\": \"none\"}}",
+    ">113.474s TX id=opget-poll-46 150B {\"id\": \"opget-poll-46\", \"version\": \"1.0\", \"cmd\": \"operation.get\", \"args\": {\"operation_id\": \"op-88E51FFDA89FB609\"}, \"token\": \"<redacted>\"}",
+    "<113.647s> RX id=opget-poll-46 114B frags=1 sizes=[114] {\"id\": \"opget-poll-46\", \"ok\": true, \"data\": {\"operation_id\": \"op-88E51FFDA89FB609\", \"state\": \"connecting\", \"error\": \"none\"}}",
+    ">114.150s TX id=opget-poll-47 150B {\"id\": \"opget-poll-47\", \"version\": \"1.0\", \"cmd\": \"operation.get\", \"args\": {\"operation_id\": \"op-88E51FFDA89FB609\"}, \"token\": \"<redacted>\"}",
+    "<114.364s> RX id=opget-poll-47 114B frags=1 sizes=[114] {\"id\": \"opget-poll-47\", \"ok\": true, \"data\": {\"operation_id\": \"op-88E51FFDA89FB609\", \"state\": \"connecting\", \"error\": \"none\"}}",
+    ">114.865s TX id=opget-poll-48 150B {\"id\": \"opget-poll-48\", \"version\": \"1.0\", \"cmd\": \"operation.get\", \"args\": {\"operation_id\": \"op-88E51FFDA89FB609\"}, \"token\": \"<redacted>\"}",
+    "<115.085s> RX id=opget-poll-48 114B frags=1 sizes=[114] {\"id\": \"opget-poll-48\", \"ok\": true, \"data\": {\"operation_id\": \"op-88E51FFDA89FB609\", \"state\": \"connecting\", \"error\": \"none\"}}",
+    ">115.590s TX id=opget-poll-49 150B {\"id\": \"opget-poll-49\", \"version\": \"1.0\", \"cmd\": \"operation.get\", \"args\": {\"operation_id\": \"op-88E51FFDA89FB609\"}, \"token\": \"<redacted>\"}",
+    "<115.810s> RX id=opget-poll-49 114B frags=1 sizes=[114] {\"id\": \"opget-poll-49\", \"ok\": true, \"data\": {\"operation_id\": \"op-88E51FFDA89FB609\", \"state\": \"connecting\", \"error\": \"none\"}}",
+    ">116.314s TX id=opget-poll-50 150B {\"id\": \"opget-poll-50\", \"version\": \"1.0\", \"cmd\": \"operation.get\", \"args\": {\"operation_id\": \"op-88E51FFDA89FB609\"}, \"token\": \"<redacted>\"}",
+    "<116.527s> RX id=opget-poll-50 118B frags=1 sizes=[118] {\"id\": \"opget-poll-50\", \"ok\": true, \"data\": {\"operation_id\": \"op-88E51FFDA89FB609\", \"state\": \"failed\", \"error\": \"ap_not_found\"}}",
+    ">116.780s TX id=wrongpw-cancel-51 155B {\"id\": \"wrongpw-cancel-51\", \"version\": \"1.0\", \"cmd\": \"network.cancel\", \"args\": {\"operation_id\": \"op-88E51FFDA89FB609\"}, \"token\": \"<redacted>\"}",
+    "<116.890s> RX id=wrongpw-cancel-51 100B frags=1 sizes=[100] {\"id\": \"wrongpw-cancel-51\", \"ok\": false, \"error\": {\"code\": \"operation_state\", \"message\": \"operation_state\"}}",
+    ">116.893s TX id=race1-52 204B {\"id\": \"race1-52\", \"version\": \"1.0\", \"cmd\": \"network.tryconnect\", \"args\": {\"ssid\": \"TQ2017\", \"password\": \"<redacted>\", \"idempotency_key\": \"p0race-3ab331050e7d\"}, \"token\": \"<redacted>\"}",
+    "[conn] link lost during id=race1-52 (ConnectionLost: write failed after disconnect: (<BleakGATTProtocolErrorCode.UNLIKELY_ERROR: 14>, 'GATT Protocol Error: Unlikely Error')); reconnecting and retrying",
+    "[conn] reconnect #2 starting",
+    ">119.470s TX id=login-53 101B {\"id\": \"login-53\", \"version\": \"1.0\", \"cmd\": \"auth.login\", \"args\": {\"username\": \"admin\", \"password\": \"<redacted>\"}}",
+    "<119.542s> RX id=login-53 96B frags=1 sizes=[96] {\"id\": \"login-53\", \"ok\": true, \"data\": {\"token\": \"<redacted>\", \"expires_in\": 600}}",
+    "[auth] login ok (token redacted)",
+    "[conn] reconnect #2 ok",
+    ">119.542s TX id=race1-52 204B {\"id\": \"race1-52\", \"version\": \"1.0\", \"cmd\": \"network.tryconnect\", \"args\": {\"ssid\": \"TQ2017\", \"password\": \"<redacted>\", \"idempotency_key\": \"p0race-3ab331050e7d\"}, \"token\": \"<redacted>\"}",
+    "<119.987s> RX id=race1-52 92B frags=1 sizes=[92] {\"id\": \"race1-52\", \"ok\": true, \"data\": {\"operation_id\": \"op-B0ADBA48BC61D109\", \"state\": \"accepted\"}}",
+    ">120.240s TX id=race1-cancel-54 153B {\"id\": \"race1-cancel-54\", \"version\": \"1.0\", \"cmd\": \"network.cancel\", \"args\": {\"operation_id\": \"op-B0ADBA48BC61D109\"}, \"token\": \"<redacted>\"}",
+    "<120.395s> RX id=race1-cancel-54 100B frags=1 sizes=[100] {\"id\": \"race1-cancel-54\", \"ok\": true, \"data\": {\"operation_id\": \"op-B0ADBA48BC61D109\", \"state\": \"cancelled\"}}",
+    ">120.399s TX id=opget-poll-55 150B {\"id\": \"opget-poll-55\", \"version\": \"1.0\", \"cmd\": \"operation.get\", \"args\": {\"operation_id\": \"op-B0ADBA48BC61D109\"}, \"token\": \"<redacted>\"}",
+    "<120.757s> RX id=opget-poll-55 118B frags=1 sizes=[118] {\"id\": \"opget-poll-55\", \"ok\": true, \"data\": {\"operation_id\": \"op-B0ADBA48BC61D109\", \"state\": \"cancelled\", \"error\": \"cancelled\"}}",
+    ">121.010s TX id=race1-cancel-dup-56 157B {\"id\": \"race1-cancel-dup-56\", \"version\": \"1.0\", \"cmd\": \"network.cancel\", \"args\": {\"operation_id\": \"op-B0ADBA48BC61D109\"}, \"token\": \"<redacted>\"}",
+    "<121.159s> RX id=race1-cancel-dup-56 104B frags=1 sizes=[104] {\"id\": \"race1-cancel-dup-56\", \"ok\": true, \"data\": {\"operation_id\": \"op-B0ADBA48BC61D109\", \"state\": \"cancelled\"}}",
+    "[race 1] cancel=cancelled terminal=cancelled elapsed=0.36s dup=cancelled",
+    ">121.415s TX id=race2-57 204B {\"id\": \"race2-57\", \"version\": \"1.0\", \"cmd\": \"network.tryconnect\", \"args\": {\"ssid\": \"TQ2017\", \"password\": \"<redacted>\", \"idempotency_key\": \"p0race-11329232a4e1\"}, \"token\": \"<redacted>\"}",
+    "<121.523s> RX id=race2-57 92B frags=1 sizes=[92] {\"id\": \"race2-57\", \"ok\": true, \"data\": {\"operation_id\": \"op-B549A9628F8EF48A\", \"state\": \"accepted\"}}",
+    ">121.777s TX id=race2-cancel-58 153B {\"id\": \"race2-cancel-58\", \"version\": \"1.0\", \"cmd\": \"network.cancel\", \"args\": {\"operation_id\": \"op-B549A9628F8EF48A\"}, \"token\": \"<redacted>\"}",
+    "<121.881s> RX id=race2-cancel-58 100B frags=1 sizes=[100] {\"id\": \"race2-cancel-58\", \"ok\": true, \"data\": {\"operation_id\": \"op-B549A9628F8EF48A\", \"state\": \"cancelled\"}}",
+    ">121.883s TX id=opget-poll-59 150B {\"id\": \"opget-poll-59\", \"version\": \"1.0\", \"cmd\": \"operation.get\", \"args\": {\"operation_id\": \"op-B549A9628F8EF48A\"}, \"token\": \"<redacted>\"}",
+    "<122.242s> RX id=opget-poll-59 118B frags=1 sizes=[118] {\"id\": \"opget-poll-59\", \"ok\": true, \"data\": {\"operation_id\": \"op-B549A9628F8EF48A\", \"state\": \"cancelled\", \"error\": \"cancelled\"}}",
+    ">122.496s TX id=race2-cancel-dup-60 157B {\"id\": \"race2-cancel-dup-60\", \"version\": \"1.0\", \"cmd\": \"network.cancel\", \"args\": {\"operation_id\": \"op-B549A9628F8EF48A\"}, \"token\": \"<redacted>\"}",
+    "<122.601s> RX id=race2-cancel-dup-60 104B frags=1 sizes=[104] {\"id\": \"race2-cancel-dup-60\", \"ok\": true, \"data\": {\"operation_id\": \"op-B549A9628F8EF48A\", \"state\": \"cancelled\"}}",
+    "[race 2] cancel=cancelled terminal=cancelled elapsed=0.362s dup=cancelled",
+    ">122.854s TX id=nf-get-61 151B {\"id\": \"nf-get-61\", \"version\": \"1.0\", \"cmd\": \"operation.get\", \"args\": {\"operation_id\": \"op-does-not-exist-0a7b0e\"}, \"token\": \"<redacted>\"}",
+    "<122.960s> RX id=nf-get-61 80B frags=1 sizes=[80] {\"id\": \"nf-get-61\", \"ok\": false, \"error\": {\"code\": \"not_found\", \"message\": \"not_found\"}}",
+    ">122.962s TX id=nf-apply-62 153B {\"id\": \"nf-apply-62\", \"version\": \"1.0\", \"cmd\": \"network.apply\", \"args\": {\"operation_id\": \"op-does-not-exist-0a7b0e\"}, \"token\": \"<redacted>\"}",
+    "<123.411s> RX id=nf-apply-62 82B frags=1 sizes=[82] {\"id\": \"nf-apply-62\", \"ok\": false, \"error\": {\"code\": \"not_found\", \"message\": \"not_found\"}}",
+    ">123.415s TX id=nf-cancel-63 155B {\"id\": \"nf-cancel-63\", \"version\": \"1.0\", \"cmd\": \"network.cancel\", \"args\": {\"operation_id\": \"op-does-not-exist-0a7b0e\"}, \"token\": \"<redacted>\"}",
+    "<123.680s> RX id=nf-cancel-63 83B frags=1 sizes=[83] {\"id\": \"nf-cancel-63\", \"ok\": false, \"error\": {\"code\": \"not_found\", \"message\": \"not_found\"}}",
+    ">123.683s TX id=75 103B {\"id\": 75, \"method\": \"config.set\", \"params\": {\"net_mode\": \"sta\"}, \"token\": \"<redacted>\"}",
+    "<124.130s> RX id=75 228B frags=1 sizes=[228] {\"id\": 75, \"ok\": true, \"result\": {\"success\": true, \"changed\": [], \"effect\": \"none\", \"relay_on\": false, \"led_on\": true, \"input_active\": false, \"io_seq\": 3, \"io_source\": \"input\", \"saved\": true, \"applied\": true, \"restart_required\": false, \"rollback\": \"none\"}}",
+    "[final] config.set net_mode=sta -> {\"id\": 75, \"ok\": true, \"result\": {\"success\": true, \"changed\": [], \"effect\": \"none\", \"relay_on\": false, \"led_on\": true, \"input_active\": false, \"io_seq\": 3, \"io_source\": \"input\", \"saved\": true, \"applied\": true, \"restart_required\": false, \"rollback\": \"none\"}}",
+    ">126.136s TX id=config.get-64 132B {\"id\": \"config.get-64\", \"version\": \"1.0\", \"cmd\": \"config.get\", \"args\": {\"domains\": [\"network\"]}, \"token\": \"<redacted>\"}",
+    "<126.253s> RX id=config.get-64 470B frags=2 sizes=[253, 217] {\"id\": \"config.get-64\", \"ok\": true, \"data\": {\"network\": {\"net_mode\": \"sta\", \"ap_ssid\": \"IotHub-C8E4\", \"ap_password_set\": false, \"sta_ssid\": \"CMCC-502\", \"sta_password_set\": true, \"sta_use_static\": true, \"sta_static_ip\": \"192.168.1.213\", \"sta_static_gateway\": \"192.168.1.1\", \"sta_static_netmask\": \"255.255.255.0\", \"sta_static_dns1\": \"192.168.1.1\", \"sta_static_dns2\": \"8.8.8.8\", \"sta_connected\": true, \"sta_has_ip\": true, \"sta_ip\": \"192.168.1.213\", \"last_disconnect\": \"none\", \"startup_fallback_to_ap\": false}}}"
+  ],
+  "_path": "/home/tc/esp/workspace/iothub/tools/ble_p0/results/p0_20261023_130612.json",
+  "supplementary_tests": {
+    "wrong_password_visible_ap_CMCC502": {
+      "ssid": "CMCC-502",
+      "operation_id": "op-09D1E08148E7C7DF",
+      "accepted": true,
+      "terminal": {
+        "state": "failed",
+        "error": "wrong_password",
+        "elapsed_s": 15.341
+      },
+      "apply": {
+        "ok": false,
+        "error_code": "operation_state"
+      },
+      "cancel": {
+        "ok": false,
+        "error_code": "operation_state"
+      },
+      "status_after": {
+        "sta_connected": true,
+        "sta_has_ip": true,
+        "sta_ip": "192.168.1.213",
+        "sta_ssid": "CMCC-502",
+        "mode": "sta",
+        "mqtt_connected": false,
+        "mqtt_last_error": "waiting_sta_ip"
+      },
+      "note": "TQ2017 is absent from both ESP32 and host scans; used the visible CMCC-502 AP."
+    },
+    "tq2017_visibility": {
+      "esp32_scan_11_runs": false,
+      "host_wifi_scan": false,
+      "conclusion": "TQ2017 not present/visible; ap_not_found expected. A hidden 2.4GHz AP exists but cannot be confirmed as TQ2017."
+    },
+    "operation_slot_exhaustion": {
+      "observed": "After 4 tryconnect operations in one boot, a new tryconnect returned no_slot until a hard reset.",
+      "note": "Terminal operations retain their slots (10 min per docs). Mini-program should handle no_slot and retry/query later."
+    }
+  },
+  "caveats": [
+    "Actual iOS/Android WeChat UI not tested; only BlueZ central observation on Ubuntu.",
+    "TQ2017 absent, so correct-password tryconnect -> got_ip -> apply success was not exercised. Apply-on-failed correctly returned operation_state.",
+    "One host-side BLE link loss during the 10x scan run; auto-reconnect/retry completed all 10 JSON responses.",
+    "At MTU 256 the 5-fragment long response completes before the 200ms command rate-limit gap; operation.get was sent 0.046s after it and returned in 108.9ms, still before tryconnect ended."
+  ],
+  "final_verdict": {
+    "item1_service_filter": "PASS (BlueZ discovery filter with NUS UUID hit)",
+    "item2_names": "PARTIAL (full name IotHubBLE-C8E4 observed; short name/phone UI not verified)",
+    "item3_10_long_responses": "PASS (10/10 complete JSON; 1 host reconnect/retry; 10/10 config.get also complete)",
+    "item4_operation_get": "PASS for non-blocking (108.9ms, state connecting, before tryconnect terminal); not literally between fragments at MTU 256",
+    "item5_record_and_config_set": "PASS; v0 config.set net_mode=sta returned ok, changed=[], effect=none, net_mode verified sta",
+    "p0_full_pass_requires": [
+      "real iOS/Android name display",
+      "a visible TQ2017 (or other target AP) for got_ip/apply success"
+    ],
+    "t1_success_same_ssid": "PASS: CMCC-502 same-SSID tryconnect -> got_ip -> apply -> reboot persistence -> MQTT connected",
+    "t1_remaining": "serial maintenance channel; AP config fields/identity second batch; iOS/Android phones; T2 10-minute reclaim; T3 MTU23; code review/commit; sdkconfig.defaults BT guard",
+    "t1_success_apply_static": "PASS: same-SSID + CMCC-502->TQ2018 + v0 static IP + reboot/MQTT",
+    "t1_rollback_after_success": "FIXED: P0-4 profile writeback removed; regression PASS at 0/4/12/20s, reboot, and success interleave",
+    "full_p0_6_0_3": "PASS (host-side); 8/8 modules; P0 core true; phone UI false",
+    "ble_rescue_sta_failed": "FIXED/PASS without AP",
+    "ap_fallback_removal": "DONE"
+  },
+  "followup_t1": {
+    "result": "tools/ble_p0/results/success_path_20261023_195304.json",
+    "status": "PASS (same SSID CMCC-502)",
+    "timeline": "connecting 0.315-9.897s -> got_ip 10.53s -> apply success -> reboot DHCP 192.168.1.28, MQTT connected",
+    "caveat": "cross-SSID/TQ2018 not tested; apply changed sta_use_static true->false; network.status may show sta_connected=true but sta_has_ip=false/0.0.0.0 immediately after got_ip/apply; client must wait for sta_has_ip",
+    "same_ssid_cmcc502": {
+      "result": "tools/ble_p0/results/success_path_20261023_195304.json",
+      "status": "PASS"
+    },
+    "tq2018_cross_ssid": {
+      "result": "tools/ble_p0/results/success_path_20261023_200406.json",
+      "status": "PASS",
+      "detail": "CMCC-502 192.168.1.28 -> TQ2018 got_ip 14.582s -> apply -> DHCP 192.168.43.63 -> reboot/MQTT"
+    },
+    "static_ip_v0": {
+      "result": "tools/ble_p0/results/static_ip_20261023_200728.json",
+      "status": "PASS",
+      "detail": "v0 config.set static 192.168.43.213/.1, effect reboot, persisted/runtime/MQTT; 275B command needs <=240B chunking"
+    },
+    "rollback_after_success": {
+      "result": "tools/ble_p0/results/rollback_after_success_20261023_200845.json",
+      "status": "FAIL (pre-fix evidence); fixed and regression PASS",
+      "detail": "wrong candidate failed at 13.545s; initial 4s check TQ2018/static .43.213; ~12s later sta_ssid=CMCC-502 with static .43.213, MQTT disconnected"
+    },
+    "recovered_by": {
+      "result": "tools/ble_p0/results/success_path_20261023_201130.json",
+      "status": "PASS",
+      "final": "TQ2018 DHCP 192.168.43.63, static false, MQTT connected"
+    },
+    "static_baseline_after_fix": {
+      "result": "tools/ble_p0/results/static_ip_20261023_202755.json",
+      "status": "PASS",
+      "detail": "TQ2018 static 192.168.43.213, MQTT connected"
+    },
+    "p0_4_fix": {
+      "result": "tools/ble_p0/results/p0_4_regression_20261023_203032.json",
+      "status": "PASS",
+      "root_cause": "IP_EVENT_STA_GOT_IP profile writeback copied only ssid/password from the auto-selected CMCC-502 profile into s_config, leaving TQ2018 static fields; triggered after the failed candidate auto-connect.",
+      "fix": "removed profile->formal config writeback; static-IP mode forbids cross-profile fallback; removed obsolete suppress/resume API.",
+      "evidence": "after wrong candidate: TQ2018/static .43.213 at 0/4/12/20s (MQTT 4s+); reboot PASS; interleaved success apply TQ2018 DHCP .63 at 0/4/12/20s and reboot PASS."
+    },
+    "final_state": "CMCC-502 DHCP 192.168.1.28, sta_use_static=false, MQTT connected; AP runtime removed",
+    "full_p0_6_0_3": {
+      "result": "tools/ble_p0/results/p0_20261023_204921.json",
+      "status": "PASS (host-side full suite)",
+      "modules": "scan/long_scan/long_config/operation/wrong_password/cancel_race/not_found/final_config_set 8/8 PASS; P0 core true; phone UI false",
+      "caveats": "one host BLE link loss (auto-recovered); operation terminal cancelled (host loss) while non-blocking criterion passed and sent_before_long_complete=true; full-suite wrong_password returned connect_failed 0.27s (dedicated wrong_password 13.545s); final formal TQ2018/runtime CMCC-502 .28, reset to TQ2018 DHCP .63"
+    },
+    "t2_no_slot": {
+      "result": "tools/ble_p0/results/success_path_20261023_205143.json",
+      "status": "no_slot after 4 terminal operations; reset cleared; 10-minute reclaim not yet measured"
+    },
+    "audit": {
+      "formal_write_paths": "config_apply_patch (apply/config.set); apply snapshot/restore; boot defaults/migration; explicit auth.admin.set",
+      "only_automatic_exception": "app_wifi_handle_startup_sta_failure() sets net_mode=AP and saves after the 90s startup window; only net_mode, no SSID/static fields",
+      "s_wifi_sta_connecting_fix": "static guard clears s_wifi_sta_connecting on fast-path failure so boot monitor retries the formal SSID",
+      "runtime_vs_formal": "non-static auto-connect may fall back to another saved profile while formal config stays unchanged; network.status.sta_ssid is formal, sta_ip is runtime; may not pair during fallback"
+    },
+    "ble_rescue_sta_failed": {
+      "status": "FIXED / PASS",
+      "pre_fix": "tools/ble_p0/results/ble_rescue_20261023_210816.json (scan 0 AP)",
+      "fixed": "tools/ble_p0/results/ble_rescue_20261023_221537.json",
+      "evidence": "CMCC-502 wrong profile -> 100s no IP/MQTT, mode sta -> BLE scan hit -> tryconnect/apply -> .28/MQTT"
+    },
+    "ble_rescue_from_ap": {
+      "result": "tools/ble_p0/results/success_path_20261023_211113.json",
+      "status": "PASS recovery",
+      "evidence": "after >90s the AP auto-fallback set mode=ap and persisted; BLE tryconnect/apply from AP restored TQ2018 DHCP .63/MQTT."
+    },
+    "ap_fallback_removal": "DONE: AP netif/AP/APSTA/fallback/persist removed; net_mode STA only; softAP/DHCPS off; app 1,140,624B (-59KB); AP config fields/identity remain second batch",
+    "full_p0_after_ap_removal": {
+      "result": "tools/ble_p0/results/p0_20261023_222123.json",
+      "status": "PASS 8/8",
+      "note": "first 7/8 cancel_race no_slot from prior operations; reset clean 8/8"
+    }
+  }
+}

@@ -592,7 +592,6 @@ static void app_mqtt_publish_attributes(void)
     }
     cJSON_AddStringToObject(root, "fw_version",  fw_version);
     cJSON_AddStringToObject(root, "net_mode",    app_network_mode_to_string(s_config.net_mode));
-    cJSON_AddStringToObject(root, "ap_ssid",     s_config.ap_ssid);
     cJSON_AddStringToObject(root, "sta_ssid",    s_config.sta_ssid);
     cJSON_AddStringToObject(root, "sta_ip",      s_wifi.sta_ip);
     cJSON_AddStringToObject(root, "bt_mode",     app_bt_mode_to_string(s_config.bt_role));

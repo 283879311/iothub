@@ -83,15 +83,12 @@ static bool app_cmd_net_store_trial(const char *ssid, const char *password,
     s_net_trial.expires_ms = esp_timer_get_time() / 1000 + APP_NET_TRIAL_TTL_MS;
     s_net_trial.owner = source;
     s_net_trial.valid = true;
-    app_wifi_suppress_profile_writeback(APP_NET_TRIAL_TTL_MS);
     return true;
 }
 
 static void app_cmd_net_trial_clear(void)
 {
     memset(&s_net_trial, 0, sizeof(s_net_trial));
-    /* trial 结束(取消/过期/apply/断连)后恢复正常 profile 回写。 */
-    app_wifi_resume_profile_writeback();
 }
 
 void app_cmd_net_on_ble_disconnect(void)
@@ -663,8 +660,6 @@ static cJSON *app_cmd_build_get_config(const cJSON *domains)
     sec = cJSON_AddObjectToObject(root, "network");
     if (sec != NULL) {
         cJSON_AddStringToObject(sec, "net_mode", app_network_mode_to_string(cfg.net_mode));
-        cJSON_AddStringToObject(sec, "ap_ssid", cfg.ap_ssid);
-        cJSON_AddBoolToObject(sec, "ap_password_set", cfg.ap_password[0] != '\0');
         cJSON_AddStringToObject(sec, "sta_ssid", cfg.sta_ssid);
         cJSON_AddBoolToObject(sec, "sta_password_set", cfg.sta_password[0] != '\0');
         cJSON_AddBoolToObject(sec, "sta_use_static", cfg.sta_use_static != 0);
@@ -676,14 +671,12 @@ static cJSON *app_cmd_build_get_config(const cJSON *domains)
         {
             bool sta_connected;
             bool sta_has_ip;
-            bool fallback;
             char sta_ip[16];
             char last_disconnect[32];
 
             app_wifi_runtime_lock();
             sta_connected = s_wifi.sta_connected;
             sta_has_ip = s_wifi.sta_has_ip;
-            fallback = s_wifi.startup_fallback_to_ap;
             memcpy(sta_ip, s_wifi.sta_ip, sizeof(sta_ip));
             memcpy(last_disconnect, s_wifi.last_disconnect, sizeof(last_disconnect));
             app_wifi_runtime_unlock();
@@ -691,7 +684,6 @@ static cJSON *app_cmd_build_get_config(const cJSON *domains)
             cJSON_AddBoolToObject(sec, "sta_has_ip", sta_has_ip);
             cJSON_AddStringToObject(sec, "sta_ip", sta_ip);
             cJSON_AddStringToObject(sec, "last_disconnect", last_disconnect);
-            cJSON_AddBoolToObject(sec, "startup_fallback_to_ap", fallback);
         }
     }
 
@@ -1510,7 +1502,7 @@ esp_err_t app_cmd_execute_ex(const cJSON *frame, app_cmd_source_t source,
 
             if (source == APP_CMD_SOURCE_MQTT) {
                 err = "guard_rejected";
-            } else if (app_wifi_perform_scan() != ESP_OK) {
+            } else if (app_wifi_perform_scan_command() != ESP_OK) {
                 err = "wifi_scan_failed";
             } else {
                 app_wifi_runtime_lock();

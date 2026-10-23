@@ -119,9 +119,9 @@ void app_main(void)
     }
     app_log_mem_phase("after_diag");
 
-    ESP_LOGI(TAG, "iothub phase-4 ready: mode=%s, AP SSID='%s' (BLE-only management)",
+    ESP_LOGI(TAG, "iothub phase-4 ready: mode=%s, STA SSID='%s' (BLE-only management)",
              app_network_mode_to_string(s_config.net_mode),
-             s_config.ap_ssid);
+             s_config.sta_ssid);
 
 #ifdef APP_OPERATION_SELFTEST
     ESP_LOGI(TAG, "[boot-14] operation selftest");

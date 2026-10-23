@@ -1,0 +1,488 @@
+{
+  "timestamp": "2026-10-24T00:07:26.670",
+  "started_at": "2026-10-24T00:07:26+08:00",
+  "name": "T3_BLE_CMD_DATA_CHANNELS",
+  "ssid": "CMCC-502",
+  "max_write": 20,
+  "data_frame_size": 200,
+  "reset": {
+    "rc": 0,
+    "tail": "Running stub flasher...\nStub flasher running.\n\nMAC:                b0:a7:32:28:c8:e4\n\nHard resetting via RTS pin...\nWARNING: DEPRECATED: 'esptool.py' is deprecated. Please use 'esptool' instead. The '.py' suffix will be removed in a future major release.\nWARNING: Deprecated: Command 'read_mac' is deprecated. Use 'read-mac' instead."
+  },
+  "board": {
+    "address": "B0:A7:32:28:C8:E6",
+    "name": "IotHubBLE-C8E4"
+  },
+  "gatt": {
+    "mtu": 23,
+    "services": [
+      {
+        "uuid": "6e400001-b5a3-f393-e0a9-e50e24dcca9e",
+        "characteristics": [
+          {
+            "uuid": "6e400002-b5a3-f393-e0a9-e50e24dcca9e",
+            "handle": 2,
+            "properties": [
+              "write",
+              "write-without-response"
+            ],
+            "descriptors": []
+          },
+          {
+            "uuid": "6e400003-b5a3-f393-e0a9-e50e24dcca9e",
+            "handle": 4,
+            "properties": [
+              "notify"
+            ],
+            "descriptors": [
+              "00002902-0000-1000-8000-00805f9b34fb"
+            ]
+          },
+          {
+            "uuid": "6e400004-b5a3-f393-e0a9-e50e24dcca9e",
+            "handle": 7,
+            "properties": [
+              "write",
+              "write-without-response"
+            ],
+            "descriptors": []
+          },
+          {
+            "uuid": "6e400005-b5a3-f393-e0a9-e50e24dcca9e",
+            "handle": 9,
+            "properties": [
+              "notify"
+            ],
+            "descriptors": [
+              "00002902-0000-1000-8000-00805f9b34fb"
+            ]
+          }
+        ]
+      }
+    ],
+    "data_rx": {
+      "uuid": "6e400002-b5a3-f393-e0a9-e50e24dcca9e",
+      "handle": 2,
+      "properties": [
+        "write",
+        "write-without-response"
+      ],
+      "descriptors": []
+    },
+    "data_tx": {
+      "uuid": "6e400003-b5a3-f393-e0a9-e50e24dcca9e",
+      "handle": 4,
+      "properties": [
+        "notify"
+      ],
+      "descriptors": [
+        "00002902-0000-1000-8000-00805f9b34fb"
+      ]
+    },
+    "cmd_rx": {
+      "uuid": "6e400004-b5a3-f393-e0a9-e50e24dcca9e",
+      "handle": 7,
+      "properties": [
+        "write",
+        "write-without-response"
+      ],
+      "descriptors": []
+    },
+    "cmd_tx": {
+      "uuid": "6e400005-b5a3-f393-e0a9-e50e24dcca9e",
+      "handle": 9,
+      "properties": [
+        "notify"
+      ],
+      "descriptors": [
+        "00002902-0000-1000-8000-00805f9b34fb"
+      ]
+    },
+    "checks": {
+      "service_present": true,
+      "data_rx_write": true,
+      "data_tx_notify": true,
+      "cmd_rx_write": true,
+      "cmd_tx_notify": true,
+      "data_tx_cccd": true,
+      "cmd_tx_cccd": true,
+      "data_tx_no_indicate": true,
+      "cmd_tx_no_indicate": true
+    }
+  },
+  "mtu": 23,
+  "host_reported_mtu": 23,
+  "mtu_note": "Bleak/BlueZ may report the default 23; the observed CMD notify chunk sizes are the authoritative negotiated payload.",
+  "device_info": {
+    "id": "t3-info-2",
+    "ok": true,
+    "data": {
+      "model": "iothub",
+      "firmware": "1.2",
+      "device_id": "IotHub-C8E4",
+      "protocol_versions": [
+        "1.0"
+      ],
+      "security": {
+        "link_encrypted": false,
+        "bonded": false,
+        "l2_ready": false,
+        "sensitive_writes_allowed": false
+      }
+    }
+  },
+  "loopback_enable": {
+    "ok": true,
+    "error_code": null,
+    "data": {
+      "loopback": true
+    }
+  },
+  "data_single": {
+    "sent_len": 20,
+    "echo_len": 20,
+    "exact": true,
+    "latency_s": 0.115,
+    "notify_sizes": [
+      20
+    ],
+    "sent_hex": "b0d5fa1f44698eb3d8fd22476c91b6db00254a6f",
+    "echo_hex": "b0d5fa1f44698eb3d8fd22476c91b6db00254a6f"
+  },
+  "data_long": {
+    "sent_len": 200,
+    "write_chunks": 10,
+    "write_sizes": [
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20
+    ],
+    "echo_len": 200,
+    "exact": true,
+    "latency_s": 1.0534,
+    "notify_count": 10,
+    "notify_sizes": [
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20
+    ],
+    "write_rows": [
+      {
+        "len": 20,
+        "t0": 92904.803,
+        "t1": 92904.867
+      },
+      {
+        "len": 20,
+        "t0": 92904.867,
+        "t1": 92904.956
+      },
+      {
+        "len": 20,
+        "t0": 92904.956,
+        "t1": 92905.046
+      },
+      {
+        "len": 20,
+        "t0": 92905.046,
+        "t1": 92905.136
+      },
+      {
+        "len": 20,
+        "t0": 92905.136,
+        "t1": 92905.227
+      },
+      {
+        "len": 20,
+        "t0": 92905.227,
+        "t1": 92905.361
+      },
+      {
+        "len": 20,
+        "t0": 92905.361,
+        "t1": 92905.496
+      },
+      {
+        "len": 20,
+        "t0": 92905.496,
+        "t1": 92905.586
+      },
+      {
+        "len": 20,
+        "t0": 92905.586,
+        "t1": 92905.676
+      },
+      {
+        "len": 20,
+        "t0": 92905.676,
+        "t1": 92905.812
+      }
+    ]
+  },
+  "data_duplicate": {
+    "frame_len": 20,
+    "echo_len": 40,
+    "two_copies": true,
+    "notify_sizes": [
+      20,
+      20
+    ]
+  },
+  "data_continuous": {
+    "frames": 10,
+    "frame_size": 60,
+    "write_chunks": 30,
+    "sent_len": 600,
+    "echo_len": 600,
+    "exact": true,
+    "notify_count": 30,
+    "notify_sizes": [
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20
+    ],
+    "latency_s": 3.3485
+  },
+  "data_max": {
+    "host_reported_mtu": 23,
+    "payload_limit": 240,
+    "sent_len": 240,
+    "echo_len": 240,
+    "exact": true,
+    "notify_sizes": [
+      240
+    ],
+    "latency_s": 0.2502
+  },
+  "data_unsubscribed": {
+    "gatt_write_ok_while_unsubscribed": true,
+    "echo_while_unsubscribed": 0,
+    "resubscribe_marker_exact": true,
+    "stale_after_resubscribe": false,
+    "note": "DATA TX subscription gates delivery; GATT write success is not delivery"
+  },
+  "data_burst": {
+    "requested_writes": 32,
+    "sent_len": 640,
+    "echo_len": 640,
+    "exact": true,
+    "notify_count": 32,
+    "notify_sizes": [
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20,
+      20
+    ],
+    "latency_s": 0.7155,
+    "note": "write-without-response: delivery is not guaranteed by ATT"
+  },
+  "cmd_long_command": {
+    "target_len": 275,
+    "actual_len": 275,
+    "write_chunks": 14,
+    "latency_s": 1.6116,
+    "ok": false,
+    "error_code": "unknown_method",
+    "note": "unknown method; no config mutation; verifies 20B line reassembly"
+  },
+  "cmd_concurrent": {
+    "operation_id": "op-EE704A516EC67225",
+    "tryconnect": {
+      "id": "t3-tc-4",
+      "ok": true,
+      "data": {
+        "operation_id": "op-EE704A516EC67225",
+        "state": "accepted"
+      }
+    },
+    "cmd_first_fragment": true,
+    "cmd_fragments": [
+      {
+        "t": 92916.9303,
+        "len": 253
+      },
+      {
+        "t": 92917.0185,
+        "len": 253
+      },
+      {
+        "t": 92917.108,
+        "len": 253
+      },
+      {
+        "t": 92917.1532,
+        "len": 253
+      },
+      {
+        "t": 92917.156,
+        "len": 95
+      },
+      {
+        "t": 92918.8663,
+        "len": 111
+      }
+    ],
+    "cmd_fragment_count": 6,
+    "cmd_fragment_sizes": [
+      253,
+      253,
+      253,
+      253,
+      95,
+      111
+    ],
+    "long_response_len": 1107,
+    "long_response_ok": true,
+    "long_response_error": null,
+    "opget_state": "connecting",
+    "opget_error": "none",
+    "opget_sent_during_long": false,
+    "opget_done_before_long": false,
+    "opget_latency_s": 1.0408,
+    "data_sent_len": 100,
+    "data_echo_len": 100,
+    "data_exact": true,
+    "data_notify_sizes": [
+      20,
+      20,
+      20,
+      20,
+      20
+    ],
+    "cancel": {
+      "id": "t3-cancel-7",
+      "ok": true,
+      "data": {
+        "operation_id": "op-EE704A516EC67225",
+        "state": "cancelled"
+      }
+    },
+    "long_started": 92915.894,
+    "long_finished": 92917.156
+  },
+  "observed_cmd_notify_max": 253,
+  "observed_data_notify_max": 20,
+  "disconnect_cmd": {
+    "fragments_before_disconnect": 5,
+    "reconnect_device_info_ok": true,
+    "reconnect_device_info_error": null,
+    "new_session_response_ids": [
+      "t3-dc-info-2"
+    ],
+    "old_partial_json_leaked": false
+  },
+  "disconnect_data": {
+    "burst_sent_len": 320,
+    "pre_marker_bytes": 0,
+    "marker_len": 20,
+    "echo_after_reconnect": 20,
+    "marker_exact": true,
+    "stale_bytes_after_reconnect": false,
+    "note": "source audit: data_pipe has no disconnect flush or session id"
+  },
+  "loopback_disable": {
+    "ok": true,
+    "data": {
+      "loopback": false
+    }
+  },
+  "checks": {
+    "gatt_all": true,
+    "data_single_exact": true,
+    "data_long_exact": true,
+    "data_duplicate_two_copies": true,
+    "data_continuous_exact": true,
+    "data_max_exact": true,
+    "data_unsubscribed_dropped": true,
+    "data_resubscribe_no_stale": true,
+    "cmd_long_command_received": true,
+    "cmd_long_response_ok": true,
+    "cmd_opget_during_long": true,
+    "cmd_opget_state": true,
+    "cmd_data_concurrent": true,
+    "cmd_disconnect_clean": true,
+    "data_disconnect_clean": true
+  },
+  "reliability_boundary": {
+    "data_layer": "raw byte pipe (data_pipe), no app ACK/sequence/retransmit/framing",
+    "gatt_write_success_is_delivery": false,
+    "data_pipe_queue_depth": 16,
+    "data_pipe_chunk_max": 256,
+    "data_notify_chunking": "MTU-3, cap 512, no inter-chunk delay",
+    "data_disconnect_flush": "not implemented in data_pipe (source audit)",
+    "cmd_layer": "JSON line reassembly 512B; TX queue 8; 20ms inter-fragment; FIFO",
+    "cmd_disconnect_flush": "line buffer + TX queue cleared"
+  },
+  "pass": true,
+  "finished_at": "2026-10-24T00:08:22+08:00",
+  "_path": "/home/tc/esp/workspace/iothub/tools/ble_p0/results/t3_ble_channels_20261024_000822.json"
+}

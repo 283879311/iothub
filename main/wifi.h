@@ -8,14 +8,14 @@
 
 #include "runtime.h"
 
-extern esp_netif_t *s_ap_netif;
 extern wifi_runtime_t s_wifi;
 
 const char *app_network_mode_to_string(uint8_t mode);
 uint8_t app_network_mode_from_string(const char *mode);
 bool app_network_mode_has_sta(uint8_t mode);
-bool app_network_mode_has_ap(uint8_t mode);
 esp_err_t app_wifi_perform_scan(void);
+/* BLE/串口维护命令扫描:暂停自动重连、等待当前 connect task、独占扫描。 */
+esp_err_t app_wifi_perform_scan_command(void);
 void app_wifi_restart_task(void *arg);
 bool app_wifi_schedule_restart(void);
 void app_start_wifi(void);
@@ -50,9 +50,3 @@ app_wifi_try_result_t app_wifi_try_connect_ip(const char *ssid, const char *pass
                                               uint32_t timeout_ms);
 /* 请求取消正在进行的 tryconnect；true 表示当时有活动试连。 */
 bool app_wifi_try_cancel(void);
-
-/* 网络候选 trial 未决期间，禁止 GOT_IP 把“当前自动连接的 profile”回写主配置。
- * 否则 tryconnect 恢复后 auto_connect 选中另一张网，会绕过 apply 直接覆盖正式配置。
- * 超时自动失效，不依赖调用方一定来 resume。 */
-void app_wifi_suppress_profile_writeback(uint32_t duration_ms);
-void app_wifi_resume_profile_writeback(void);

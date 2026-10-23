@@ -1,0 +1,147 @@
+{
+  "timestamp": "2026-10-23T22:09:13.502",
+  "name": "BLE_RESCUE_CHAIN",
+  "target_ssid": "TQ2018",
+  "observe_wait_s": 100.0,
+  "bad_ssid": "P0-NOAP-412FC13C",
+  "before": {
+    "status": {
+      "sta_connected": false,
+      "sta_has_ip": false,
+      "sta_ip": "0.0.0.0",
+      "last_disconnect": "201(NO_AP_FOUND)",
+      "sta_ssid": "TQ2018",
+      "password_set": true,
+      "mode": "sta",
+      "mqtt_connected": false,
+      "mqtt_last_error": "waiting_sta_ip",
+      "trial": {
+        "state": "idle"
+      }
+    },
+    "network": {
+      "net_mode": "sta",
+      "ap_ssid": "IotHub-C8E4",
+      "ap_password_set": false,
+      "sta_ssid": "TQ2018",
+      "sta_password_set": true,
+      "sta_use_static": false,
+      "sta_static_ip": "192.168.43.213",
+      "sta_static_gateway": "192.168.43.1",
+      "sta_static_netmask": "255.255.255.0",
+      "sta_static_dns1": "192.168.43.1",
+      "sta_static_dns2": "8.8.8.8",
+      "sta_connected": false,
+      "sta_has_ip": false,
+      "sta_ip": "0.0.0.0",
+      "last_disconnect": "201(NO_AP_FOUND)",
+      "startup_fallback_to_ap": false
+    },
+    "mqtt": {
+      "mqtt_backend": "tb_selfhost",
+      "mqtt_host": "117.131.99.2",
+      "mqtt_port": 21883,
+      "mqtt_use_tls": false,
+      "mqtt_token_set": true,
+      "connected": false,
+      "publish_count": 0,
+      "outbox": 0,
+      "last_error": "waiting_sta_ip"
+    }
+  },
+  "bad_config_set": {
+    "ok": true,
+    "response": {
+      "id": 78,
+      "ok": true,
+      "result": {
+        "success": true,
+        "changed": [
+          "sta_ssid",
+          "sta_password"
+        ],
+        "effect": "reboot",
+        "relay_on": false,
+        "led_on": false,
+        "input_active": false,
+        "io_seq": 0,
+        "io_source": "boot",
+        "saved": true,
+        "applied": false,
+        "restart_required": true,
+        "rollback": "none",
+        "operation_type": "reboot"
+      }
+    }
+  },
+  "failed_state": {
+    "status": {
+      "sta_connected": true,
+      "sta_has_ip": true,
+      "sta_ip": "192.168.1.28",
+      "last_disconnect": "none",
+      "sta_ssid": "P0-NOAP-412FC13C",
+      "password_set": true,
+      "mode": "sta",
+      "mqtt_connected": true,
+      "mqtt_last_error": "",
+      "trial": {
+        "state": "idle"
+      }
+    },
+    "network": {
+      "net_mode": "sta",
+      "ap_ssid": "IotHub-C8E4",
+      "ap_password_set": false,
+      "sta_ssid": "P0-NOAP-412FC13C",
+      "sta_password_set": true,
+      "sta_use_static": false,
+      "sta_static_ip": "192.168.43.213",
+      "sta_static_gateway": "192.168.43.1",
+      "sta_static_netmask": "255.255.255.0",
+      "sta_static_dns1": "192.168.43.1",
+      "sta_static_dns2": "8.8.8.8",
+      "sta_connected": true,
+      "sta_has_ip": true,
+      "sta_ip": "192.168.1.28",
+      "last_disconnect": "none",
+      "startup_fallback_to_ap": false
+    },
+    "mqtt": {
+      "mqtt_backend": "tb_selfhost",
+      "mqtt_host": "117.131.99.2",
+      "mqtt_port": 21883,
+      "mqtt_use_tls": false,
+      "mqtt_token_set": true,
+      "connected": true,
+      "publish_count": 9,
+      "outbox": 0,
+      "last_error": ""
+    }
+  },
+  "failed_state_checks": {
+    "ble_connected": true,
+    "ssid_is_bad": true,
+    "mode_is_sta": true,
+    "no_ip": false,
+    "mqtt_down": false,
+    "ap_fallback_field": false
+  },
+  "scan": {
+    "ok": true,
+    "target_visible": false,
+    "ssids": [
+      "CMCC-502",
+      "CMCC-GhyE",
+      "ChinaNet-eykP",
+      "TP-LINK_BFBD",
+      "CU_2MWf",
+      "CMCC-eYXF",
+      "CMCC-xYA7",
+      "ChinaNGB-UM8Qvf"
+    ]
+  },
+  "pass": false,
+  "reason": "target SSID not visible during BLE rescue",
+  "_path": "/home/tc/esp/workspace/iothub/tools/ble_p0/results/ble_rescue_20261023_221124.json"
+}

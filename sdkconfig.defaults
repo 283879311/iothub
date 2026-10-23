@@ -103,7 +103,9 @@ CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
 # BT 主机栈(1.3-62):默认 NimBLE(稳定性优先)
 # Bluedroid 回退 profile 的完整种子见 sdkconfig.bluedroid;
 # 构建命令:IDF_BUILD_DIR=build-bluedroid tools/idfbuild.sh build
+# 守卫:BT 总开关必须显式打开;否则全新生成 sdkconfig 时 NimBLE 配置不会生效。
 # ============================================================================
+CONFIG_BT_ENABLED=y
 CONFIG_BT_NIMBLE_ENABLED=y
 CONFIG_BT_BLUEDROID_ENABLED=n
 CONFIG_BT_NIMBLE_MAX_CONNECTIONS=3
@@ -117,3 +119,8 @@ CONFIG_BT_NIMBLE_ATT_PREFERRED_MTU=256
 CONFIG_BT_NIMBLE_HOST_TASK_STACK_SIZE=4096
 CONFIG_BT_NIMBLE_MSYS_1_BLOCK_COUNT=32
 CONFIG_BT_NIMBLE_LOG_LEVEL_INFO=y
+
+# AP/Web/HTTP removed: no config channel in AP. STA-only + BLE/serial rescue.
+CONFIG_ESP_WIFI_SOFTAP_SUPPORT=n
+CONFIG_ESP_WIFI_SOFTAP_SAE_SUPPORT=n
+CONFIG_LWIP_DHCPS=n

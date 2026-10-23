@@ -45,7 +45,8 @@ static app_config_snapshot_blob_t s_config_snapshot;
  *     + contains legacy uart_rx_gpio / uart_tx_gpio (int32)
  *     + no GPIO pin fields for relay/led/input (pins were fixed-constant in v3 era)
  *     + all configs below have the common prefix (relay_active_high..uart_baudrate)
- *       and the common 8 strings (ap_ssid..mqtt_token) — see common macros below
+ *       and the legacy AP/STA/MQTT string block. AP slots are NVS-layout-only now;
+ *       current runtime uses sta_ssid..mqtt_token (see migrate helpers below).
  *
  *   v4 (sizeof(app_config_v4_t)):
  *     + keeps uart_rx_gpio / uart_tx_gpio from v3
@@ -86,6 +87,8 @@ static app_config_snapshot_blob_t s_config_snapshot;
  *       输出上次状态不再写主 blob,而是独立 NVS 键(仅状态记忆策略写)。
  */
 
+/* Legacy v3-v6 mirrors: the AP slots below are kept only to read old blob
+ * layouts; app_config_migrate_* never copies them into the current config. */
 typedef struct {
     uint32_t magic;
     uint16_t version;
@@ -277,18 +280,6 @@ void app_wifi_profiles_unlock(void)
         APP_ASSIGN_UINT32(uart_baudrate);                        \
     } while (0)
 
-#define APP_MIGRATE_COMMON_STRINGS()                             \
-    do {                                                         \
-        APP_COPY_STR(ap_ssid);                                   \
-        APP_COPY_STR(ap_password);                               \
-        APP_COPY_STR(sta_ssid);                                  \
-        APP_COPY_STR(sta_password);                              \
-        APP_COPY_STR(bt_device_name);                            \
-        APP_COPY_STR(mqtt_backend);                              \
-        APP_COPY_STR(mqtt_host);                                 \
-        APP_COPY_STR(mqtt_token);                                \
-    } while (0)
-
 #define APP_MIGRATE_FIXED_FRAME()                                \
     do {                                                         \
         config->uart_data_bits = 8;                              \
@@ -423,7 +414,6 @@ void app_config_set_defaults(app_config_t *config)
     /* v11:输出上电策略,默认固定关闭(安全默认);不写上次状态。 */
     config->relay_power_policy = APP_GPIO_POWER_FIXED_OFF;
     config->led_power_policy = APP_GPIO_POWER_FIXED_OFF;
-    app_copy_string(config->ap_ssid, sizeof(config->ap_ssid), "iothub");
     app_copy_string(config->bt_device_name, sizeof(config->bt_device_name), "iothub-bt");
     app_copy_string(config->mqtt_backend, sizeof(config->mqtt_backend), "tb_cloud");
     app_copy_string(config->mqtt_host, sizeof(config->mqtt_host), "demo.thingsboard.io");
@@ -433,6 +423,33 @@ void app_config_set_defaults(app_config_t *config)
     esp_fill_random(config->web_pass_salt, sizeof(config->web_pass_salt));
     app_web_hash_password(config->web_pass_salt, sizeof(config->web_pass_salt),
                           CONFIG_WEB_DEFAULT_PASSWORD, config->web_pass_hash);
+}
+
+bool app_config_scrub_legacy_ap(app_config_t *config)
+{
+    bool changed = false;
+    size_t i;
+
+    if (config == NULL) {
+        return false;
+    }
+    for (i = 0; i < sizeof(config->reserved_ap_ssid); i++) {
+        if (config->reserved_ap_ssid[i] != '\0') {
+            changed = true;
+            break;
+        }
+    }
+    for (i = 0; i < sizeof(config->reserved_ap_password); i++) {
+        if (config->reserved_ap_password[i] != '\0') {
+            changed = true;
+            break;
+        }
+    }
+    if (changed) {
+        memset(config->reserved_ap_ssid, 0, sizeof(config->reserved_ap_ssid));
+        memset(config->reserved_ap_password, 0, sizeof(config->reserved_ap_password));
+    }
+    return changed;
 }
 
 static inline void app_config_mark_current_version(app_config_t *config)
@@ -523,8 +540,6 @@ esp_err_t app_config_save(const app_config_t *config)
 }
 
 static inline void app_config_migrate_set_strings_from_ptr(app_config_t *config,
-                                                           const char *ap_ssid,
-                                                           const char *ap_password,
                                                            const char *sta_ssid,
                                                            const char *sta_password,
                                                            const char *bt_device_name,
@@ -532,8 +547,6 @@ static inline void app_config_migrate_set_strings_from_ptr(app_config_t *config,
                                                            const char *mqtt_host,
                                                            const char *mqtt_token)
 {
-    app_copy_string(config->ap_ssid,        sizeof(config->ap_ssid),        ap_ssid);
-    app_copy_string(config->ap_password,    sizeof(config->ap_password),    ap_password);
     app_copy_string(config->sta_ssid,       sizeof(config->sta_ssid),       sta_ssid);
     app_copy_string(config->sta_password,   sizeof(config->sta_password),   sta_password);
     app_copy_string(config->bt_device_name, sizeof(config->bt_device_name), bt_device_name);
@@ -543,8 +556,6 @@ static inline void app_config_migrate_set_strings_from_ptr(app_config_t *config,
 }
 
 static inline void app_config_migrate_apply_common(app_config_t *config,
-                                                   const char *ap_ssid,
-                                                   const char *ap_password,
                                                    const char *sta_ssid,
                                                    const char *sta_password,
                                                    const char *bt_device_name,
@@ -555,15 +566,14 @@ static inline void app_config_migrate_apply_common(app_config_t *config,
     app_config_set_defaults(config);
     APP_MIGRATE_FIXED_FRAME();
     app_config_migrate_set_strings_from_ptr(config,
-        ap_ssid, ap_password, sta_ssid, sta_password,
-        bt_device_name, mqtt_backend, mqtt_host, mqtt_token);
+        sta_ssid, sta_password, bt_device_name, mqtt_backend, mqtt_host, mqtt_token);
     app_config_mark_current_version(config);
 }
 
 static void app_config_migrate_v3(app_config_t *config, const app_config_v3_t *legacy)
 {
     app_config_migrate_apply_common(config,
-        legacy->ap_ssid, legacy->ap_password, legacy->sta_ssid, legacy->sta_password,
+        legacy->sta_ssid, legacy->sta_password,
         legacy->bt_device_name, legacy->mqtt_backend, legacy->mqtt_host, legacy->mqtt_token);
     APP_MIGRATE_COMMON_PREFIX();
 }
@@ -571,7 +581,7 @@ static void app_config_migrate_v3(app_config_t *config, const app_config_v3_t *l
 static void app_config_migrate_v4(app_config_t *config, const app_config_v4_t *legacy)
 {
     app_config_migrate_apply_common(config,
-        legacy->ap_ssid, legacy->ap_password, legacy->sta_ssid, legacy->sta_password,
+        legacy->sta_ssid, legacy->sta_password,
         legacy->bt_device_name, legacy->mqtt_backend, legacy->mqtt_host, legacy->mqtt_token);
     APP_MIGRATE_COMMON_PREFIX();
 }
@@ -579,7 +589,7 @@ static void app_config_migrate_v4(app_config_t *config, const app_config_v4_t *l
 static void app_config_migrate_v5(app_config_t *config, const app_config_v5_t *legacy)
 {
     app_config_migrate_apply_common(config,
-        legacy->ap_ssid, legacy->ap_password, legacy->sta_ssid, legacy->sta_password,
+        legacy->sta_ssid, legacy->sta_password,
         legacy->bt_device_name, legacy->mqtt_backend, legacy->mqtt_host, legacy->mqtt_token);
     APP_MIGRATE_COMMON_PREFIX();
 }

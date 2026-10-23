@@ -1,0 +1,338 @@
+{
+  "timestamp": "2026-10-23T23:11:38.179",
+  "started_at": "2026-10-23T23:11:38+08:00",
+  "name": "T2_OPERATION_SLOT_RECLAIM",
+  "ssid": "CMCC-502",
+  "retention_s": 600.0,
+  "margin_s": 15.0,
+  "reset": {
+    "rc": 0,
+    "tail": "Running stub flasher...\nStub flasher running.\n\nMAC:                b0:a7:32:28:c8:e4\n\nHard resetting via RTS pin...\nWARNING: DEPRECATED: 'esptool.py' is deprecated. Please use 'esptool' instead. The '.py' suffix will be removed in a future major release.\nWARNING: Deprecated: Command 'read_mac' is deprecated. Use 'read-mac' instead."
+  },
+  "board": {
+    "address": "B0:A7:32:28:C8:E6",
+    "name": "IotHubBLE-C8E4"
+  },
+  "baseline": {
+    "sta_connected": true,
+    "sta_has_ip": true,
+    "sta_ip": "192.168.1.28",
+    "last_disconnect": "none",
+    "sta_ssid": "CMCC-502",
+    "password_set": true,
+    "mode": "sta",
+    "mqtt_connected": true,
+    "mqtt_last_error": "",
+    "trial": {
+      "state": "idle"
+    }
+  },
+  "A": {
+    "ok": true,
+    "operation_id": "op-C787453E9825C9D8",
+    "state": "accepted",
+    "error": null,
+    "created_at": "2026-10-23T23:11:59+08:00"
+  },
+  "B_while_active": {
+    "ok": false,
+    "error_code": "busy",
+    "operation_id": null
+  },
+  "A_terminal": {
+    "state": "failed",
+    "error": "wrong_password",
+    "at": "2026-10-23T23:12:15+08:00",
+    "elapsed_s": 14.806,
+    "states": [
+      {
+        "t_s": 0.36,
+        "state": "connecting",
+        "error": "none"
+      },
+      {
+        "t_s": 1.215,
+        "state": "connecting",
+        "error": "none"
+      },
+      {
+        "t_s": 1.935,
+        "state": "connecting",
+        "error": "none"
+      },
+      {
+        "t_s": 2.611,
+        "state": "connecting",
+        "error": "none"
+      },
+      {
+        "t_s": 3.24,
+        "state": "connecting",
+        "error": "none"
+      },
+      {
+        "t_s": 3.87,
+        "state": "connecting",
+        "error": "none"
+      },
+      {
+        "t_s": 4.631,
+        "state": "connecting",
+        "error": "none"
+      },
+      {
+        "t_s": 5.221,
+        "state": "connecting",
+        "error": "none"
+      },
+      {
+        "t_s": 5.85,
+        "state": "connecting",
+        "error": "none"
+      },
+      {
+        "t_s": 6.617,
+        "state": "connecting",
+        "error": "none"
+      },
+      {
+        "t_s": 7.331,
+        "state": "connecting",
+        "error": "none"
+      },
+      {
+        "t_s": 7.963,
+        "state": "connecting",
+        "error": "none"
+      },
+      {
+        "t_s": 8.549,
+        "state": "connecting",
+        "error": "none"
+      },
+      {
+        "t_s": 9.407,
+        "state": "connecting",
+        "error": "none"
+      },
+      {
+        "t_s": 10.124,
+        "state": "connecting",
+        "error": "none"
+      },
+      {
+        "t_s": 10.935,
+        "state": "connecting",
+        "error": "none"
+      },
+      {
+        "t_s": 11.655,
+        "state": "connecting",
+        "error": "none"
+      },
+      {
+        "t_s": 12.285,
+        "state": "connecting",
+        "error": "none"
+      },
+      {
+        "t_s": 12.96,
+        "state": "connecting",
+        "error": "none"
+      },
+      {
+        "t_s": 13.59,
+        "state": "connecting",
+        "error": "none"
+      },
+      {
+        "t_s": 14.219,
+        "state": "connecting",
+        "error": "none"
+      },
+      {
+        "t_s": 14.806,
+        "state": "failed",
+        "error": "wrong_password"
+      }
+    ]
+  },
+  "C_D_E": [
+    {
+      "name": "C",
+      "ok": true,
+      "operation_id": "op-5659F9A51B2F7A02",
+      "state": "accepted",
+      "created_at": "2026-10-23T23:12:15+08:00",
+      "cancel_ok": true,
+      "cancel_state": "cancelled",
+      "cancel_error_code": null,
+      "terminal_state": "cancelled",
+      "terminal_error": "cancelled",
+      "terminal_at": "2026-10-23T23:12:16+08:00",
+      "terminal_elapsed_s": 0.361,
+      "terminal_mono": 89570.60207396,
+      "states": [
+        {
+          "t_s": 0.361,
+          "state": "cancelled",
+          "error": "cancelled"
+        }
+      ]
+    },
+    {
+      "name": "D",
+      "ok": true,
+      "operation_id": "op-418D9A786648AAB8",
+      "state": "accepted",
+      "created_at": "2026-10-23T23:12:16+08:00",
+      "cancel_ok": true,
+      "cancel_state": "cancelled",
+      "cancel_error_code": null,
+      "terminal_state": "cancelled",
+      "terminal_error": "cancelled",
+      "terminal_at": "2026-10-23T23:12:17+08:00",
+      "terminal_elapsed_s": 0.363,
+      "terminal_mono": 89571.816276355,
+      "states": [
+        {
+          "t_s": 0.363,
+          "state": "cancelled",
+          "error": "cancelled"
+        }
+      ]
+    },
+    {
+      "name": "E",
+      "ok": true,
+      "operation_id": "op-71F820DC49287F48",
+      "state": "accepted",
+      "created_at": "2026-10-23T23:12:17+08:00",
+      "cancel_ok": true,
+      "cancel_state": "cancelled",
+      "cancel_error_code": null,
+      "terminal_state": "cancelled",
+      "terminal_error": "cancelled",
+      "terminal_at": "2026-10-23T23:12:18+08:00",
+      "terminal_elapsed_s": 0.405,
+      "terminal_mono": 89572.985332392,
+      "states": [
+        {
+          "t_s": 0.405,
+          "state": "cancelled",
+          "error": "cancelled"
+        }
+      ]
+    }
+  ],
+  "F_no_slot": {
+    "ok": false,
+    "error_code": "no_slot",
+    "operation_id": null
+  },
+  "A_reclaim": {
+    "reclaimed": true,
+    "elapsed_s_from_terminal": 602.729,
+    "boundary_ok": true,
+    "samples": [
+      {
+        "at": "2026-10-23T23:22:07+08:00",
+        "elapsed_s_from_terminal": 592.066,
+        "ok": true,
+        "state": "failed",
+        "error_code": null
+      },
+      {
+        "at": "2026-10-23T23:22:09+08:00",
+        "elapsed_s_from_terminal": 594.18,
+        "ok": true,
+        "state": "failed",
+        "error_code": null
+      },
+      {
+        "at": "2026-10-23T23:22:11+08:00",
+        "elapsed_s_from_terminal": 596.251,
+        "ok": true,
+        "state": "failed",
+        "error_code": null
+      },
+      {
+        "at": "2026-10-23T23:22:13+08:00",
+        "elapsed_s_from_terminal": 598.32,
+        "ok": true,
+        "state": "failed",
+        "error_code": null
+      },
+      {
+        "at": "2026-10-23T23:22:15+08:00",
+        "elapsed_s_from_terminal": 600.526,
+        "ok": true,
+        "state": "failed",
+        "error_code": null
+      },
+      {
+        "at": "2026-10-23T23:22:17+08:00",
+        "elapsed_s_from_terminal": 602.729,
+        "ok": false,
+        "state": null,
+        "error_code": "not_found"
+      }
+    ]
+  },
+  "F2_after_A_reclaim": {
+    "ok": true,
+    "operation_id": "op-1A6892C366B3303F",
+    "state": "accepted",
+    "error_code": null,
+    "created_at": "2026-10-23T23:22:18+08:00"
+  },
+  "F2_cancel": {
+    "ok": true,
+    "state": "cancelled",
+    "error_code": null
+  },
+  "F2_terminal": {
+    "state": "cancelled",
+    "elapsed_s": 0.361
+  },
+  "C_reclaim": {
+    "reclaimed": true,
+    "elapsed_s_from_terminal": 602.866,
+    "boundary_ok": true,
+    "samples": [
+      {
+        "at": "2026-10-23T23:22:19+08:00",
+        "elapsed_s_from_terminal": 602.866,
+        "ok": false,
+        "state": null,
+        "error_code": "not_found"
+      }
+    ]
+  },
+  "G_after_C_reclaim": {
+    "ok": true,
+    "operation_id": "op-15B427580EE375F5",
+    "state": "accepted",
+    "error_code": null,
+    "created_at": "2026-10-23T23:22:19+08:00"
+  },
+  "checks": {
+    "B_busy_not_no_slot": true,
+    "F_no_slot": true,
+    "A_terminal": true,
+    "C_cancelled": true,
+    "D_cancelled": true,
+    "E_cancelled": true,
+    "A_reclaimed": true,
+    "A_old_not_found": true,
+    "A_reclaim_not_early": true,
+    "F2_accepted": true,
+    "C_reclaimed": true,
+    "C_old_not_found": true,
+    "C_reclaim_not_early": true,
+    "G_accepted": true
+  },
+  "pass": true,
+  "finished_at": "2026-10-23T23:22:20+08:00",
+  "_path": "/home/tc/esp/workspace/iothub/tools/ble_p0/results/t2_slot_reclaim_20261023_232220.json"
+}

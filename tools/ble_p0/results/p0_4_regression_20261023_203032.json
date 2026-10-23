@@ -1,0 +1,1012 @@
+{
+  "timestamp": "2026-10-23T20:28:03.984",
+  "name": "P0_4_REGRESSION",
+  "times_s": [
+    0,
+    4,
+    12,
+    20
+  ],
+  "baseline": {
+    "status": {
+      "sta_connected": true,
+      "sta_has_ip": true,
+      "sta_ip": "192.168.43.213",
+      "last_disconnect": "none",
+      "sta_ssid": "TQ2018",
+      "password_set": true,
+      "mode": "sta",
+      "mqtt_connected": true,
+      "mqtt_last_error": "",
+      "trial": {
+        "state": "idle"
+      }
+    },
+    "network": {
+      "net_mode": "sta",
+      "ap_ssid": "IotHub-C8E4",
+      "ap_password_set": false,
+      "sta_ssid": "TQ2018",
+      "sta_password_set": true,
+      "sta_use_static": true,
+      "sta_static_ip": "192.168.43.213",
+      "sta_static_gateway": "192.168.43.1",
+      "sta_static_netmask": "255.255.255.0",
+      "sta_static_dns1": "192.168.43.1",
+      "sta_static_dns2": "8.8.8.8",
+      "sta_connected": true,
+      "sta_has_ip": true,
+      "sta_ip": "192.168.43.213",
+      "last_disconnect": "none",
+      "startup_fallback_to_ap": false
+    },
+    "mqtt": {
+      "mqtt_backend": "tb_selfhost",
+      "mqtt_host": "117.131.99.2",
+      "mqtt_port": 21883,
+      "mqtt_use_tls": false,
+      "mqtt_token_set": true,
+      "connected": true,
+      "publish_count": 5,
+      "outbox": 0,
+      "last_error": ""
+    }
+  },
+  "baseline_formal_ok": true,
+  "failed_candidate": {
+    "tryconnect": {
+      "id": "failed-wrong-4",
+      "ok": true,
+      "data": {
+        "operation_id": "op-C9210E448EA18103",
+        "state": "accepted"
+      }
+    },
+    "operation_id": "op-C9210E448EA18103",
+    "states": [
+      {
+        "t": 0.36,
+        "state": "connecting",
+        "error": "none"
+      },
+      {
+        "t": 1.036,
+        "state": "connecting",
+        "error": "none"
+      },
+      {
+        "t": 1.666,
+        "state": "connecting",
+        "error": "none"
+      },
+      {
+        "t": 2.296,
+        "state": "connecting",
+        "error": "none"
+      },
+      {
+        "t": 2.971,
+        "state": "connecting",
+        "error": "none"
+      },
+      {
+        "t": 3.6,
+        "state": "connecting",
+        "error": "none"
+      },
+      {
+        "t": 4.23,
+        "state": "connecting",
+        "error": "none"
+      },
+      {
+        "t": 4.907,
+        "state": "connecting",
+        "error": "none"
+      },
+      {
+        "t": 5.535,
+        "state": "connecting",
+        "error": "none"
+      },
+      {
+        "t": 6.121,
+        "state": "connecting",
+        "error": "none"
+      },
+      {
+        "t": 6.751,
+        "state": "connecting",
+        "error": "none"
+      },
+      {
+        "t": 7.381,
+        "state": "connecting",
+        "error": "none"
+      },
+      {
+        "t": 8.056,
+        "state": "connecting",
+        "error": "none"
+      },
+      {
+        "t": 8.685,
+        "state": "connecting",
+        "error": "none"
+      },
+      {
+        "t": 9.27,
+        "state": "connecting",
+        "error": "none"
+      },
+      {
+        "t": 9.906,
+        "state": "connecting",
+        "error": "none"
+      },
+      {
+        "t": 10.576,
+        "state": "connecting",
+        "error": "none"
+      },
+      {
+        "t": 11.162,
+        "state": "connecting",
+        "error": "none"
+      },
+      {
+        "t": 11.745,
+        "state": "connecting",
+        "error": "none"
+      },
+      {
+        "t": 12.376,
+        "state": "connecting",
+        "error": "none"
+      },
+      {
+        "t": 12.961,
+        "state": "connecting",
+        "error": "none"
+      },
+      {
+        "t": 13.545,
+        "state": "failed",
+        "error": "wrong_password"
+      }
+    ],
+    "terminal": {
+      "operation_id": "op-C9210E448EA18103",
+      "state": "failed",
+      "error": "wrong_password"
+    },
+    "elapsed_s": 13.545,
+    "apply_after": {
+      "id": "failed-apply-27",
+      "ok": false,
+      "error": {
+        "code": "operation_state",
+        "message": "operation_state"
+      }
+    },
+    "cancel_after": {
+      "id": "failed-cancel-28",
+      "ok": false,
+      "error": {
+        "code": "operation_state",
+        "message": "operation_state"
+      }
+    }
+  },
+  "after_fail": [
+    {
+      "status": {
+        "sta_connected": true,
+        "sta_has_ip": true,
+        "sta_ip": "192.168.43.213",
+        "last_disconnect": "none",
+        "sta_ssid": "TQ2018",
+        "password_set": true,
+        "mode": "sta",
+        "mqtt_connected": false,
+        "mqtt_last_error": "waiting_sta_ip",
+        "trial": {
+          "state": "idle"
+        }
+      },
+      "network": {
+        "net_mode": "sta",
+        "ap_ssid": "IotHub-C8E4",
+        "ap_password_set": false,
+        "sta_ssid": "TQ2018",
+        "sta_password_set": true,
+        "sta_use_static": true,
+        "sta_static_ip": "192.168.43.213",
+        "sta_static_gateway": "192.168.43.1",
+        "sta_static_netmask": "255.255.255.0",
+        "sta_static_dns1": "192.168.43.1",
+        "sta_static_dns2": "8.8.8.8",
+        "sta_connected": true,
+        "sta_has_ip": true,
+        "sta_ip": "192.168.43.213",
+        "last_disconnect": "none",
+        "startup_fallback_to_ap": false
+      },
+      "mqtt": {
+        "mqtt_backend": "tb_selfhost",
+        "mqtt_host": "117.131.99.2",
+        "mqtt_port": 21883,
+        "mqtt_use_tls": false,
+        "mqtt_token_set": true,
+        "connected": false,
+        "publish_count": 6,
+        "outbox": 0,
+        "last_error": "waiting_sta_ip"
+      },
+      "t_s": 0
+    },
+    {
+      "status": {
+        "sta_connected": true,
+        "sta_has_ip": true,
+        "sta_ip": "192.168.43.213",
+        "last_disconnect": "none",
+        "sta_ssid": "TQ2018",
+        "password_set": true,
+        "mode": "sta",
+        "mqtt_connected": true,
+        "mqtt_last_error": "",
+        "trial": {
+          "state": "idle"
+        }
+      },
+      "network": {
+        "net_mode": "sta",
+        "ap_ssid": "IotHub-C8E4",
+        "ap_password_set": false,
+        "sta_ssid": "TQ2018",
+        "sta_password_set": true,
+        "sta_use_static": true,
+        "sta_static_ip": "192.168.43.213",
+        "sta_static_gateway": "192.168.43.1",
+        "sta_static_netmask": "255.255.255.0",
+        "sta_static_dns1": "192.168.43.1",
+        "sta_static_dns2": "8.8.8.8",
+        "sta_connected": true,
+        "sta_has_ip": true,
+        "sta_ip": "192.168.43.213",
+        "last_disconnect": "none",
+        "startup_fallback_to_ap": false
+      },
+      "mqtt": {
+        "mqtt_backend": "tb_selfhost",
+        "mqtt_host": "117.131.99.2",
+        "mqtt_port": 21883,
+        "mqtt_use_tls": false,
+        "mqtt_token_set": true,
+        "connected": true,
+        "publish_count": 7,
+        "outbox": 0,
+        "last_error": ""
+      },
+      "t_s": 4
+    },
+    {
+      "status": {
+        "sta_connected": true,
+        "sta_has_ip": true,
+        "sta_ip": "192.168.43.213",
+        "last_disconnect": "none",
+        "sta_ssid": "TQ2018",
+        "password_set": true,
+        "mode": "sta",
+        "mqtt_connected": true,
+        "mqtt_last_error": "",
+        "trial": {
+          "state": "idle"
+        }
+      },
+      "network": {
+        "net_mode": "sta",
+        "ap_ssid": "IotHub-C8E4",
+        "ap_password_set": false,
+        "sta_ssid": "TQ2018",
+        "sta_password_set": true,
+        "sta_use_static": true,
+        "sta_static_ip": "192.168.43.213",
+        "sta_static_gateway": "192.168.43.1",
+        "sta_static_netmask": "255.255.255.0",
+        "sta_static_dns1": "192.168.43.1",
+        "sta_static_dns2": "8.8.8.8",
+        "sta_connected": true,
+        "sta_has_ip": true,
+        "sta_ip": "192.168.43.213",
+        "last_disconnect": "none",
+        "startup_fallback_to_ap": false
+      },
+      "mqtt": {
+        "mqtt_backend": "tb_selfhost",
+        "mqtt_host": "117.131.99.2",
+        "mqtt_port": 21883,
+        "mqtt_use_tls": false,
+        "mqtt_token_set": true,
+        "connected": true,
+        "publish_count": 9,
+        "outbox": 0,
+        "last_error": ""
+      },
+      "t_s": 12
+    },
+    {
+      "status": {
+        "sta_connected": true,
+        "sta_has_ip": true,
+        "sta_ip": "192.168.43.213",
+        "last_disconnect": "none",
+        "sta_ssid": "TQ2018",
+        "password_set": true,
+        "mode": "sta",
+        "mqtt_connected": true,
+        "mqtt_last_error": "",
+        "trial": {
+          "state": "idle"
+        }
+      },
+      "network": {
+        "net_mode": "sta",
+        "ap_ssid": "IotHub-C8E4",
+        "ap_password_set": false,
+        "sta_ssid": "TQ2018",
+        "sta_password_set": true,
+        "sta_use_static": true,
+        "sta_static_ip": "192.168.43.213",
+        "sta_static_gateway": "192.168.43.1",
+        "sta_static_netmask": "255.255.255.0",
+        "sta_static_dns1": "192.168.43.1",
+        "sta_static_dns2": "8.8.8.8",
+        "sta_connected": true,
+        "sta_has_ip": true,
+        "sta_ip": "192.168.43.213",
+        "last_disconnect": "none",
+        "startup_fallback_to_ap": false
+      },
+      "mqtt": {
+        "mqtt_backend": "tb_selfhost",
+        "mqtt_host": "117.131.99.2",
+        "mqtt_port": 21883,
+        "mqtt_use_tls": false,
+        "mqtt_token_set": true,
+        "connected": true,
+        "publish_count": 9,
+        "outbox": 0,
+        "last_error": ""
+      },
+      "t_s": 20
+    }
+  ],
+  "after_fail_formal_ok": true,
+  "after_fail_runtime_ok": true,
+  "reboot_after_fail": {
+    "reset": {
+      "rc": 0,
+      "tail": "Running stub flasher...\nStub flasher running.\n\nMAC:                b0:a7:32:28:c8:e4\n\nHard resetting via RTS pin...\nWARNING: DEPRECATED: 'esptool.py' is deprecated. Please use 'esptool' instead. The '.py' suffix will be removed in a future major release.\nWARNING: Deprecated: Command 'read_mac' is deprecated. Use 'read-mac' instead."
+    },
+    "ready": {
+      "ok": true,
+      "elapsed_s": 0.32,
+      "status": {
+        "sta_connected": true,
+        "sta_has_ip": true,
+        "sta_ip": "192.168.43.213",
+        "last_disconnect": "none",
+        "sta_ssid": "TQ2018",
+        "password_set": true,
+        "mode": "sta",
+        "mqtt_connected": true,
+        "mqtt_last_error": "",
+        "trial": {
+          "state": "idle"
+        }
+      }
+    },
+    "sample": {
+      "status": {
+        "sta_connected": true,
+        "sta_has_ip": true,
+        "sta_ip": "192.168.43.213",
+        "last_disconnect": "none",
+        "sta_ssid": "TQ2018",
+        "password_set": true,
+        "mode": "sta",
+        "mqtt_connected": true,
+        "mqtt_last_error": "",
+        "trial": {
+          "state": "idle"
+        }
+      },
+      "network": {
+        "net_mode": "sta",
+        "ap_ssid": "IotHub-C8E4",
+        "ap_password_set": false,
+        "sta_ssid": "TQ2018",
+        "sta_password_set": true,
+        "sta_use_static": true,
+        "sta_static_ip": "192.168.43.213",
+        "sta_static_gateway": "192.168.43.1",
+        "sta_static_netmask": "255.255.255.0",
+        "sta_static_dns1": "192.168.43.1",
+        "sta_static_dns2": "8.8.8.8",
+        "sta_connected": true,
+        "sta_has_ip": true,
+        "sta_ip": "192.168.43.213",
+        "last_disconnect": "none",
+        "startup_fallback_to_ap": false
+      },
+      "mqtt": {
+        "mqtt_backend": "tb_selfhost",
+        "mqtt_host": "117.131.99.2",
+        "mqtt_port": 21883,
+        "mqtt_use_tls": false,
+        "mqtt_token_set": true,
+        "connected": true,
+        "publish_count": 3,
+        "outbox": 0,
+        "last_error": ""
+      }
+    },
+    "formal_ok": true,
+    "runtime_ok": true
+  },
+  "interleave_failed_candidate": {
+    "tryconnect": {
+      "id": "interleave-wrong-5",
+      "ok": true,
+      "data": {
+        "operation_id": "op-924DBAD7CBEA41CC",
+        "state": "accepted"
+      }
+    },
+    "operation_id": "op-924DBAD7CBEA41CC",
+    "states": [
+      {
+        "t": 0.315,
+        "state": "connecting",
+        "error": "none"
+      },
+      {
+        "t": 0.945,
+        "state": "connecting",
+        "error": "none"
+      },
+      {
+        "t": 1.576,
+        "state": "connecting",
+        "error": "none"
+      },
+      {
+        "t": 2.251,
+        "state": "connecting",
+        "error": "none"
+      },
+      {
+        "t": 2.836,
+        "state": "connecting",
+        "error": "none"
+      },
+      {
+        "t": 3.512,
+        "state": "connecting",
+        "error": "none"
+      },
+      {
+        "t": 4.186,
+        "state": "connecting",
+        "error": "none"
+      },
+      {
+        "t": 4.86,
+        "state": "connecting",
+        "error": "none"
+      },
+      {
+        "t": 5.535,
+        "state": "connecting",
+        "error": "none"
+      },
+      {
+        "t": 6.168,
+        "state": "connecting",
+        "error": "none"
+      },
+      {
+        "t": 6.798,
+        "state": "connecting",
+        "error": "none"
+      },
+      {
+        "t": 7.473,
+        "state": "connecting",
+        "error": "none"
+      },
+      {
+        "t": 8.105,
+        "state": "connecting",
+        "error": "none"
+      },
+      {
+        "t": 8.688,
+        "state": "connecting",
+        "error": "none"
+      },
+      {
+        "t": 9.316,
+        "state": "connecting",
+        "error": "none"
+      },
+      {
+        "t": 9.901,
+        "state": "connecting",
+        "error": "none"
+      },
+      {
+        "t": 10.531,
+        "state": "connecting",
+        "error": "none"
+      },
+      {
+        "t": 11.162,
+        "state": "connecting",
+        "error": "none"
+      },
+      {
+        "t": 11.791,
+        "state": "connecting",
+        "error": "none"
+      },
+      {
+        "t": 12.466,
+        "state": "connecting",
+        "error": "none"
+      },
+      {
+        "t": 13.051,
+        "state": "connecting",
+        "error": "none"
+      },
+      {
+        "t": 13.636,
+        "state": "connecting",
+        "error": "none"
+      },
+      {
+        "t": 14.267,
+        "state": "connecting",
+        "error": "none"
+      },
+      {
+        "t": 14.851,
+        "state": "connecting",
+        "error": "none"
+      },
+      {
+        "t": 15.436,
+        "state": "connecting",
+        "error": "none"
+      },
+      {
+        "t": 16.065,
+        "state": "connecting",
+        "error": "none"
+      },
+      {
+        "t": 16.652,
+        "state": "connecting",
+        "error": "none"
+      },
+      {
+        "t": 17.237,
+        "state": "connecting",
+        "error": "none"
+      },
+      {
+        "t": 17.87,
+        "state": "failed",
+        "error": "wrong_password"
+      }
+    ],
+    "terminal": {
+      "operation_id": "op-924DBAD7CBEA41CC",
+      "state": "failed",
+      "error": "wrong_password"
+    },
+    "elapsed_s": 17.87,
+    "apply_after": {
+      "id": "interleave-apply-35",
+      "ok": false,
+      "error": {
+        "code": "operation_state",
+        "message": "operation_state"
+      }
+    },
+    "cancel_after": {
+      "id": "interleave-cancel-36",
+      "ok": false,
+      "error": {
+        "code": "operation_state",
+        "message": "operation_state"
+      }
+    }
+  },
+  "interleave_success_candidate": {
+    "tryconnect": {
+      "id": "p04-ok-37",
+      "ok": true,
+      "data": {
+        "operation_id": "op-5B51011C6370A8F9",
+        "state": "accepted"
+      }
+    },
+    "operation_id": "op-5B51011C6370A8F9",
+    "states": [
+      {
+        "t": 0.585,
+        "state": "connecting",
+        "error": "none"
+      },
+      {
+        "t": 1.219,
+        "state": "connecting",
+        "error": "none"
+      },
+      {
+        "t": 1.845,
+        "state": "connecting",
+        "error": "none"
+      },
+      {
+        "t": 2.52,
+        "state": "connecting",
+        "error": "none"
+      },
+      {
+        "t": 3.104,
+        "state": "connecting",
+        "error": "none"
+      },
+      {
+        "t": 3.78,
+        "state": "connecting",
+        "error": "none"
+      },
+      {
+        "t": 4.456,
+        "state": "connecting",
+        "error": "none"
+      },
+      {
+        "t": 5.084,
+        "state": "connecting",
+        "error": "none"
+      },
+      {
+        "t": 5.766,
+        "state": "connecting",
+        "error": "none"
+      },
+      {
+        "t": 6.391,
+        "state": "connecting",
+        "error": "none"
+      },
+      {
+        "t": 7.019,
+        "state": "connecting",
+        "error": "none"
+      },
+      {
+        "t": 7.696,
+        "state": "connecting",
+        "error": "none"
+      },
+      {
+        "t": 8.324,
+        "state": "connecting",
+        "error": "none"
+      },
+      {
+        "t": 9.043,
+        "state": "connecting",
+        "error": "none"
+      },
+      {
+        "t": 9.675,
+        "state": "connecting",
+        "error": "none"
+      },
+      {
+        "t": 10.259,
+        "state": "got_ip",
+        "error": "none"
+      }
+    ],
+    "terminal": {
+      "operation_id": "op-5B51011C6370A8F9",
+      "state": "got_ip",
+      "error": "none",
+      "trial_id": "trial-DA95A2F7",
+      "ssid": "TQ2018"
+    },
+    "elapsed_s": 10.259,
+    "apply": {
+      "id": "p04-ok-apply-54",
+      "ok": true,
+      "data": {
+        "operation_id": "op-5B51011C6370A8F9",
+        "state": "success",
+        "saved": true,
+        "applied": true
+      }
+    }
+  },
+  "after_success_apply": [
+    {
+      "status": {
+        "sta_connected": true,
+        "sta_has_ip": true,
+        "sta_ip": "192.168.43.63",
+        "last_disconnect": "none",
+        "sta_ssid": "TQ2018",
+        "password_set": true,
+        "mode": "sta",
+        "mqtt_connected": false,
+        "mqtt_last_error": "waiting_sta_ip",
+        "trial": {
+          "state": "idle"
+        }
+      },
+      "network": {
+        "net_mode": "sta",
+        "ap_ssid": "IotHub-C8E4",
+        "ap_password_set": false,
+        "sta_ssid": "TQ2018",
+        "sta_password_set": true,
+        "sta_use_static": false,
+        "sta_static_ip": "192.168.43.213",
+        "sta_static_gateway": "192.168.43.1",
+        "sta_static_netmask": "255.255.255.0",
+        "sta_static_dns1": "192.168.43.1",
+        "sta_static_dns2": "8.8.8.8",
+        "sta_connected": true,
+        "sta_has_ip": true,
+        "sta_ip": "192.168.43.63",
+        "last_disconnect": "none",
+        "startup_fallback_to_ap": false
+      },
+      "mqtt": {
+        "mqtt_backend": "tb_selfhost",
+        "mqtt_host": "117.131.99.2",
+        "mqtt_port": 21883,
+        "mqtt_use_tls": false,
+        "mqtt_token_set": true,
+        "connected": false,
+        "publish_count": 4,
+        "outbox": 0,
+        "last_error": "waiting_sta_ip"
+      },
+      "t_s": 0
+    },
+    {
+      "status": {
+        "sta_connected": true,
+        "sta_has_ip": true,
+        "sta_ip": "192.168.43.63",
+        "last_disconnect": "none",
+        "sta_ssid": "TQ2018",
+        "password_set": true,
+        "mode": "sta",
+        "mqtt_connected": true,
+        "mqtt_last_error": "",
+        "trial": {
+          "state": "idle"
+        }
+      },
+      "network": {
+        "net_mode": "sta",
+        "ap_ssid": "IotHub-C8E4",
+        "ap_password_set": false,
+        "sta_ssid": "TQ2018",
+        "sta_password_set": true,
+        "sta_use_static": false,
+        "sta_static_ip": "192.168.43.213",
+        "sta_static_gateway": "192.168.43.1",
+        "sta_static_netmask": "255.255.255.0",
+        "sta_static_dns1": "192.168.43.1",
+        "sta_static_dns2": "8.8.8.8",
+        "sta_connected": true,
+        "sta_has_ip": true,
+        "sta_ip": "192.168.43.63",
+        "last_disconnect": "none",
+        "startup_fallback_to_ap": false
+      },
+      "mqtt": {
+        "mqtt_backend": "tb_selfhost",
+        "mqtt_host": "117.131.99.2",
+        "mqtt_port": 21883,
+        "mqtt_use_tls": false,
+        "mqtt_token_set": true,
+        "connected": true,
+        "publish_count": 6,
+        "outbox": 0,
+        "last_error": ""
+      },
+      "t_s": 4
+    },
+    {
+      "status": {
+        "sta_connected": true,
+        "sta_has_ip": true,
+        "sta_ip": "192.168.43.63",
+        "last_disconnect": "none",
+        "sta_ssid": "TQ2018",
+        "password_set": true,
+        "mode": "sta",
+        "mqtt_connected": true,
+        "mqtt_last_error": "",
+        "trial": {
+          "state": "idle"
+        }
+      },
+      "network": {
+        "net_mode": "sta",
+        "ap_ssid": "IotHub-C8E4",
+        "ap_password_set": false,
+        "sta_ssid": "TQ2018",
+        "sta_password_set": true,
+        "sta_use_static": false,
+        "sta_static_ip": "192.168.43.213",
+        "sta_static_gateway": "192.168.43.1",
+        "sta_static_netmask": "255.255.255.0",
+        "sta_static_dns1": "192.168.43.1",
+        "sta_static_dns2": "8.8.8.8",
+        "sta_connected": true,
+        "sta_has_ip": true,
+        "sta_ip": "192.168.43.63",
+        "last_disconnect": "none",
+        "startup_fallback_to_ap": false
+      },
+      "mqtt": {
+        "mqtt_backend": "tb_selfhost",
+        "mqtt_host": "117.131.99.2",
+        "mqtt_port": 21883,
+        "mqtt_use_tls": false,
+        "mqtt_token_set": true,
+        "connected": true,
+        "publish_count": 7,
+        "outbox": 0,
+        "last_error": ""
+      },
+      "t_s": 12
+    },
+    {
+      "status": {
+        "sta_connected": true,
+        "sta_has_ip": true,
+        "sta_ip": "192.168.43.63",
+        "last_disconnect": "none",
+        "sta_ssid": "TQ2018",
+        "password_set": true,
+        "mode": "sta",
+        "mqtt_connected": true,
+        "mqtt_last_error": "",
+        "trial": {
+          "state": "idle"
+        }
+      },
+      "network": {
+        "net_mode": "sta",
+        "ap_ssid": "IotHub-C8E4",
+        "ap_password_set": false,
+        "sta_ssid": "TQ2018",
+        "sta_password_set": true,
+        "sta_use_static": false,
+        "sta_static_ip": "192.168.43.213",
+        "sta_static_gateway": "192.168.43.1",
+        "sta_static_netmask": "255.255.255.0",
+        "sta_static_dns1": "192.168.43.1",
+        "sta_static_dns2": "8.8.8.8",
+        "sta_connected": true,
+        "sta_has_ip": true,
+        "sta_ip": "192.168.43.63",
+        "last_disconnect": "none",
+        "startup_fallback_to_ap": false
+      },
+      "mqtt": {
+        "mqtt_backend": "tb_selfhost",
+        "mqtt_host": "117.131.99.2",
+        "mqtt_port": 21883,
+        "mqtt_use_tls": false,
+        "mqtt_token_set": true,
+        "connected": true,
+        "publish_count": 8,
+        "outbox": 0,
+        "last_error": ""
+      },
+      "t_s": 20
+    }
+  ],
+  "after_success_formal_ok": true,
+  "after_success_runtime_ok": true,
+  "reboot_after_success": {
+    "reset": {
+      "rc": 0,
+      "tail": "Running stub flasher...\nStub flasher running.\n\nMAC:                b0:a7:32:28:c8:e4\n\nHard resetting via RTS pin...\nWARNING: DEPRECATED: 'esptool.py' is deprecated. Please use 'esptool' instead. The '.py' suffix will be removed in a future major release.\nWARNING: Deprecated: Command 'read_mac' is deprecated. Use 'read-mac' instead."
+    },
+    "ready": {
+      "ok": true,
+      "elapsed_s": 0.415,
+      "status": {
+        "sta_connected": true,
+        "sta_has_ip": true,
+        "sta_ip": "192.168.43.63",
+        "last_disconnect": "none",
+        "sta_ssid": "TQ2018",
+        "password_set": true,
+        "mode": "sta",
+        "mqtt_connected": true,
+        "mqtt_last_error": "",
+        "trial": {
+          "state": "idle"
+        }
+      }
+    },
+    "sample": {
+      "status": {
+        "sta_connected": true,
+        "sta_has_ip": true,
+        "sta_ip": "192.168.43.63",
+        "last_disconnect": "none",
+        "sta_ssid": "TQ2018",
+        "password_set": true,
+        "mode": "sta",
+        "mqtt_connected": true,
+        "mqtt_last_error": "",
+        "trial": {
+          "state": "idle"
+        }
+      },
+      "network": {
+        "net_mode": "sta",
+        "ap_ssid": "IotHub-C8E4",
+        "ap_password_set": false,
+        "sta_ssid": "TQ2018",
+        "sta_password_set": true,
+        "sta_use_static": false,
+        "sta_static_ip": "192.168.43.213",
+        "sta_static_gateway": "192.168.43.1",
+        "sta_static_netmask": "255.255.255.0",
+        "sta_static_dns1": "192.168.43.1",
+        "sta_static_dns2": "8.8.8.8",
+        "sta_connected": true,
+        "sta_has_ip": true,
+        "sta_ip": "192.168.43.63",
+        "last_disconnect": "none",
+        "startup_fallback_to_ap": false
+      },
+      "mqtt": {
+        "mqtt_backend": "tb_selfhost",
+        "mqtt_host": "117.131.99.2",
+        "mqtt_port": 21883,
+        "mqtt_use_tls": false,
+        "mqtt_token_set": true,
+        "connected": true,
+        "publish_count": 3,
+        "outbox": 0,
+        "last_error": ""
+      }
+    },
+    "formal_ok": true,
+    "runtime_ok": true
+  },
+  "pass": true,
+  "_path": "/home/tc/esp/workspace/iothub/tools/ble_p0/results/p0_4_regression_20261023_203032.json"
+}

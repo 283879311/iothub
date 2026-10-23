@@ -48,6 +48,16 @@ void app_bootstrap_load_config(void)
 {
     app_bootstrap_reset_runtime_state();
     app_config_load(&s_config);
+    if (app_config_scrub_legacy_ap(&s_config)) {
+        esp_err_t scrub_err = app_bootstrap_save_config();
+
+        if (scrub_err == ESP_OK) {
+            ESP_LOGI(TAG, "legacy AP config bytes scrubbed from NVS layout");
+        } else {
+            ESP_LOGW(TAG, "legacy AP config scrub save failed: %s",
+                     esp_err_to_name(scrub_err));
+        }
+    }
     app_refresh_managed_identity_fields();
 }
 

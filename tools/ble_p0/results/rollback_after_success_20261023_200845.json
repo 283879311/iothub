@@ -1,0 +1,351 @@
+{
+  "timestamp": "2026-10-23T20:08:45.950",
+  "name": "ROLLBACK_AFTER_SUCCESS",
+  "before": {
+    "status": {
+      "sta_connected": true,
+      "sta_has_ip": true,
+      "sta_ip": "192.168.43.213",
+      "last_disconnect": "none",
+      "sta_ssid": "TQ2018",
+      "password_set": true,
+      "mode": "sta",
+      "mqtt_connected": true,
+      "mqtt_last_error": "",
+      "trial": {
+        "state": "idle"
+      }
+    },
+    "network": {
+      "net_mode": "sta",
+      "ap_ssid": "IotHub-C8E4",
+      "ap_password_set": false,
+      "sta_ssid": "TQ2018",
+      "sta_password_set": true,
+      "sta_use_static": true,
+      "sta_static_ip": "192.168.43.213",
+      "sta_static_gateway": "192.168.43.1",
+      "sta_static_netmask": "255.255.255.0",
+      "sta_static_dns1": "192.168.43.1",
+      "sta_static_dns2": "8.8.8.8",
+      "sta_connected": true,
+      "sta_has_ip": true,
+      "sta_ip": "192.168.43.213",
+      "last_disconnect": "none",
+      "startup_fallback_to_ap": false
+    },
+    "mqtt": {
+      "mqtt_backend": "tb_selfhost",
+      "mqtt_host": "117.131.99.2",
+      "mqtt_port": 21883,
+      "mqtt_use_tls": false,
+      "mqtt_token_set": true,
+      "connected": true,
+      "publish_count": 9,
+      "outbox": 0,
+      "last_error": ""
+    }
+  },
+  "tryconnect": {
+    "id": "wrong-4",
+    "ok": true,
+    "data": {
+      "operation_id": "op-4A6C1817271FD99A",
+      "state": "accepted"
+    }
+  },
+  "operation_id": "op-4A6C1817271FD99A",
+  "states": [
+    {
+      "t": 0.313,
+      "state": "connecting",
+      "error": "none"
+    },
+    {
+      "t": 0.944,
+      "state": "connecting",
+      "error": "none"
+    },
+    {
+      "t": 1.575,
+      "state": "connecting",
+      "error": "none"
+    },
+    {
+      "t": 2.249,
+      "state": "connecting",
+      "error": "none"
+    },
+    {
+      "t": 2.879,
+      "state": "connecting",
+      "error": "none"
+    },
+    {
+      "t": 3.509,
+      "state": "connecting",
+      "error": "none"
+    },
+    {
+      "t": 4.184,
+      "state": "connecting",
+      "error": "none"
+    },
+    {
+      "t": 4.77,
+      "state": "connecting",
+      "error": "none"
+    },
+    {
+      "t": 5.353,
+      "state": "connecting",
+      "error": "none"
+    },
+    {
+      "t": 6.03,
+      "state": "connecting",
+      "error": "none"
+    },
+    {
+      "t": 6.659,
+      "state": "connecting",
+      "error": "none"
+    },
+    {
+      "t": 7.29,
+      "state": "connecting",
+      "error": "none"
+    },
+    {
+      "t": 7.92,
+      "state": "connecting",
+      "error": "none"
+    },
+    {
+      "t": 8.504,
+      "state": "connecting",
+      "error": "none"
+    },
+    {
+      "t": 9.181,
+      "state": "connecting",
+      "error": "none"
+    },
+    {
+      "t": 9.766,
+      "state": "connecting",
+      "error": "none"
+    },
+    {
+      "t": 10.396,
+      "state": "connecting",
+      "error": "none"
+    },
+    {
+      "t": 11.024,
+      "state": "connecting",
+      "error": "none"
+    },
+    {
+      "t": 11.609,
+      "state": "connecting",
+      "error": "none"
+    },
+    {
+      "t": 12.24,
+      "state": "connecting",
+      "error": "none"
+    },
+    {
+      "t": 12.915,
+      "state": "connecting",
+      "error": "none"
+    },
+    {
+      "t": 13.545,
+      "state": "failed",
+      "error": "wrong_password"
+    }
+  ],
+  "terminal": {
+    "operation_id": "op-4A6C1817271FD99A",
+    "state": "failed",
+    "error": "wrong_password"
+  },
+  "terminal_elapsed_s": 13.545,
+  "after": {
+    "ready": {
+      "ok": true,
+      "elapsed_s": 0.228,
+      "status": {
+        "sta_connected": true,
+        "sta_has_ip": true,
+        "sta_ip": "192.168.43.213",
+        "last_disconnect": "none",
+        "sta_ssid": "TQ2018",
+        "password_set": true,
+        "mode": "sta",
+        "mqtt_connected": false,
+        "mqtt_last_error": "waiting_sta_ip",
+        "trial": {
+          "state": "idle"
+        }
+      }
+    },
+    "status": {
+      "sta_connected": true,
+      "sta_has_ip": true,
+      "sta_ip": "192.168.43.213",
+      "last_disconnect": "none",
+      "sta_ssid": "TQ2018",
+      "password_set": true,
+      "mode": "sta",
+      "mqtt_connected": false,
+      "mqtt_last_error": "waiting_sta_ip",
+      "trial": {
+        "state": "idle"
+      }
+    },
+    "network": {
+      "net_mode": "sta",
+      "ap_ssid": "IotHub-C8E4",
+      "ap_password_set": false,
+      "sta_ssid": "TQ2018",
+      "sta_password_set": true,
+      "sta_use_static": true,
+      "sta_static_ip": "192.168.43.213",
+      "sta_static_gateway": "192.168.43.1",
+      "sta_static_netmask": "255.255.255.0",
+      "sta_static_dns1": "192.168.43.1",
+      "sta_static_dns2": "8.8.8.8",
+      "sta_connected": true,
+      "sta_has_ip": true,
+      "sta_ip": "192.168.43.213",
+      "last_disconnect": "none",
+      "startup_fallback_to_ap": false
+    },
+    "mqtt": {
+      "mqtt_backend": "tb_selfhost",
+      "mqtt_host": "117.131.99.2",
+      "mqtt_port": 21883,
+      "mqtt_use_tls": false,
+      "mqtt_token_set": true,
+      "connected": false,
+      "publish_count": 10,
+      "outbox": 0,
+      "last_error": "waiting_sta_ip"
+    }
+  },
+  "apply_after": {
+    "ok": false,
+    "error_code": "operation_state",
+    "error": "{\"code\": \"operation_state\", \"message\": \"operation_state\"}"
+  },
+  "cancel_after": {
+    "ok": false,
+    "error_code": "operation_state",
+    "error": "{\"code\": \"operation_state\", \"message\": \"operation_state\"}",
+    "data": null
+  },
+  "pass": false,
+  "note": "FAIL: delayed failed-candidate restore reverted SSID to CMCC-502 while keeping TQ2018 static .43.213. Recovered with a successful TQ2018 apply.",
+  "initial_check_4s": {
+    "ready": {
+      "ok": true,
+      "elapsed_s": 0.228,
+      "status": {
+        "sta_connected": true,
+        "sta_has_ip": true,
+        "sta_ip": "192.168.43.213",
+        "last_disconnect": "none",
+        "sta_ssid": "TQ2018",
+        "password_set": true,
+        "mode": "sta",
+        "mqtt_connected": false,
+        "mqtt_last_error": "waiting_sta_ip",
+        "trial": {
+          "state": "idle"
+        }
+      }
+    },
+    "status": {
+      "sta_connected": true,
+      "sta_has_ip": true,
+      "sta_ip": "192.168.43.213",
+      "last_disconnect": "none",
+      "sta_ssid": "TQ2018",
+      "password_set": true,
+      "mode": "sta",
+      "mqtt_connected": false,
+      "mqtt_last_error": "waiting_sta_ip",
+      "trial": {
+        "state": "idle"
+      }
+    },
+    "network": {
+      "net_mode": "sta",
+      "ap_ssid": "IotHub-C8E4",
+      "ap_password_set": false,
+      "sta_ssid": "TQ2018",
+      "sta_password_set": true,
+      "sta_use_static": true,
+      "sta_static_ip": "192.168.43.213",
+      "sta_static_gateway": "192.168.43.1",
+      "sta_static_netmask": "255.255.255.0",
+      "sta_static_dns1": "192.168.43.1",
+      "sta_static_dns2": "8.8.8.8",
+      "sta_connected": true,
+      "sta_has_ip": true,
+      "sta_ip": "192.168.43.213",
+      "last_disconnect": "none",
+      "startup_fallback_to_ap": false
+    },
+    "mqtt": {
+      "mqtt_backend": "tb_selfhost",
+      "mqtt_host": "117.131.99.2",
+      "mqtt_port": 21883,
+      "mqtt_use_tls": false,
+      "mqtt_token_set": true,
+      "connected": false,
+      "publish_count": 10,
+      "outbox": 0,
+      "last_error": "waiting_sta_ip"
+    }
+  },
+  "final_check": {
+    "status": {
+      "sta_connected": true,
+      "sta_has_ip": true,
+      "sta_ip": "192.168.43.213",
+      "sta_ssid": "CMCC-502",
+      "mode": "sta",
+      "mqtt_connected": false,
+      "mqtt_last_error": "disconnected",
+      "trial": {
+        "state": "idle"
+      }
+    },
+    "network": {
+      "net_mode": "sta",
+      "sta_ssid": "CMCC-502",
+      "sta_password_set": true,
+      "sta_use_static": true,
+      "sta_static_ip": "192.168.43.213",
+      "sta_static_gateway": "192.168.43.1",
+      "sta_static_netmask": "255.255.255.0",
+      "sta_static_dns1": "192.168.43.1",
+      "sta_static_dns2": "8.8.8.8",
+      "sta_connected": true,
+      "sta_has_ip": true,
+      "sta_ip": "192.168.43.213"
+    },
+    "mqtt": {
+      "connected": false,
+      "last_error": "disconnected",
+      "publish_count": 10
+    },
+    "note": "About 12s after the initial 4s check, the delayed failed-candidate restore changed sta_ssid to CMCC-502 while keeping TQ2018 static 192.168.43.213. MQTT disconnected. The initial check was premature; this is a profile/restore inconsistency."
+  },
+  "recovered_by": "tools/ble_p0/results/success_path_20261023_201130.json",
+  "recovery_final": "TQ2018 DHCP 192.168.43.63, sta_use_static=false, MQTT connected"
+}

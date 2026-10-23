@@ -1,0 +1,128 @@
+{
+  "timestamp": "2026-10-24T00:12:02.840",
+  "started_at": "2026-10-24T00:12:02+08:00",
+  "name": "AP_SCHEMA_CLEANUP_CHECK",
+  "address": "b0:a7:32:28:c8:e4",
+  "board": {
+    "address": "B0:A7:32:28:C8:E6",
+    "name": "IotHubBLE-C8E4"
+  },
+  "before": {
+    "ok": true,
+    "network": {
+      "net_mode": "sta",
+      "sta_ssid": "CMCC-502",
+      "sta_password_set": true,
+      "sta_use_static": false,
+      "sta_static_ip": "192.168.43.213",
+      "sta_static_gateway": "192.168.43.1",
+      "sta_static_netmask": "255.255.255.0",
+      "sta_static_dns1": "192.168.43.1",
+      "sta_static_dns2": "8.8.8.8",
+      "sta_connected": true,
+      "sta_has_ip": true,
+      "sta_ip": "192.168.1.28",
+      "last_disconnect": "none"
+    }
+  },
+  "ap_fields_present_before": [],
+  "old_ap_patch": {
+    "ok": true,
+    "error_code": null,
+    "response": {
+      "id": 901,
+      "ok": true,
+      "result": {
+        "success": true,
+        "changed": [],
+        "effect": "none",
+        "relay_on": false,
+        "led_on": false,
+        "input_active": false,
+        "io_seq": 0,
+        "io_source": "boot",
+        "saved": true,
+        "applied": true,
+        "restart_required": false,
+        "rollback": "none"
+      }
+    }
+  },
+  "after_old_ap_patch": {
+    "ok": true,
+    "network": {
+      "net_mode": "sta",
+      "sta_ssid": "CMCC-502",
+      "sta_password_set": true,
+      "sta_use_static": false,
+      "sta_static_ip": "192.168.43.213",
+      "sta_static_gateway": "192.168.43.1",
+      "sta_static_netmask": "255.255.255.0",
+      "sta_static_dns1": "192.168.43.1",
+      "sta_static_dns2": "8.8.8.8",
+      "sta_connected": true,
+      "sta_has_ip": true,
+      "sta_ip": "192.168.1.28",
+      "last_disconnect": "none"
+    }
+  },
+  "ap_fields_present_after": [],
+  "formal_unchanged_by_old_ap_patch": true,
+  "ap_mode_patch": {
+    "ok": false,
+    "error_code": "invalid_config",
+    "response": {
+      "ok": false,
+      "error": "invalid_config",
+      "id": 902
+    }
+  },
+  "v1_network": {
+    "ok": true,
+    "network": {
+      "net_mode": "sta",
+      "sta_ssid": "CMCC-502",
+      "sta_password_set": true,
+      "sta_use_static": false,
+      "sta_static_ip": "192.168.43.213",
+      "sta_static_gateway": "192.168.43.1",
+      "sta_static_netmask": "255.255.255.0",
+      "sta_static_dns1": "192.168.43.1",
+      "sta_static_dns2": "8.8.8.8",
+      "sta_connected": true,
+      "sta_has_ip": true,
+      "sta_ip": "192.168.1.28",
+      "last_disconnect": "none"
+    },
+    "ap_fields": []
+  },
+  "network_status": {
+    "sta_connected": true,
+    "sta_has_ip": true,
+    "sta_ip": "192.168.1.28",
+    "last_disconnect": "none",
+    "sta_ssid": "CMCC-502",
+    "password_set": true,
+    "mode": "sta",
+    "mqtt_connected": true,
+    "mqtt_last_error": "",
+    "trial": {
+      "state": "idle"
+    }
+  },
+  "checks": {
+    "no_ap_ssid_before": true,
+    "no_ap_password_set_before": true,
+    "no_startup_fallback_before": true,
+    "sta_ssid_preserved": true,
+    "net_mode_sta": true,
+    "old_ap_patch_no_effect": true,
+    "ap_mode_rejected": true,
+    "no_ap_ssid_after": true,
+    "no_ap_fields_v1": true,
+    "network_sta": true
+  },
+  "pass": true,
+  "finished_at": "2026-10-24T00:12:20+08:00",
+  "_path": "/home/tc/esp/workspace/iothub/tools/ble_p0/results/config_schema_20261024_001220.json"
+}

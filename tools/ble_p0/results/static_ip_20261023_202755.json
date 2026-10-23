@@ -1,0 +1,142 @@
+{
+  "timestamp": "2026-10-23T20:27:21.394",
+  "name": "STATIC_IP_V0_CONFIG_SET",
+  "ssid": "TQ2018",
+  "board": {
+    "address": "B0:A7:32:28:C8:E6",
+    "name": "IotHubBLE-C8E4"
+  },
+  "before": {
+    "status": {
+      "sta_connected": true,
+      "sta_has_ip": true,
+      "sta_ip": "192.168.43.63",
+      "last_disconnect": "none",
+      "sta_ssid": "TQ2018",
+      "password_set": true,
+      "mode": "sta",
+      "mqtt_connected": true,
+      "mqtt_last_error": "",
+      "trial": {
+        "state": "idle"
+      }
+    },
+    "network": {
+      "net_mode": "sta",
+      "ap_ssid": "IotHub-C8E4",
+      "ap_password_set": false,
+      "sta_ssid": "TQ2018",
+      "sta_password_set": true,
+      "sta_use_static": false,
+      "sta_static_ip": "192.168.43.213",
+      "sta_static_gateway": "192.168.43.1",
+      "sta_static_netmask": "255.255.255.0",
+      "sta_static_dns1": "192.168.43.1",
+      "sta_static_dns2": "8.8.8.8",
+      "sta_connected": true,
+      "sta_has_ip": true,
+      "sta_ip": "192.168.43.63",
+      "last_disconnect": "none",
+      "startup_fallback_to_ap": false
+    }
+  },
+  "plan": {
+    "sta_static_ip": "192.168.43.213",
+    "sta_static_gateway": "192.168.43.1",
+    "sta_static_netmask": "255.255.255.0",
+    "sta_static_dns1": "192.168.43.1",
+    "sta_static_dns2": "8.8.8.8"
+  },
+  "config_set": {
+    "ok": true,
+    "response": {
+      "id": 76,
+      "ok": true,
+      "result": {
+        "success": true,
+        "changed": [
+          "sta_use_static"
+        ],
+        "effect": "reboot",
+        "relay_on": false,
+        "led_on": false,
+        "input_active": false,
+        "io_seq": 0,
+        "io_source": "boot",
+        "saved": true,
+        "applied": false,
+        "restart_required": true,
+        "rollback": "none",
+        "operation_type": "reboot"
+      }
+    },
+    "latency_ms": 199.8
+  },
+  "after": {
+    "ready": {
+      "ok": true,
+      "elapsed_s": 0.404,
+      "status": {
+        "sta_connected": true,
+        "sta_has_ip": true,
+        "sta_ip": "192.168.43.213",
+        "last_disconnect": "none",
+        "sta_ssid": "TQ2018",
+        "password_set": true,
+        "mode": "sta",
+        "mqtt_connected": true,
+        "mqtt_last_error": "",
+        "trial": {
+          "state": "idle"
+        }
+      }
+    },
+    "status": {
+      "sta_connected": true,
+      "sta_has_ip": true,
+      "sta_ip": "192.168.43.213",
+      "last_disconnect": "none",
+      "sta_ssid": "TQ2018",
+      "password_set": true,
+      "mode": "sta",
+      "mqtt_connected": true,
+      "mqtt_last_error": "",
+      "trial": {
+        "state": "idle"
+      }
+    },
+    "network": {
+      "net_mode": "sta",
+      "ap_ssid": "IotHub-C8E4",
+      "ap_password_set": false,
+      "sta_ssid": "TQ2018",
+      "sta_password_set": true,
+      "sta_use_static": true,
+      "sta_static_ip": "192.168.43.213",
+      "sta_static_gateway": "192.168.43.1",
+      "sta_static_netmask": "255.255.255.0",
+      "sta_static_dns1": "192.168.43.1",
+      "sta_static_dns2": "8.8.8.8",
+      "sta_connected": true,
+      "sta_has_ip": true,
+      "sta_ip": "192.168.43.213",
+      "last_disconnect": "none",
+      "startup_fallback_to_ap": false
+    },
+    "mqtt": {
+      "mqtt_backend": "tb_selfhost",
+      "mqtt_host": "117.131.99.2",
+      "mqtt_port": 21883,
+      "mqtt_use_tls": false,
+      "mqtt_token_set": true,
+      "connected": true,
+      "publish_count": 3,
+      "outbox": 0,
+      "last_error": ""
+    }
+  },
+  "command_available": true,
+  "runtime_static_ok": true,
+  "pass": true,
+  "_path": "/home/tc/esp/workspace/iothub/tools/ble_p0/results/static_ip_20261023_202755.json"
+}

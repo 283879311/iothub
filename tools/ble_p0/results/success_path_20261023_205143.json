@@ -1,0 +1,71 @@
+{
+  "timestamp": "2026-10-23T20:51:27.019",
+  "name": "T1_SUCCESS_TRYCONNECT_GOT_IP_APPLY",
+  "ssid": "TQ2018",
+  "password_redacted": true,
+  "caveats": [],
+  "board": {
+    "address": "B0:A7:32:28:C8:E6",
+    "name": "IotHubBLE-C8E4",
+    "adv_local_name": "IotHubBLE-C8E4"
+  },
+  "device_info": {
+    "id": "info-2",
+    "ok": true,
+    "data": {
+      "model": "iothub",
+      "firmware": "1.2",
+      "device_id": "IotHub-C8E4",
+      "protocol_versions": [
+        "1.0"
+      ],
+      "security": {
+        "link_encrypted": false,
+        "bonded": false,
+        "l2_ready": false,
+        "sensitive_writes_allowed": false
+      }
+    }
+  },
+  "before": {
+    "sta_connected": true,
+    "sta_has_ip": true,
+    "sta_ip": "192.168.1.28",
+    "last_disconnect": "none",
+    "sta_ssid": "TQ2018",
+    "password_set": true,
+    "mode": "sta",
+    "mqtt_connected": true,
+    "mqtt_last_error": "",
+    "trial": {
+      "state": "idle"
+    }
+  },
+  "scan": {
+    "ok": true,
+    "target_visible": true,
+    "count": 8,
+    "ssids": [
+      "CMCC-502",
+      "TQ2018",
+      "CMCC-GhyE",
+      "ChinaNet-eykP",
+      "TP-LINK_BFBD",
+      "CU_2MWf",
+      "CMCC-xYA7",
+      "CMCC-eYXF"
+    ],
+    "bytes": 619,
+    "frags": 3
+  },
+  "tryconnect": {
+    "ok": false,
+    "state": null,
+    "operation_id": null,
+    "error": "{\"code\": \"no_slot\", \"message\": \"no_slot\"}",
+    "latency_ms": 95.6
+  },
+  "pass": false,
+  "reason": "tryconnect did not return operation_id",
+  "_path": "/home/tc/esp/workspace/iothub/tools/ble_p0/results/success_path_20261023_205143.json"
+}

@@ -64,7 +64,8 @@ void app_ota_get_running_partition_stats(const esp_partition_t **running_partiti
 }
 
 #if CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE
-/* 健康判定:STA 拿到 IP、AP 网络面已激活、或 MQTT 已连上,任一满足即认为新固件业务可用。 */
+/* 健康判定:STA 拿到 IP、或 MQTT 已连上,任一满足即认为新固件业务可用。
+ * AP/Web 已删除,不再用 AP netif 作为健康条件。 */
 static bool app_ota_network_healthy(const char **reason)
 {
     bool sta_has_ip;
@@ -75,10 +76,6 @@ static bool app_ota_network_healthy(const char **reason)
     app_wifi_runtime_unlock();
     if (sta_has_ip) {
         *reason = "sta_ip";
-        return true;
-    }
-    if (s_ap_netif != NULL && esp_netif_is_netif_up(s_ap_netif)) {
-        *reason = "ap_up";
         return true;
     }
     app_mqtt_lock();

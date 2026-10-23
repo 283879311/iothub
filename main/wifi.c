@@ -14,8 +14,6 @@
 #include "lwip/etharp.h"
 #include "lwip/ip4_addr.h"
 
-#include "dhcpserver/dhcpserver.h"
-
 #include "common.h"
 #include "config.h"
 #include "identity.h"
@@ -57,7 +55,6 @@ static portMUX_TYPE s_tryconnect_mux = portMUX_INITIALIZER_UNLOCKED;
 
 extern app_config_t s_config;
 
-esp_netif_t *s_ap_netif;
 static esp_netif_t *s_sta_netif;
 wifi_runtime_t s_wifi = {0};
 static TaskHandle_t s_wifi_connect_task = NULL;
@@ -74,36 +71,12 @@ static bool s_wifi_fast_path_pending = false;
 static SemaphoreHandle_t s_wifi_restart_lock = NULL;
 static StaticSemaphore_t s_wifi_restart_lock_buf;
 static portMUX_TYPE s_wifi_restart_lock_mux = portMUX_INITIALIZER_UNLOCKED;
-/* 网络候选 trial 未决时抑制 profile→主配置回写；0 表示不抑制。 */
-static int64_t s_profile_writeback_suppress_until_ms = 0;
-
-void app_wifi_suppress_profile_writeback(uint32_t duration_ms)
-{
-    app_wifi_runtime_lock();
-    s_profile_writeback_suppress_until_ms =
-        esp_timer_get_time() / 1000 + (int64_t)duration_ms;
-    app_wifi_runtime_unlock();
-}
-
-void app_wifi_resume_profile_writeback(void)
-{
-    app_wifi_runtime_lock();
-    s_profile_writeback_suppress_until_ms = 0;
-    app_wifi_runtime_unlock();
-}
-
-static bool app_wifi_profile_writeback_suppressed(void)
-{
-    bool suppressed;
-    int64_t now_ms = esp_timer_get_time() / 1000;
-
-    app_wifi_runtime_lock();
-    suppressed = (s_profile_writeback_suppress_until_ms != 0 &&
-                  now_ms < s_profile_writeback_suppress_until_ms);
-    app_wifi_runtime_unlock();
-    return suppressed;
-}
-
+/* BLE 救援命令独占 Wi-Fi:暂停新的自动重连调度,等待当前 connect task 退出,
+ * 并串行化扫描,避免 STA 失败重连时 network.scan 返回空列表。 */
+static volatile bool s_wifi_auto_connect_suspended = false;
+static SemaphoreHandle_t s_wifi_scan_lock = NULL;
+static StaticSemaphore_t s_wifi_scan_lock_buf;
+static portMUX_TYPE s_wifi_scan_lock_mux = portMUX_INITIALIZER_UNLOCKED;
 _Static_assert(sizeof(s_wifi.scan_records_storage) >=
                    sizeof(wifi_ap_record_t) * WIFI_SCAN_LIST_SIZE,
                "scan_records_storage must fit WIFI_SCAN_LIST_SIZE records");
@@ -122,6 +95,20 @@ static void app_wifi_restart_unlock(void)
 {
     if (s_wifi_restart_lock != NULL) {
         xSemaphoreGiveRecursive(s_wifi_restart_lock);
+    }
+}
+
+static void app_wifi_scan_lock(void)
+{
+    SemaphoreHandle_t lock = app_mutex_ensure(&s_wifi_scan_lock, &s_wifi_scan_lock_buf,
+                                              &s_wifi_scan_lock_mux, true);
+    xSemaphoreTakeRecursive(lock, portMAX_DELAY);
+}
+
+static void app_wifi_scan_unlock(void)
+{
+    if (s_wifi_scan_lock != NULL) {
+        xSemaphoreGiveRecursive(s_wifi_scan_lock);
     }
 }
 
@@ -188,6 +175,8 @@ void app_wifi_sta_config_updated(void)
     app_wifi_profiles_unlock();
 }
 
+/* AP/APSTA strings exist only to read legacy NVS values; runtime forces STA and
+ * cfg_validate_net_mode() rejects any non-STA write. */
 const char *app_network_mode_to_string(uint8_t mode)
 {
     switch (mode) {
@@ -302,27 +291,10 @@ static void app_sta_ip_conflict_check_start(void)
     }
 }
 
-static wifi_mode_t app_network_mode_to_wifi_mode(uint8_t mode)
-{
-    switch (mode) {
-    case NET_MODE_STA:
-        return WIFI_MODE_STA;
-    case NET_MODE_APSTA:
-        return WIFI_MODE_APSTA;
-    case NET_MODE_AP:
-    default:
-        return WIFI_MODE_AP;
-    }
-}
-
 bool app_network_mode_has_sta(uint8_t mode)
 {
-    return mode == NET_MODE_STA || mode == NET_MODE_APSTA;
-}
-
-bool app_network_mode_has_ap(uint8_t mode)
-{
-    return mode == NET_MODE_AP || mode == NET_MODE_APSTA;
+    (void)mode;
+    return true;
 }
 
 static int64_t app_wifi_now_ms(void)
@@ -363,7 +335,6 @@ static void app_wifi_start_startup_connect_window(void)
 
     app_wifi_runtime_lock();
     s_wifi.startup_connect_active = true;
-    s_wifi.startup_fallback_to_ap = false;
     s_wifi.startup_connect_deadline_ms = app_wifi_now_ms() + APP_WIFI_STA_STARTUP_TIMEOUT_MS;
     s_wifi_fast_path_pending = true;
     app_wifi_runtime_unlock();
@@ -440,59 +411,6 @@ static esp_err_t app_configure_sta_static_ip(void)
              dns1_str[0] != '\0' ? dns1_str : "(none)",
              dns2_str[0] != '\0' ? dns2_str : "(none)");
     return ESP_OK;
-}
-
-static esp_err_t app_configure_ap_netif_ip(void)
-{
-    esp_netif_ip_info_t ip_info = {0};
-    esp_err_t err;
-
-    if (s_ap_netif == NULL) {
-        return ESP_ERR_INVALID_STATE;
-    }
-
-    err = esp_netif_dhcps_stop(s_ap_netif);
-    if (err != ESP_OK &&
-        err != ESP_ERR_ESP_NETIF_DHCP_ALREADY_STOPPED &&
-        err != ESP_ERR_ESP_NETIF_IF_NOT_READY &&
-        err != ESP_ERR_INVALID_STATE &&
-        err != ESP_ERR_NOT_SUPPORTED) {
-        ESP_LOGW(TAG, "dhcps stop unexpected err 0x%x, still proceed to set_ip_info", err);
-    }
-
-    IP4_ADDR(&ip_info.ip, 192, 168, 8, 1);
-    IP4_ADDR(&ip_info.gw, 192, 168, 8, 1);
-    IP4_ADDR(&ip_info.netmask, 255, 255, 255, 0);
-    err = esp_netif_set_ip_info(s_ap_netif, &ip_info);
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "set ap netif ip info failed: %s", esp_err_to_name(err));
-        return err;
-    }
-
-    /* DHCP 下发 DNS=AP IP:客户端的域名查询才会进 captive dns 劫持
-     * (IDF dhcps 默认不添加 DNS 选项,须同时置位 OFFER_DNS 与地址,问题与版本优化.md 第 24 项) */
-    dhcps_offer_t dns_offer = OFFER_DNS;
-    esp_netif_dns_info_t dns_info = {0};
-    dns_info.ip.type = ESP_IPADDR_TYPE_V4;
-    IP4_ADDR(&dns_info.ip.u_addr.ip4, 192, 168, 8, 1);
-    esp_netif_dhcps_option(s_ap_netif, ESP_NETIF_OP_SET, ESP_NETIF_DOMAIN_NAME_SERVER,
-                           &dns_offer, sizeof(dns_offer));
-    esp_netif_set_dns_info(s_ap_netif, ESP_NETIF_DNS_MAIN, &dns_info);
-
-    /* DHCP 选项 114(强制门户地址,RFC 7710):较新系统跳过探测直接打开此 URL,
-     * 必须免认证 200——指向落地页而非会 401 的根路径;URI 按 RFC 不带 NUL 尾 */
-    static const char captive_portal_uri[] = "http://192.168.8.1" APP_WEB_PORTAL_PATH;
-    esp_netif_dhcps_option(s_ap_netif, ESP_NETIF_OP_SET, ESP_NETIF_CAPTIVEPORTAL_URI,
-                           (void *)captive_portal_uri, sizeof(captive_portal_uri) - 1);
-
-    err = esp_netif_dhcps_start(s_ap_netif);
-    if (err == ESP_ERR_ESP_NETIF_DHCP_ALREADY_STARTED ||
-        err == ESP_ERR_ESP_NETIF_IF_NOT_READY ||
-        err == ESP_ERR_INVALID_STATE ||
-        err == ESP_ERR_NOT_SUPPORTED) {
-        err = ESP_OK;
-    }
-    return err;
 }
 
 static void app_wifi_load_saved_profiles(void)
@@ -686,9 +604,10 @@ static esp_err_t app_wifi_connect_best_saved_profile(bool allow_fast_path)
     esp_err_t err;
     int profile_index;
     size_t profile_count;
-    char sta_ssid_snapshot[33];
-    char sta_password_snapshot[65];
+    char sta_ssid_snapshot[33] = {0};
+    char sta_password_snapshot[65] = {0};
     bool sta_has_ssid = false;
+    bool formal_static = false;
 
     app_wifi_load_saved_profiles();
     app_config_lock();
@@ -697,7 +616,13 @@ static esp_err_t app_wifi_connect_best_saved_profile(bool allow_fast_path)
         app_copy_string(sta_password_snapshot, sizeof(sta_password_snapshot), s_config.sta_password);
         sta_has_ssid = true;
     }
+    formal_static = (s_config.sta_use_static != 0);
     app_config_unlock();
+
+    /* 静态 IP 与正式 SSID 绑定；即便调用方不允许 fast path，也必须先试正式配置。 */
+    if (formal_static) {
+        allow_fast_path = true;
+    }
 
     if (allow_fast_path && sta_has_ssid) {
         wifi_config_t sta_cfg = {0};
@@ -747,6 +672,17 @@ static esp_err_t app_wifi_connect_best_saved_profile(bool allow_fast_path)
         } else {
             ESP_LOGW(TAG, "fast_path set_config failed: %s, fall back to scan", esp_err_to_name(err));
         }
+    }
+
+    if (formal_static) {
+        /* 静态 IP 是给正式 SSID 的，不能扫描后切到另一个 profile：
+         * 那会把 A 的静态地址套到 B 上（P0-4 的触发条件）。
+         * fast path 失败时清掉 connecting，让 boot monitor 继续重试正式 SSID，
+         * 而不是留下 true 后永久不调度。 */
+        ESP_LOGW(TAG, "formal config uses static IP; skip saved-profile fallback (ssid=%s)",
+                 sta_ssid_snapshot);
+        s_wifi_sta_connecting = false;
+        return ESP_ERR_INVALID_STATE;
     }
 
     app_wifi_profiles_lock();
@@ -878,18 +814,6 @@ static void app_wifi_handle_startup_sta_failure(const char *reason)
     const char *effective_reason = reason;
     char buf_last_disconnect[sizeof(s_wifi.last_disconnect)];
     char buf_fallback_reason[sizeof(s_wifi.startup_fallback_reason)];
-    uint8_t buf_net_mode;
-    bool buf_fallback_to_ap;
-
-    app_config_lock();
-    buf_net_mode = s_config.net_mode;
-    app_config_unlock();
-    app_wifi_runtime_lock();
-    buf_fallback_to_ap = s_wifi.startup_fallback_to_ap;
-    app_wifi_runtime_unlock();
-    if (buf_net_mode != NET_MODE_STA || buf_fallback_to_ap) {
-        return;
-    }
 
     app_wifi_runtime_lock();
     app_copy_string(buf_last_disconnect, sizeof(buf_last_disconnect), s_wifi.last_disconnect);
@@ -900,29 +824,16 @@ static void app_wifi_handle_startup_sta_failure(const char *reason)
         effective_reason = buf_last_disconnect;
     }
 
-    app_wifi_runtime_lock();
-    s_wifi.startup_fallback_to_ap = true;
-    app_wifi_runtime_unlock();
+    /* HTTP/Web 已删除:AP 没有配置通道。启动失败保持 STA,让 BLE 继续广播
+     * 供小程序救援;不再自动切 AP,也不再把 net_mode 持久化为 AP。 */
     app_wifi_set_startup_fallback_reason(effective_reason != NULL ? effective_reason : "connect_timeout");
     app_wifi_stop_startup_connect_window();
     app_wifi_runtime_lock();
     app_copy_string(buf_fallback_reason, sizeof(buf_fallback_reason), s_wifi.startup_fallback_reason);
-    app_wifi_runtime_unlock();
-    app_wifi_runtime_lock();
     app_copy_string(s_wifi.last_disconnect, sizeof(s_wifi.last_disconnect), buf_fallback_reason);
     app_wifi_runtime_unlock();
-    ESP_LOGW(TAG, "STA startup failed (%s), switching configured mode to AP",
+    ESP_LOGW(TAG, "STA startup failed (%s); staying in STA for BLE rescue (AP fallback disabled)",
              buf_fallback_reason);
-
-    app_config_lock();
-    s_config.net_mode = NET_MODE_AP;
-    if (app_config_save(&s_config) != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to persist AP fallback mode");
-    }
-    app_config_unlock();
-    if (app_apply_wifi_config() != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to apply AP fallback mode");
-    }
 }
 
 static void app_wifi_boot_monitor_task_fn(void *arg)
@@ -973,9 +884,32 @@ static void app_wifi_boot_monitor_task_fn(void *arg)
     }
 }
 
+static void app_wifi_auto_connect_suspend(void)
+{
+    s_wifi_auto_connect_suspended = true;
+}
+
+static void app_wifi_auto_connect_resume(void)
+{
+    s_wifi_auto_connect_suspended = false;
+}
+
+static bool app_wifi_wait_connect_task_idle(uint32_t timeout_ms)
+{
+    int64_t deadline = app_wifi_now_ms() + (int64_t)timeout_ms;
+
+    while (s_wifi_connect_task != NULL && app_wifi_now_ms() < deadline) {
+        vTaskDelay(pdMS_TO_TICKS(20));
+    }
+    return s_wifi_connect_task == NULL;
+}
+
 static void app_wifi_schedule_connect_task(TickType_t delay_ticks)
 {
     uint8_t net_mode;
+    if (s_wifi_auto_connect_suspended) {
+        return;
+    }
     app_config_lock();
     net_mode = s_config.net_mode;
     app_config_unlock();
@@ -1089,24 +1023,6 @@ static void app_wifi_event_handler(void *arg, esp_event_base_t event_base, int32
 
     if (event_base == WIFI_EVENT) {
         switch (event_id) {
-        case WIFI_EVENT_AP_STACONNECTED: {
-            wifi_event_ap_staconnected_t *ap_sta = event_data;
-            /* AP 客户端加入/离开必须可见:排查"手机连着 AP 但网页转圈/半截"
-             * —— 若 STA 抖动带着 AP 换信道,客户端会反复掉线重连,此处会连续刷屏 */
-            ESP_LOGI(TAG, "AP client joined: %02x:%02x:%02x:%02x:%02x:%02x aid=%u",
-                     ap_sta->mac[0], ap_sta->mac[1], ap_sta->mac[2],
-                     ap_sta->mac[3], ap_sta->mac[4], ap_sta->mac[5],
-                     (unsigned)ap_sta->aid);
-            break;
-        }
-        case WIFI_EVENT_AP_STADISCONNECTED: {
-            wifi_event_ap_stadisconnected_t *ap_sta = event_data;
-            ESP_LOGI(TAG, "AP client left: %02x:%02x:%02x:%02x:%02x:%02x aid=%u reason=%u",
-                     ap_sta->mac[0], ap_sta->mac[1], ap_sta->mac[2],
-                     ap_sta->mac[3], ap_sta->mac[4], ap_sta->mac[5],
-                     (unsigned)ap_sta->aid, (unsigned)ap_sta->reason);
-            break;
-        }
         case WIFI_EVENT_STA_START:
             app_wifi_profiles_lock();
             s_wifi_attempted_mask = 0;
@@ -1286,8 +1202,6 @@ static void app_wifi_event_handler(void *arg, esp_event_base_t event_base, int32
         }
     } else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
         ip_event_got_ip_t *event = event_data;
-        int active_profile_snapshot;
-        size_t profile_count_snapshot;
 
         /* 试连验证:拿 IP 属候选连接,不写运行时状态/不回写 profile。
          * 必须处于候选 connecting 阶段,避免旧连接的迟到 IP 事件误判成功。 */
@@ -1330,92 +1244,37 @@ static void app_wifi_event_handler(void *arg, esp_event_base_t event_base, int32
             }
         }
 
-        app_wifi_profiles_lock();
-        active_profile_snapshot = s_wifi_active_profile_index;
-        profile_count_snapshot = s_wifi_profile_count;
-        app_wifi_profiles_unlock();
-        if (app_wifi_profile_writeback_suppressed()) {
-            ESP_LOGI(TAG, "profile writeback suppressed by pending network trial");
-        } else if (active_profile_snapshot >= 0 &&
-            (size_t)active_profile_snapshot < profile_count_snapshot) {
-            char profile_ssid[33];
-            char profile_password[65];
-            app_wifi_profiles_lock();
-            app_copy_string(profile_ssid, sizeof(profile_ssid),
-                            s_wifi_profiles[active_profile_snapshot].ssid);
-            app_copy_string(profile_password, sizeof(profile_password),
-                            s_wifi_profiles[active_profile_snapshot].password);
-            app_wifi_profiles_unlock();
-            /* 护栏(问题与版本优化.md 1.3-20):profile 的 ssid/口令为空时**不回写**主配置 ——
-             * 否则会把可用的凭据用空值覆盖并落盘(自我强化地丢口令)。 */
-            if (profile_ssid[0] != '\0' && profile_password[0] != '\0') {
-                app_config_lock();
-                app_copy_string(s_config.sta_ssid, sizeof(s_config.sta_ssid), profile_ssid);
-                app_copy_string(s_config.sta_password, sizeof(s_config.sta_password), profile_password);
-                app_config_save(&s_config);
-                app_config_unlock();
-                app_config_save_wifi_profile(profile_ssid, profile_password);
-                app_wifi_load_saved_profiles();
-            } else {
-                ESP_LOGW(TAG, "profile %d has empty ssid/password; skip config writeback",
-                         active_profile_snapshot);
-            }
-        }
+        /* P0-4: 正式配置只允许由 network.apply / config.set 修改。
+         * 这里原先会把自动重连选中的旧 profile（如 CMCC-502）只写
+         * ssid/password 到 s_config，留下新配置的静态字段，造成 SSID
+         * 与静态 IP 跨网络拼接。自动重连/profile 只是运行时回退，
+         * 不得改写正式配置。 */
     }
 }
 
 static esp_err_t app_apply_wifi_config(void)
 {
-    wifi_config_t ap_cfg = {0};
     wifi_config_t sta_cfg = {0};
     esp_err_t err;
-    uint8_t net_mode_snapshot;
-    char ap_ssid_log[sizeof(s_config.ap_ssid)];
     char sta_ssid_log[sizeof(s_config.sta_ssid)];
-    char sta_pwd_log[sizeof(s_config.sta_password)];   /* 仅用于打印长度,绝不打印内容 */
+    char sta_pwd_log[sizeof(s_config.sta_password)];
     bool sta_use_static = false;
 
     app_config_lock();
     sta_use_static = s_config.sta_use_static;
-    if (app_network_mode_has_ap(s_config.net_mode)) {
-        app_copy_string((char *)ap_cfg.ap.ssid, sizeof(ap_cfg.ap.ssid), s_config.ap_ssid);
-        ap_cfg.ap.ssid_len = strlen((char *)ap_cfg.ap.ssid);
-        app_copy_string((char *)ap_cfg.ap.password, sizeof(ap_cfg.ap.password), s_config.ap_password);
-    }
-    if (app_network_mode_has_sta(s_config.net_mode)) {
-        app_copy_fixed_bytes(sta_cfg.sta.ssid, sizeof(sta_cfg.sta.ssid), s_config.sta_ssid);
-        app_copy_fixed_bytes(sta_cfg.sta.password, sizeof(sta_cfg.sta.password), s_config.sta_password);
-    }
-    app_copy_string(ap_ssid_log, sizeof(ap_ssid_log), s_config.ap_ssid);
+    app_copy_fixed_bytes(sta_cfg.sta.ssid, sizeof(sta_cfg.sta.ssid), s_config.sta_ssid);
+    app_copy_fixed_bytes(sta_cfg.sta.password, sizeof(sta_cfg.sta.password), s_config.sta_password);
     app_copy_string(sta_ssid_log, sizeof(sta_ssid_log), s_config.sta_ssid);
     app_copy_string(sta_pwd_log, sizeof(sta_pwd_log), s_config.sta_password);
-    net_mode_snapshot = s_config.net_mode;
     app_config_unlock();
 
-    if (app_network_mode_has_ap(net_mode_snapshot)) {
-        ap_cfg.ap.channel = 1;
-        ap_cfg.ap.max_connection = 4;
-        ap_cfg.ap.authmode = strlen((char *)ap_cfg.ap.password) == 0 ? WIFI_AUTH_OPEN : WIFI_AUTH_WPA2_PSK;
-        ap_cfg.ap.pmf_cfg.required = false;
-    }
-    if (app_network_mode_has_sta(net_mode_snapshot)) {
-        sta_cfg.sta.threshold.authmode =
-            (strlen((const char *)sta_cfg.sta.password) >= 8) ? APP_WIFI_STA_AUTHMODE_MIN : WIFI_AUTH_OPEN;
-        sta_cfg.sta.pmf_cfg.capable = true;
-        sta_cfg.sta.pmf_cfg.required = false;
-        sta_cfg.sta.scan_method = WIFI_FAST_SCAN;
-    }
-    if (app_network_mode_has_sta(net_mode_snapshot)) {
-        app_wifi_log_sta_cfg("apply_wifi_config", &sta_cfg);
-    }
-
-    /* 打印"实际存储值"而不是"是否启用":此前非 STA 模式下恒打 <disabled>,
-     * 会把"SSID 已存但模式未启用"(1.3-04)掩盖成"没保存",排障时严重误导 */
-    ESP_LOGI(TAG, "apply_wifi_config: net_mode=%d has_ap=%d has_sta=%d ap_ssid='%s' sta_ssid='%s' sta_pwd_len=%u",
-             net_mode_snapshot,
-             (int)app_network_mode_has_ap(net_mode_snapshot),
-             (int)app_network_mode_has_sta(net_mode_snapshot),
-             ap_ssid_log[0] != '\0' ? ap_ssid_log : "<empty>",
+    sta_cfg.sta.threshold.authmode =
+        (strlen((const char *)sta_cfg.sta.password) >= 8) ? APP_WIFI_STA_AUTHMODE_MIN : WIFI_AUTH_OPEN;
+    sta_cfg.sta.pmf_cfg.capable = true;
+    sta_cfg.sta.pmf_cfg.required = false;
+    sta_cfg.sta.scan_method = WIFI_FAST_SCAN;
+    app_wifi_log_sta_cfg("apply_wifi_config", &sta_cfg);
+    ESP_LOGI(TAG, "apply_wifi_config: STA-only sta_ssid='%s' sta_pwd_len=%u",
              sta_ssid_log[0] != '\0' ? sta_ssid_log : "<empty>",
              (unsigned)strlen(sta_pwd_log));
 
@@ -1429,10 +1288,9 @@ static esp_err_t app_apply_wifi_config(void)
     s_wifi.sta_has_ip = false;
     s_wifi.sta_ip_conflict = false;
     s_wifi.sta_retries = 0;
-    s_wifi.startup_fallback_to_ap = false;
     app_wifi_runtime_unlock();
     s_wifi_sta_connecting = false;
-    s_wifi_pmf_required_tried = false;   /* 重新配置网络后允许再次 PMF 兜底 */
+    s_wifi_pmf_required_tried = false;
     app_wifi_profiles_lock();
     s_wifi_active_profile_index = -1;
     s_wifi_attempted_mask = 0;
@@ -1441,49 +1299,27 @@ static esp_err_t app_apply_wifi_config(void)
     app_wifi_set_startup_fallback_reason("none");
     app_set_sta_ip_strings(NULL);
 
-    err = esp_wifi_set_mode(app_network_mode_to_wifi_mode(net_mode_snapshot));
+    err = esp_wifi_set_mode(WIFI_MODE_STA);
     if (err != ESP_OK) {
-        ESP_LOGE(TAG, "apply_wifi_config: set_mode failed: %s", esp_err_to_name(err));
+        ESP_LOGE(TAG, "apply_wifi_config: set_mode STA failed: %s", esp_err_to_name(err));
         return err;
     }
-    if (!app_network_mode_has_ap(net_mode_snapshot)) {
-        esp_netif_ip_info_t zero_ip;
-        memset(&zero_ip, 0, sizeof(zero_ip));
-        esp_netif_set_ip_info(s_ap_netif, &zero_ip);
-        wifi_config_t zero_ap_cfg = {0};
-        zero_ap_cfg.ap.authmode = WIFI_AUTH_OPEN;
-        zero_ap_cfg.ap.ssid_len = 0;
-        esp_wifi_set_config(WIFI_IF_AP, &zero_ap_cfg);
+
+    err = esp_wifi_set_config(WIFI_IF_STA, &sta_cfg);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "apply_wifi_config: set sta config failed: %s", esp_err_to_name(err));
+        return err;
     }
-    if (app_network_mode_has_ap(net_mode_snapshot)) {
-        err = esp_wifi_set_config(WIFI_IF_AP, &ap_cfg);
+    if (sta_use_static) {
+        err = app_configure_sta_static_ip();
         if (err != ESP_OK) {
-            ESP_LOGE(TAG, "apply_wifi_config: set ap config failed: %s", esp_err_to_name(err));
+            ESP_LOGE(TAG, "apply_wifi_config: static ip config failed: %s", esp_err_to_name(err));
             return err;
         }
-        /* 1.3-69:AP 的 netif IP 不能在这里配 —— 此时 esp_wifi_start() 还没调用,
-         * AP 接口未就绪,set_ip_info 不生效/会被随后的 start 重置成 IDF 默认
-         * 192.168.4.1(状态接口因此报 .4.1,而设计值是 192.168.8.1)。
-         * IP/DHCP 选项统一移到 esp_wifi_start() 成功之后。 */
-    }
-    if (app_network_mode_has_sta(net_mode_snapshot)) {
-        err = esp_wifi_set_config(WIFI_IF_STA, &sta_cfg);
-        if (err != ESP_OK) {
-            ESP_LOGE(TAG, "apply_wifi_config: set sta config failed: %s", esp_err_to_name(err));
-            return err;
-        }
-        if (sta_use_static) {
-            err = app_configure_sta_static_ip();
-            if (err != ESP_OK) {
-                ESP_LOGE(TAG, "apply_wifi_config: static ip config failed: %s", esp_err_to_name(err));
-                return err;
-            }
-        } else {
-            /* DHCP 模式:如之前被静态 IP 停止,恢复 DHCP 客户端 */
-            esp_err_t start_err = esp_netif_dhcpc_start(s_sta_netif);
-            if (start_err != ESP_OK && start_err != ESP_ERR_ESP_NETIF_DHCP_ALREADY_STARTED) {
-                ESP_LOGW(TAG, "apply_wifi_config: dhcpc_start: %s", esp_err_to_name(start_err));
-            }
+    } else {
+        esp_err_t start_err = esp_netif_dhcpc_start(s_sta_netif);
+        if (start_err != ESP_OK && start_err != ESP_ERR_ESP_NETIF_DHCP_ALREADY_STARTED) {
+            ESP_LOGW(TAG, "apply_wifi_config: dhcpc_start: %s", esp_err_to_name(start_err));
         }
     }
 
@@ -1494,41 +1330,14 @@ static esp_err_t app_apply_wifi_config(void)
         return err;
     }
     ESP_LOGI(TAG, "apply_wifi_config: esp_wifi_start returned OK");
-
-    /* 1.3-69:AP 接口起来后再设 IP/DHCP 选项。先 stop dhcps → set_ip_info →
-     * DNS/captive URI → start dhcps(见 app_configure_ap_netif_ip)。失败只告警:
-     * AP 退回 IDF 默认 192.168.4.1 仍可用,不把整次 WiFi 启动判失败。 */
-    if (app_network_mode_has_ap(net_mode_snapshot)) {
-        err = app_configure_ap_netif_ip();
-        if (err != ESP_OK) {
-            ESP_LOGE(TAG, "apply_wifi_config: post-start ap netif ip failed: %s", esp_err_to_name(err));
-        }
-    }
     return ESP_OK;
 }
 
-esp_err_t app_wifi_perform_scan(void)
+static esp_err_t app_wifi_perform_scan_impl(void)
 {
-    wifi_mode_t old_mode = WIFI_MODE_NULL;
-    bool temporary_apsta = false;
     uint16_t number = WIFI_SCAN_LIST_SIZE;
     wifi_scan_config_t scan_cfg = {0};
     esp_err_t err;
-
-    err = esp_wifi_get_mode(&old_mode);
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "scan: get_mode failed: %s", esp_err_to_name(err));
-        return err;
-    }
-    if (old_mode == WIFI_MODE_AP) {
-        err = esp_wifi_set_mode(WIFI_MODE_APSTA);
-        if (err != ESP_OK) {
-            ESP_LOGE(TAG, "scan: set APSTA failed: %s", esp_err_to_name(err));
-            return err;
-        }
-        temporary_apsta = true;
-        vTaskDelay(pdMS_TO_TICKS(120));
-    }
 
     scan_cfg.ssid = NULL;
     scan_cfg.bssid = NULL;
@@ -1541,30 +1350,42 @@ esp_err_t app_wifi_perform_scan(void)
     err = esp_wifi_scan_start(&scan_cfg, true);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "scan: start failed: %s", esp_err_to_name(err));
-        if (temporary_apsta) {
-            esp_wifi_set_mode(WIFI_MODE_AP);
-        }
         return err;
     }
     err = esp_wifi_scan_get_ap_records(&number, S_WIFI_SCAN_RECORDS);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "scan: get_ap_records failed: %s", esp_err_to_name(err));
-        if (temporary_apsta) {
-            esp_wifi_set_mode(WIFI_MODE_AP);
-        }
         return err;
     }
     app_wifi_runtime_lock();
     s_wifi.scan_count = number;
     app_wifi_runtime_unlock();
-
-    if (temporary_apsta) {
-        err = esp_wifi_set_mode(WIFI_MODE_AP);
-        if (err != ESP_OK) {
-            ESP_LOGW(TAG, "scan: restore AP mode failed: %s", esp_err_to_name(err));
-        }
-    }
     return ESP_OK;
+}
+
+esp_err_t app_wifi_perform_scan(void)
+{
+    esp_err_t err;
+
+    app_wifi_scan_lock();
+    err = app_wifi_perform_scan_impl();
+    app_wifi_scan_unlock();
+    return err;
+}
+
+esp_err_t app_wifi_perform_scan_command(void)
+{
+    esp_err_t err;
+
+    app_wifi_auto_connect_suspend();
+    if (!app_wifi_wait_connect_task_idle(15000)) {
+        app_wifi_auto_connect_resume();
+        ESP_LOGW(TAG, "scan command: auto-connect task still busy");
+        return ESP_ERR_TIMEOUT;
+    }
+    err = app_wifi_perform_scan();
+    app_wifi_auto_connect_resume();
+    return err;
 }
 
 /* ---------------------------------------------------------------------------
@@ -1577,8 +1398,6 @@ static app_wifi_try_result_t app_wifi_try_connect_common(const char *ssid, const
 {
     wifi_config_t old_cfg = {0};
     wifi_config_t candidate = {0};
-    wifi_mode_t old_wifi_mode = WIFI_MODE_NULL;
-    bool mode_switched = false;
     uint16_t scan_count;
     bool ssid_seen = false;
     EventGroupHandle_t events;
@@ -1591,33 +1410,23 @@ static app_wifi_try_result_t app_wifi_try_connect_common(const char *ssid, const
     if (password == NULL) {
         password = "";
     }
-    if (s_tryconnect_active || s_wifi_connect_task != NULL) {
-        ESP_LOGW(TAG, "tryconnect busy (active=%d connect_task=%p)",
-                 (int)s_tryconnect_active, (void *)s_wifi_connect_task);
+    if (s_tryconnect_active) {
+        ESP_LOGW(TAG, "tryconnect busy (active=1)");
+        return APP_WIFI_TRY_BUSY;
+    }
+    /* BLE 救援优先:暂停自动重连,等当前 connect task 退出后再试连。
+     * 否则 STA 失败重连中的 scan/connect 会和候选流程互相干扰。 */
+    app_wifi_auto_connect_suspend();
+    if (!app_wifi_wait_connect_task_idle(15000)) {
+        app_wifi_auto_connect_resume();
+        ESP_LOGW(TAG, "tryconnect busy: auto-connect task still running");
         return APP_WIFI_TRY_BUSY;
     }
 
     if (esp_wifi_get_config(WIFI_IF_STA, &old_cfg) != ESP_OK) {
         ESP_LOGW(TAG, "tryconnect: get sta config failed");
+        app_wifi_auto_connect_resume();
         return APP_WIFI_TRY_CONNECT_FAILED;
-    }
-    if (esp_wifi_get_mode(&old_wifi_mode) != ESP_OK) {
-        ESP_LOGW(TAG, "tryconnect: get wifi mode failed");
-        return APP_WIFI_TRY_CONNECT_FAILED;
-    }
-
-    /* 纯 AP 模式下 STA 接口未启用，候选试连必须临时切到 APSTA；
-     * 必须在扫描**之前**切换，否则 app_wifi_perform_scan() 结束时会恢复 AP，
-     * 随后 set_config(STA) 返回 ESP_ERR_WIFI_MODE（65D8 AP-only 板实测）。
-     * 结束后恢复原模式，不能把设备永久留在 APSTA。 */
-    if (old_wifi_mode == WIFI_MODE_AP) {
-        err = esp_wifi_set_mode(WIFI_MODE_APSTA);
-        if (err != ESP_OK) {
-            ESP_LOGW(TAG, "tryconnect: switch AP->APSTA failed: %s", esp_err_to_name(err));
-            return APP_WIFI_TRY_CONNECT_FAILED;
-        }
-        mode_switched = true;
-        ESP_LOGI(TAG, "tryconnect: temporary APSTA enabled (old mode=%d)", (int)old_wifi_mode);
     }
 
     /* 预检(方案 C):扫描确认 SSID 在场。隐藏网络扫不到 —— 属预期限制,前端文案说明 */
@@ -1638,9 +1447,7 @@ static app_wifi_try_result_t app_wifi_try_connect_common(const char *ssid, const
         }
         if (!ssid_seen) {
             ESP_LOGW(TAG, "tryconnect: ssid '%s' not in scan results", ssid);
-            if (mode_switched) {
-                (void)esp_wifi_set_mode(old_wifi_mode);
-            }
+            app_wifi_auto_connect_resume();
             return APP_WIFI_TRY_AP_NOT_FOUND;
         }
     }
@@ -1666,9 +1473,7 @@ static app_wifi_try_result_t app_wifi_try_connect_common(const char *ssid, const
         events = created;
     }
     if (events == NULL) {
-        if (mode_switched) {
-            (void)esp_wifi_set_mode(old_wifi_mode);
-        }
+        app_wifi_auto_connect_resume();
         return APP_WIFI_TRY_CONNECT_FAILED;
     }
 
@@ -1698,9 +1503,7 @@ static app_wifi_try_result_t app_wifi_try_connect_common(const char *ssid, const
             s_tryconnect_require_ip = false;
             s_wifi_sta_connecting = false;
             (void)esp_wifi_set_config(WIFI_IF_STA, &old_cfg);
-            if (mode_switched) {
-                (void)esp_wifi_set_mode(old_wifi_mode);
-            }
+            app_wifi_auto_connect_resume();
             app_wifi_schedule_connect_task(pdMS_TO_TICKS(400));
             return APP_WIFI_TRY_CONNECT_FAILED;
         }
@@ -1718,9 +1521,7 @@ static app_wifi_try_result_t app_wifi_try_connect_common(const char *ssid, const
         s_tryconnect_require_ip = false;
         s_wifi_sta_connecting = false;
         (void)esp_wifi_set_config(WIFI_IF_STA, &old_cfg);
-        if (mode_switched) {
-            (void)esp_wifi_set_mode(old_wifi_mode);
-        }
+        app_wifi_auto_connect_resume();
         app_wifi_schedule_connect_task(pdMS_TO_TICKS(400));
         return APP_WIFI_TRY_CONNECT_FAILED;
     }
@@ -1761,15 +1562,7 @@ static app_wifi_try_result_t app_wifi_try_connect_common(const char *ssid, const
     if (esp_wifi_set_config(WIFI_IF_STA, &old_cfg) != ESP_OK) {
         ESP_LOGW(TAG, "tryconnect: restore sta config failed");
     }
-    if (mode_switched) {
-        esp_err_t mode_err = esp_wifi_set_mode(old_wifi_mode);
-        if (mode_err != ESP_OK) {
-            ESP_LOGW(TAG, "tryconnect: restore wifi mode failed: %s",
-                     esp_err_to_name(mode_err));
-        } else {
-            ESP_LOGI(TAG, "tryconnect: restored wifi mode=%d", (int)old_wifi_mode);
-        }
-    }
+    app_wifi_auto_connect_resume();
     app_wifi_schedule_connect_task(pdMS_TO_TICKS(400));
 
     ESP_LOGI(TAG, "tryconnect ssid='%s' result=%d require_ip=%d",
@@ -1853,16 +1646,11 @@ void app_start_wifi(void)
 
     ESP_ERROR_CHECK(esp_netif_init());
     ESP_ERROR_CHECK(esp_event_loop_create_default());
-    s_ap_netif = esp_netif_create_default_wifi_ap();
     s_sta_netif = esp_netif_create_default_wifi_sta();
 
     /* hostname 与 storage 属非致命配置,失败降级告警,不中止启动 */
     {
-        esp_err_t hostname_err = esp_netif_set_hostname(s_ap_netif, hostname);
-        if (hostname_err != ESP_OK) {
-            ESP_LOGW(TAG, "set ap hostname failed: %s", esp_err_to_name(hostname_err));
-        }
-        hostname_err = esp_netif_set_hostname(s_sta_netif, hostname);
+        esp_err_t hostname_err = esp_netif_set_hostname(s_sta_netif, hostname);
         if (hostname_err != ESP_OK) {
             ESP_LOGW(TAG, "set sta hostname failed: %s", esp_err_to_name(hostname_err));
         }
@@ -1883,7 +1671,28 @@ void app_start_wifi(void)
                         NULL, 5, &s_wifi_boot_monitor_task) != pdPASS) {
             s_wifi_boot_monitor_task = NULL;
             ESP_LOGE(TAG, "Failed to create wifi_boot_monitor task "
-                          "(startup STA-failure AP fallback will be unavailable)");
+                          "(STA failure will stay STA for BLE rescue)");
+        }
+    }
+
+    /* AP/APSTA 已移除:旧 NVS 的 net_mode 迁移为 STA,避免重启后进入无配置通道的 AP。 */
+    {
+        bool changed = false;
+        app_config_lock();
+        if (s_config.net_mode != NET_MODE_STA) {
+            s_config.net_mode = NET_MODE_STA;
+            changed = true;
+        }
+        app_config_unlock();
+        if (changed) {
+            app_config_lock();
+            esp_err_t save_err = app_config_save(&s_config);
+            app_config_unlock();
+            if (save_err != ESP_OK) {
+                ESP_LOGW(TAG, "force STA migration save failed: %s", esp_err_to_name(save_err));
+            } else {
+                ESP_LOGW(TAG, "legacy net_mode forced to STA (AP/APSTA removed)");
+            }
         }
     }
     ESP_ERROR_CHECK(app_apply_wifi_config());

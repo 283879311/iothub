@@ -1,0 +1,414 @@
+{
+  "timestamp": "2026-10-23T19:52:01.868",
+  "name": "T1_SUCCESS_TRYCONNECT_GOT_IP_APPLY",
+  "ssid": "CMCC-502",
+  "password_redacted": true,
+  "caveats": [],
+  "board": {
+    "address": "B0:A7:32:28:C8:E6",
+    "name": "IotHubBLE-C8E4",
+    "adv_local_name": "IotHubBLE-C8E4"
+  },
+  "device_info": {
+    "id": "info-2",
+    "ok": true,
+    "data": {
+      "model": "iothub",
+      "firmware": "1.2",
+      "device_id": "IotHub-C8E4",
+      "protocol_versions": [
+        "1.0"
+      ],
+      "security": {
+        "link_encrypted": false,
+        "bonded": false,
+        "l2_ready": false,
+        "sensitive_writes_allowed": false
+      }
+    }
+  },
+  "before": {
+    "sta_connected": true,
+    "sta_has_ip": true,
+    "sta_ip": "192.168.1.213",
+    "last_disconnect": "none",
+    "sta_ssid": "CMCC-502",
+    "password_set": true,
+    "mode": "sta",
+    "mqtt_connected": true,
+    "mqtt_last_error": "",
+    "trial": {
+      "state": "idle"
+    }
+  },
+  "scan": {
+    "ok": true,
+    "target_visible": true,
+    "count": 8,
+    "ssids": [
+      "CMCC-502",
+      "CMCC-GhyE",
+      "ChinaNet-eykP",
+      "CMCC-xYA7",
+      "TP-LINK_BFBD",
+      "CU_2MWf",
+      "ChinaNGB-UM8Qvf",
+      "CU_Gb5G"
+    ],
+    "bytes": 626,
+    "frags": 3
+  },
+  "tryconnect": {
+    "ok": true,
+    "state": "accepted",
+    "operation_id": "op-50D39AD873159FA4",
+    "error": null,
+    "latency_ms": 151.7
+  },
+  "operation_states": [
+    {
+      "t": 0.315,
+      "state": "connecting",
+      "error": "none",
+      "trial_id": null,
+      "ssid": null
+    },
+    {
+      "t": 0.946,
+      "state": "connecting",
+      "error": "none",
+      "trial_id": null,
+      "ssid": null
+    },
+    {
+      "t": 1.577,
+      "state": "connecting",
+      "error": "none",
+      "trial_id": null,
+      "ssid": null
+    },
+    {
+      "t": 2.249,
+      "state": "connecting",
+      "error": "none",
+      "trial_id": null,
+      "ssid": null
+    },
+    {
+      "t": 2.88,
+      "state": "connecting",
+      "error": "none",
+      "trial_id": null,
+      "ssid": null
+    },
+    {
+      "t": 3.51,
+      "state": "connecting",
+      "error": "none",
+      "trial_id": null,
+      "ssid": null
+    },
+    {
+      "t": 4.186,
+      "state": "connecting",
+      "error": "none",
+      "trial_id": null,
+      "ssid": null
+    },
+    {
+      "t": 4.816,
+      "state": "connecting",
+      "error": "none",
+      "trial_id": null,
+      "ssid": null
+    },
+    {
+      "t": 5.445,
+      "state": "connecting",
+      "error": "none",
+      "trial_id": null,
+      "ssid": null
+    },
+    {
+      "t": 6.075,
+      "state": "connecting",
+      "error": "none",
+      "trial_id": null,
+      "ssid": null
+    },
+    {
+      "t": 6.707,
+      "state": "connecting",
+      "error": "none",
+      "trial_id": null,
+      "ssid": null
+    },
+    {
+      "t": 7.291,
+      "state": "connecting",
+      "error": "none",
+      "trial_id": null,
+      "ssid": null
+    },
+    {
+      "t": 7.921,
+      "state": "connecting",
+      "error": "none",
+      "trial_id": null,
+      "ssid": null
+    },
+    {
+      "t": 8.506,
+      "state": "connecting",
+      "error": "none",
+      "trial_id": null,
+      "ssid": null
+    },
+    {
+      "t": 9.18,
+      "state": "connecting",
+      "error": "none",
+      "trial_id": null,
+      "ssid": null
+    },
+    {
+      "t": 9.897,
+      "state": "connecting",
+      "error": "none",
+      "trial_id": null,
+      "ssid": null
+    },
+    {
+      "t": 10.53,
+      "state": "got_ip",
+      "error": "none",
+      "trial_id": "trial-751CAE75",
+      "ssid": "CMCC-502"
+    }
+  ],
+  "terminal": {
+    "state": "got_ip",
+    "error": "none",
+    "data": {
+      "operation_id": "op-50D39AD873159FA4",
+      "state": "got_ip",
+      "error": "none",
+      "trial_id": "trial-751CAE75",
+      "ssid": "CMCC-502"
+    },
+    "elapsed_s": 10.53,
+    "observed_connecting": true
+  },
+  "candidate_status": {
+    "sta_connected": true,
+    "sta_has_ip": false,
+    "sta_ip": "0.0.0.0",
+    "last_disconnect": "none",
+    "sta_ssid": "CMCC-502",
+    "password_set": true,
+    "mode": "sta",
+    "mqtt_connected": false,
+    "mqtt_last_error": "waiting_sta_ip",
+    "trial": {
+      "trial_id": "trial-751CAE75",
+      "state": "got_ip",
+      "ssid": "CMCC-502"
+    }
+  },
+  "apply": {
+    "ok": true,
+    "state": "success",
+    "saved": true,
+    "applied": true,
+    "error": null,
+    "data": {
+      "id": "apply-24",
+      "ok": true,
+      "data": {
+        "operation_id": "op-50D39AD873159FA4",
+        "state": "success",
+        "saved": true,
+        "applied": true
+      }
+    }
+  },
+  "apply_duplicate": {
+    "ok": true,
+    "state": "success",
+    "error": null
+  },
+  "cancel_after_success": {
+    "ok": false,
+    "error_code": "operation_state",
+    "error": "{\"code\": \"operation_state\", \"message\": \"operation_state\"}",
+    "data": null
+  },
+  "after_apply_ready": {
+    "ok": true,
+    "elapsed_s": 0.147,
+    "status": {
+      "sta_connected": true,
+      "sta_has_ip": false,
+      "sta_ip": "0.0.0.0",
+      "last_disconnect": "none",
+      "sta_ssid": "CMCC-502",
+      "password_set": true,
+      "mode": "sta",
+      "mqtt_connected": false,
+      "mqtt_last_error": "waiting_sta_ip",
+      "trial": {
+        "state": "idle"
+      }
+    }
+  },
+  "after_apply": {
+    "sta_connected": true,
+    "sta_has_ip": false,
+    "sta_ip": "0.0.0.0",
+    "last_disconnect": "none",
+    "sta_ssid": "CMCC-502",
+    "password_set": true,
+    "mode": "sta",
+    "mqtt_connected": false,
+    "mqtt_last_error": "waiting_sta_ip",
+    "trial": {
+      "state": "idle"
+    }
+  },
+  "after_config_network": {
+    "net_mode": "sta",
+    "ap_ssid": "IotHub-C8E4",
+    "ap_password_set": false,
+    "sta_ssid": "CMCC-502",
+    "sta_password_set": true,
+    "sta_use_static": false,
+    "sta_static_ip": "192.168.1.213",
+    "sta_static_gateway": "192.168.1.1",
+    "sta_static_netmask": "255.255.255.0",
+    "sta_static_dns1": "192.168.1.1",
+    "sta_static_dns2": "8.8.8.8",
+    "sta_connected": true,
+    "sta_has_ip": true,
+    "sta_ip": "192.168.1.28",
+    "last_disconnect": "none",
+    "startup_fallback_to_ap": false
+  },
+  "after_mqtt": {
+    "mqtt_backend": "tb_selfhost",
+    "mqtt_host": "117.131.99.2",
+    "mqtt_port": 21883,
+    "mqtt_use_tls": false,
+    "mqtt_token_set": true,
+    "connected": false,
+    "publish_count": 2457,
+    "outbox": 0,
+    "last_error": "waiting_sta_ip"
+  },
+  "after_mqtt_retry": {
+    "mqtt_backend": "tb_selfhost",
+    "mqtt_host": "117.131.99.2",
+    "mqtt_port": 21883,
+    "mqtt_use_tls": false,
+    "mqtt_token_set": true,
+    "connected": true,
+    "publish_count": 2458,
+    "outbox": 0,
+    "last_error": ""
+  },
+  "after_config_network_retry": {
+    "net_mode": "sta",
+    "ap_ssid": "IotHub-C8E4",
+    "ap_password_set": false,
+    "sta_ssid": "CMCC-502",
+    "sta_password_set": true,
+    "sta_use_static": false,
+    "sta_static_ip": "192.168.1.213",
+    "sta_static_gateway": "192.168.1.1",
+    "sta_static_netmask": "255.255.255.0",
+    "sta_static_dns1": "192.168.1.1",
+    "sta_static_dns2": "8.8.8.8",
+    "sta_connected": true,
+    "sta_has_ip": true,
+    "sta_ip": "192.168.1.28",
+    "last_disconnect": "none",
+    "startup_fallback_to_ap": false
+  },
+  "reboot_verify": {
+    "reset": {
+      "rc": 0,
+      "tail": "Running stub flasher...\nStub flasher running.\n\nMAC:                b0:a7:32:28:c8:e4\n\nHard resetting via RTS pin...\nWARNING: DEPRECATED: 'esptool.py' is deprecated. Please use 'esptool' instead. The '.py' suffix will be removed in a future major release.\nWARNING: Deprecated: Command 'read_mac' is deprecated. Use 'read-mac' instead."
+    },
+    "ready": {
+      "ok": true,
+      "elapsed_s": 0.32,
+      "status": {
+        "sta_connected": true,
+        "sta_has_ip": true,
+        "sta_ip": "192.168.1.28",
+        "last_disconnect": "none",
+        "sta_ssid": "CMCC-502",
+        "password_set": true,
+        "mode": "sta",
+        "mqtt_connected": true,
+        "mqtt_last_error": "",
+        "trial": {
+          "state": "idle"
+        }
+      }
+    },
+    "board": {
+      "address": "B0:A7:32:28:C8:E6",
+      "name": "IotHubBLE-C8E4"
+    },
+    "status": {
+      "sta_connected": true,
+      "sta_has_ip": true,
+      "sta_ip": "192.168.1.28",
+      "last_disconnect": "none",
+      "sta_ssid": "CMCC-502",
+      "password_set": true,
+      "mode": "sta",
+      "mqtt_connected": true,
+      "mqtt_last_error": "",
+      "trial": {
+        "state": "idle"
+      }
+    },
+    "config_network": {
+      "net_mode": "sta",
+      "ap_ssid": "IotHub-C8E4",
+      "ap_password_set": false,
+      "sta_ssid": "CMCC-502",
+      "sta_password_set": true,
+      "sta_use_static": false,
+      "sta_static_ip": "192.168.1.213",
+      "sta_static_gateway": "192.168.1.1",
+      "sta_static_netmask": "255.255.255.0",
+      "sta_static_dns1": "192.168.1.1",
+      "sta_static_dns2": "8.8.8.8",
+      "sta_connected": true,
+      "sta_has_ip": true,
+      "sta_ip": "192.168.1.28",
+      "last_disconnect": "none",
+      "startup_fallback_to_ap": false
+    },
+    "mqtt": {
+      "mqtt_backend": "tb_selfhost",
+      "mqtt_host": "117.131.99.2",
+      "mqtt_port": 21883,
+      "mqtt_use_tls": false,
+      "mqtt_token_set": true,
+      "connected": true,
+      "publish_count": 3,
+      "outbox": 0,
+      "last_error": ""
+    }
+  },
+  "pass": true,
+  "notes": [
+    "Candidate is the same SSID as the committed network; this validates the transaction and persistence, not a switch from a different SSID.",
+    "apply intentionally commits sta_use_static=false (DHCP); the device IP may change from a static address.",
+    "TQ2018 was not visible during this run; the visible CMCC-502 AP was used."
+  ],
+  "_path": "/home/tc/esp/workspace/iothub/tools/ble_p0/results/success_path_20261023_195304.json"
+}

@@ -31,9 +31,8 @@ static const char *TAG = "diag";
 #define APP_DIAG_UNKNOWN_CH 0xFFu
 
 /* 只读快照。任一子查询失败只影响该字段,绝不阻塞、不重试。
- * 注意:APSTA 下 AP 与 STA **共享同一个信道**(IDF 的 esp_wifi_get_channel 无接口
- * 参数就是证据),因此这个信道一旦因 STA 重连而变化,已连上 AP 的客户端必须跟着
- * 重新关联 —— 这正是"手机连着 AP 却打不开页面"的头号可疑机制,故必须逐周期可见。 */
+ * STA-only:AP 运行时已删除,不再统计 AP 客户端;信道仍逐周期记录以便
+ * 观察 STA 重连后的射频变化。 */
 static void app_diag_dump(void)
 {
     const size_t heap_free = esp_get_free_heap_size();
@@ -44,25 +43,18 @@ static void app_diag_dump(void)
     uint8_t primary = APP_DIAG_UNKNOWN_CH;
     wifi_second_chan_t second = WIFI_SECOND_CHAN_NONE;
     bool channel_valid = false;
-    int ap_clients = -1;
 
     data_pipe_get_stats(&dp_stats);
 
     if (esp_wifi_get_mode(&mode) == ESP_OK) {
         /* 签名:esp_wifi_get_channel(uint8_t *primary, wifi_second_chan_t *second) */
         channel_valid = (esp_wifi_get_channel(&primary, &second) == ESP_OK);
-        if ((mode & WIFI_MODE_AP) != 0) {
-            wifi_sta_list_t sta_list;
-            if (esp_wifi_ap_get_sta_list(&sta_list) == ESP_OK) {
-                ap_clients = (int)sta_list.num;
-            }
-        }
     }
 
     /* 1.3-44 全开稳态观测:level 是全局内存水位档(见 mem_guard.h);
      * mqtt_shed/pipe_yield 是让路计数 —— "极端情况下系统选择了降级而不是崩溃"
      * 的直接证据(0 表示从未触发,非 0 表示触发过且已恢复)。 */
-    ESP_LOGI(TAG, "heap free=%u min=%u largest=%u level=%s | wifi mode=%d ch=%u/%d ap_clients=%d"
+    ESP_LOGI(TAG, "heap free=%u min=%u largest=%u level=%s | wifi mode=%d ch=%u/%d"
              " mqtt_outbox=%d mqtt_shed=%u pipe_yield=%u",
              (unsigned)heap_free,
              (unsigned)heap_min,
@@ -71,7 +63,6 @@ static void app_diag_dump(void)
              (int)mode,
              channel_valid ? (unsigned)primary : APP_DIAG_UNKNOWN_CH,
              channel_valid ? (int)second : -1,
-             ap_clients,
              app_mqtt_outbox_size(),
              (unsigned)app_mqtt_tele_shed_count(),
              (unsigned)dp_stats.yielded);
