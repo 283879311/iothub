@@ -165,7 +165,6 @@
 		"/home/tc/workspace/iothub/build-bluedroid/esp-idf/rt/cmake_install.cmake",
 		"/home/tc/workspace/iothub/build-bluedroid/esp-idf/spiffs/cmake_install.cmake",
 		"/home/tc/workspace/iothub/build-bluedroid/esp-idf/ulp/cmake_install.cmake",
-		"/home/tc/workspace/iothub/build-bluedroid/esp-idf/joltwallet__littlefs/cmake_install.cmake",
 		"/home/tc/workspace/iothub/build-bluedroid/esp-idf/espressif__mqtt/cmake_install.cmake",
 		"/home/tc/workspace/iothub/build-bluedroid/esp-idf/espressif__cjson/cmake_install.cmake",
 		"/home/tc/workspace/iothub/build-bluedroid/esp-idf/main/cmake_install.cmake"

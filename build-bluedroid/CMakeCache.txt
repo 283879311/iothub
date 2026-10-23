@@ -14,6 +14,19 @@
 # EXTERNAL cache entries
 ########################
 
+//Build the A/B four-characteristic central test harness (default
+// OFF)
+APP_BLE_PEER_TEST:BOOL=OFF
+
+//Build G3 worker lifecycle/memory measurement (default OFF)
+APP_OPERATION_LIFECYCLE_TEST:BOOL=OFF
+
+//Build G3 operation table/worker selftest (default OFF)
+APP_OPERATION_SELFTEST:BOOL=OFF
+
+//Use static FreeRTOS stack/TCB for the G3 worker (default OFF)
+APP_OPERATION_WORKER_STATIC:BOOL=OFF
+
 //No help, variable specified on the command line.
 CCACHE_ENABLE:UNINITIALIZED=False
 
@@ -606,7 +619,7 @@ CMAKE_MODULE_LINKER_FLAGS_RELWITHDEBINFO-ADVANCED:INTERNAL=1
 //ADVANCED property for variable: CMAKE_NM
 CMAKE_NM-ADVANCED:INTERNAL=1
 //number of local generators
-CMAKE_NUMBER_OF_MAKEFILES:INTERNAL=168
+CMAKE_NUMBER_OF_MAKEFILES:INTERNAL=167
 //ADVANCED property for variable: CMAKE_OBJCOPY
 CMAKE_OBJCOPY-ADVANCED:INTERNAL=1
 //ADVANCED property for variable: CMAKE_OBJDUMP

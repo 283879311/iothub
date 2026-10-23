@@ -3,6 +3,11 @@ cmake_minimum_required(VERSION 3.16)
 
 if("${CONFIG}" STREQUAL "" OR "${CONFIG}" STREQUAL "")
   file(REMOVE_RECURSE
+  "bootloader/bootloader.bin"
+  "bootloader/bootloader.elf"
+  "bootloader/bootloader.map"
+  "config/sdkconfig.cmake"
+  "config/sdkconfig.h"
   "esp-idf/mbedtls/x509_crt_bundle"
   "flash_app_args"
   "flash_bootloader_args"
@@ -13,7 +18,6 @@ if("${CONFIG}" STREQUAL "" OR "${CONFIG}" STREQUAL "")
   "iothub.map"
   "ldgen_libraries"
   "ldgen_libraries.in"
-  "littlefs_py_venv"
   "project_elf_src_esp32.c"
   "x509_crt_bundle.S"
   )

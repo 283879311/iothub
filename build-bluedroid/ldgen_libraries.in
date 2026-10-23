@@ -201,10 +201,9 @@ $<TARGET_FILE:__idf_esp_driver_sdspi>
 $<TARGET_FILE:idf::perfmon>
 $<TARGET_FILE:idf::rt>
 $<TARGET_FILE:idf::spiffs>
-$<TARGET_FILE:idf::joltwallet__littlefs>
 $<TARGET_FILE:idf::espressif__mqtt>
 $<TARGET_FILE:idf::espressif__cjson>
 $<TARGET_FILE:idf::main>
-$<TARGET_FILE:__idf_joltwallet__littlefs>
+$<TARGET_FILE:__idf_esp_driver_touch_sens>
 $<TARGET_FILE:__idf_espressif__mqtt>
 $<TARGET_FILE:__idf_espressif__cjson>

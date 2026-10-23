@@ -1150,13 +1150,6 @@
 /home/tc/workspace/iothub/build-bluedroid/esp-idf/ulp/CMakeFiles/install.dir
 /home/tc/workspace/iothub/build-bluedroid/esp-idf/ulp/CMakeFiles/install/local.dir
 /home/tc/workspace/iothub/build-bluedroid/esp-idf/ulp/CMakeFiles/install/strip.dir
-/home/tc/workspace/iothub/build-bluedroid/esp-idf/joltwallet__littlefs/CMakeFiles/__idf_joltwallet__littlefs.dir
-/home/tc/workspace/iothub/build-bluedroid/esp-idf/joltwallet__littlefs/CMakeFiles/edit_cache.dir
-/home/tc/workspace/iothub/build-bluedroid/esp-idf/joltwallet__littlefs/CMakeFiles/rebuild_cache.dir
-/home/tc/workspace/iothub/build-bluedroid/esp-idf/joltwallet__littlefs/CMakeFiles/list_install_components.dir
-/home/tc/workspace/iothub/build-bluedroid/esp-idf/joltwallet__littlefs/CMakeFiles/install.dir
-/home/tc/workspace/iothub/build-bluedroid/esp-idf/joltwallet__littlefs/CMakeFiles/install/local.dir
-/home/tc/workspace/iothub/build-bluedroid/esp-idf/joltwallet__littlefs/CMakeFiles/install/strip.dir
 /home/tc/workspace/iothub/build-bluedroid/esp-idf/espressif__mqtt/CMakeFiles/__idf_espressif__mqtt.dir
 /home/tc/workspace/iothub/build-bluedroid/esp-idf/espressif__mqtt/CMakeFiles/edit_cache.dir
 /home/tc/workspace/iothub/build-bluedroid/esp-idf/espressif__mqtt/CMakeFiles/rebuild_cache.dir
@@ -1172,10 +1165,6 @@
 /home/tc/workspace/iothub/build-bluedroid/esp-idf/espressif__cjson/CMakeFiles/install/local.dir
 /home/tc/workspace/iothub/build-bluedroid/esp-idf/espressif__cjson/CMakeFiles/install/strip.dir
 /home/tc/workspace/iothub/build-bluedroid/esp-idf/main/CMakeFiles/__idf_main.dir
-/home/tc/workspace/iothub/build-bluedroid/esp-idf/main/CMakeFiles/web_assets_minified.dir
-/home/tc/workspace/iothub/build-bluedroid/esp-idf/main/CMakeFiles/littlefs_storage_bin.dir
-/home/tc/workspace/iothub/build-bluedroid/esp-idf/main/CMakeFiles/storage-flash.dir
-/home/tc/workspace/iothub/build-bluedroid/esp-idf/main/CMakeFiles/encrypted-storage-flash.dir
 /home/tc/workspace/iothub/build-bluedroid/esp-idf/main/CMakeFiles/edit_cache.dir
 /home/tc/workspace/iothub/build-bluedroid/esp-idf/main/CMakeFiles/rebuild_cache.dir
 /home/tc/workspace/iothub/build-bluedroid/esp-idf/main/CMakeFiles/list_install_components.dir

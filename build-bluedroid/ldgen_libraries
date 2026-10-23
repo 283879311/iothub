@@ -201,10 +201,9 @@
 /home/tc/workspace/iothub/build-bluedroid/esp-idf/perfmon/libperfmon.a
 /home/tc/workspace/iothub/build-bluedroid/esp-idf/rt/librt.a
 /home/tc/workspace/iothub/build-bluedroid/esp-idf/spiffs/libspiffs.a
-/home/tc/workspace/iothub/build-bluedroid/esp-idf/joltwallet__littlefs/libjoltwallet__littlefs.a
 /home/tc/workspace/iothub/build-bluedroid/esp-idf/espressif__mqtt/libespressif__mqtt.a
 /home/tc/workspace/iothub/build-bluedroid/esp-idf/espressif__cjson/libespressif__cjson.a
 /home/tc/workspace/iothub/build-bluedroid/esp-idf/main/libmain.a
-/home/tc/workspace/iothub/build-bluedroid/esp-idf/joltwallet__littlefs/libjoltwallet__littlefs.a
+/home/tc/workspace/iothub/build-bluedroid/esp-idf/esp_driver_touch_sens/libesp_driver_touch_sens.a
 /home/tc/workspace/iothub/build-bluedroid/esp-idf/espressif__mqtt/libespressif__mqtt.a
 /home/tc/workspace/iothub/build-bluedroid/esp-idf/espressif__cjson/libespressif__cjson.a

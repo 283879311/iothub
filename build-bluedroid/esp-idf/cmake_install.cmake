@@ -719,11 +719,6 @@ endif()
 
 if(NOT CMAKE_INSTALL_LOCAL_ONLY)
   # Include the install script for the subdirectory.
-  include("/home/tc/workspace/iothub/build-bluedroid/esp-idf/joltwallet__littlefs/cmake_install.cmake")
-endif()
-
-if(NOT CMAKE_INSTALL_LOCAL_ONLY)
-  # Include the install script for the subdirectory.
   include("/home/tc/workspace/iothub/build-bluedroid/esp-idf/espressif__mqtt/cmake_install.cmake")
 endif()
 
