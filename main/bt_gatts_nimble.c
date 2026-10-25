@@ -231,6 +231,9 @@ void app_ble_gatts_nimble_on_connect(uint16_t conn_handle)
 {
     struct ble_gap_upd_params cp = {0};
     struct ble_gap_conn_desc desc;
+    bool params_ok = false;
+    uint32_t itvl_ms = 0;
+    uint32_t sup_ms = 0;
 
     s_conn_handle = conn_handle;
     s_connected = true;
@@ -254,6 +257,21 @@ void app_ble_gatts_nimble_on_connect(uint16_t conn_handle)
                  desc.peer_id_addr.val[3], desc.peer_id_addr.val[2],
                  desc.peer_id_addr.val[1], desc.peer_id_addr.val[0],
                  (unsigned)desc.peer_id_addr.type);
+        /* 1.3-94(P1-1 A/B 守卫):当前连接参数已满足共存策略时跳过参数更新请求。
+         * 背景:无条件发起 LL Connection Parameters Request,本宿主控制器不响应,
+         * 40s LL 过程响应超时到期即拆链(设备 0x222 / 中央 0x08,btmon 实证)。
+         * 策略=更新请求的目标:itvl 30-50ms / latency 0 / 监督超时 ≥4s;
+         * 中央初始参数已满足(如 BlueZ 50ms/0/6s)则跳过,手机默认 15ms 仍会触发请求。
+         * 描述符读取失败按不满足处理,回落原请求路径(安全默认)。 */
+        itvl_ms = (uint32_t)desc.conn_itvl * 5u / 4u;   /* 1.25ms 单位 → ms */
+        sup_ms = (uint32_t)desc.supervision_timeout * 10u;
+        params_ok = (itvl_ms >= 30 && itvl_ms <= 50) &&
+                    (desc.conn_latency == 0) && (sup_ms >= 4000);
+        ESP_LOGI(TAG, "conn params policy: itvl=%ums lat=%u sup=%ums -> %s",
+                 (unsigned)itvl_ms, (unsigned)desc.conn_latency,
+                 (unsigned)sup_ms,
+                 params_ok ? "satisfied, skip update request"
+                           : "out of policy, requesting update");
     } else {
         ESP_LOGI(TAG, "central connected (conn_handle=%u) peer=unknown", (unsigned)conn_handle);
     }
@@ -265,7 +283,9 @@ void app_ble_gatts_nimble_on_connect(uint16_t conn_handle)
     cp.supervision_timeout = 600;    /* 600 × 10ms = 6s */
     cp.min_ce_len = 0;
     cp.max_ce_len = 0;
-    (void)ble_gap_update_params(conn_handle, &cp);
+    if (!params_ok) {
+        (void)ble_gap_update_params(conn_handle, &cp);
+    }
 }
 
 void app_ble_gatts_nimble_on_disconnect(int reason)
