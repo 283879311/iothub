@@ -562,12 +562,10 @@ static void app_bt_adv_watchdog_tick_impl(uint32_t *silent_ticks, uint32_t *next
         }
         ESP_LOGW(TAG, "adv watchdog retry #%u failed (rc implies host state; "
                  "rc=22 persistent => host dead, reboot device)", (unsigned)attempt);
+        /* 规格序列 2/4/8/16/30s(1.3-92):16 后直达封顶,不再回到 CAP-2 */
         *next_retry_s = (*next_retry_s == 0) ? 2
-                       : (*next_retry_s < 8) ? (*next_retry_s * 2)
-                       : (uint32_t)(APP_ADV_WATCHDOG_RETRY_CAP_S - 2);
-        if (*next_retry_s + 2 > APP_ADV_WATCHDOG_RETRY_CAP_S) {
-            *next_retry_s = APP_ADV_WATCHDOG_RETRY_CAP_S;
-        }
+                       : (*next_retry_s < 16) ? (*next_retry_s * 2)
+                       : APP_ADV_WATCHDOG_RETRY_CAP_S;
     }
 }
 
@@ -853,12 +851,10 @@ static void app_bt_adv_watchdog_tick_impl(uint32_t *silent_ticks, uint32_t *next
         }
         ESP_LOGW(TAG, "adv watchdog retry #%u failed: %s",
                  (unsigned)attempt, esp_err_to_name(err));
+        /* 规格序列 2/4/8/16/30s(1.3-92):16 后直达封顶,不再回到 CAP-2 */
         *next_retry_s = (*next_retry_s == 0) ? 2
-                       : (*next_retry_s < 8) ? (*next_retry_s * 2)
-                       : (uint32_t)(APP_ADV_WATCHDOG_RETRY_CAP_S - 2);
-        if (*next_retry_s + 2 > APP_ADV_WATCHDOG_RETRY_CAP_S) {
-            *next_retry_s = APP_ADV_WATCHDOG_RETRY_CAP_S;
-        }
+                       : (*next_retry_s < 16) ? (*next_retry_s * 2)
+                       : APP_ADV_WATCHDOG_RETRY_CAP_S;
     }
 }
 
