@@ -544,6 +544,36 @@ static esp_err_t app_apply_wifi_config(void);
 static void app_wifi_handle_startup_sta_failure(const char *reason);
 static void app_wifi_schedule_connect_task(TickType_t delay_ticks);
 
+/* 记录"实际连上的 SSID"。
+ * 取 esp_wifi_sta_get_ap_info() 的关联结果而不是 s_wifi_active_profile_index：
+ * fast_path 未在 profiles 里命中时 index 会保留上一次的值，直接暴露会误报。
+ * connected_profile 按 SSID 反查下标，查不到即 -1（例如正式 SSID 不在 profiles 里）。 */
+static void app_wifi_set_connected_ssid(const char *ssid)
+{
+    int matched = -1;
+    size_t i;
+    size_t count;
+
+    if (ssid == NULL) {
+        ssid = "";
+    }
+
+    app_wifi_profiles_lock();
+    count = s_wifi_profile_count;
+    for (i = 0; i < count; i++) {
+        if (strcmp((const char *)s_wifi_profiles[i].ssid, ssid) == 0) {
+            matched = (int)i;
+            break;
+        }
+    }
+    app_wifi_profiles_unlock();
+
+    app_wifi_runtime_lock();
+    app_copy_string(s_wifi.connected_ssid, sizeof(s_wifi.connected_ssid), ssid);
+    s_wifi.connected_profile = matched;
+    app_wifi_runtime_unlock();
+}
+
 static esp_err_t app_wifi_connect_profile_index(int profile_index)
 {
     wifi_config_t sta_cfg = {0};
@@ -1032,6 +1062,12 @@ static void app_wifi_event_handler(void *arg, esp_event_base_t event_base, int32
             break;
         case WIFI_EVENT_STA_CONNECTED: {
             bool use_static = false;
+            wifi_ap_record_t ap_info;
+
+            /* 运行态 SSID 以实际关联结果为准：试连与自动回退都能如实反映 */
+            if (esp_wifi_sta_get_ap_info(&ap_info) == ESP_OK) {
+                app_wifi_set_connected_ssid((const char *)ap_info.ssid);
+            }
 
             /* 试连验证:普通试连以关联成功为准;G2 候选必须继续等 DHCP/IP */
             if (s_tryconnect_active && s_tryconnect_connecting) {
@@ -1096,6 +1132,9 @@ static void app_wifi_event_handler(void *arg, esp_event_base_t event_base, int32
             uint8_t net_mode_snapshot;
             bool need_schedule_connect = false;
             bool do_retry_direct = false;
+
+            /* 链路已断，运行态 SSID 立即失效。保留最后连过的值会误导 App 判"还连着"。 */
+            app_wifi_set_connected_ssid("");
 
             /* 试连验证:旧链路拆除的断开事件单独标记,不能算候选失败;
              * 候选连接失败才记结果;无论如何都跳过正常重连逻辑 */

@@ -40,6 +40,11 @@ typedef struct {
     char sta_gateway[16];
     char sta_netmask[16];
     char last_disconnect[32];
+    /* 运行态：实际关联上的 SSID / 对应的已保存 profile 下标。
+     * 与 s_config.sta_ssid（正式配置）区分开：自动回退时二者不同，
+     * App 只有靠这两个字段才能判断"当前连的到底是哪个网络"。 */
+    char connected_ssid[33];
+    int connected_profile;
     char startup_fallback_reason[32];
     void *restart_task;
 } wifi_runtime_t;

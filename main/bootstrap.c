@@ -30,6 +30,8 @@ static void app_bootstrap_reset_runtime_state(void)
     app_copy_string(s_wifi.sta_gateway, sizeof(s_wifi.sta_gateway), "0.0.0.0");
     app_copy_string(s_wifi.sta_netmask, sizeof(s_wifi.sta_netmask), "0.0.0.0");
     app_copy_string(s_wifi.last_disconnect, sizeof(s_wifi.last_disconnect), "none");
+    app_copy_string(s_wifi.connected_ssid, sizeof(s_wifi.connected_ssid), "");
+    s_wifi.connected_profile = -1;
 }
 
 void app_bootstrap_set_defaults(void)

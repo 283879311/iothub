@@ -501,6 +501,11 @@ static cJSON *app_cmd_build_network_status(void)
     cJSON_AddBoolToObject(root, "sta_has_ip", s_wifi.sta_has_ip);
     cJSON_AddStringToObject(root, "sta_ip", s_wifi.sta_ip);
     cJSON_AddStringToObject(root, "last_disconnect", s_wifi.last_disconnect);
+    /* 加法字段：运行态实际连上的 SSID / profile 下标。
+     * sta_ssid 是正式配置，自动回退时二者不同；App 靠这两个字段判断"当前连的是哪个网络"。
+     * 旧客户端忽略即可，不影响既有字段语义。 */
+    cJSON_AddStringToObject(root, "connected_ssid", s_wifi.connected_ssid);
+    cJSON_AddNumberToObject(root, "connected_profile", s_wifi.connected_profile);
     app_wifi_runtime_unlock();
 
     app_config_lock();
