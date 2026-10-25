@@ -1,0 +1,50 @@
+{
+  "timestamp": "2026-10-25T23:22:57.085",
+  "started_at": "2026-10-25T23:22:57+08:00",
+  "name": "T3_UART1_DATA_PATH",
+  "uart_port": "/dev/ttyUSB1",
+  "board": {
+    "address": "B0:A7:32:28:C8:E6"
+  },
+  "U2B_256B": {
+    "sent": 256,
+    "recv": 0,
+    "exact": false,
+    "notify_count": 0,
+    "notify_sizes": [],
+    "latency_s": 8.049
+  },
+  "U2B_2048B_burst": {
+    "sent": 2048,
+    "recv": 0,
+    "exact": false,
+    "prefix_match": false,
+    "loss_bytes": 2048,
+    "notify_count": 0,
+    "notify_sizes_head": [],
+    "latency_s": 15.626,
+    "note": "best-effort pipe: queue-16 overrun may drop bytes; serial console checked separately"
+  },
+  "B2U_200B": {
+    "sent": 200,
+    "recv": 200,
+    "exact": true,
+    "latency_s": 1.561
+  },
+  "B2U_1000B_burst": {
+    "sent": 1000,
+    "recv": 1000,
+    "exact": true,
+    "loss_bytes": 0,
+    "latency_s": 7.45
+  },
+  "checks": {
+    "u2b_256_exact": false,
+    "u2b_2048_prefix": false,
+    "b2u_200_exact": true,
+    "b2u_1000_exact": true
+  },
+  "pass": false,
+  "finished_at": "2026-10-25T23:23:41+08:00",
+  "_path": "/home/tc/esp/workspace/iothub/tools/ble_p0/results/t3_uart1_20261025_232341.json"
+}
