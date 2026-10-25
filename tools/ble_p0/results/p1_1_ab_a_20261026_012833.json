@@ -1,0 +1,46 @@
+{
+  "timestamp": "2026-10-26T01:28:33+08:00",
+  "name": "P1_1_AB_A",
+  "firmware": "a",
+  "rounds": [
+    {
+      "round": 1,
+      "setup_s": 1.76,
+      "lifetime_s": 44.84,
+      "dropped": true,
+      "alive_at_60": false
+    },
+    {
+      "round": 2,
+      "setup_s": 1.75,
+      "lifetime_s": 44.73,
+      "dropped": true,
+      "alive_at_60": false
+    },
+    {
+      "round": 3,
+      "setup_s": 1.93,
+      "lifetime_s": 44.94,
+      "dropped": true,
+      "alive_at_60": false
+    },
+    {
+      "round": 4,
+      "setup_s": 1.58,
+      "lifetime_s": 44.84,
+      "dropped": true,
+      "alive_at_60": false
+    },
+    {
+      "round": 5,
+      "setup_s": 1.31,
+      "lifetime_s": 44.98,
+      "dropped": true,
+      "alive_at_60": false
+    }
+  ],
+  "observe_s": 65.0,
+  "alive_at_60_count": 0,
+  "dropped_count": 5,
+  "pass": true
+}
