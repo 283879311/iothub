@@ -1,0 +1,28 @@
+{
+  "timestamp": "2026-10-26T00:34:19+08:00",
+  "name": "P1_1_IDLE_LIFETIME_PROBE",
+  "note": "connect + subscribe CMD TX only; zero commands; measure link lifetime",
+  "rounds": [
+    {
+      "round": 1,
+      "setup_s": 1.44,
+      "lifetime_s": 44.94,
+      "dropped": true,
+      "still_connected_at_120s": false
+    },
+    {
+      "round": 2,
+      "setup_s": 1.5,
+      "lifetime_s": 44.79,
+      "dropped": true,
+      "still_connected_at_120s": false
+    },
+    {
+      "round": 3,
+      "setup_s": 1.73,
+      "lifetime_s": 44.84,
+      "dropped": true,
+      "still_connected_at_120s": false
+    }
+  ]
+}
