@@ -1,0 +1,141 @@
+{
+  "timestamp": "2026-10-25T23:38:46.178",
+  "started_at": "2026-10-25T23:38:46+08:00",
+  "name": "T3_UART1_STRESS_SINGLE_PATH",
+  "uart_port": "/dev/ttyUSB1",
+  "baud": 115200,
+  "scope": "BLE DATA RX -> data_pipe -> UART1 TX (single leg only)",
+  "board": {
+    "address": "B0:A7:32:28:C8:E6"
+  },
+  "S1_no_pace_reliable": {
+    "phase": "S1-no-pace-32KB-rel",
+    "chunk": 240,
+    "pace_ms": 0,
+    "write_mode": "with-response",
+    "host_link_drops": [],
+    "sent": 32768,
+    "recv": 32768,
+    "loss_bytes": 0,
+    "write_s": 29.126,
+    "total_s": 29.326,
+    "ble_feed_goodput_Bps": 1125.1,
+    "uart_goodput_Bps": 1117.4,
+    "exact": true,
+    "integrity": "exact"
+  },
+  "S1b_no_pace_unack": {
+    "phase": "S1b-no-pace-64KB-unack",
+    "chunk": 240,
+    "pace_ms": 0,
+    "write_mode": "without-response",
+    "host_link_drops": [],
+    "sent": 65536,
+    "recv": 0,
+    "loss_bytes": 65536,
+    "write_s": 0.403,
+    "total_s": 15.444,
+    "ble_feed_goodput_Bps": 162502.0,
+    "uart_goodput_Bps": 0.0,
+    "exact": false,
+    "integrity": "chunk-drops-only",
+    "subsequence": {
+      "torn": false,
+      "consumed": 0,
+      "lost_chunks": 0,
+      "lost_runs": [],
+      "first_lost_chunk": null
+    }
+  },
+  "S2_paced_zero_loss": {
+    "phase": "S2-paced-64KB",
+    "chunk": 240,
+    "pace_ms": 24,
+    "write_mode": "with-response",
+    "host_link_drops": [
+      "BleakError@115303",
+      "BleakGATTProtocolError@115350"
+    ],
+    "sent": 65536,
+    "recv": 65536,
+    "loss_bytes": 0,
+    "write_s": 66.796,
+    "total_s": 66.997,
+    "ble_feed_goodput_Bps": 981.1,
+    "uart_goodput_Bps": 978.2,
+    "exact": true,
+    "integrity": "exact"
+  },
+  "S3_small_frame": {
+    "phase": "S3-20B-8KB",
+    "chunk": 20,
+    "pace_ms": 0,
+    "write_mode": "without-response",
+    "host_link_drops": [],
+    "sent": 8192,
+    "recv": 0,
+    "loss_bytes": 8192,
+    "write_s": 0.547,
+    "total_s": 10.574,
+    "ble_feed_goodput_Bps": 14969.1,
+    "uart_goodput_Bps": 0.0,
+    "exact": false,
+    "integrity": "chunk-drops-only",
+    "subsequence": {
+      "torn": false,
+      "consumed": 0,
+      "lost_chunks": 0,
+      "lost_runs": [],
+      "first_lost_chunk": null
+    }
+  },
+  "S4_endurance_60s": {
+    "phase": "S4-endurance",
+    "chunk": 240,
+    "pace_ms": 24,
+    "write_mode": "with-response",
+    "host_link_drops": [
+      "BleakGATTProtocolError@115396",
+      "BleakGATTProtocolError@115443",
+      "BleakGATTProtocolError@115489",
+      "BleakGATTProtocolError@115536",
+      "BleakGATTProtocolError@115582",
+      "BleakGATTProtocolError@115629",
+      "BleakGATTProtocolError@115676",
+      "BleakGATTProtocolError@115723",
+      "BleakGATTProtocolError@115769",
+      "BleakGATTProtocolError@115815",
+      "BleakGATTProtocolError@115862",
+      "BleakGATTProtocolError@115908",
+      "BleakGATTProtocolError@115955",
+      "BleakGATTProtocolError@116001"
+    ],
+    "sent": 614400,
+    "recv": 0,
+    "loss_bytes": 614400,
+    "write_s": 628.883,
+    "total_s": 704.039,
+    "ble_feed_goodput_Bps": 977.0,
+    "uart_goodput_Bps": 0.0,
+    "exact": false,
+    "integrity": "chunk-drops-only",
+    "subsequence": {
+      "torn": false,
+      "consumed": 0,
+      "lost_chunks": 0,
+      "lost_runs": [],
+      "first_lost_chunk": null
+    }
+  },
+  "checks": {
+    "s1_reliable_zero_loss": true,
+    "s1b_pressure_not_torn": true,
+    "s2_zero_loss": true,
+    "s3_small_frame_ok": false,
+    "s4_endurance_ok": false,
+    "s4_throughput_near_baud": false
+  },
+  "pass": false,
+  "finished_at": "2026-10-25T23:52:47+08:00",
+  "_path": "/home/tc/esp/workspace/iothub/tools/ble_p0/results/t3_uart1_stress_20261025_235247.json"
+}

@@ -1,0 +1,36 @@
+{
+  "timestamp": "2026-10-25T23:34:54.900",
+  "started_at": "2026-10-25T23:34:54+08:00",
+  "name": "T3_UART1_STRESS_SINGLE_PATH",
+  "uart_port": "/dev/ttyUSB1",
+  "baud": 115200,
+  "scope": "BLE DATA RX -> data_pipe -> UART1 TX (single leg only)",
+  "board": {
+    "address": "B0:A7:32:28:C8:E6"
+  },
+  "S1_no_pace": {
+    "phase": "S1-no-pace-32KB",
+    "chunk": 240,
+    "pace_ms": 0,
+    "sent": 32880,
+    "recv": 32768,
+    "loss_bytes": 112,
+    "write_s": 28.184,
+    "total_s": 28.385,
+    "ble_feed_goodput_Bps": 1166.6,
+    "uart_goodput_Bps": 1154.4,
+    "exact": false,
+    "integrity": "chunk-drops-only",
+    "subsequence": {
+      "torn": false,
+      "consumed": 32768,
+      "lost_chunks": 0,
+      "lost_runs": [],
+      "first_lost_chunk": null
+    }
+  },
+  "pass": false,
+  "fatal": "BleakGATTProtocolError: (<BleakGATTProtocolErrorCode.UNLIKELY_ERROR: 14>, 'GATT Protocol Error: Unlikely Error')",
+  "finished_at": "2026-10-25T23:35:49+08:00",
+  "_path": "/home/tc/esp/workspace/iothub/tools/ble_p0/results/t3_uart1_stress_20261025_233549.json"
+}
