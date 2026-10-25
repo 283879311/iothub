@@ -1,0 +1,70 @@
+{
+  "timestamp": "2026-10-25T12:32:52+08:00",
+  "name": "T5_CONNECT_SCENARIO_P06_RECONFIRM",
+  "firmware_note": "HEAD fe73d2a-class worktree (watchdog+eviction+connected_ssid)",
+  "rounds_requested": 10,
+  "rounds_pass": 10,
+  "pass": true,
+  "rounds": [
+    {
+      "round": 1,
+      "disconnect_ok": true,
+      "disconnect_error": null,
+      "visible_after_1p2s": true
+    },
+    {
+      "round": 2,
+      "disconnect_ok": true,
+      "disconnect_error": null,
+      "visible_after_1p2s": true
+    },
+    {
+      "round": 3,
+      "disconnect_ok": true,
+      "disconnect_error": null,
+      "visible_after_1p2s": true
+    },
+    {
+      "round": 4,
+      "disconnect_ok": true,
+      "disconnect_error": null,
+      "visible_after_1p2s": true
+    },
+    {
+      "round": 5,
+      "disconnect_ok": true,
+      "disconnect_error": null,
+      "visible_after_1p2s": true
+    },
+    {
+      "round": 6,
+      "disconnect_ok": true,
+      "disconnect_error": null,
+      "visible_after_1p2s": true
+    },
+    {
+      "round": 7,
+      "disconnect_ok": true,
+      "disconnect_error": null,
+      "visible_after_1p2s": true
+    },
+    {
+      "round": 8,
+      "disconnect_ok": true,
+      "disconnect_error": null,
+      "visible_after_1p2s": true
+    },
+    {
+      "round": 9,
+      "disconnect_ok": true,
+      "disconnect_error": null,
+      "visible_after_1p2s": true
+    },
+    {
+      "round": 10,
+      "disconnect_ok": true,
+      "disconnect_error": null,
+      "visible_after_1p2s": true
+    }
+  ]
+}
