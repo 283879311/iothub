@@ -14,6 +14,7 @@
 #include "bt.h"
 #include "bt_gattc.h"
 #include "bt_gatts.h"
+#include "common.h"
 #include "constants.h"
 #include "data_pipe.h"
 #include "diag.h"
@@ -53,19 +54,30 @@ static void app_diag_dump(void)
 
     /* 1.3-44 全开稳态观测:level 是全局内存水位档(见 mem_guard.h);
      * mqtt_shed/pipe_yield 是让路计数 —— "极端情况下系统选择了降级而不是崩溃"
-     * 的直接证据(0 表示从未触发,非 0 表示触发过且已恢复)。 */
-    ESP_LOGI(TAG, "heap free=%u min=%u largest=%u level=%s | wifi mode=%d ch=%u/%d"
-             " mqtt_outbox=%d mqtt_shed=%u pipe_yield=%u",
-             (unsigned)heap_free,
-             (unsigned)heap_min,
-             (unsigned)heap_largest,
-             app_mem_level_str(app_mem_level()),
-             (int)mode,
-             channel_valid ? (unsigned)primary : APP_DIAG_UNKNOWN_CH,
-             channel_valid ? (int)second : -1,
-             app_mqtt_outbox_size(),
-             (unsigned)app_mqtt_tele_shed_count(),
-             (unsigned)dp_stats.yielded);
+     * 的直接证据(0 表示从未触发,非 0 表示触发过且已恢复)。
+     * 1.3-92:行尾追加 BLE 广播/连接/角色,"设备是否可见"逐周期可判。 */
+    {
+        uint8_t bt_mode = BT_MODE_OFF;
+        bool ble_conn;
+
+        app_bt_get_status(&bt_mode, NULL, 0);
+        ble_conn = app_ble_gatts_connected() || app_ble_gattc_connected();
+        ESP_LOGI(TAG, "heap free=%u min=%u largest=%u level=%s | wifi mode=%d ch=%u/%d"
+                 " adv=%d conn=%d role=%s"
+                 " mqtt_outbox=%d mqtt_shed=%u pipe_yield=%u",
+                 (unsigned)heap_free,
+                 (unsigned)heap_min,
+                 (unsigned)heap_largest,
+                 app_mem_level_str(app_mem_level()),
+                 (int)mode,
+                 channel_valid ? (unsigned)primary : APP_DIAG_UNKNOWN_CH,
+                 channel_valid ? (int)second : -1,
+                 (int)app_bt_advertising(), (int)ble_conn,
+                 app_bt_mode_to_string(bt_mode),
+                 app_mqtt_outbox_size(),
+                 (unsigned)app_mqtt_tele_shed_count(),
+                 (unsigned)dp_stats.yielded);
+    }
 }
 
 /* 1.3-30 批 1 核绑定可见性:启动时打印 wifi/tcpip 任务的落核。 */
@@ -273,9 +285,11 @@ static void app_diag_task(void *arg)
     app_diag_dump();
     for (;;) {
         /* 1.3-44:基准节拍 1s(堆低谷采样);每 30s 例行 dump/空闲率;
-         * 10 分钟(开机 60s 加一次)打任务栈高水位。 */
+         * 10 分钟(开机 60s 加一次)打任务栈高水位。
+         * 1.3-92:节拍尾部驱动 BLE 广播看门狗(无连接且广播停 >5s 自愈)。 */
         vTaskDelay(pdMS_TO_TICKS(APP_DIAG_TICK_MS));
         sec++;
+        app_bt_adv_watchdog_poll();
         app_diag_sample_heap();
         if ((sec % 30u) == 0u) {
                     app_diag_dump_core_idle();

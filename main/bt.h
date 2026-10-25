@@ -30,6 +30,15 @@ esp_err_t app_bt_restart_advertising(void);
  * 用于在主机侧一眼判断"设备是否可见",避免"断开后静默不广播"再次难查(1.3-03)。 */
 bool app_bt_advertising(void);
 
+/* 广播看门狗(P0-6/1.3-92):diag 1s 节拍调用;判"无连接且权威广播停 >5s"
+ * 即重试广播,退避 2/4/8/16/30s 封顶后持续重试。一个机制覆盖全部静默死亡路径:
+ * 断连重启一次失败无重试、CONNECT status!=0 无人重启、ADV_COMPLETE 无人重启、
+ * 以及 NimBLE restart 早退守卫误信 s_adv_active 标志的 no-op。 */
+void app_bt_adv_watchdog_poll(void);
+
+/* 看门狗累计重试次数(config.get.bluetooth.adv_retry_count 透出,加法字段) */
+uint32_t app_bt_adv_retry_count(void);
+
 /* 读取蓝牙运行态快照(BT 栈回调线程与 Web 线程并发访问,内部加锁)。
  * runtime_mode/last_error_buf 任一可为 NULL 表示不取该项。 */
 void app_bt_get_status(uint8_t *runtime_mode, char *last_error_buf, size_t last_error_buf_size);

@@ -730,6 +730,7 @@ static cJSON *app_cmd_build_get_config(const cJSON *domains)
             cJSON_AddStringToObject(sec, "runtime_mode", app_bt_mode_to_string(runtime_mode));
             cJSON_AddBoolToObject(sec, "adv_active", app_bt_advertising());
             cJSON_AddBoolToObject(sec, "connected", connected);
+            cJSON_AddNumberToObject(sec, "adv_retry_count", (double)app_bt_adv_retry_count());
             cJSON_AddStringToObject(sec, "last_error", last_error);
         }
     }

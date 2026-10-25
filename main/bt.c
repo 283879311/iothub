@@ -62,6 +62,55 @@ static void app_bt_status_set_errorf(const char *fmt, ...)
     app_bt_status_set_error(buf);
 }
 
+/* ---- 广播看门狗(P0-6/1.3-92) --------------------------------------------
+ * 背景:三类路径都能进入"无连接、无广播"的静默死亡,且互不重叠:
+ *   1) 断连回调里 adv_start 一次失败(EBUSY 竞态)无重试;
+ *   2) CONNECT status!=0(host 已停广播,无人重启);
+ *   3) ADV_COMPLETE 意外触发后无人重启;
+ *   4) s_adv_active 卡 true 使 restart 早退静默 no-op(NimBLE 独有守卫)。
+ * 治法:diag 1s 节拍驱动本看门狗,判据只认权威广播态(不认标志),
+ * 连续 6s 不满足即重试,退避 2/4/8/16/30s 封顶后永不放弃只降频。
+ * 一个机制覆盖全部路径;失败 rc 留在 last_error 供分诊:
+ *   rc=22(BLE_HS_ENOTSYNCED) 持续出现 = host 级故障,需复位;
+ *   rc=15(BLE_HS_EBUSY) 等 = 广播层竞态,看门狗应能自愈。 */
+static const char *s_adv_last_writer = "init";
+static uint32_t s_adv_retry_count = 0;
+
+/* 看门狗参数(1.3-92):连续静默阈值与退避封顶 */
+#define APP_ADV_WATCHDOG_SILENT_LIMIT_S 5
+#define APP_ADV_WATCHDOG_RETRY_CAP_S    30
+
+static void app_bt_adv_note_writer(const char *writer)
+{
+    s_adv_last_writer = writer;
+}
+
+/* 各栈分支提供(定义在 #if/#else 段内):权威广播态 + 看门狗判据实现 */
+static bool app_bt_adv_authoritative(void);
+static void app_bt_adv_watchdog_tick_impl(uint32_t *silent_ticks, uint32_t *next_retry_s);
+static uint8_t app_bt_status_get_mode(void);   /* 定义在本文件下方 */
+
+uint32_t app_bt_adv_retry_count(void)
+{
+    return s_adv_retry_count;
+}
+
+/* 看门狗主体(diag 1s 节拍调用):栈相关的"权威广播态/连接态/sync 态"
+ * 由各栈分支的 tick_impl 提供,计数/退避/日志语义单份维护 */
+static void app_bt_adv_watchdog_tick(void)
+{
+    static uint32_t s_silent_ticks = 0;
+    static uint32_t s_next_retry_s = 0;
+
+    /* OFF/未启动:看门狗不干预(含 Bluedroid ADV 失败置 OFF 的既有语义) */
+    if (!s_stack_started || app_bt_status_get_mode() != BT_MODE_BLE) {
+        s_silent_ticks = 0;
+        s_next_retry_s = 0;
+        return;
+    }
+    app_bt_adv_watchdog_tick_impl(&s_silent_ticks, &s_next_retry_s);
+}
+
 /* 1.3-64:供 NimBLE central 模块在连接建立后清除 "central_scanning";
  * peripheral 侧在广播启动/连接建立/断开后重广播时由 bt.c 自行清空。 */
 void app_bt_status_clear_error(void)
@@ -132,12 +181,21 @@ static int app_bt_nimble_gap_cb(struct ble_gap_event *event, void *arg)
     switch (event->type) {
     case BLE_GAP_EVENT_ADV_COMPLETE:
         s_adv_active = false;
+        app_bt_adv_note_writer("adv_complete");
         break;
     case BLE_GAP_EVENT_CONNECT:
         if (event->connect.status == 0) {
             s_adv_active = false;   /* 建立连接时广播停止(NimBLE 不自动恢复,1.3-03) */
+            app_bt_adv_note_writer("connect_ok");
             app_bt_status_set_error("");   /* 1.3-64:连接已建立,清掉 ble_starting */
             app_ble_gatts_nimble_on_connect(event->connect.conn_handle);
+        } else {
+            /* P0-6 路径2:连接建立失败(central 中止/握手失败)时 host 已停广播,
+             * 此处不重启(时序敏感,重启交给看门狗 ≤6s 兜底),但必须可见 + 清标志 */
+            s_adv_active = false;
+            app_bt_adv_note_writer("connect_fail");
+            ESP_LOGW(TAG, "connect attempt failed: status=%d (adv stopped; "
+                     "watchdog will recover)", (int)event->connect.status);
         }
         break;
     case BLE_GAP_EVENT_DISCONNECT:
@@ -178,7 +236,7 @@ static void app_bt_nimble_on_sync(void)
         return;
     }
     app_ble_gatts_nimble_on_sync();   /* peripheral 服务注册(host 任务上下文) */
-    if (s_adv_requested && !s_adv_active) {
+    if (s_adv_requested && !app_bt_adv_authoritative()) {
         (void)app_bt_nimble_start_adv();
     }
 }
@@ -335,6 +393,7 @@ static int app_bt_nimble_start_adv(void)
         return rc;
     }
     s_adv_active = true;
+    app_bt_adv_note_writer("start_adv");
     app_bt_status_set_error("");   /* 1.3-64:广播已起来,清掉 ble_starting */
     ESP_LOGI(TAG, "BLE advertising started");
     return 0;
@@ -349,6 +408,7 @@ static void app_bt_stop(void)
     if (runtime_mode == BT_MODE_BLE && s_adv_active) {
         (void)ble_gap_adv_stop();
         s_adv_active = false;
+        app_bt_adv_note_writer("bt_stop");
     }
 
     app_bt_cleanup_stack();
@@ -416,8 +476,15 @@ esp_err_t app_bt_restart_advertising(void)
     if (s_central_mode) {
         return ESP_ERR_INVALID_STATE;   /* 主角色不广播(1.3-58) */
     }
-    if (s_adv_active) {
-        return ESP_OK;   /* 已在广播 */
+    /* P0-6 路径4:早退只认权威广播态(ble_gap_adv_active),不认 s_adv_active ——
+     * 标志卡 true 时这里曾静默 no-op,设备从此不可见。 */
+    if (app_bt_adv_authoritative()) {
+        /* 对齐 Bluedroid 语义:已在广播 = 正常;顺手清掉残留的 adv 错误,
+         * 消灭"广播活着但 last_error 还挂着"的不一致(如上次 adv_restart:15)。 */
+        ESP_LOGI(TAG, "advertising already active (restart skipped, last_writer=%s)",
+                 s_adv_last_writer);
+        app_bt_status_set_error("");
+        return ESP_OK;
     }
     rc = ble_gap_adv_start(BLE_OWN_ADDR_PUBLIC, NULL, BLE_HS_FOREVER,
                            &s_nimble_adv_params, app_bt_nimble_gap_cb, NULL);
@@ -428,9 +495,80 @@ esp_err_t app_bt_restart_advertising(void)
         return ESP_FAIL;
     }
     s_adv_active = true;
+    app_bt_adv_note_writer("restart");
     app_bt_status_set_error("");   /* 1.3-64:断开后重广播成功,清空状态 */
     ESP_LOGI(TAG, "advertising restart requested (after disconnect)");
     return ESP_OK;
+}
+
+/* diag 1s 节拍驱动的广播看门狗入口(1.3-92):跨任务安全 ——
+ * NimBLE 的 ble_gap_adv_start 由 host mutex 串行化,本仓库已有
+ * cmd 任务调 bt.c 接口的先例(app_bt_apply_config) */
+void app_bt_adv_watchdog_poll(void)
+{
+    app_bt_adv_watchdog_tick();
+}
+
+/* NimBLE 的权威广播态:协议栈实时值,非手工标志 */
+static bool app_bt_adv_authoritative(void)
+{
+    return ble_gap_adv_active() != 0;
+}
+
+/* 看门狗 tick(diag 1s 节拍调用;主体与栈无关,判据的栈相关项由本分支提供) */
+static void app_bt_adv_watchdog_tick_impl(uint32_t *silent_ticks, uint32_t *next_retry_s)
+{
+    static bool s_desync_reported = false;
+    bool connected = app_ble_gatts_connected() || app_ble_gattc_connected();
+    bool authoritative = app_bt_adv_authoritative();
+    bool flag = s_adv_active;
+
+    /* desync 只诊断不动作:权威 true 时重启只会 EBUSY;方向变化打一次 */
+    if (authoritative != flag) {
+        if (!s_desync_reported) {
+            ESP_LOGW(TAG, "adv flag desync: flag=%d host=%d last_writer=%s "
+                     "(treat host as truth)", (int)flag, (int)authoritative,
+                     s_adv_last_writer);
+            s_desync_reported = true;
+        }
+    } else {
+        s_desync_reported = false;   /* 出口去抖:退出 desync 后允许再次报告 */
+    }
+
+    /* 判据:非 central + host 已 sync + 无连接 + 权威广播停。任一不满足即清零。 */
+    if (s_central_mode || connected || !ble_hs_synced() || authoritative) {
+        *silent_ticks = 0;
+        *next_retry_s = 0;
+        return;
+    }
+    (*silent_ticks)++;
+    if (*silent_ticks <= APP_ADV_WATCHDOG_SILENT_LIMIT_S) {
+        return;
+    }
+    if (*next_retry_s > 0) {
+        (*next_retry_s)--;
+        return;
+    }
+    {
+        uint32_t attempt = ++s_adv_retry_count;
+        esp_err_t err = app_bt_restart_advertising();
+
+        if (err == ESP_OK) {
+            ESP_LOGW(TAG, "adv watchdog: advertising recovered (attempt=%u, last_writer=%s)",
+                     (unsigned)attempt, s_adv_last_writer);
+            *silent_ticks = 0;
+            *next_retry_s = 0;
+            return;
+        }
+        ESP_LOGW(TAG, "adv watchdog retry #%u failed (rc implies host state; "
+                 "rc=22 persistent => host dead, reboot device)", (unsigned)attempt);
+        *next_retry_s = (*next_retry_s == 0) ? 2
+                       : (*next_retry_s < 8) ? (*next_retry_s * 2)
+                       : (uint32_t)(APP_ADV_WATCHDOG_RETRY_CAP_S - 2);
+        if (*next_retry_s + 2 > APP_ADV_WATCHDOG_RETRY_CAP_S) {
+            *next_retry_s = APP_ADV_WATCHDOG_RETRY_CAP_S;
+        }
+    }
 }
 
 bool app_bt_advertising(void)
@@ -547,6 +685,7 @@ static void app_ble_gap_cb(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t 
         break;
     case ESP_GAP_BLE_ADV_START_COMPLETE_EVT:
         s_adv_active = (param->adv_start_cmpl.status == ESP_BT_STATUS_SUCCESS);
+        app_bt_adv_note_writer(s_adv_active ? "adv_start_ok" : "adv_start_fail");
         if (param->adv_start_cmpl.status == ESP_BT_STATUS_SUCCESS) {
             ESP_LOGI(TAG, "BLE advertising started");
             app_bt_status_set_error("");
@@ -657,6 +796,7 @@ esp_err_t app_bt_restart_advertising(void)
     if (err == ESP_ERR_INVALID_STATE) {
         /* 已经在广播(栈可能已自动恢复)→ 视为正常 */
         ESP_LOGI(TAG, "advertising already active");
+        app_bt_status_set_error("");
         return ESP_OK;
     }
     if (err != ESP_OK) {
@@ -664,6 +804,7 @@ esp_err_t app_bt_restart_advertising(void)
                  esp_err_to_name(err), (unsigned)esp_get_free_heap_size());
         return err;
     }
+    app_bt_adv_note_writer("restart");
     ESP_LOGI(TAG, "advertising restart requested (after disconnect)");
     return ESP_OK;
 }
@@ -671,6 +812,54 @@ esp_err_t app_bt_restart_advertising(void)
 bool app_bt_advertising(void)
 {
     return s_adv_active;
+}
+
+/* Bluedroid:BTA 不暴露 adv-active 权威查询,标志就是唯一事实源(1.3-92);
+ * restart 的 INVALID_STATE 容忍已兜住"标志错报已停"的情形 */
+static bool app_bt_adv_authoritative(void)
+{
+    return s_adv_active;
+}
+
+/* Bluedroid 看门狗 tick_impl:无 desync 检测(权威=标志,永不 desync)、
+ * 无 sync 判断(BTA 自带状态机) */
+static void app_bt_adv_watchdog_tick_impl(uint32_t *silent_ticks, uint32_t *next_retry_s)
+{
+    bool connected = app_ble_gatts_connected() || app_ble_gattc_connected();
+
+    if (connected || app_bt_adv_authoritative()) {
+        *silent_ticks = 0;
+        *next_retry_s = 0;
+        return;
+    }
+    (*silent_ticks)++;
+    if (*silent_ticks <= APP_ADV_WATCHDOG_SILENT_LIMIT_S) {
+        return;
+    }
+    if (*next_retry_s > 0) {
+        (*next_retry_s)--;
+        return;
+    }
+    {
+        uint32_t attempt = ++s_adv_retry_count;
+        esp_err_t err = app_bt_restart_advertising();
+
+        if (err == ESP_OK) {
+            ESP_LOGW(TAG, "adv watchdog: advertising recovered (attempt=%u, last_writer=%s)",
+                     (unsigned)attempt, s_adv_last_writer);
+            *silent_ticks = 0;
+            *next_retry_s = 0;
+            return;
+        }
+        ESP_LOGW(TAG, "adv watchdog retry #%u failed: %s",
+                 (unsigned)attempt, esp_err_to_name(err));
+        *next_retry_s = (*next_retry_s == 0) ? 2
+                       : (*next_retry_s < 8) ? (*next_retry_s * 2)
+                       : (uint32_t)(APP_ADV_WATCHDOG_RETRY_CAP_S - 2);
+        if (*next_retry_s + 2 > APP_ADV_WATCHDOG_RETRY_CAP_S) {
+            *next_retry_s = APP_ADV_WATCHDOG_RETRY_CAP_S;
+        }
+    }
 }
 
 static void app_bt_stop(void)

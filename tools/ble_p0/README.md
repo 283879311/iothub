@@ -154,6 +154,14 @@ MTU23 测试构建：临时改 `sdkconfig` 的 `CONFIG_BT_NIMBLE_ATT_PREFERRED_M
 
 2026-10-23 结果：MTU23 `t3_ble_channels_20261023_234439.json` 功能 15/15 PASS（CMD 通知 20B；DATA 200B/600B 回环一致；`operation.get` 在长响应期间发出）；MTU256 恢复复核 `235335` 功能 15/15（CMD 253B、DATA 240B 边界）。**DATA 是 best-effort 字节管道，无应用 ACK/序号/重传/帧重组/流控；断连无显式 `data_pipe` flush。** 不能据此宣称端到端可靠。AP schema 清理后 T3 smoke `t3_ble_channels_20261024_000822.json` 仍 15/15，`config.get` 长响应降为 1107B。
 
+## T4 微信小程序交互协议
+
+小程序侧完整协议（扫描/订阅顺序、20B 写入、CMD 分片重组、登录/token、配网 operation、错误码、DATA 边界、iOS/Android 测试矩阵）：
+
+[`docs/BLE微信小程序交互协议_T4_2026-10-24.md`](../../docs/BLE微信小程序交互协议_T4_2026-10-24.md)
+
+关键约束：先订阅 CMD TX 再发命令；20B 保守分片；`config.get` 长响应按 JSON 边界重组；token 600s 且断连失效；`operation.get` 轮询到终态；apply 后等 `sta_has_ip`/MQTT；DATA 无应用 ACK。T4 需 iOS/Android 各一台真机。
+
 ## 6.0.3 全量 P0 与审计
 
 全量套件（IDF 6.0.3 构建、TQ2018）：

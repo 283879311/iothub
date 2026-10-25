@@ -1,0 +1,79 @@
+{
+  "timestamp": "2026-10-25T09:52:34+08:00",
+  "name": "T5_CONNECT_SCENARIO_ADV_WATCHDOG",
+  "rounds_requested": 10,
+  "rounds_pass": 10,
+  "pass": true,
+  "rounds": [
+    {
+      "round": 1,
+      "disconnect_ok": true,
+      "disconnect_error": null,
+      "visible_after_1p2s": true,
+      "scan_s": 6.03
+    },
+    {
+      "round": 2,
+      "disconnect_ok": true,
+      "disconnect_error": null,
+      "visible_after_1p2s": true,
+      "scan_s": 6.02
+    },
+    {
+      "round": 3,
+      "disconnect_ok": true,
+      "disconnect_error": null,
+      "visible_after_1p2s": true,
+      "scan_s": 6.02
+    },
+    {
+      "round": 4,
+      "disconnect_ok": true,
+      "disconnect_error": null,
+      "visible_after_1p2s": true,
+      "scan_s": 6.02
+    },
+    {
+      "round": 5,
+      "disconnect_ok": true,
+      "disconnect_error": null,
+      "visible_after_1p2s": true,
+      "scan_s": 6.02
+    },
+    {
+      "round": 6,
+      "disconnect_ok": true,
+      "disconnect_error": null,
+      "visible_after_1p2s": true,
+      "scan_s": 6.02
+    },
+    {
+      "round": 7,
+      "disconnect_ok": true,
+      "disconnect_error": null,
+      "visible_after_1p2s": true,
+      "scan_s": 6.02
+    },
+    {
+      "round": 8,
+      "disconnect_ok": true,
+      "disconnect_error": null,
+      "visible_after_1p2s": true,
+      "scan_s": 6.02
+    },
+    {
+      "round": 9,
+      "disconnect_ok": true,
+      "disconnect_error": null,
+      "visible_after_1p2s": true,
+      "scan_s": 6.02
+    },
+    {
+      "round": 10,
+      "disconnect_ok": true,
+      "disconnect_error": null,
+      "visible_after_1p2s": true,
+      "scan_s": 6.02
+    }
+  ]
+}

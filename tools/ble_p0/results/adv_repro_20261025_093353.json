@@ -1,0 +1,317 @@
+{
+  "timestamp": "2026-10-25T09:33:53+08:00",
+  "name": "ADV_RESTART_REPRO_50CYCLES",
+  "cycles_requested": 50,
+  "cycles_completed": 50,
+  "connect_ok": 50,
+  "connect_fail": 0,
+  "disappeared_at_cycle": null,
+  "final_scan_1": [
+    "B0:A7:32:28:C8:E6"
+  ],
+  "final_scan_2_after_5s": [
+    "B0:A7:32:28:C8:E6"
+  ],
+  "cycles": [
+    {
+      "cycle": 1,
+      "ok": true,
+      "dt_s": 5.398,
+      "error": null
+    },
+    {
+      "cycle": 2,
+      "ok": true,
+      "dt_s": 4.0,
+      "error": null
+    },
+    {
+      "cycle": 3,
+      "ok": true,
+      "dt_s": 4.999,
+      "error": null
+    },
+    {
+      "cycle": 4,
+      "ok": true,
+      "dt_s": 4.001,
+      "error": null
+    },
+    {
+      "cycle": 5,
+      "ok": true,
+      "dt_s": 4.004,
+      "error": null
+    },
+    {
+      "cycle": 6,
+      "ok": true,
+      "dt_s": 3.014,
+      "error": null
+    },
+    {
+      "cycle": 7,
+      "ok": true,
+      "dt_s": 2.97,
+      "error": null
+    },
+    {
+      "cycle": 8,
+      "ok": true,
+      "dt_s": 4.007,
+      "error": null
+    },
+    {
+      "cycle": 9,
+      "ok": true,
+      "dt_s": 4.993,
+      "error": null
+    },
+    {
+      "cycle": 10,
+      "ok": true,
+      "dt_s": 3.014,
+      "error": null
+    },
+    {
+      "cycle": 11,
+      "ok": true,
+      "dt_s": 2.979,
+      "error": null
+    },
+    {
+      "cycle": 12,
+      "ok": true,
+      "dt_s": 3.998,
+      "error": null
+    },
+    {
+      "cycle": 13,
+      "ok": true,
+      "dt_s": 3.015,
+      "error": null
+    },
+    {
+      "cycle": 14,
+      "ok": true,
+      "dt_s": 5.003,
+      "error": null
+    },
+    {
+      "cycle": 15,
+      "ok": true,
+      "dt_s": 3.385,
+      "error": null
+    },
+    {
+      "cycle": 16,
+      "ok": true,
+      "dt_s": 3.625,
+      "error": null
+    },
+    {
+      "cycle": 17,
+      "ok": true,
+      "dt_s": 3.964,
+      "error": null
+    },
+    {
+      "cycle": 18,
+      "ok": true,
+      "dt_s": 4.001,
+      "error": null
+    },
+    {
+      "cycle": 19,
+      "ok": true,
+      "dt_s": 3.014,
+      "error": null
+    },
+    {
+      "cycle": 20,
+      "ok": true,
+      "dt_s": 4.051,
+      "error": null
+    },
+    {
+      "cycle": 21,
+      "ok": true,
+      "dt_s": 2.967,
+      "error": null
+    },
+    {
+      "cycle": 22,
+      "ok": true,
+      "dt_s": 3.964,
+      "error": null
+    },
+    {
+      "cycle": 23,
+      "ok": true,
+      "dt_s": 3.017,
+      "error": null
+    },
+    {
+      "cycle": 24,
+      "ok": true,
+      "dt_s": 4.003,
+      "error": null
+    },
+    {
+      "cycle": 25,
+      "ok": true,
+      "dt_s": 4.007,
+      "error": null
+    },
+    {
+      "cycle": 26,
+      "ok": true,
+      "dt_s": 4.003,
+      "error": null
+    },
+    {
+      "cycle": 27,
+      "ok": true,
+      "dt_s": 4.094,
+      "error": null
+    },
+    {
+      "cycle": 28,
+      "ok": true,
+      "dt_s": 3.912,
+      "error": null
+    },
+    {
+      "cycle": 29,
+      "ok": true,
+      "dt_s": 5.986,
+      "error": null
+    },
+    {
+      "cycle": 30,
+      "ok": true,
+      "dt_s": 4.011,
+      "error": null
+    },
+    {
+      "cycle": 31,
+      "ok": true,
+      "dt_s": 2.964,
+      "error": null
+    },
+    {
+      "cycle": 32,
+      "ok": true,
+      "dt_s": 4.005,
+      "error": null
+    },
+    {
+      "cycle": 33,
+      "ok": true,
+      "dt_s": 4.004,
+      "error": null
+    },
+    {
+      "cycle": 34,
+      "ok": true,
+      "dt_s": 4.049,
+      "error": null
+    },
+    {
+      "cycle": 35,
+      "ok": true,
+      "dt_s": 2.974,
+      "error": null
+    },
+    {
+      "cycle": 36,
+      "ok": true,
+      "dt_s": 2.973,
+      "error": null
+    },
+    {
+      "cycle": 37,
+      "ok": true,
+      "dt_s": 3.007,
+      "error": null
+    },
+    {
+      "cycle": 38,
+      "ok": true,
+      "dt_s": 4.053,
+      "error": null
+    },
+    {
+      "cycle": 39,
+      "ok": true,
+      "dt_s": 3.964,
+      "error": null
+    },
+    {
+      "cycle": 40,
+      "ok": true,
+      "dt_s": 2.966,
+      "error": null
+    },
+    {
+      "cycle": 41,
+      "ok": true,
+      "dt_s": 4.009,
+      "error": null
+    },
+    {
+      "cycle": 42,
+      "ok": true,
+      "dt_s": 3.011,
+      "error": null
+    },
+    {
+      "cycle": 43,
+      "ok": true,
+      "dt_s": 4.007,
+      "error": null
+    },
+    {
+      "cycle": 44,
+      "ok": true,
+      "dt_s": 4.994,
+      "error": null
+    },
+    {
+      "cycle": 45,
+      "ok": true,
+      "dt_s": 3.056,
+      "error": null
+    },
+    {
+      "cycle": 46,
+      "ok": true,
+      "dt_s": 2.967,
+      "error": null
+    },
+    {
+      "cycle": 47,
+      "ok": true,
+      "dt_s": 4.006,
+      "error": null
+    },
+    {
+      "cycle": 48,
+      "ok": true,
+      "dt_s": 2.963,
+      "error": null
+    },
+    {
+      "cycle": 49,
+      "ok": true,
+      "dt_s": 2.998,
+      "error": null
+    },
+    {
+      "cycle": 50,
+      "ok": true,
+      "dt_s": 4.001,
+      "error": null
+    }
+  ]
+}
