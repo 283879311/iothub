@@ -1,0 +1,35 @@
+{
+  "timestamp": "2026-10-25T12:07:31.741",
+  "started_at": "2026-10-25T12:07:31+08:00",
+  "name": "T5_M3_ANOMALY_MATRIX",
+  "ssid": "CMCC-502",
+  "only": "m3-7",
+  "M3_7_reboot": {
+    "esptool_rc": 0,
+    "esptool_tail": "\nHard resetting via RTS pin...\nWARNING: DEPRECATED: 'esptool.py' is deprecated. Please use 'esptool' instead. The '.py' suffix will be removed in a future major release.\nWARNING: Deprecated: Command 'read_mac' is deprecated. Use 'read-mac' instead.",
+    "manageable_adv_s": 5.4,
+    "manageable_login_s": 2.64,
+    "poll_log": [
+      {
+        "t": 15.45,
+        "sta_has_ip": true,
+        "mqtt_connected": true
+      }
+    ],
+    "network_ip_s": 15.45,
+    "business_mqtt_s": 15.45,
+    "config_identical": true,
+    "old_op_query": {},
+    "op_table_reset": true
+  },
+  "checks": {
+    "m3_7_config_identical": true,
+    "m3_7_manageable": true,
+    "m3_7_network": true,
+    "m3_7_business": true,
+    "m3_7_op_table_reset": true
+  },
+  "pass": true,
+  "finished_at": "2026-10-25T12:08:21+08:00",
+  "_path": "/home/tc/esp/workspace/iothub/tools/ble_p0/results/t5_m3_20261025_120821.json"
+}

@@ -1,0 +1,167 @@
+{
+  "timestamp": "2026-10-25T11:53:29.324",
+  "started_at": "2026-10-25T11:53:29+08:00",
+  "name": "T5_M3_ANOMALY_MATRIX",
+  "ssid": "CMCC-502",
+  "board": {
+    "address": "B0:A7:32:28:C8:E6",
+    "name": "IotHubBLE-C8E4"
+  },
+  "baseline": {
+    "config": {
+      "net_mode": "sta",
+      "sta_ssid": "CMCC-502",
+      "sta_password_set": true,
+      "sta_use_static": false,
+      "sta_static_ip": "192.168.43.213",
+      "sta_static_gateway": "192.168.43.1",
+      "sta_static_netmask": "255.255.255.0",
+      "sta_static_dns1": "192.168.43.1",
+      "sta_static_dns2": "8.8.8.8"
+    },
+    "profiles": [
+      "CMCC-502",
+      "TQ2018"
+    ],
+    "status": {
+      "sta_connected": true,
+      "sta_has_ip": true,
+      "sta_ip": "192.168.1.28",
+      "last_disconnect": "none",
+      "connected_ssid": "CMCC-502",
+      "connected_profile": 0,
+      "sta_ssid": "CMCC-502",
+      "password_set": true,
+      "mode": "sta",
+      "mqtt_connected": true,
+      "mqtt_last_error": "",
+      "trial": {
+        "state": "idle"
+      }
+    }
+  },
+  "scenarios": {
+    "M3_6": {
+      "cancel_during_connecting": {
+        "operation_id": "op-6DEF15329AF1E9C4",
+        "state": "cancelled"
+      },
+      "cancel_repeat": {
+        "operation_id": "op-6DEF15329AF1E9C4",
+        "state": "cancelled"
+      },
+      "cancel_repeat_idempotent": true,
+      "cancel_unknown": "not_found",
+      "unknown_expect_not_found": true
+    },
+    "M3_3": {
+      "terminal": {
+        "operation_id": "op-E9BEE739E3387DAF",
+        "state": "failed",
+        "error": "wrong_password",
+        "elapsed_s": 13.196
+      },
+      "classified_wrong_password": true,
+      "not_busy_or_no_slot": true,
+      "formal_config_unchanged": true,
+      "profiles_unchanged": true,
+      "runtime_recovered": true,
+      "_st_before": {
+        "sta_connected": true,
+        "sta_has_ip": true,
+        "sta_ip": "192.168.1.28",
+        "last_disconnect": "none",
+        "connected_ssid": "",
+        "connected_profile": -1,
+        "sta_ssid": "CMCC-502",
+        "password_set": true,
+        "mode": "sta",
+        "mqtt_connected": false,
+        "mqtt_last_error": "waiting_sta_ip",
+        "trial": {
+          "state": "idle"
+        }
+      }
+    },
+    "M3_1": {
+      "old_token_rejected": true,
+      "old_token_error": "<redacted>",
+      "relogin_ok": true,
+      "old_op_queryable": true,
+      "old_op_state": "cancelled",
+      "old_op_cancelled_by_ble_drop": true
+    },
+    "M3_4": {
+      "late_query_state": "failed",
+      "late_query_error": "wrong_password",
+      "terminal_without_polling": true,
+      "new_op_accepted": true,
+      "expired_note": "literal EXPIRED unreachable: all candidates terminate <20s by event with current APs (accepted TTL 20s caps all)"
+    },
+    "M3_5": {
+      "got_ip": true,
+      "trial_at_got": {
+        "trial_id": "trial-A3C734E7",
+        "state": "got_ip",
+        "ssid": "CMCC-502"
+      },
+      "expiry_samples": [
+        {
+          "t": "2026-10-25T11:56:56+08:00",
+          "state": "cancelled",
+          "error": "cancelled"
+        }
+      ],
+      "op_expired": false,
+      "late_apply_error": "operation_state",
+      "late_apply_refused": true,
+      "formal_config_not_committed": true,
+      "trial_idle_after": true
+    },
+    "M3_2_subset": {
+      "terminal": {
+        "operation_id": "op-0E7EA177DFDB960A",
+        "state": "failed",
+        "error": "ap_not_found",
+        "elapsed_s": 5.001
+      },
+      "ap_not_found": true,
+      "reason_traceable": true,
+      "pending_manual": "mid-connect AP loss needs a real AP toggle; run with a controllable hotspot and record operation.get + last_disconnect"
+    }
+  },
+  "M3_7_reboot": {
+    "esptool_rc": 0,
+    "manageable_adv_s": 5.43,
+    "manageable_login_s": 3.23,
+    "network_ip_s": null,
+    "business_mqtt_s": null,
+    "config_identical": true,
+    "op_table_reset": "not_found",
+    "old_op_query": {}
+  },
+  "checks": {
+    "m3_6_cancel_idempotent": true,
+    "m3_6_unknown_not_found": true,
+    "m3_3_wrong_password": true,
+    "m3_3_config_unchanged": true,
+    "m3_3_profiles_unchanged": true,
+    "m3_1_old_token_rejected": true,
+    "m3_1_old_op_cancelled": true,
+    "m3_4_terminal_without_polling": true,
+    "m3_4_new_op_accepted": true,
+    "m3_5_got_ip": true,
+    "m3_5_op_expired": false,
+    "m3_5_late_apply_refused": true,
+    "m3_5_config_not_committed": true,
+    "m3_5_trial_idle": true,
+    "m3_2_ap_not_found": true,
+    "m3_7_config_identical": true,
+    "m3_7_manageable": true,
+    "m3_7_network": false,
+    "m3_7_business": false
+  },
+  "pass": false,
+  "finished_at": "2026-10-25T12:00:03+08:00",
+  "_path": "/home/tc/esp/workspace/iothub/tools/ble_p0/results/t5_m3_20261025_120003.json"
+}
