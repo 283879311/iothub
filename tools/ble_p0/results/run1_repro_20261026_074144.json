@@ -1,0 +1,47 @@
+{
+  "name": "RUN1_PATTERN_REPRO",
+  "pairs": {
+    "pair1": {
+      "B1": {
+        "op": "op-437B392267E553A8",
+        "state": "failed",
+        "error": "wrong_password",
+        "elapsed": 18.05
+      },
+      "C_after_1s": {
+        "op": "op-83BF7D110E55FBD1",
+        "state": "got_ip",
+        "error": "none",
+        "elapsed": 17.3
+      }
+    },
+    "pair2": {
+      "B1": {
+        "op": "op-38835FD8653A7564",
+        "state": "failed",
+        "error": "wrong_password",
+        "elapsed": 16.64
+      },
+      "C_after_1s": {
+        "op": "op-B9C3EBFEB426DDCD",
+        "state": "got_ip",
+        "error": "none",
+        "elapsed": 18.65
+      }
+    },
+    "pair3": {
+      "B1": {
+        "op": "op-9CE2845041864114",
+        "state": "failed",
+        "error": "wrong_password",
+        "elapsed": 18.34
+      },
+      "C_after_1s": {
+        "op": "op-8FACA0AF63C02379",
+        "state": "got_ip",
+        "error": "none",
+        "elapsed": 17.1
+      }
+    }
+  }
+}

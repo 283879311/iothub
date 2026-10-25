@@ -1,0 +1,20 @@
+{
+  "timestamp": "2026-10-26T07:36:21.012",
+  "started_at": "2026-10-26T07:36:21+08:00",
+  "name": "T3_UART1_INBOUND_CONGESTION",
+  "sent": 32768,
+  "recv": 12385,
+  "recv_is_ordered_subsequence": true,
+  "write_s": 2.86,
+  "input_rate_Bps": 11463.8,
+  "output_rate_Bps": 1127.5,
+  "drain_s": 10.98,
+  "note": "device-side 'queue full (port 1)' warning count and per-event byte granularity audited from the serial console capture (separate file); accounting tolerance covers console log loss",
+  "checks": {
+    "ordered_subsequence": true,
+    "drops_occurred": true,
+    "output_throttled_to_ble_rate": true
+  },
+  "pass": true,
+  "_path": "/home/tc/esp/workspace/iothub/tools/ble_p0/results/t3_uart1_congestion_20261026_073621.json"
+}
