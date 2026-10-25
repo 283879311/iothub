@@ -12,6 +12,7 @@
 
 #include "common.h"
 #include "config.h"
+#include "data_pipe.h"
 #include "state.h"
 #include "uart.h"
 #include "uart_internal.h"
@@ -28,6 +29,55 @@ static StaticSemaphore_t s_uart_op_mutex_buf;
  * 阻塞到数据全部发出(官方 UART 文档),data_pipe 任务被拖住 → 队列 overrun。
  * 2048 > UART_HW_FIFO_LEN,ISR 后台搬 FIFO;发送前用 free_size 做非阻塞背压。 */
 #define UART_DRV_TX_BUF_SIZE 2048
+
+/* ---- UART1 入站读取(P1-11/1.3-94):UART1 → data_pipe → 路由出站 ----
+ * 设计声明三边双向(data_pipe.h),此前缺入站读取——RX 环形缓冲装满即静默丢弃。
+ * 本任务补齐:有界读取(256B = DATA_PIPE_CHUNK_MAX,一次 feed 一块),字节透明、
+ * 不解析业务协议;队列满/未启用等丢弃与计数语义沿用 data_pipe 既有实现。
+ * 与 apply 重配置互斥:uart_driver_delete/install 并发读会触碰已释放缓冲,
+ * 读取全程持 app_uart_lock(递归锁,空闲 20ms 读超时即让路,apply 最多等 20ms)。 */
+#define UART1_RX_READ_LEN   256
+#define UART1_RX_TASK_STACK 3072
+#define UART1_RX_TASK_PRIO  3
+
+static TaskHandle_t s_uart1_rx_task;
+static uint8_t s_uart1_rx_buf[UART1_RX_READ_LEN];
+
+static void app_uart1_rx_task(void *arg)
+{
+    (void)arg;
+    for (;;) {
+        int n;
+
+        if (!app_uart_lock(pdMS_TO_TICKS(100))) {
+            continue;
+        }
+        n = uart_read_bytes(UART_PORT, s_uart1_rx_buf, UART1_RX_READ_LEN,
+                            pdMS_TO_TICKS(20));
+        app_uart_unlock();
+        if (n > 0) {
+            (void)data_pipe_feed(DATA_PORT_UART1, s_uart1_rx_buf, (size_t)n);
+        } else if (n < 0) {
+            /* 驱动未安装/重配置窗口:让路后重试 */
+            vTaskDelay(pdMS_TO_TICKS(50));
+        }
+    }
+}
+
+static void app_uart1_rx_task_start_once(void)
+{
+    if (s_uart1_rx_task != NULL) {
+        return;
+    }
+    if (xTaskCreate(app_uart1_rx_task, "uart1_rx", UART1_RX_TASK_STACK, NULL,
+                    UART1_RX_TASK_PRIO, &s_uart1_rx_task) != pdPASS) {
+        s_uart1_rx_task = NULL;
+        ESP_LOGW(TAG, "uart1 rx task create failed (UART1 inbound disabled)");
+        return;
+    }
+    ESP_LOGI(TAG, "uart1 rx reader started (inbound -> data_pipe, chunk=%u)",
+             (unsigned)UART1_RX_READ_LEN);
+}
 
 
 static void app_uart_set_apply_error(const char *error_key)
@@ -375,6 +425,7 @@ static esp_err_t app_uart_apply_config_values(uint32_t baudrate, uint8_t data_bi
         s_uart.driver_installed = true;
         app_uart_set_apply_error("");
             uart_flush_input(UART_PORT);
+        app_uart1_rx_task_start_once();
         app_uart_unlock();
         return ESP_OK;
     }
