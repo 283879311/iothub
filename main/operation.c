@@ -139,6 +139,7 @@ const char *app_operation_error_name(app_operation_error_t error)
     case APP_OPERATION_ERR_OPERATION_STATE:return "operation_state";
     case APP_OPERATION_ERR_STORAGE_FAILED: return "storage_failed";
     case APP_OPERATION_ERR_ROLLBACK_FAILED:return "rollback_failed";
+    case APP_OPERATION_ERR_SCAN_FAILED:   return "wifi_scan_failed";
     default:                               return "unknown";
     }
 }

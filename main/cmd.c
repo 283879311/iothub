@@ -151,6 +151,7 @@ static app_operation_error_t app_cmd_net_wifi_error(app_wifi_try_result_t result
     switch (result) {
     case APP_WIFI_TRY_WRONG_PASSWORD: return APP_OPERATION_ERR_WRONG_PASSWORD;
     case APP_WIFI_TRY_AP_NOT_FOUND:   return APP_OPERATION_ERR_AP_NOT_FOUND;
+    case APP_WIFI_TRY_SCAN_FAILED:    return APP_OPERATION_ERR_SCAN_FAILED;
     case APP_WIFI_TRY_TIMEOUT:        return APP_OPERATION_ERR_TIMEOUT;
     case APP_WIFI_TRY_CANCELLED:      return APP_OPERATION_ERR_CANCELLED;
     case APP_WIFI_TRY_OK:
@@ -1362,6 +1363,9 @@ esp_err_t app_cmd_execute_ex(const cJSON *frame, app_cmd_source_t source,
                     break;
                 case APP_WIFI_TRY_AP_NOT_FOUND:
                     err = "ap_not_found";
+                    break;
+                case APP_WIFI_TRY_SCAN_FAILED:
+                    err = "wifi_scan_failed";
                     break;
                 case APP_WIFI_TRY_TIMEOUT:
                     err = "connect_timeout";

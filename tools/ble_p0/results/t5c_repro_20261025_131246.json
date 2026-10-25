@@ -1,0 +1,170 @@
+{
+  "timestamp": "2026-10-25T13:11:00.904",
+  "started_at": "2026-10-25T13:11:00+08:00",
+  "name": "T5C_ANOMALY_REPRO",
+  "ssid": "CMCC-502",
+  "board": {
+    "address": "B0:A7:32:28:C8:E6",
+    "name": "IotHubBLE-C8E4"
+  },
+  "S0_baseline": {
+    "sta_connected": true,
+    "sta_has_ip": true,
+    "sta_ip": "192.168.1.28",
+    "last_disconnect": "none",
+    "connected_ssid": "CMCC-502",
+    "connected_profile": 0,
+    "sta_ssid": "CMCC-502",
+    "password_set": true,
+    "mode": "sta",
+    "mqtt_connected": true,
+    "mqtt_last_error": "",
+    "trial": {
+      "state": "idle"
+    }
+  },
+  "S1_b3_noap": {
+    "ssid": "T5-NOAP-c07974eb",
+    "password_kind": "<redacted>",
+    "accepted": true,
+    "operation_id": "op-CBF32D00C6BDE73C",
+    "accept_latency_s": 1.505,
+    "error_code": null,
+    "terminal_state": "failed",
+    "terminal_error": "ap_not_found",
+    "elapsed_s": 7.951,
+    "matching_t5c": false
+  },
+  "S2_c_after_b3_correct": {
+    "ssid": "CMCC-502",
+    "password_kind": "<redacted>",
+    "accepted": true,
+    "operation_id": "op-F3DC612406584411",
+    "accept_latency_s": 1.25,
+    "error_code": null,
+    "terminal_state": "got_ip",
+    "terminal_error": "none",
+    "elapsed_s": 14.851,
+    "matching_t5c": false
+  },
+  "S2_cancel": {
+    "ok": true,
+    "state": "cancelled"
+  },
+  "S2_status": {
+    "sta_connected": true,
+    "sta_has_ip": false,
+    "sta_ip": "0.0.0.0",
+    "last_disconnect": "none",
+    "connected_ssid": "CMCC-502",
+    "connected_profile": 0,
+    "sta_ssid": "CMCC-502",
+    "password_set": true,
+    "mode": "sta",
+    "mqtt_connected": false,
+    "mqtt_last_error": "waiting_sta_ip",
+    "trial": {
+      "state": "idle"
+    }
+  },
+  "S3a_b3_noap": {
+    "ssid": "T5-NOAP-2365de74",
+    "password_kind": "<redacted>",
+    "accepted": true,
+    "operation_id": "op-B37AFB4B28EE3C18",
+    "accept_latency_s": 1.603,
+    "error_code": null,
+    "terminal_state": "failed",
+    "terminal_error": "ap_not_found",
+    "elapsed_s": 8.55,
+    "matching_t5c": false
+  },
+  "S3b_c_wrong_pw": {
+    "ssid": "CMCC-502",
+    "password_kind": "<redacted>",
+    "accepted": true,
+    "operation_id": "op-2CAEF7651F3BCBA9",
+    "accept_latency_s": 9.954,
+    "error_code": null,
+    "terminal_state": "failed",
+    "terminal_error": "wrong_password",
+    "elapsed_s": 26.45,
+    "matching_t5c": false
+  },
+  "S3b_status": {
+    "sta_connected": true,
+    "sta_has_ip": true,
+    "sta_ip": "192.168.1.28",
+    "last_disconnect": "none",
+    "connected_ssid": "",
+    "connected_profile": -1,
+    "sta_ssid": "CMCC-502",
+    "password_set": true,
+    "mode": "sta",
+    "mqtt_connected": false,
+    "mqtt_last_error": "waiting_sta_ip",
+    "trial": {
+      "state": "idle"
+    }
+  },
+  "S4_c_empty_pw": {
+    "ssid": "CMCC-502",
+    "password_kind": "<redacted>",
+    "accepted": true,
+    "operation_id": "op-F843F9E63C86DDAC",
+    "accept_latency_s": 1.6,
+    "error_code": null,
+    "terminal_state": "failed",
+    "terminal_error": "connect_failed",
+    "elapsed_s": 13.546,
+    "matching_t5c": false
+  },
+  "S4_status": {
+    "sta_connected": true,
+    "sta_has_ip": false,
+    "sta_ip": "0.0.0.0",
+    "last_disconnect": "none",
+    "connected_ssid": "CMCC-502",
+    "connected_profile": 0,
+    "sta_ssid": "CMCC-502",
+    "password_set": true,
+    "mode": "sta",
+    "mqtt_connected": false,
+    "mqtt_last_error": "waiting_sta_ip",
+    "trial": {
+      "state": "idle"
+    }
+  },
+  "S5_final_status": {
+    "sta_connected": true,
+    "sta_has_ip": true,
+    "sta_ip": "192.168.1.28",
+    "last_disconnect": "none",
+    "connected_ssid": "CMCC-502",
+    "connected_profile": 0,
+    "sta_ssid": "CMCC-502",
+    "password_set": true,
+    "mode": "sta",
+    "mqtt_connected": true,
+    "mqtt_last_error": "",
+    "trial": {
+      "state": "idle"
+    }
+  },
+  "checks": {
+    "S1_ap_not_found": true,
+    "S2_correct_pw_got_ip": true,
+    "S2_not_t5c_failure": true,
+    "S3a_churn_noap_honest": true,
+    "S3b_churn_wrong_pw_honest": true,
+    "S5_link_restored": true
+  },
+  "pass": true,
+  "verdict_hint": {
+    "S2_reproduces": false,
+    "S4_reproduces_t5c": false,
+    "note": "S2 reproducing => firmware B3->C state bug; only S4 reproducing => tester sent no password (firmware fine)"
+  },
+  "finished_at": "2026-10-25T13:12:46+08:00",
+  "_path": "/home/tc/esp/workspace/iothub/tools/ble_p0/results/t5c_repro_20261025_131246.json"
+}

@@ -34,6 +34,7 @@ typedef enum {
     APP_OPERATION_ERR_OPERATION_STATE,
     APP_OPERATION_ERR_STORAGE_FAILED,
     APP_OPERATION_ERR_ROLLBACK_FAILED,
+    APP_OPERATION_ERR_SCAN_FAILED,   /* P1-10:候选预扫描两次失败,未进入连接 */
 } app_operation_error_t;
 
 typedef struct app_operation app_operation_t;

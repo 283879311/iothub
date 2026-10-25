@@ -1468,26 +1468,44 @@ static app_wifi_try_result_t app_wifi_try_connect_common(const char *ssid, const
         return APP_WIFI_TRY_CONNECT_FAILED;
     }
 
-    /* 预检(方案 C):扫描确认 SSID 在场。隐藏网络扫不到 —— 属预期限制,前端文案说明 */
-    if (app_wifi_perform_scan() == ESP_OK) {
-        app_wifi_runtime_lock();
-        scan_count = s_wifi.scan_count;
-        app_wifi_runtime_unlock();
-        for (i = 0; i < (int)scan_count; i++) {
-            const char *seen = NULL;
-            int8_t rssi = 0;
-            uint8_t auth = 0;
+    /* 预检(方案 C→A,P1-10):扫描确认 SSID 在场。隐藏网络扫不到 —— 属预期限制,前端文案说明。
+     * 扫描失败不再 fail-open:过渡态扫不到不证明 AP 不存在,更不能进入连接把驱动状态
+     * 伪装成 connect_failed。失败间隔 500ms 重试一次(参数类错误不可重试);
+     * 两次均失败返回 SCAN_FAILED,不启动候选连接。 */
+    {
+        esp_err_t scan_err = app_wifi_perform_scan();
 
-            if (app_wifi_scan_record_at((uint16_t)i, &seen, &rssi, &auth) &&
-                seen != NULL && strcmp(seen, ssid) == 0) {
-                ssid_seen = true;
-                break;
-            }
+        if (scan_err != ESP_OK && scan_err != ESP_ERR_INVALID_ARG) {
+            ESP_LOGW(TAG, "tryconnect: pre-scan failed (%s), one retry in 500ms",
+                     esp_err_to_name(scan_err));
+            vTaskDelay(pdMS_TO_TICKS(500));
+            scan_err = app_wifi_perform_scan();
         }
-        if (!ssid_seen) {
-            ESP_LOGW(TAG, "tryconnect: ssid '%s' not in scan results", ssid);
+        if (scan_err == ESP_OK) {
+            app_wifi_runtime_lock();
+            scan_count = s_wifi.scan_count;
+            app_wifi_runtime_unlock();
+            for (i = 0; i < (int)scan_count; i++) {
+                const char *seen = NULL;
+                int8_t rssi = 0;
+                uint8_t auth = 0;
+
+                if (app_wifi_scan_record_at((uint16_t)i, &seen, &rssi, &auth) &&
+                    seen != NULL && strcmp(seen, ssid) == 0) {
+                    ssid_seen = true;
+                    break;
+                }
+            }
+            if (!ssid_seen) {
+                ESP_LOGW(TAG, "tryconnect: ssid '%s' not in scan results", ssid);
+                app_wifi_auto_connect_resume();
+                return APP_WIFI_TRY_AP_NOT_FOUND;
+            }
+        } else {
+            ESP_LOGW(TAG, "tryconnect: pre-scan failed twice (%s), abort before connect",
+                     esp_err_to_name(scan_err));
             app_wifi_auto_connect_resume();
-            return APP_WIFI_TRY_AP_NOT_FOUND;
+            return APP_WIFI_TRY_SCAN_FAILED;
         }
     }
 

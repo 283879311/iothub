@@ -163,7 +163,16 @@ async def run(args: argparse.Namespace) -> int:
             "S1_ap_not_found": result["S1_b3_noap"].get("terminal_error") == "ap_not_found",
             "S2_correct_pw_got_ip": result["S2_c_after_b3_correct"].get("terminal_state") == "got_ip",
             "S2_not_t5c_failure": not result["S2_c_after_b3_correct"].get("matching_t5c", False),
-            "S3b_wrong_password": result["S3b_c_wrong_pw"].get("terminal_error") == "wrong_password",
+            # P1-10 fix A: churn-window NOAP must classify honestly now — either the
+            # retry scan succeeds (ap_not_found) or both scans fail (wifi_scan_failed);
+            # generic connect_failed is the bug signature and must not appear.
+            "S3a_churn_noap_honest": result["S3a_b3_noap"].get("terminal_error") in
+                ("ap_not_found", "wifi_scan_failed"),
+            # wrong password in churn: honest classes only (scan path fixed; if the
+            # scan succeeds the handshake classifies wrong_password; scan-failed
+            # surfaces as wifi_scan_failed). connect_failed stays the bug tell.
+            "S3b_churn_wrong_pw_honest": result["S3b_c_wrong_pw"].get("terminal_error") in
+                ("wrong_password", "wifi_scan_failed"),
             "S5_link_restored": result["S5_final_status"].get("sta_connected") is True,
         }
         result["checks"] = checks

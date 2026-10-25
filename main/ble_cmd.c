@@ -417,6 +417,7 @@ static const char *app_ble_cmd_v1_error_code(const char *v0)
         strcmp(v0, "wrong_password") == 0 ||
         strcmp(v0, "ap_not_found") == 0 ||
         strcmp(v0, "connect_failed") == 0 ||
+        strcmp(v0, "wifi_scan_failed") == 0 ||   /* P1-10:保持可分辨,不折叠进 network_failed */
         strcmp(v0, "no_slot") == 0 ||
         strcmp(v0, "expired") == 0 ||
         strcmp(v0, "rollback_failed") == 0) {
