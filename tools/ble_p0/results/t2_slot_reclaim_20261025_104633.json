@@ -1,0 +1,231 @@
+{
+  "timestamp": "2026-10-25T10:35:49.026",
+  "started_at": "2026-10-25T10:35:49+08:00",
+  "name": "T2_OPERATION_SLOT_RECLAIM",
+  "ssid": "CMCC-502",
+  "retention_s": 600.0,
+  "margin_s": 15.0,
+  "reset": {
+    "rc": 1,
+    "error": "[Errno 2] No such file or directory: 'esptool.py'"
+  },
+  "board": {
+    "address": "B0:A7:32:28:C8:E6",
+    "name": "IotHubBLE-C8E4"
+  },
+  "baseline": {
+    "sta_connected": true,
+    "sta_has_ip": true,
+    "sta_ip": "192.168.1.28",
+    "last_disconnect": "none",
+    "connected_ssid": "CMCC-502",
+    "connected_profile": 0,
+    "sta_ssid": "CMCC-502",
+    "password_set": true,
+    "mode": "sta",
+    "mqtt_connected": true,
+    "mqtt_last_error": "",
+    "trial": {
+      "state": "idle"
+    }
+  },
+  "A": {
+    "ok": true,
+    "operation_id": "op-D9776CF89CD39622",
+    "state": "accepted",
+    "error": null,
+    "created_at": "2026-10-25T10:36:10+08:00"
+  },
+  "B_while_active": {
+    "ok": false,
+    "error_code": "busy",
+    "operation_id": null
+  },
+  "A_terminal": {
+    "state": "failed",
+    "error": "wrong_password",
+    "at": "2026-10-25T10:36:26+08:00",
+    "elapsed_s": 13.505,
+    "states": [
+      {
+        "t_s": 1.549,
+        "state": "connecting",
+        "error": "none"
+      },
+      {
+        "t_s": 3.4,
+        "state": "connecting",
+        "error": "none"
+      },
+      {
+        "t_s": 5.001,
+        "state": "connecting",
+        "error": "none"
+      },
+      {
+        "t_s": 6.652,
+        "state": "connecting",
+        "error": "none"
+      },
+      {
+        "t_s": 8.399,
+        "state": "connecting",
+        "error": "none"
+      },
+      {
+        "t_s": 10.104,
+        "state": "connecting",
+        "error": "none"
+      },
+      {
+        "t_s": 11.752,
+        "state": "connecting",
+        "error": "none"
+      },
+      {
+        "t_s": 13.505,
+        "state": "failed",
+        "error": "wrong_password"
+      }
+    ]
+  },
+  "C_D_E": [
+    {
+      "name": "C",
+      "ok": true,
+      "operation_id": "op-9FD3DB899B4D2D69",
+      "state": "accepted",
+      "created_at": "2026-10-25T10:36:28+08:00",
+      "cancel_ok": true,
+      "cancel_state": "cancelled",
+      "cancel_error_code": null,
+      "terminal_state": "cancelled",
+      "terminal_error": "cancelled",
+      "terminal_at": "2026-10-25T10:36:31+08:00",
+      "terminal_elapsed_s": 1.4,
+      "terminal_mono": 68310.289405598,
+      "states": [
+        {
+          "t_s": 1.4,
+          "state": "cancelled",
+          "error": "cancelled"
+        }
+      ]
+    },
+    {
+      "name": "D",
+      "ok": true,
+      "operation_id": "op-59BD2BD15175D229",
+      "state": "accepted",
+      "created_at": "2026-10-25T10:36:32+08:00",
+      "cancel_ok": true,
+      "cancel_state": "cancelled",
+      "cancel_error_code": null,
+      "terminal_state": "cancelled",
+      "terminal_error": "cancelled",
+      "terminal_at": "2026-10-25T10:36:35+08:00",
+      "terminal_elapsed_s": 1.352,
+      "terminal_mono": 68314.942534317,
+      "states": [
+        {
+          "t_s": 1.352,
+          "state": "cancelled",
+          "error": "cancelled"
+        }
+      ]
+    },
+    {
+      "name": "E",
+      "ok": true,
+      "operation_id": "op-C2B65135D14225BE",
+      "state": "accepted",
+      "created_at": "2026-10-25T10:36:37+08:00",
+      "cancel_ok": true,
+      "cancel_state": "cancelled",
+      "cancel_error_code": null,
+      "terminal_state": "cancelled",
+      "terminal_error": "cancelled",
+      "terminal_at": "2026-10-25T10:36:40+08:00",
+      "terminal_elapsed_s": 1.398,
+      "terminal_mono": 68319.887106641,
+      "states": [
+        {
+          "t_s": 1.398,
+          "state": "cancelled",
+          "error": "cancelled"
+        }
+      ]
+    }
+  ],
+  "F_evicts_oldest": {
+    "ok": true,
+    "operation_id": "op-835EF8CCF5B146B1",
+    "state": "accepted",
+    "error_code": null,
+    "created_at": "2026-10-25T10:36:42+08:00"
+  },
+  "A_after_eviction": {
+    "error_code": "not_found",
+    "at": "2026-10-25T10:36:44+08:00"
+  },
+  "F_cancel": {
+    "ok": true,
+    "state": "cancelled"
+  },
+  "F_terminal": {
+    "state": "cancelled",
+    "elapsed_s": 11.348
+  },
+  "C_reclaim": {
+    "reclaimed": true,
+    "elapsed_s_from_terminal": 599.799,
+    "boundary_ok": true,
+    "samples": [
+      {
+        "at": "2026-10-25T10:46:24+08:00",
+        "elapsed_s_from_terminal": 593.798,
+        "ok": true,
+        "state": "cancelled",
+        "error_code": null
+      },
+      {
+        "at": "2026-10-25T10:46:27+08:00",
+        "elapsed_s_from_terminal": 596.898,
+        "ok": true,
+        "state": "cancelled",
+        "error_code": null
+      },
+      {
+        "at": "2026-10-25T10:46:30+08:00",
+        "elapsed_s_from_terminal": 599.799,
+        "ok": false,
+        "state": null,
+        "error_code": "not_found"
+      }
+    ]
+  },
+  "G_after_C_reclaim": {
+    "ok": true,
+    "operation_id": "op-88281ED24D5F0763",
+    "state": "accepted",
+    "error_code": null,
+    "created_at": "2026-10-25T10:46:32+08:00"
+  },
+  "checks": {
+    "B_busy_not_no_slot": true,
+    "F_accepted_via_eviction": true,
+    "A_not_found_after_eviction": true,
+    "A_terminal": true,
+    "C_cancelled": true,
+    "D_cancelled": true,
+    "E_cancelled": true,
+    "F_cancelled": true,
+    "C_reclaimed": true,
+    "C_old_not_found": true,
+    "C_reclaim_not_early": true,
+    "G_accepted": true
+  },
+  "pass": true,
+  "finished_at": "2026-10-25T10:46:33+08:00",
+  "_path": "/home/tc/esp/workspace/iothub/tools/ble_p0/results/t2_slot_reclaim_20261025_104633.json"
+}

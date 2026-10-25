@@ -62,7 +62,9 @@ typedef struct {
 esp_err_t app_operation_init(void);
 
 /* 创建 operation 入队并唤醒唯一 worker。accepted_ttl_ms/got_ip_ttl_ms 传 0
- * 使用默认值(20s/300s)。并发的第二个网络操作返回 ESP_ERR_INVALID_STATE。 */
+ * 使用默认值(20s/300s)。并发的第二个网络操作返回 ESP_ERR_INVALID_STATE。
+ * 终态保留统一 600s（同 key 重试在保留期内幂等返回原终态）；
+ * 槽满且无活动 operation 时覆盖最老终态记录，正常不再返回 ESP_ERR_NO_MEM。 */
 esp_err_t app_operation_start(app_operation_owner_t owner, const char *idem_key,
                               uint32_t accepted_ttl_ms, uint32_t got_ip_ttl_ms,
                               app_operation_run_fn run_fn,

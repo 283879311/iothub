@@ -1,14 +1,12 @@
 #!/usr/bin/env python3
-"""T2: operation slot exhaustion / terminal retention / reclaim.
+"""T2: operation slot eviction / uniform terminal retention.
 
-Flow (starts from a hard reset and an empty operation table):
+Eviction semantics (post b42fe49, uniform 600s retention + oldest-evict):
   A: tryconnect wrong password -> active; B: second tryconnect -> busy (not no_slot)
-  A terminal; C/D/E: tryconnect wrong + immediate cancel -> cancelled terminals
-  4 slots full; F: tryconnect -> no_slot
-  Poll A's old id: terminal until ~600s after A terminal, then not_found
-  F2 accepted after A reclaim; C old id poll -> not_found; G accepted
-  Active-protection, cancelled-terminal reclaim, failed-terminal reclaim, and
-  old-id cache removal are all asserted.
+  A terminal(failed); C/D/E: tryconnect + immediate cancel -> cancelled terminals
+  Table full with 4 terminals; F: tryconnect -> ACCEPTED by evicting oldest (A);
+  A's old id -> not_found immediately; F cancelled
+  C (now oldest) survives until ~600s after its terminal, then not_found; G accepted
 
     .venv-bleak/bin/python -u tools/ble_p0/t2_slot_reclaim.py --ssid CMCC-502
 
@@ -222,49 +220,45 @@ async def run(args: argparse.Namespace) -> int:
         c_op = c_row.get("operation_id") if c_row else None
         c_terminal_mono = c_row.get("terminal_mono") if c_row else None
 
-        # F: fifth request while 4 terminal slots are retained -> no_slot.
+        # F: fifth request while 4 terminal slots are retained.
+        # Eviction semantics (post b42fe49): the table is all-terminal, no active
+        # op -> the oldest terminal (A) is evicted and F is ACCEPTED; A's old id
+        # becomes not_found immediately. no_slot is no longer reachable here.
         f_res = await tryconnect(sess, "t2-F", args.ssid, args.wrong_password)
-        result["F_no_slot"] = {
+        f_op = op_id_of(f_res)
+        result["F_evicts_oldest"] = {
             "ok": f_res.obj.get("ok") is True,
+            "operation_id": f_op,
+            "state": data_of(f_res.obj).get("state"),
             "error_code": response_error_code(f_res.obj),
-            "operation_id": op_id_of(f_res),
-        }
-
-        # Poll A old id across the 600s retention boundary.
-        result["A_reclaim"] = await poll_old_id_reclaimed(
-            sess, a_op, a_terminal_mono, args.retention, args.margin
-        )
-        # F2 accepted after A slot is reclaimed.
-        f2_res = await tryconnect(sess, "t2-F2", args.ssid, args.wrong_password)
-        f2_op = op_id_of(f2_res)
-        result["F2_after_A_reclaim"] = {
-            "ok": f2_res.obj.get("ok") is True,
-            "operation_id": f2_op,
-            "state": data_of(f2_res.obj).get("state"),
-            "error_code": response_error_code(f2_res.obj),
             "created_at": wall(),
         }
-        if f2_op:
-            # Cancel immediately: if F2 were left to run its 15s candidate, the
-            # C boundary poll below would start after C had already been
-            # reclaimed and the cancel-terminal boundary would be unobserved.
+        if f_op:
             await asyncio.sleep(0.25)
-            f2_cancel = await sess.v1(
-                "network.cancel", {"operation_id": f2_op}, timeout=15,
-                id_prefix="t2-F2-cancel",
+            a_after = await sess.v1(
+                "operation.get", {"operation_id": a_op}, timeout=10, id_prefix="t2-a-evicted"
             )
-            result["F2_cancel"] = {
-                "ok": f2_cancel.obj.get("ok") is True,
-                "state": data_of(f2_cancel.obj).get("state"),
-                "error_code": response_error_code(f2_cancel.obj),
+            result["A_after_eviction"] = {
+                "error_code": response_error_code(a_after.obj),
+                "at": wall(),
             }
-            f2_term, _, f2_elapsed = await poll_until_terminal(sess, f2_op, timeout=20)
-            result["F2_terminal"] = {
-                "state": f2_term.get("state"),
-                "elapsed_s": round(f2_elapsed, 3),
+            f_cancel = await sess.v1(
+                "network.cancel", {"operation_id": f_op}, timeout=15,
+                id_prefix="t2-F-cancel",
+            )
+            result["F_cancel"] = {
+                "ok": f_cancel.obj.get("ok") is True,
+                "state": data_of(f_cancel.obj).get("state"),
+            }
+            f_term, _, f_elapsed = await poll_until_terminal(sess, f_op, timeout=20)
+            result["F_terminal"] = {
+                "state": f_term.get("state"),
+                "elapsed_s": round(f_elapsed, 3),
             }
 
-        # C old id across the retention boundary (cancelled terminal).
+        # C old id across the uniform 600s retention boundary (cancelled terminal).
+        # Terminals now in table: C, D, E, F — C is the oldest; nothing else can
+        # evict it (no further starts), so the 600s reclaim must be observable.
         if c_op and c_terminal_mono is not None:
             result["C_reclaim"] = await poll_old_id_reclaimed(
                 sess, c_op, c_terminal_mono, args.retention, args.margin
@@ -289,15 +283,19 @@ async def run(args: argparse.Namespace) -> int:
 
         checks = {
             "B_busy_not_no_slot": result["B_while_active"].get("error_code") == "busy",
-            "F_no_slot": result["F_no_slot"].get("error_code") == "no_slot",
+            "F_accepted_via_eviction": (
+                result["F_evicts_oldest"].get("ok") is True
+                and result["F_evicts_oldest"].get("state") == "accepted"
+            ),
+            "A_not_found_after_eviction": (
+                result["A_after_eviction"].get("error_code") == "not_found"
+            ),
             "A_terminal": result["A_terminal"].get("state") in ("failed", "cancelled", "expired"),
             "C_cancelled": bool(c_row and c_row.get("terminal_state") == "cancelled"),
             "D_cancelled": bool(next((r for r in cancelled_ops if r.get("name") == "D"), {}).get("terminal_state") == "cancelled"),
             "E_cancelled": bool(next((r for r in cancelled_ops if r.get("name") == "E"), {}).get("terminal_state") == "cancelled"),
-            "A_reclaimed": result["A_reclaim"].get("reclaimed") is True,
-            "A_old_not_found": result["A_reclaim"].get("reclaimed") is True,
-            "A_reclaim_not_early": result["A_reclaim"].get("boundary_ok") is True,
-            "F2_accepted": result["F2_after_A_reclaim"].get("ok") is True,
+            "F_cancelled": result["F_cancel"].get("ok") is True
+                and result["F_terminal"].get("state") == "cancelled",
             "C_reclaimed": result["C_reclaim"].get("reclaimed") is True,
             "C_old_not_found": result["C_reclaim"].get("reclaimed") is True,
             "C_reclaim_not_early": result["C_reclaim"].get("boundary_ok") is True,

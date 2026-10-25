@@ -19,6 +19,10 @@ static const char *TAG = "operation";
 
 #define APP_OPERATION_DEFAULT_ACCEPTED_TTL_MS 20000
 #define APP_OPERATION_DEFAULT_GOT_IP_TTL_MS 300000
+/* 终态保留统一 600s（幂等窗口：同 key 重试在保留期内返回原终态，契约见
+ * G3 操作契约冻结/检查表第 15 项）。槽满由"覆盖最老终态"解决，不再靠
+ * 缩短保留换可用性——淘汰上线后分级保留失去动机，统一保留让契约变更
+ * 收敛为唯一一条行为差异。 */
 #define APP_OPERATION_DEFAULT_RETENTION_MS 600000
 #define APP_OPERATION_WORKER_STACK 4096
 
@@ -175,6 +179,26 @@ static void app_operation_reclaim_terminal_locked(int64_t now_ms)
     }
 }
 
+/* 槽满且无活动 operation 时的兜底：回收最老的终态记录，让新请求总有人接待。
+ * 只在确认全表为终态时调用（active 已被上层 busy 分支拦截）。 */
+static app_operation_t *app_operation_oldest_terminal_locked(void)
+{
+    app_operation_t *oldest = NULL;
+    size_t i;
+
+    for (i = 0; i < APP_OPERATION_MAX_SLOTS; i++) {
+        app_operation_t *op = &s_ops[i];
+
+        if (!op->used || !app_op_state_is_terminal(op->state)) {
+            continue;
+        }
+        if (oldest == NULL || op->terminal_ms < oldest->terminal_ms) {
+            oldest = op;
+        }
+    }
+    return oldest;
+}
+
 static void app_operation_worker(void *arg);
 static esp_err_t app_operation_ensure_worker(void);
 
@@ -224,6 +248,9 @@ esp_err_t app_operation_start(app_operation_owner_t owner, const char *idem_key,
     }
 
     now_ms = app_operation_now_ms();
+    char reclaimed_id[APP_OPERATION_ID_LEN] = "";
+    app_op_state_t reclaimed_state = APP_OP_FREE;
+    int64_t reclaimed_age_ms = -1;
     portENTER_CRITICAL(&s_ops_mux);
     app_operation_reclaim_terminal_locked(now_ms);
     if (app_operation_has_active_locked()) {
@@ -240,11 +267,20 @@ esp_err_t app_operation_start(app_operation_owner_t owner, const char *idem_key,
         }
     }
     if (slot == NULL) {
-        portEXIT_CRITICAL(&s_ops_mux);
-        if (defer_started) {
-            app_mqtt_defer_restart_end();
+        /* 全表为终态保留记录：覆盖最老的一条而不是拒绝新请求。
+         * no_slot 从此只在极端路径（如 worker 创建失败前的竞态）出现。 */
+        slot = app_operation_oldest_terminal_locked();
+        if (slot == NULL) {
+            portEXIT_CRITICAL(&s_ops_mux);
+            if (defer_started) {
+                app_mqtt_defer_restart_end();
+            }
+            return ESP_ERR_NO_MEM;      /* 理论不可达：无活动且无终态却无空槽 */
         }
-        return ESP_ERR_NO_MEM;          /* terminal slots still retained */
+        /* 临界区内只取证，日志在锁外打 */
+        snprintf(reclaimed_id, sizeof(reclaimed_id), "%s", slot->id);
+        reclaimed_state = slot->state;
+        reclaimed_age_ms = now_ms - slot->terminal_ms;
     }
 
     memset(slot, 0, sizeof(*slot));
@@ -264,6 +300,12 @@ esp_err_t app_operation_start(app_operation_owner_t owner, const char *idem_key,
         snprintf(slot->idem_key, sizeof(slot->idem_key), "%s", idem_key);
     }
     portEXIT_CRITICAL(&s_ops_mux);
+
+    if (reclaimed_age_ms >= 0) {
+        ESP_LOGW(TAG, "reclaim oldest terminal %s state=%s age=%ums for new request",
+                 reclaimed_id, app_op_state_name(reclaimed_state),
+                 (unsigned)reclaimed_age_ms);
+    }
 
     if (app_operation_ensure_worker() != ESP_OK) {
         portENTER_CRITICAL(&s_ops_mux);
@@ -666,29 +708,42 @@ static void app_operation_selftest_run(void)
     if (err == ESP_OK && app_operation_state(op) == APP_OP_CANCELLED) pass++; else fail++;
     ESP_LOGI(TAG, "selftest cancel: %s state=%s", esp_err_to_name(err),
              app_op_state_name(app_operation_state(op)));
-
-    for (size_t i = 0; i < sizeof(fill) / sizeof(fill[0]); i++) {
-        err = app_operation_start(APP_OPERATION_OWNER_INTERNAL, "self-fill",
-                                  5000, 1000, app_operation_selftest_success,
-                                  NULL, NULL, &fill[i]);
-        if (err == ESP_OK &&
-            app_operation_selftest_wait_state(fill[i], APP_OP_SUCCESS, 1500)) {
-            pass++;
-        } else {
-            fail++;
-        }
-        ESP_LOGI(TAG, "selftest fill[%u]: %s state=%s", (unsigned)i,
-                 esp_err_to_name(err),
-                 app_op_state_name(app_operation_state(fill[i])));
-    }
-
     {
-        app_operation_t *overflow = NULL;
-        err = app_operation_start(APP_OPERATION_OWNER_INTERNAL, "self-overflow",
-                                  5000, 1000, app_operation_selftest_success,
-                                  NULL, NULL, &overflow);
-        if (err == ESP_ERR_NO_MEM) pass++; else fail++;
-        ESP_LOGI(TAG, "selftest slot overflow: %s", esp_err_to_name(err));
+        char cancelled_id[APP_OPERATION_ID_LEN];
+
+        snprintf(cancelled_id, sizeof(cancelled_id), "%s", app_operation_id(op));
+
+        for (size_t i = 0; i < sizeof(fill) / sizeof(fill[0]); i++) {
+            err = app_operation_start(APP_OPERATION_OWNER_INTERNAL, "self-fill",
+                                      5000, 1000, app_operation_selftest_success,
+                                      NULL, NULL, &fill[i]);
+            if (err == ESP_OK &&
+                app_operation_selftest_wait_state(fill[i], APP_OP_SUCCESS, 1500)) {
+                pass++;
+            } else {
+                fail++;
+            }
+            ESP_LOGI(TAG, "selftest fill[%u]: %s state=%s", (unsigned)i,
+                     esp_err_to_name(err),
+                     app_op_state_name(app_operation_state(fill[i])));
+        }
+
+        /* 槽满不再返回 NO_MEM：覆盖最老终态（本例即 cancelled 那条），
+         * 新请求必须成功受理，且旧 id 查不到。 */
+        {
+            app_operation_t *overflow = NULL;
+            err = app_operation_start(APP_OPERATION_OWNER_INTERNAL, "self-overflow",
+                                      5000, 1000, app_operation_selftest_success,
+                                      NULL, NULL, &overflow);
+            if (err == ESP_OK && app_operation_find(cancelled_id) == NULL) {
+                pass++;
+            } else {
+                fail++;
+            }
+            ESP_LOGI(TAG, "selftest slot overflow: %s old_id_found=%d",
+                     esp_err_to_name(err), (int)(app_operation_find(cancelled_id) != NULL));
+            (void)app_operation_selftest_wait_state(overflow, APP_OP_SUCCESS, 1500);
+        }
     }
 
     /* 等终态保留过期，再验证 got_ip TTL。 */
