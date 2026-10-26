@@ -1,0 +1,122 @@
+Adding "flash"'s dependency "all" to list of commands with default set of options.
+Executing action: all (aliases: build)
+Running ninja in directory /home/tc/esp/workspace/iothub/build
+Executing "ninja all"...
+[1/4] cd /home/tc/esp/workspace/iothub/build && /home/tc/.espressif/python_env/idf6.0_py3.12_env/bin/python /home/tc/esp/esp-idf/components/partition_table/check_sizes.py --offset 0x8000 partition --type app /home/tc/esp/workspace/iothub/build/partition_table/partition-table.bin /home/tc/esp/workspace/iothub/build/iothub.bin
+iothub.bin binary size 0x117390 bytes. Smallest app partition is 0x1e0000 bytes. 0xc8c70 bytes (42%) free.
+[2/4] Performing build step for 'bootloader'
+[1/1] cd /home/tc/esp/workspace/iothub/build/bootloader && /home/tc/.espressif/python_env/idf6.0_py3.12_env/bin/python /home/tc/esp/esp-idf/components/partition_table/check_sizes.py --offset 0x8000 bootloader 0x1000 /home/tc/esp/workspace/iothub/build/bootloader/bootloader.bin
+Bootloader binary size 0x65c0 bytes. 0xa40 bytes (9%) free.
+[3/4] No install step for 'bootloader'
+[4/4] Completed 'bootloader'
+Executing action: flash
+Running ninja in directory /home/tc/esp/workspace/iothub/build
+Executing "ninja flash"...
+[1/5] cd /home/tc/esp/workspace/iothub/build && /home/tc/.espressif/python_env/idf6.0_py3.12_env/bin/python /home/tc/esp/esp-idf/components/partition_table/check_sizes.py --offset 0x8000 partition --type app /home/tc/esp/workspace/iothub/build/partition_table/partition-table.bin /home/tc/esp/workspace/iothub/build/iothub.bin
+iothub.bin binary size 0x117390 bytes. Smallest app partition is 0x1e0000 bytes. 0xc8c70 bytes (42%) free.
+[2/5] Performing build step for 'bootloader'
+[1/1] cd /home/tc/esp/workspace/iothub/build/bootloader && /home/tc/.espressif/python_env/idf6.0_py3.12_env/bin/python /home/tc/esp/esp-idf/components/partition_table/check_sizes.py --offset 0x8000 bootloader 0x1000 /home/tc/esp/workspace/iothub/build/bootloader/bootloader.bin
+Bootloader binary size 0x65c0 bytes. 0xa40 bytes (9%) free.
+[3/5] No install step for 'bootloader'
+[4/5] Completed 'bootloader'
+[4/5] Running utility command for flash
+esptool --chip esp32 -p /dev/ttyUSB0 -b 460800 --before=default-reset --after=hard-reset write-flash --flash-mode dio --flash-freq 40m --flash-size 4MB 0x1000 bootloader/bootloader.bin 0x8000 partition_table/partition-table.bin 0xd000 ota_data_initial.bin 0x10000 iothub.bin
+esptool v5.6.0
+Serial port /dev/ttyUSB0:
+Connecting....
+Connected to ESP32 on /dev/ttyUSB0:
+Chip type:          ESP32-D0WD-V3 (revision v3.1)
+Features:           Wi-Fi, BT, Dual Core + LP Core, 240MHz, Vref calibration in eFuse, Coding Scheme None
+Crystal frequency:  40MHz
+MAC:                b0:a7:32:28:c8:e4
+
+Uploading stub flasher...
+Running stub flasher...
+Stub flasher running.
+Changing baud rate to 460800...
+Changed.
+
+Configuring flash size...
+
+Writing 'bootloader/bootloader.bin' at 0x00001000...
+SHA digest in image updated.
+Flash will be erased from 0x00001000 to 0x00007fff...
+Compressed 26048 bytes to 16607...
+Writing at 0x00007494 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╸  98.7% 16.00kB/16.22kB [0s] 
+Writing at 0x000075c0 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% 16.22kB/16.22kB [0s] 
+Wrote 26048 bytes (16607 compressed) at 0x00001000 in 0.5 seconds (406.3 kbit/s).
+Verifying written data...
+Hash of data verified.
+
+Writing 'partition_table/partition-table.bin' at 0x00008000...
+Flash will be erased from 0x00008000 to 0x00008fff...
+Compressed 3072 bytes to 162...
+Writing at 0x00008c00 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% 162B/162B [0s] 
+Wrote 3072 bytes (162 compressed) at 0x00008000 in 0.0 seconds (1889.7 kbit/s).
+Verifying written data...
+Hash of data verified.
+
+Writing 'ota_data_initial.bin' at 0x0000d000...
+Flash will be erased from 0x0000d000 to 0x0000efff...
+Compressed 8192 bytes to 31...
+Writing at 0x0000f000 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% 31B/31B [0s] 
+Wrote 8192 bytes (31 compressed) at 0x0000d000 in 0.0 seconds (2975.0 kbit/s).
+Verifying written data...
+Hash of data verified.
+
+Writing 'iothub.bin' at 0x00010000...
+Flash will be erased from 0x00010000 to 0x00127fff...
+Compressed 1143696 bytes to 756615...
+Writing at 0x0001c7bb ╸                                2.2% 16.00kB/738.88kB [0s] 
+Writing at 0x0002a278 ━                                4.3% 32.00kB/738.88kB [0s] 
+Writing at 0x0003319e ━╸                               6.5% 48.00kB/738.88kB [1s] 
+Writing at 0x00039548 ━━╸                              8.7% 64.00kB/738.88kB [1s] 
+Writing at 0x00040e9a ━━━                             10.8% 80.00kB/738.88kB [1s] 
+Writing at 0x0004b628 ━━━╸                            13.0% 96.00kB/738.88kB [2s] 
+Writing at 0x000510d0 ━━━━╸                           15.2% 112.00kB/738.88kB [2s] 
+Writing at 0x00056b45 ━━━━━                           17.3% 128.00kB/738.88kB [3s] 
+Writing at 0x0005c135 ━━━━━╸                          19.5% 144.00kB/738.88kB [3s] 
+Writing at 0x000615fa ━━━━━━                          21.7% 160.00kB/738.88kB [3s] 
+Writing at 0x000666b3 ━━━━━━━                         23.8% 176.00kB/738.88kB [4s] 
+Writing at 0x0006bc90 ━━━━━━━╸                        26.0% 192.00kB/738.88kB [4s] 
+Writing at 0x000716c3 ━━━━━━━━                        28.2% 208.00kB/738.88kB [5s] 
+Writing at 0x00076cc3 ━━━━━━━━━                       30.3% 224.00kB/738.88kB [5s] 
+Writing at 0x0007c6ca ━━━━━━━━━╸                      32.5% 240.00kB/738.88kB [5s] 
+Writing at 0x000822bf ━━━━━━━━━━                      34.6% 256.00kB/738.88kB [6s] 
+Writing at 0x00087dc7 ━━━━━━━━━━━                     36.8% 272.00kB/738.88kB [6s] 
+Writing at 0x0008d25e ━━━━━━━━━━━╸                    39.0% 288.00kB/738.88kB [7s] 
+Writing at 0x000927a3 ━━━━━━━━━━━━                    41.1% 304.00kB/738.88kB [7s] 
+Writing at 0x00097853 ━━━━━━━━━━━━╸                   43.3% 320.00kB/738.88kB [7s] 
+Writing at 0x0009d033 ━━━━━━━━━━━━━╸                  45.5% 336.00kB/738.88kB [8s] 
+Writing at 0x000a20f0 ━━━━━━━━━━━━━━                  47.6% 352.00kB/738.88kB [8s] 
+Writing at 0x000a7347 ━━━━━━━━━━━━━━╸                 49.8% 368.00kB/738.88kB [8s] 
+Writing at 0x000ac87c ━━━━━━━━━━━━━━━╸                52.0% 384.00kB/738.88kB [9s] 
+Writing at 0x000b1da3 ━━━━━━━━━━━━━━━━                54.1% 400.00kB/738.88kB [9s] 
+Writing at 0x000b7883 ━━━━━━━━━━━━━━━━╸               56.3% 416.00kB/738.88kB [10s] 
+Writing at 0x000bcb93 ━━━━━━━━━━━━━━━━━╸              58.5% 432.00kB/738.88kB [10s] 
+Writing at 0x000c239d ━━━━━━━━━━━━━━━━━━              60.6% 448.00kB/738.88kB [10s] 
+Writing at 0x000c7d01 ━━━━━━━━━━━━━━━━━━╸             62.8% 464.00kB/738.88kB [11s] 
+Writing at 0x000cd4ca ━━━━━━━━━━━━━━━━━━━             65.0% 480.00kB/738.88kB [11s] 
+Writing at 0x000d3266 ━━━━━━━━━━━━━━━━━━━━            67.1% 496.00kB/738.88kB [12s] 
+Writing at 0x000d8a08 ━━━━━━━━━━━━━━━━━━━━╸           69.3% 512.00kB/738.88kB [12s] 
+Writing at 0x000de07a ━━━━━━━━━━━━━━━━━━━━━           71.5% 528.00kB/738.88kB [12s] 
+Writing at 0x000e395b ━━━━━━━━━━━━━━━━━━━━━━          73.6% 544.00kB/738.88kB [13s] 
+Writing at 0x000e956f ━━━━━━━━━━━━━━━━━━━━━━╸         75.8% 560.00kB/738.88kB [13s] 
+Writing at 0x000ee8fd ━━━━━━━━━━━━━━━━━━━━━━━         78.0% 576.00kB/738.88kB [14s] 
+Writing at 0x000f3cc8 ━━━━━━━━━━━━━━━━━━━━━━━━        80.1% 592.00kB/738.88kB [14s] 
+Writing at 0x000f9642 ━━━━━━━━━━━━━━━━━━━━━━━━╸       82.3% 608.00kB/738.88kB [14s] 
+Writing at 0x000ff12f ━━━━━━━━━━━━━━━━━━━━━━━━━       84.5% 624.00kB/738.88kB [15s] 
+Writing at 0x0010481d ━━━━━━━━━━━━━━━━━━━━━━━━━╸      86.6% 640.00kB/738.88kB [15s] 
+Writing at 0x0010a339 ━━━━━━━━━━━━━━━━━━━━━━━━━━╸     88.8% 656.00kB/738.88kB [16s] 
+Writing at 0x00110247 ━━━━━━━━━━━━━━━━━━━━━━━━━━━     90.9% 672.00kB/738.88kB [16s] 
+Writing at 0x00115b5a ━━━━━━━━━━━━━━━━━━━━━━━━━━━╸    93.1% 688.00kB/738.88kB [16s] 
+Writing at 0x0011b7ee ━━━━━━━━━━━━━━━━━━━━━━━━━━━━╸   95.3% 704.00kB/738.88kB [17s] 
+Writing at 0x00120c30 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━   97.4% 720.00kB/738.88kB [17s] 
+Writing at 0x0012600d ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╸  99.6% 736.00kB/738.88kB [17s] 
+Writing at 0x00127390 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100.0% 738.88kB/738.88kB [18s] 
+Wrote 1143696 bytes (756615 compressed) at 0x00010000 in 18.1 seconds (505.5 kbit/s).
+Verifying written data...
+Hash of data verified.
+
+Hard resetting via RTS pin...
+Done

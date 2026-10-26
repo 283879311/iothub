@@ -4,7 +4,6 @@
 
 #include "cJSON.h"
 #include "esp_log.h"
-#include "esp_random.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
@@ -25,7 +24,7 @@ static const char *TAG = "ble_cmd";
 #define BLE_CMD_LINE_MAX 512
 #define BLE_CMD_QUEUE_DEPTH 8
 #define BLE_CMD_TX_QUEUE_DEPTH 8
-#define BLE_CMD_TOKEN_TTL_MS 600000
+/* token TTL 归 auth_token.c 统一管理(APP_TOKEN_TTL_MS)。 */
 
 #define BLE_CMD_ITEM_LINE  0
 #define BLE_CMD_ITEM_ERROR 1
@@ -54,9 +53,9 @@ static StaticQueue_t s_tx_queue_buf;
 static uint8_t s_tx_queue_storage[BLE_CMD_TX_QUEUE_DEPTH * sizeof(ble_cmd_tx_msg_t)];
 static bool s_tx_ready = false;
 
-/* 短时 token:连接级鉴权(login 用 web 同源口令换 token,后续命令带 token) */
-static char s_token[33];
-static int64_t s_token_expire_ms = 0;
+/* 短时 token:连接级鉴权(login 用 web 同源口令换 token,后续命令带 token)。
+ * 槽位与 TTL 已迁到 auth_token.c(按来源分槽、锁内比较);本文件不再持有
+ * token 内容,只保留命令限流时间戳。 */
 static int64_t s_last_cmd_ms = 0;
 
 /* 判断缓冲区里是否已经有一个完整的 JSON 对象(括号配对,跳过字符串内容)。
@@ -179,8 +178,10 @@ void app_ble_cmd_on_write(const uint8_t *data, size_t len)
 
 void app_ble_cmd_on_disconnect(void)
 {
-    s_token[0] = '\0';
-    s_token_expire_ms = 0;
+    /* 只清 BLE 槽:串口槽属于另一条会话,断 BLE 不该连带失效。
+     * s_last_cmd_ms / 行缓冲 / TX 队列 / network candidate 清理保持原样,
+     * 它们不是 token 语义的一部分(A 阶段不扩大范围)。 */
+    app_token_store_clear(TOKEN_SRC_BLE);
     s_last_cmd_ms = 0;
     s_line_len = 0;
     if (s_tx_queue != NULL) {
@@ -277,28 +278,20 @@ static void app_ble_cmd_send(const cJSON *resp)
     cJSON_free(body);
 }
 
-static void app_ble_cmd_issue_token(char *out, size_t out_size)
+/* 签发走 store(锁/槽位/TTL 都在那里),这里只固定 BLE 来源。
+ * out 由调用方给局部缓冲,回包直接用它 —— 不回读槽位。 */
+static bool app_ble_cmd_issue_token(char *out, size_t out_size)
 {
-    uint8_t raw[16];
-    size_t i;
-
-    esp_fill_random(raw, sizeof(raw));
-    for (i = 0; i < sizeof(raw) && i * 2 + 2 <= out_size; i++) {
-        snprintf(out + i * 2, 3, "%02X", raw[i]);
-    }
-    s_token_expire_ms = esp_timer_get_time() / 1000 + BLE_CMD_TOKEN_TTL_MS;
+    return app_token_store_issue(TOKEN_SRC_BLE, out, out_size);
 }
 
 static bool app_ble_cmd_authed(const cJSON *frame)
 {
     const cJSON *tok = cJSON_GetObjectItemCaseSensitive(frame, "token");
-    int64_t now = esp_timer_get_time() / 1000;
 
-    if (s_token[0] == '\0' || now >= s_token_expire_ms) {
-        return false;
-    }
+    /* 格式检查与定长比较都在 store 内完成,这里不再做字符串比较。 */
     return cJSON_IsString(tok) && tok->valuestring != NULL &&
-           strcmp(tok->valuestring, s_token) == 0;
+           app_token_store_validate(TOKEN_SRC_BLE, tok->valuestring);
 }
 
 /* v1.0 适配层：只暴露已有 handler，未实现的网络事务/operation 不伪造。 */
@@ -674,15 +667,28 @@ static void app_ble_cmd_handle_line(const char *line, size_t len)
                   app_auth_check_credentials(u->valuestring, p->valuestring);
 
         if (ok) {
-            app_ble_cmd_issue_token(s_token, sizeof(s_token));
-            /* 只放结果字段;外层统一包装补 {"id","ok","result"},
-             * 避免 token 落在 result.result.token。 */
-            resp = cJSON_CreateObject();
-            if (resp != NULL) {
-                cJSON_AddStringToObject(resp, "token", s_token);
-                cJSON_AddNumberToObject(resp, "expires_in", (double)(BLE_CMD_TOKEN_TTL_MS / 1000));
-                ESP_LOGI(TAG, "ble cmd login ok, token issued (ttl=%us)",
-                         (unsigned)(BLE_CMD_TOKEN_TTL_MS / 1000));
+            char token[APP_TOKEN_HEX_LEN + 1];
+
+            /* 正常路径不可能失败(out_size 固定 33、来源为常量);但失败必须
+             * 有确定出口,否则会退化成"回包 token 为空"的老 bug。 */
+            if (!app_ble_cmd_issue_token(token, sizeof(token))) {
+                resp = cJSON_CreateObject();
+                if (resp != NULL) {
+                    cJSON_AddBoolToObject(resp, "ok", false);
+                    cJSON_AddStringToObject(resp, "error", "internal_error");
+                }
+                ESP_LOGE(TAG, "ble cmd login: token issue failed");
+            } else {
+                /* 只放结果字段;外层统一包装补 {"id","ok","result"},
+                 * 避免 token 落在 result.result.token。 */
+                resp = cJSON_CreateObject();
+                if (resp != NULL) {
+                    cJSON_AddStringToObject(resp, "token", token);
+                    cJSON_AddNumberToObject(resp, "expires_in",
+                                            (double)(APP_TOKEN_TTL_MS / 1000));
+                    ESP_LOGI(TAG, "ble cmd login ok, token issued (ttl=%us)",
+                             (unsigned)(APP_TOKEN_TTL_MS / 1000));
+                }
             }
         } else {
             resp = cJSON_CreateObject();

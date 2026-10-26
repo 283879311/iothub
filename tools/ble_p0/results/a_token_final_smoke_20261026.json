@@ -1,0 +1,20 @@
+{
+  "name": "A_TOKEN_FINAL_SMOKE",
+  "timestamp": "2026-10-26T18:57:41+08:00",
+  "steps": [
+    {
+      "name": "final.login",
+      "pass": true,
+      "expires_in": 600,
+      "token_len": 32
+    },
+    {
+      "name": "final.protected",
+      "pass": true,
+      "code": null,
+      "mqtt_connected": true,
+      "sta_has_ip": true
+    }
+  ],
+  "pass": true
+}

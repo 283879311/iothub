@@ -4,6 +4,7 @@
 #include "cJSON.h"
 #include "esp_log.h"
 
+#include "auth.h"
 #include "bt.h"
 #include "bt_gattc.h"
 #include "bt_gatts.h"
@@ -1187,12 +1188,17 @@ esp_err_t app_cmd_execute_ex(const cJSON *frame, app_cmd_source_t source,
                 if (save_err != ESP_OK) {
                     err = "save_failed";
                 } else {
+                    /* 口令哈希已落盘成功。先构造成功响应,再作废全部既有
+                     * token(含串口槽):发送路径不读 token,清理不会截断响应;
+                     * 即使 cJSON 分配失败,改密已生效,仍必须清全部会话。 */
                     resp = cJSON_CreateObject();
                     if (resp == NULL) {
                         err = "out_of_memory";
                     } else {
                         cJSON_AddBoolToObject(resp, "saved", true);
+                        cJSON_AddBoolToObject(resp, "sessions_invalidated", true);
                     }
+                    app_token_store_clear_all();
                 }
             }
         } else if (strcmp(m, "provisioning.pin.set") == 0) {

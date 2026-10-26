@@ -1,0 +1,132 @@
+{
+  "name": "A_TOKEN_BOARD",
+  "timestamp": "2026-10-26T18:51:26+08:00",
+  "address": "B0:A7:32:28:C8:E6",
+  "steps": [
+    {
+      "name": "0. v1 device.info 无 token",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "1a. 正确口令登录",
+      "pass": true,
+      "detail": "token_len=32",
+      "latency_s": 0.602
+    },
+    {
+      "name": "1b. login expires_in 正常",
+      "pass": true,
+      "detail": "expires_in=600"
+    },
+    {
+      "name": "1c. 带 token 的受保护命令",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "2a. 错误口令登录被拒",
+      "pass": true,
+      "detail": "",
+      "code": "unauthorized"
+    },
+    {
+      "name": "2b. 错误口令后旧 token 仍有效",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "3a. 正确口令重登",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "3b. 重登后旧 token 失效",
+      "pass": true,
+      "detail": "",
+      "code": "unauthorized"
+    },
+    {
+      "name": "3c. 重登后新 token 有效",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "4a. 断连重连后旧 token 失效",
+      "pass": true,
+      "detail": "",
+      "code": "unauthorized"
+    },
+    {
+      "name": "4b. 断连重连后重新登录",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "4c. 重连后新 token 有效",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "5a. 改密成功且 sessions_invalidated=true",
+      "pass": true,
+      "detail": "sessions_invalidated=True"
+    },
+    {
+      "name": "5b. 改密后旧 token 失效",
+      "pass": true,
+      "detail": "",
+      "code": "unauthorized"
+    },
+    {
+      "name": "5c. 改密后旧口令被拒",
+      "pass": true,
+      "detail": "",
+      "code": "unauthorized"
+    },
+    {
+      "name": "5d. 改密后新口令可登录",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "5e. 新口令 token 可用",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "5f. 恢复原口令成功",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "5g. 恢复后临时 token 失效",
+      "pass": true,
+      "detail": "",
+      "code": "unauthorized"
+    },
+    {
+      "name": "5h. 恢复后原口令可登录",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "6a. 大写 token 有效",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "6b. 小写 token v1 拒绝",
+      "pass": true,
+      "detail": "",
+      "code": "unauthorized"
+    },
+    {
+      "name": "ABORT",
+      "pass": false,
+      "detail": "TimeoutError: no complete JSON for id=lower-v0-14 within 12s"
+    }
+  ],
+  "password_restored": true,
+  "pass": false
+}
