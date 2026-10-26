@@ -17,6 +17,7 @@
 #include "common.h"
 #include "config.h"
 #include "identity.h"
+#include "bt_gatts.h"
 #include "wifi.h"
 
 static const char *TAG = "wifi";
@@ -25,6 +26,23 @@ static const char *TAG = "wifi";
 static const uint8_t APP_WIFI_STA_RETRY_LIMIT = 3;
 static const int64_t APP_WIFI_STA_STARTUP_TIMEOUT_MS = 90000;
 static const int64_t APP_WIFI_STA_STARTUP_RETRY_INTERVAL_MS = 1000;
+/* 运行时断网兜底(死点修复,2026-10-27):启动窗口外断网后,原实现只由断连事件驱动
+ * —— 直连重试 3 次 + attempted_mask 把已存 profile 各试一次;mask 试满的那轮
+ * "no untried saved AP left" 不发起连接,也就不再产生断连事件,链条永久终止,
+ * AP 恢复后无人再去扫。本监视器在启动窗口外周期重试:每轮先 fast path 试正式
+ * SSID 再扫描选最优未试 profile(mask 每轮清零),节拍 5/10/30/60s 封顶 ——
+ * 60s 档每轮 2-3s scan 的占空比约 4%,对 BLE 通知时序无感。 */
+static const int64_t APP_WIFI_RUNTIME_RETRY_BACKOFF_MS[] = {5000, 10000, 30000, 60000};
+#define APP_WIFI_RUNTIME_RETRY_STEPS \
+    (sizeof(APP_WIFI_RUNTIME_RETRY_BACKOFF_MS) / sizeof(APP_WIFI_RUNTIME_RETRY_BACKOFF_MS[0]))
+/* BLE 连接期间跳轮:用户在场走 BLE 救援/配网,后台扫描只会争射频;
+ * 跳轮不推进退避档位,断开后从暂停档继续(不重置回 5s)。 */
+static int64_t s_wifi_rt_retry_at_ms = 0;   /* 下次允许发起的时刻;0=立即 */
+static uint8_t s_wifi_rt_retry_step = 0;    /* 当前退避档(0..STEPS-1,封顶后不再升) */
+static uint32_t s_wifi_rt_retry_cycle = 0;  /* 已发起轮次(日志关联用),拿到 IP 清零 */
+/* 只在启动窗口关闭后启用:监视器首 tick 可能早于窗口开启,不设门会在启动期抢跑。
+ * 窗口关闭(拿到 IP 或启动失败)即置位,此后设备生命周期内常驻。 */
+static bool s_wifi_rt_armed = false;
 /* STA 关联的最低可接受安全模式(1.3-04 实测):原实现按"口令 >= 8 位"设 WIFI_AUTH_WPA2_PSK,
  * 会拒连安全模式判定低于 WPA2 的上游(WPA-only / 部分混模路由器),报 reason=210
  * (NO_AP_FOUND_W_COMPATIBLE_SECURITY:找到了 AP 但安全模式与阈值不兼容)。
@@ -320,6 +338,7 @@ static void app_wifi_stop_startup_connect_window(void)
     app_wifi_runtime_unlock();
     s_wifi_startup_retry_at_ms = 0;
     s_wifi_sta_connecting = false;
+    s_wifi_rt_armed = true;   /* 启动阶段结束,运行时兜底自此常驻 */
 }
 
 static void app_wifi_start_startup_connect_window(void)
@@ -339,6 +358,10 @@ static void app_wifi_start_startup_connect_window(void)
     s_wifi_fast_path_pending = true;
     app_wifi_runtime_unlock();
     s_wifi_startup_retry_at_ms = app_wifi_now_ms() + APP_WIFI_STA_STARTUP_RETRY_INTERVAL_MS;
+    /* 新的连通性纪元(启动/apply 重启):运行时兜底退避归零 */
+    s_wifi_rt_retry_at_ms = 0;
+    s_wifi_rt_retry_step = 0;
+    s_wifi_rt_retry_cycle = 0;
     app_wifi_set_startup_fallback_reason("none");
 }
 
@@ -903,6 +926,32 @@ static void app_wifi_boot_monitor_task_fn(void *arg)
                        now_ms >= s_wifi_startup_retry_at_ms) {
                 schedule_connect_now = true;
             }
+        } else if (s_wifi_rt_armed && !startup_connect_active && net_mode == NET_MODE_STA &&
+                   !sta_connected && !sta_has_ip && !sta_connecting &&
+                   connect_task_snapshot == NULL &&
+                   !s_tryconnect_active &&
+                   !s_wifi_auto_connect_suspended &&
+                   !app_ble_gatts_connected()) {
+            /* 运行时断网兜底:复用 schedule_connect_task 单一入口(互斥自动生效),
+             * 不在本循环里直接 esp_wifi_connect()。 */
+            if (s_wifi_rt_retry_at_ms == 0 || now_ms >= s_wifi_rt_retry_at_ms) {
+                int64_t backoff_ms = APP_WIFI_RUNTIME_RETRY_BACKOFF_MS[s_wifi_rt_retry_step];
+
+                s_wifi_rt_retry_cycle += 1;
+                ESP_LOGI(TAG, "runtime retry: cycle=%u step=%u backoff=%lldms ble_conn=0",
+                         (unsigned)s_wifi_rt_retry_cycle,
+                         (unsigned)s_wifi_rt_retry_step,
+                         (long long)backoff_ms);
+                app_wifi_profiles_lock();
+                s_wifi_attempted_mask = 0;   /* 新一轮允许重试所有已存 profile */
+                app_wifi_profiles_unlock();
+                s_wifi_fast_path_pending = true;   /* 每轮先试正式 SSID(静态 IP 也走这里) */
+                app_wifi_schedule_connect_task(0);
+                s_wifi_rt_retry_at_ms = now_ms + backoff_ms;
+                if (s_wifi_rt_retry_step < APP_WIFI_RUNTIME_RETRY_STEPS - 1) {
+                    s_wifi_rt_retry_step += 1;
+                }
+            }
         }
         if (handle_failure) {
             app_wifi_handle_startup_sta_failure("connect_timeout");
@@ -1263,6 +1312,10 @@ static void app_wifi_event_handler(void *arg, esp_event_base_t event_base, int32
         app_wifi_profiles_lock();
         s_wifi_attempted_mask = 0;
         app_wifi_profiles_unlock();
+        /* 拿到 IP:运行时兜底退避归零,下次断网从 5s 重新开始 */
+        s_wifi_rt_retry_at_ms = 0;
+        s_wifi_rt_retry_step = 0;
+        s_wifi_rt_retry_cycle = 0;
         app_set_sta_ip_strings(&event->ip_info);
         app_wifi_stop_startup_connect_window();
         app_wifi_set_startup_fallback_reason("none");
