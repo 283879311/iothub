@@ -1,0 +1,32 @@
+{
+  "timestamp": "2026-10-26T08:06:38+08:00",
+  "name": "P1_1_AB_D3",
+  "firmware": "d3",
+  "rounds": [
+    {
+      "round": 1,
+      "setup_s": 2.32,
+      "lifetime_s": -1.76,
+      "dropped": true,
+      "alive_at_60": false
+    },
+    {
+      "round": 2,
+      "setup_s": 1.85,
+      "lifetime_s": 70.02,
+      "dropped": false,
+      "alive_at_60": true
+    },
+    {
+      "round": 3,
+      "setup_s": 1.5,
+      "lifetime_s": 70.02,
+      "dropped": false,
+      "alive_at_60": true
+    }
+  ],
+  "observe_s": 70.0,
+  "alive_at_60_count": 2,
+  "dropped_count": 1,
+  "pass": false
+}

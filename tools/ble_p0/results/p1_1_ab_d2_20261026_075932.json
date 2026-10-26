@@ -1,0 +1,32 @@
+{
+  "timestamp": "2026-10-26T07:59:32+08:00",
+  "name": "P1_1_AB_D2",
+  "firmware": "d2",
+  "rounds": [
+    {
+      "round": 1,
+      "setup_s": 2.42,
+      "lifetime_s": -1.32,
+      "dropped": true,
+      "alive_at_60": false
+    },
+    {
+      "round": 2,
+      "setup_s": 1.48,
+      "lifetime_s": 70.06,
+      "dropped": false,
+      "alive_at_60": true
+    },
+    {
+      "round": 3,
+      "setup_s": 1.72,
+      "lifetime_s": 70.11,
+      "dropped": false,
+      "alive_at_60": true
+    }
+  ],
+  "observe_s": 70.0,
+  "alive_at_60_count": 2,
+  "dropped_count": 1,
+  "pass": false
+}
