@@ -1,10 +1,24 @@
 # A 阶段 · token store 统一鉴权（契约与实施记录）
 
-> 状态：**A 阶段代码完成；host 单测/静态审计/整机编译/板上回归通过，待评审签收**
+> 状态：**A 阶段已签收（2026-10-26，HEAD `a75cd8e`）；B/C 冻结**
 > 评审裁决（2026-10-26）：**接受新增 `auth_token.c` 的偏差**。原实施标准“不新增源文件”据此修订；理由是该文件使 host 单测可直接编译真实源码，避免为 `auth.c` 的 `config/config` 依赖伪造整套配置结构体，且 `CMakeLists` 仅增加一行。后续同类偏差须先报批，不得由实施方单方面改写标准。
 > 范围：只做 BLE 侧的 token 存储层统一与那个「空 token 响应」bug 的收口。
 > 串口维护通道、B/C 阶段的会话生命周期**不在本次范围内**。
 > 日期：2026-10-26 · 基线 ESP-IDF v6.0.3-707
+
+---
+
+## 0. 签收条目
+
+- 签收日期：2026-10-26
+- 签收 HEAD：`a75cd8e`（A 实现提交 `4b2a4dc`；UART0 文档删除提交 `a75cd8e`）
+- 板上证据：
+  - `tools/ble_p0/results/a_token_board_20261026_185258.json`（正常 TTL 24/24 PASS）
+  - `tools/ble_p0/results/a_token_board_ttl_20261026_185425.json`（3000ms TTL 专项 PASS）
+  - `tools/ble_p0/results/a_token_final_smoke_20261026.json`（最终 600000ms 固件抽验 PASS）
+  - `tools/ble_p0/results/t3_uart1_20261026_185634.json`（UART1 双向 4/4 PASS）
+  - `tools/ble_p0/results/a_token_final_serial_20261026.log`（堆/MQTT/BLE 状态，已脱敏）
+- 结论：**A 阶段通过验收，可关闭；B/C 阶段继续冻结。**
 
 ---
 
@@ -229,6 +243,16 @@ TTL 专项（临时 `APP_TOKEN_TTL_MS=3000`，独立构建/烧录）：
 - 小程序侧识别 `auth.login` 失败的新 `internal_error` 出口（此前是空 token）。
 - 协议文档已更新：T4 §5.2 token 大写/大小写敏感；§6.11 改密
   `sessions_invalidated:true` 及响应顺序。
+
+### 6.6 签收时遗留项（不阻塞 A，登记在台账）
+
+| 项 | 状态 | 备注 |
+| --- | --- | --- |
+| B 阶段：source/owner 校验、trial owner、async apply 来源参数 | 冻结 | 等串口维护通道重新立项；缺口见审计 §3 |
+| C 阶段：串口传输层 | 冻结 | 承载接口未定前不启动 |
+| 串口会话生命周期规范 | 待实施 | TTL/logout/DTR/终端关闭四条规则；§5 保留 trial/operation 连带清理待 B/C 核对 |
+| token 仅存 RAM、重启即失效 | 按设计接受 | 无 NVS 持久化是现状；重启后重新登录 |
+| 常量时间比较覆盖边界 | 已声明 | 只覆盖比较时序，不替代格式检查/随机数质量/TTL 语义 |
 
 ---
 
