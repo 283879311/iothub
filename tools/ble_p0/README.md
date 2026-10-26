@@ -205,7 +205,7 @@ IOTHUB_WIFI_PASSWORD='<TARGET_WIFI_PASSWORD>' \
 - 有效救援（`ble_rescue_20261023_221537.json`）：CMCC-502 错误 profile → 100s 无 IP/MQTT、mode=sta → BLE scan 命中 → tryconnect/apply → `.28`/MQTT。
 - 首次用 TQ2018 作 target 时 TQ2018 热点不可见且设备回退到 CMCC-502；该次失败是场景问题。
 - 清槽后 6.0.3 全量 `p0_20261023_222123.json` 8/8 PASS；首次 7/8 的 cancel_race `no_slot` 是 T2 槽位保留。
-- 下一步：T4 iOS/Android 微信真机；串口维护通道（UART0/USB 或独立 UART2，复用 v1 JSON）另行安排。DATA 若要可靠传输，需要另立应用层协议设计。
+- 下一步：T4 iOS/Android 微信真机。UART0 串口维护/应急救援通道已于 2026-10-26 取消，不实现；UART0 仅保留 ESP_LOG 调试控制台。DATA 若要可靠传输，需要另立应用层协议设计。
 
 ## 结果
 

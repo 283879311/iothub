@@ -99,7 +99,7 @@
 
 > 小程序侧交互协议（T4）：[`BLE微信小程序交互协议_T4_2026-10-24.md`](BLE微信小程序交互协议_T4_2026-10-24.md)。
 >
-> **2026-10-23 实测（C8E4，BlueZ 模拟）**：设备侧 1/3/4 项通过；CMCC-502→TQ2018 跨 SSID `tryconnect → got_ip → apply`、v0 静态 IP 通过；**P0-4 已修复**，0/4/12/20s、重启、成功交错回归 PASS；**IDF 6.0.3 全量 P0 主机侧套件 8/8 PASS**（P0 core true；1 次主机断链自动恢复）。**AP 运行时已删除；BLE 无 AP 独立救援 PASS；清槽后 6.0.3 全量 8/8 PASS；T2 槽位生命周期 PASS**（4 终态槽后 `no_slot`、active 时 `busy`、600s 后旧 ID `not_found`、cancel 终态同样回收；`t2_slot_reclaim_20261023_232220.json`）；**T3 BLE CMD/DATA 功能 PASS（MTU23 15/15）**，但 DATA 仍是无 ACK/序号/重传/帧/流控的 best-effort 字节管道，见下方 C2。**AP 配置 schema/identity 清理 PASS**：`config.get` 无 AP 字段、旧 AP patch 不生效、`net_mode=ap` 拒绝、旧 NVS 布局保留且 STA 配置不丢（`config_schema_20261024_001220.json` 10/10）。剩余串口维护通道、iOS/Android 真机、DATA 可靠传输是否立项。完整记录见 [`docs/P0_BLE验收记录_2026-10-23.md`](P0_BLE验收记录_2026-10-23.md)。
+> **2026-10-23 实测（C8E4，BlueZ 模拟）**：设备侧 1/3/4 项通过；CMCC-502→TQ2018 跨 SSID `tryconnect → got_ip → apply`、v0 静态 IP 通过；**P0-4 已修复**，0/4/12/20s、重启、成功交错回归 PASS；**IDF 6.0.3 全量 P0 主机侧套件 8/8 PASS**（P0 core true；1 次主机断链自动恢复）。**AP 运行时已删除；BLE 无 AP 独立救援 PASS；清槽后 6.0.3 全量 8/8 PASS；T2 槽位生命周期 PASS**（4 终态槽后 `no_slot`、active 时 `busy`、600s 后旧 ID `not_found`、cancel 终态同样回收；`t2_slot_reclaim_20261023_232220.json`）；**T3 BLE CMD/DATA 功能 PASS（MTU23 15/15）**，但 DATA 仍是无 ACK/序号/重传/帧/流控的 best-effort 字节管道，见下方 C2。**AP 配置 schema/identity 清理 PASS**：`config.get` 无 AP 字段、旧 AP patch 不生效、`net_mode=ap` 拒绝、旧 NVS 布局保留且 STA 配置不丢（`config_schema_20261024_001220.json` 10/10）。UART0 串口维护/应急救援通道已于 2026-10-26 取消（不实现）；剩余 iOS/Android 真机、DATA 可靠传输是否立项。完整记录见 [`docs/P0_BLE验收记录_2026-10-23.md`](P0_BLE验收记录_2026-10-23.md)。
 
 以下是原 P0 分析，保留作记录。
 
