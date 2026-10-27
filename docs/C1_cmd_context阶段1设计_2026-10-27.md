@@ -127,3 +127,38 @@ esp_err_t app_cmd_execute_ex(const cJSON *frame, app_cmd_source_t source,
 
 - **阶段 2**：策略表读取 `ctx.source`（+ `config.set` 的 domain 细分）；`min_auth` 读 `auth_level`；`APP_CLOUD_ALLOW_NET_CMDS` 转为策略编译期条目；验收 = §5 golden 逐字节等价。
 - **阶段 3**：`channel_epoch` 由各通道提供（BLE 断连计数 / MQTT client 代数）；异步归属快照 `cmd_origin_snapshot_t`（字段沿用评审建议：source/origin/trace_id/request_id/parent_req_id/channel_epoch/depth + 固定长 identity 摘要，不持通道指针）；回写前验 epoch，失效丢弃并计数；结果记录与响应发送分离（`operation.get` 永远可查）。
+
+## 9. R1 评审处置（2026-10-28，评审结论：暂缓合并，P0/P1 完成后复审）
+
+评审四项处置与落点（提交见实验分支 R1 commit）：
+
+| 项 | 处置 | 落点 |
+| --- | --- | --- |
+| P0 异步父上下文 | **已改**：`s_net_async` 新增 `parent_ctx`，受理（`app_cmd_net_tryconnect_async`，签名改收 `const app_cmd_context_t *ctx`）时整包快照，apply 内部再入从 `&s_net_async.parent_ctx` 派生 child；不再由 `owner` 事后重建，origin/trace/auth 继承 tryconnect 请求真实值 | `cmd.c` job 结构体、受理函数、Hunk A |
+| P0 并发论证 | 受理与 apply.async 同在 dispatcher 任务按命令串行；worker 只在 `run` 开头把 owner/ssid/password 拷入局部、终态时 memset 清理，不触碰 parent_ctx 的"受理→apply"窗口；快照先于 `app_operation_start` 写入 | job 结构体注释 |
+| P1 valid 收紧 | 入口集合 = MQTT..SERIAL(1..5)，未定义值(如 99)拒绝；INTERNAL 要求 `source==INTERNAL`（防冒充）且 origin 属入口集合；auth_level 越界、`channel_epoch!=0` 整包拒绝（epoch 恒 0 为阶段 1 占位契约，阶段 3 放宽）；exec_env 非法值天然落入拒绝 | `cmd_context.c` `app_cmd_ctx_valid`、`app_cmd_src_is_entry` |
+| P1 等价性复核 | §9.1 分支清单逐项对照（下表），全部读点仅 4 处，行为等价成立 | 下表 |
+| P2 trace 原子化 | `_Atomic uint32_t` + `atomic_fetch_add(relaxed)`；host 并发测试 4×500 全唯一；32 位回绕不设防（消费方不假定唯一） | `cmd_context.c`、`t_trace_concurrent` |
+
+测试：host **85/85**（原 60 + R1 新增 25）；固件零告警（app 0x117670）。板上冒烟待 R1 复审通过后在实验构建上重跑（当前设备运行 mainline `1.2-753483f`，不作为阶段 1 证据）。
+
+### 9.1 内部 network.apply 等价性审计（旧:execute_ex(BLE) vs 新:child(parent_ctx 快照)）
+
+内部再入 frame 恒为 `{"method":"network.apply"}`（`app_cmd_net_apply_async` 构造，全仓唯一再入点，`s_net_async_apply_internal` 仅 3 处引用）。`source`/`io_source`/owner 的全部读取点：
+
+| 读取点 | 旧值(BLE) | 新值(INTERNAL/origin) | 终态等价性 |
+| --- | --- | --- | --- |
+| `network.apply` 守卫 `source==MQTT` → guard_rejected | ≠MQTT，过 | ≠MQTT，过 | 同过 |
+| busy 检查 `s_net_async.active && !apply_internal` | flag=true 跳过 | 同（flag 机制未动） | 同 |
+| trial 校验（`trial_invalid`/TTL） | 不读 source | 不读 source | 同 |
+| config patch / snapshot / profile 保存 / restart | 不读 source | 不读 source | 同 |
+| io 事件归属（`app_cmd_io_source`，仅 io.set/led/relay 分支消费） | io_source(BLE) | exec_env=INTERNAL → io(origin)=io(owner 快照)；apply 链路无 io 事件，计算值不被消费 | 不可达/同值 |
+| `out.reboot_after_response`（net 域 REBOOT 置位） | 内层 out 被 apply_async 丢弃（先于本改造即如此，属既有行为，source 无关） | 同 | 同（既有） |
+| owner 读取：断连取消（owner==BLE）、run 快照、store_trial | 不变 | 不变（P0 只删"事后重建"一读） | 同 |
+| 终态路径：SUCCESS/FAILED(storage/rollback/save)/CANCELLED/超时/BLE 断连取消/COMMITTING 放行 | 不读 source | 不读 source | 同 |
+
+唯一新增拒绝路径：快照派生失败（`parent_ctx` 非法）→ `internal_error` → op FAILED；该快照在受理时已被 execute_ctx 校验且仅值拷贝，正常流不可达（fail-loud 兜底）。
+
+### 9.2 阶段 3 锚点更新
+
+阶段 1 起 `valid()` 钉死 `channel_epoch==0`；阶段 3 接通道代数时须**同步放宽该判据并加真实校验**（回写前验 epoch、失效丢弃计数）——此约束已写入 `cmd_context.c` 注释，防止占位契约被静默绕过。

@@ -52,8 +52,12 @@ typedef struct {
     uint32_t channel_epoch;        /* 阶段 1 恒 0 占位;阶段 3 接通道代数 */
 } app_cmd_context_t;
 
-/* 上下文合法性:UNKNOWN 拒绝;ENTRY 要求 source==origin、depth=0、非 INTERNAL;
- * INTERNAL 要求 origin 是真实入口、1<=depth<=上限。 */
+/* 上下文合法性(评审 R1 收紧后):
+ *   - source=UNKNOWN / auth_level 越界 / channel_epoch!=0 → 一律拒绝
+ *     (epoch 恒 0 是阶段 1 占位契约,阶段 3 放宽并加真实校验);
+ *   - ENTRY:source 属于入口集合 MQTT..SERIAL(1..5)、source==origin、depth=0;
+ *   - INTERNAL:source 恰为 INTERNAL、origin 属于入口集合、1<=depth<=上限;
+ *   - exec_env 为其它任何值 → 拒绝。 */
 bool app_cmd_ctx_valid(const app_cmd_context_t *ctx);
 
 /* 入口构造:source==origin、ENTRY、depth=0、trace 自增。

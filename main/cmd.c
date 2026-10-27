@@ -50,6 +50,12 @@ static app_cmd_net_trial_t s_net_trial;
 typedef struct {
     bool active;
     app_cmd_source_t owner;
+    /* 评审 R1-P0:受理时快照的完整父上下文(tryconnect 命令的入口 ctx)。
+     * apply 内部再入从这里派生 child,不再由 owner 事后重建 —— origin/trace/
+     * auth_level 是因果链的真实值,不依赖"owner 当前只可能是 BLE"的论证。
+     * 并发:写(受理)与读(apply.async)同在 dispatcher 任务内按命令串行;
+     * worker 任务只读 owner/ssid/password 的开头快照,不触碰本字段。 */
+    app_cmd_context_t parent_ctx;
     char idem_key[65];
     char ssid[33];
     char password[65];
@@ -206,8 +212,11 @@ static esp_err_t app_cmd_net_async_run(app_operation_t *op, void *ctx)
                                    app_cmd_net_wifi_error(result));
 }
 
-static bool app_cmd_net_tryconnect_async(const cJSON *params, app_cmd_source_t source,
-                                          cJSON **resp_out, const char **err_out)
+/* 受理入口(R1-P0):接收完整上下文而非裸 source —— 快照进 job,异步执行
+ * 阶段从快照派生 child。 */
+static bool app_cmd_net_tryconnect_async(const cJSON *params,
+                                         const app_cmd_context_t *ctx,
+                                         cJSON **resp_out, const char **err_out)
 {
     const cJSON *ssid_item = cJSON_IsObject(params)
                                  ? cJSON_GetObjectItemCaseSensitive(params, "ssid")
@@ -219,6 +228,7 @@ static bool app_cmd_net_tryconnect_async(const cJSON *params, app_cmd_source_t s
                                 ? cJSON_GetObjectItemCaseSensitive(params, "idempotency_key")
                                 : NULL;
     const char *idem_key = cJSON_IsString(key_item) ? key_item->valuestring : NULL;
+    const app_cmd_source_t source = ctx->source;
     app_operation_t *op = NULL;
     esp_err_t err;
 
@@ -275,6 +285,7 @@ static bool app_cmd_net_tryconnect_async(const cJSON *params, app_cmd_source_t s
     memset(&s_net_async, 0, sizeof(s_net_async));
     s_net_async.active = true;
     s_net_async.owner = source;
+    s_net_async.parent_ctx = *ctx;   /* R1-P0:真实父上下文快照(先于 operation_start) */
     snprintf(s_net_async.ssid, sizeof(s_net_async.ssid), "%s", ssid_item->valuestring);
     if (cJSON_IsString(pass_item) && pass_item->valuestring != NULL) {
         snprintf(s_net_async.password, sizeof(s_net_async.password), "%s",
@@ -396,12 +407,13 @@ static bool app_cmd_net_apply_async(const cJSON *params, cJSON **resp_out,
             cJSON_AddItemToObject(frame, "params", p);
             s_net_async_apply_internal = true;
             {
-                /* C1 阶段 1:内部派生上下文 —— source=INTERNAL、origin=受理来源、
-                 * depth+1;IO 事件按 origin 归属,行为与改造前一致。 */
-                app_cmd_context_t parent = app_cmd_ctx_entry(s_net_async.owner);
+                /* C1 阶段 1(R1-P0):从受理时快照的父上下文派生 child ——
+                 * source=INTERNAL、origin/trace/auth 继承 tryconnect 请求的
+                 * 真实值,不由 owner 事后重建。 */
                 app_cmd_context_t inner_ctx;
 
-                if (!app_cmd_ctx_internal_child(&parent, &inner_ctx)) {
+                if (!app_cmd_ctx_internal_child(&s_net_async.parent_ctx,
+                                                &inner_ctx)) {
                     inner_err = "internal_error";
                 } else if (app_cmd_execute_ctx(&inner_ctx, frame, &inner, &out,
                                                &inner_err) == ESP_OK && inner != NULL) {
@@ -1331,7 +1343,7 @@ esp_err_t app_cmd_execute_ctx(const app_cmd_context_t *ctx, const cJSON *frame,
                 err = "out_of_memory";
             }
         } else if (strcmp(m, "network.tryconnect.async") == 0) {
-            if (!app_cmd_net_tryconnect_async(params, source, &resp, &err)) {
+            if (!app_cmd_net_tryconnect_async(params, ctx, &resp, &err)) {
                 /* resp/err 已由 helper 设置 */
             }
         } else if (strcmp(m, "network.apply.async") == 0) {
