@@ -135,7 +135,7 @@ esp_err_t app_cmd_execute_ex(const cJSON *frame, app_cmd_source_t source,
 | 项 | 处置 | 落点 |
 | --- | --- | --- |
 | P0 异步父上下文 | **已改**：`s_net_async` 新增 `parent_ctx`，受理（`app_cmd_net_tryconnect_async`，签名改收 `const app_cmd_context_t *ctx`）时整包快照，apply 内部再入从 `&s_net_async.parent_ctx` 派生 child；不再由 `owner` 事后重建，origin/trace/auth 继承 tryconnect 请求真实值 | `cmd.c` job 结构体、受理函数、Hunk A |
-| P0 并发论证 | 受理与 apply.async 同在 dispatcher 任务按命令串行；worker 只在 `run` 开头把 owner/ssid/password 拷入局部、终态时 memset 清理，不触碰 parent_ctx 的"受理→apply"窗口；快照先于 `app_operation_start` 写入 | job 结构体注释 |
+| P0 并发论证 | ~~受理与 apply.async 同在 dispatcher 任务串行，worker 不触碰窗口~~ **R2 修正：原论证不成立**——cleanup 在 `s_ops_mux` 临界区外执行，GOT_IP 300s TTL 过期 / BLE 断连取消的 `memset(&s_net_async,…)` 可与已过 COMMITTING 的 apply 再入并发。已加 job 生命周期锁（§9.3），受理写入 / apply 读取与再入 / 全部终态 memset 共用一把互斥 | `cmd.c` `s_net_job_lock`、§9.3 |
 | P1 valid 收紧 | 入口集合 = MQTT..SERIAL(1..5)，未定义值(如 99)拒绝；INTERNAL 要求 `source==INTERNAL`（防冒充）且 origin 属入口集合；auth_level 越界、`channel_epoch!=0` 整包拒绝（epoch 恒 0 为阶段 1 占位契约，阶段 3 放宽）；exec_env 非法值天然落入拒绝 | `cmd_context.c` `app_cmd_ctx_valid`、`app_cmd_src_is_entry` |
 | P1 等价性复核 | §9.1 分支清单逐项对照（下表），全部读点仅 4 处，行为等价成立 | 下表 |
 | P2 trace 原子化 | `_Atomic uint32_t` + `atomic_fetch_add(relaxed)`；host 并发测试 4×500 全唯一；32 位回绕不设防（消费方不假定唯一） | `cmd_context.c`、`t_trace_concurrent` |
@@ -162,3 +162,49 @@ esp_err_t app_cmd_execute_ex(const cJSON *frame, app_cmd_source_t source,
 ### 9.2 阶段 3 锚点更新
 
 阶段 1 起 `valid()` 钉死 `channel_epoch==0`；阶段 3 接通道代数时须**同步放宽该判据并加真实校验**（回写前验 epoch、失效丢弃计数）——此约束已写入 `cmd_context.c` 注释，防止占位契约被静默绕过。
+
+### 9.3 job 生命周期并发协议（R2-P0，回应复审 §8 疑点）
+
+**复审指出的问题属实**：R1 的"dispatcher 串行、worker 不触碰窗口"论证不成立。
+`operation.c` 的 `cancel`/`expire_one` 在 `s_ops_mux` 临界区**外**执行
+`cleanup_fn`（先置 `expiring=true` 出锁，再跑清理，最后回锁 finalize），
+而 `set_state(GOT_IP→COMMITTING)` 的迁移表允许在 cleanup 尚未 finalize 时
+成功——存在真实窗口：GOT_IP 300s TTL 过期（worker）或 BLE 断连取消
+（NimBLE host 任务）的 `memset(&s_net_async,…)` 与已过 COMMITTING 的
+apply 再入并发，撕碎 `parent_ctx`。
+
+**修复：job 生命周期锁 `s_net_job_lock`**（`app_mutex_ensure` 静态非递归互斥，
+与 wifi.c restart/scan 锁同一模式），覆盖：
+
+| 访问 | 任务 | 保护方式 |
+| --- | --- | --- |
+| 受理写入（memset→快照→`operation_start`→op/id 写入） | dispatcher | 持锁区间 |
+| apply 再入（child 派生读取 parent_ctx → execute_ctx → 终态 clear_job） | dispatcher | `set_state(COMMITTING)` 成功后取锁，三出口均解锁 |
+| cleanup（trial 清理 + job memset） | worker(过期) / NimBLE host(断连取消) | `_sync` 版自取锁；apply 持锁期间在此等待 |
+| run 失败路径 memset ×3 | worker | `_sync` 版自取锁 |
+
+**互斥论证**（对应复审四问）：
+
+1. *GOT_IP 下 worker 是否已停*：`run_fn` 成功路径置 GOT_IP 后即返回；
+   worker 对本 job 的残余活动只剩 `expire_one`（got_ip_ttl 到期后可选中）。
+   该路径的 cleanup 现在与 apply 互斥（锁）。
+2. *cancel/超时/断连能否在状态检查后、复制前清理*：dispatcher 复制
+   parent_ctx 的前置不是 get_status 快照，而是 `set_state(GOT_IP→COMMITTING)`
+   成功——它是在 `s_ops_mux` 临界区内的 CAS 式迁移。cleanup 若先完成
+   finalize（CANCELLED/EXPIRED），迁移被迁移表拒绝，apply 在读
+   parent_ctx 之前失败；cleanup 若在飞（`expiring=true` 未 finalize），
+   set_state 会成功，但 cleanup 随后在 job 锁上等待，apply 全程独占。
+3. *同步原语*：`s_ops_mux` 临界区（全部状态迁移）+ `s_net_job_lock`
+   （job 生命周期）+ `expiring` 标志协议（阻止 cancel/expire 重复进入）。
+4. *锁序*：`s_net_job_lock` → `s_ops_mux`；反向不存在（`ops_mux` 临界区
+   不回调 cmd.c——cleanup/run 都在临界区外执行）。apply 持锁期间调用的
+   wifi/config 锁均在更内层，无环。`app_cmd_net_on_ble_disconnect` 对
+   `owner/op` 的读取不持锁（对齐枚举/指针读，最坏读到陈旧值 → cancel 被
+   状态机拒绝），未纳入锁范围。
+
+**降级但安全的行为**：BLE 在提交中断连时，apply 不再被撕碎——cleanup 等
+锁至 apply 以 SUCCESS/FAILED 收场后清理，其 finalize 因状态已终态而成为
+no-op；代价是断连方要等 NVS 提交完成（数十 ms 级）。
+
+测试：host 85/85（不变）；固件零告警（app 0x117710）。板上冒烟仍待复审
+通过后在实验构建执行。
