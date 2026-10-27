@@ -395,9 +395,18 @@ static bool app_cmd_net_apply_async(const cJSON *params, cJSON **resp_out,
             cJSON_AddStringToObject(frame, "method", "network.apply");
             cJSON_AddItemToObject(frame, "params", p);
             s_net_async_apply_internal = true;
-            if (app_cmd_execute_ex(frame, APP_CMD_SOURCE_BLE, &inner, &out,
-                                   &inner_err) == ESP_OK && inner != NULL) {
-                ok = true;
+            {
+                /* C1 阶段 1:内部派生上下文 —— source=INTERNAL、origin=受理来源、
+                 * depth+1;IO 事件按 origin 归属,行为与改造前一致。 */
+                app_cmd_context_t parent = app_cmd_ctx_entry(s_net_async.owner);
+                app_cmd_context_t inner_ctx;
+
+                if (!app_cmd_ctx_internal_child(&parent, &inner_ctx)) {
+                    inner_err = "internal_error";
+                } else if (app_cmd_execute_ctx(&inner_ctx, frame, &inner, &out,
+                                               &inner_err) == ESP_OK && inner != NULL) {
+                    ok = true;
+                }
             }
             s_net_async_apply_internal = false;
         }
@@ -915,9 +924,13 @@ static void app_cmd_save_profile_from_params(const cJSON *params)
     }
 }
 
-static app_io_source_t app_cmd_io_source(app_cmd_source_t source)
+static app_io_source_t app_cmd_io_source(const app_cmd_context_t *ctx)
 {
-    switch (source) {
+    /* 内部派生执行按 origin 归属 IO 事件(与改造前"硬编码入口 source"等价);
+     * 入口执行按 source。 */
+    app_cmd_source_t s = (ctx->exec_env == APP_CMD_EXEC_INTERNAL) ? ctx->origin
+                                                                  : ctx->source;
+    switch (s) {
     case APP_CMD_SOURCE_MQTT:
         return APP_IO_SOURCE_MQTT;
     case APP_CMD_SOURCE_BLE:
@@ -930,11 +943,21 @@ static app_io_source_t app_cmd_io_source(app_cmd_source_t source)
     }
 }
 
+/* 兼容入口(C1 阶段 1):等价于显式构造入口上下文后执行。
+ * 四个现有调用点(ble_cmd/mqtt/state/cmd 内部)零改动即可编译。 */
 esp_err_t app_cmd_execute_ex(const cJSON *frame, app_cmd_source_t source,
                              cJSON **resp_out, app_cmd_result_t *out,
                              const char **err_msg)
 {
-    app_io_source_t io_source = app_cmd_io_source(source);
+    app_cmd_context_t ctx = app_cmd_ctx_entry(source);
+
+    return app_cmd_execute_ctx(&ctx, frame, resp_out, out, err_msg);
+}
+
+esp_err_t app_cmd_execute_ctx(const app_cmd_context_t *ctx, const cJSON *frame,
+                              cJSON **resp_out, app_cmd_result_t *out,
+                              const char **err_msg)
+{
     cJSON *method = NULL;
     cJSON *params = NULL;
     const char *err = NULL;
@@ -954,6 +977,15 @@ esp_err_t app_cmd_execute_ex(const cJSON *frame, app_cmd_source_t source,
     if (out != NULL) {
         memset(out, 0, sizeof(*out));
     }
+    /* C1 阶段 1:来源不可信(UNKNOWN/不变量破坏/NULL)一律拒绝,不执行。 */
+    if (ctx == NULL || !app_cmd_ctx_valid(ctx)) {
+        err = "internal_error";
+        goto done;
+    }
+    /* 阶段 1 保持既有分支逐字不变:全部读 source(内部派生时 source=INTERNAL,
+     * 仅执行的 network.apply 走 trial 校验路径,与改造前硬编码入口等价)。 */
+    const app_cmd_source_t source = ctx->source;
+    app_io_source_t io_source = app_cmd_io_source(ctx);
     if (!cJSON_IsObject(frame)) {
         err = "invalid_json";
         goto done;
