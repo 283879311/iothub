@@ -390,3 +390,59 @@ final= cancelled（恰好一次;无第二次 cleanup;无 FAILED 覆盖;无崩溃
 MQTT errno 字符串（`Software caused connection abort`），非崩溃；测试后
 设备自动回网,MQTT 在线。设备测试结束时代码在实验 hooks 构建（ELF 见
 证据日志头部）,正式构建（钩子关,ELF `79b5de44…`）未烧录。
+
+### 9.8 R8：`s_net_trial` 并发边界修复（复审"不要让文档代替修复"）
+
+**访问点清点与旧风险确认**：`s_net_trial` 的读写分布在 4 个任务上下文——
+worker（`store_trial`@run 成功）、BLE dispatcher（sync/async tryconnect、
+apply、op.get、network.status）、NimBLE host（断连清理）、cancel/expire
+cleanup。修复前确认存在多对**无同步并发读写**（C 数据竞争，非"未复现"
+可接受）：worker 写 trial vs dispatcher op.get/status 读；NimBLE 断连
+memset vs dispatcher strcmp/sync apply 读；dispatcher sync apply 读 vs
+NimBLE 清理。
+
+**修复**：job 锁升级为**递归互斥**（`app_mutex_ensure(…, true)`，wifi.c
+restart/scan 同款模式），trial 四原语内建加锁（`store_trial` 整体、
+`trial_clear`、`trial_ready` 含 TTL 过期清理、`app_cmd_net_operation_status`
+整体），其余读点逐处收进锁 scope：断连 trial 段、tryconnect.async 忙检、
+apply 预检、network.status trial 子对象、同步 tryconnect 忙检/清理/响应
+字段、同步 v0 apply 的 patch/profile/trial_id 三个读簇、cancel 后 trial_id
+拷贝。异步 apply（小程序主路径）的内部再入本就全程持锁。
+
+**锁序**（不变）：`s_net_job_lock(递归)` → `s_ops_mux` → wifi/config 锁；
+反向不存在。递归性用于 apply 再入（持锁）与内层 trial 原语的合法嵌套。
+
+**R8 过程中的两个工程事故（如实登记）**：
+1. **递归锁 API 误用死锁**：升级递归互斥后仍用普通 `xSemaphoreTake/Give`
+   —— 递归互斥不识别普通 Take 的属主，同任务二次加锁自锁，正式构建首次
+   回归在 `network.status` 上当场死锁（host 单测不覆盖 FreeRTOS 锁 API）。
+   修复：`xSemaphoreTakeRecursive/GiveRecursive`。
+2. **构建流程**：R8 中一次正式构建被管道 `head` 的 SIGPIPE 截断，`build/`
+   残留旧二进制——之后一律全量构建落日志再校验 ELF SHA。
+
+### 9.9 正式候选固件回归（复审 §2 步骤 1-4 执行记录）
+
+- **构建身份**：`APP_C1_TEST_HOOKS=OFF` 经三重验证——CMakeCache
+  `OFF`、`strings build/iothub.bin` 无 `diag.testhook`/`C1 hook`（0 命中；
+  hooks 构建 6 命中）、启动日志 `ELF file SHA256: 8c7abd8cc…`（与 hooks
+  构建 `0883a72e…` 不同）。烧录后经 UART0 启动日志 + BLE 登录确认身份。
+- **最小回归（全部 PASS）**：
+
+| 用例 | 结果 |
+| --- | --- |
+| BLE 登录（token 32/600s） | PASS |
+| `device.info` / `network.status` | PASS（无死锁——R8-1 修复后验证点） |
+| 不存在 SSID tryconnect | failed/ap_not_found；apply→operation_state |
+| CONNECTING 时 cancel | cancelled；apply→operation_state；**下一 op 立即受理**（op-CE99…） |
+| CONNECTING 时 BLE 断开 | `cancelled on BLE disconnect`；重连查询=cancelled；下一 op=ap_not_found |
+| 旧 worker 污染 | **无**：`stale after wait (gen=1 state=7), no job touch` 三次正确触发 |
+| 死锁/panic/internal_error | 无；heap min 33,296 / 结束 free 56,448 |
+
+- 证据：`tools/ble_p0/results/c1_r8_formal_20261028.log`（已脱敏）。
+- 主机 BLE 0x222（41.9s）再次出现（P1-1 D 分支，主机侧），不影响设备侧
+  判定；设备侧全部断开原因均为正常路径。
+- hooks 构建同步重建（ELF `0883a72e…`），R7 的钩子证据边界不变。
+
+**仍未实测**：COMMITTING 级 T1/T2 与完整 `tryconnect→GOT_IP→apply` 事务
+（`IOTHUB_WIFI_PASSWORD` 未提供）；正式构建上的事务测试在口令到位后于
+同一 ELF 上补做。

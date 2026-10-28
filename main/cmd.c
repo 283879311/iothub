@@ -78,14 +78,18 @@ static portMUX_TYPE s_net_job_lock_mux = portMUX_INITIALIZER_UNLOCKED;
 
 static void app_cmd_net_job_lock(void)
 {
-    xSemaphoreTake(app_mutex_ensure(&s_net_job_lock, &s_net_job_lock_buf,
-                                    &s_net_job_lock_mux, false), portMAX_DELAY);
+    /* 递归锁(评审 R8):trial 原语内建加锁后,apply 再入(持锁)会再次触发
+     * trial_ready/patch 读点的内层加锁;wifi.c restart/scan 同款递归模式。
+     * 必须用 TakeRecursive —— 普通 Take 对递归互斥不识别属主,同任务
+     * 二次加锁会自锁(R8 首测在 network.status 上实测死锁)。 */
+    xSemaphoreTakeRecursive(app_mutex_ensure(&s_net_job_lock, &s_net_job_lock_buf,
+                                             &s_net_job_lock_mux, true), portMAX_DELAY);
 }
 
 static void app_cmd_net_job_unlock(void)
 {
     if (s_net_job_lock != NULL) {
-        xSemaphoreGive(s_net_job_lock);
+        xSemaphoreGiveRecursive(s_net_job_lock);
     }
 }
 
@@ -109,7 +113,11 @@ static void app_cmd_net_async_clear_job_sync(void)
 static bool app_cmd_net_store_trial(const char *ssid, const char *password,
                                     app_cmd_source_t source, const char *operation_id)
 {
+    /* R8:worker(run 成功)与 dispatcher(同步 tryconnect)都会调用,
+     * 与 NimBLE 断连清理/dispatcher 读点构成跨任务并发 —— 整体入 job 锁。 */
+    app_cmd_net_job_lock();
     if (source == APP_CMD_SOURCE_BLE && !app_ble_gatts_connected()) {
+        app_cmd_net_job_unlock();
         return false;
     }
     snprintf(s_net_trial.id, sizeof(s_net_trial.id), "trial-%08X",
@@ -123,12 +131,17 @@ static bool app_cmd_net_store_trial(const char *ssid, const char *password,
     s_net_trial.expires_ms = esp_timer_get_time() / 1000 + APP_NET_TRIAL_TTL_MS;
     s_net_trial.owner = source;
     s_net_trial.valid = true;
+    app_cmd_net_job_unlock();
     return true;
 }
 
 static void app_cmd_net_trial_clear(void)
 {
+    /* R8:原语内建锁(递归)——调用点有的已持锁(apply 再入/cleanup),
+     * 有的未持(断连/TTL 过期),统一在此收口。 */
+    app_cmd_net_job_lock();
     memset(&s_net_trial, 0, sizeof(s_net_trial));
+    app_cmd_net_job_unlock();
 }
 
 void app_cmd_net_on_ble_disconnect(void)
@@ -164,23 +177,32 @@ void app_cmd_net_on_ble_disconnect(void)
             }
         }
     }
+    /* R8:trial 属主检查 + 清理入锁(NimBLE host 任务,与 worker store /
+     * dispatcher 读点互斥)。 */
+    app_cmd_net_job_lock();
     if (s_net_trial.valid && s_net_trial.owner == APP_CMD_SOURCE_BLE) {
         app_cmd_net_trial_clear();
         ESP_LOGI(TAG, "network trial cleared on BLE disconnect");
     }
+    app_cmd_net_job_unlock();
 }
 
 static bool app_cmd_net_trial_ready(const char *trial_id)
 {
     int64_t now = esp_timer_get_time() / 1000;
+    bool ok;
 
+    app_cmd_net_job_lock();
     if (!s_net_trial.valid || now >= s_net_trial.expires_ms) {
         if (s_net_trial.valid) {
             app_cmd_net_trial_clear();
         }
-        return false;
+        ok = false;
+    } else {
+        ok = (trial_id == NULL || strcmp(trial_id, s_net_trial.id) == 0);
     }
-    return trial_id == NULL || strcmp(trial_id, s_net_trial.id) == 0;
+    app_cmd_net_job_unlock();
+    return ok;
 }
 
 
@@ -344,9 +366,16 @@ static bool app_cmd_net_tryconnect_async(const cJSON *params,
         *err_out = "busy";
         return false;
     }
-    if (s_net_trial.valid && app_cmd_net_trial_ready(NULL)) {
-        *err_out = "busy";
-        return false;
+    {
+        bool trial_busy;
+
+        app_cmd_net_job_lock();
+        trial_busy = (s_net_trial.valid && app_cmd_net_trial_ready(NULL));
+        app_cmd_net_job_unlock();
+        if (trial_busy) {
+            *err_out = "busy";
+            return false;
+        }
     }
 
     app_cmd_net_job_lock();
@@ -397,14 +426,19 @@ static cJSON *app_cmd_net_operation_status(const char *operation_id, const char 
     app_operation_status_t status;
     cJSON *resp;
 
+    /* R8:读取 trial 字段(operation_id/ssid),与 worker store/断连 clear
+     * 跨任务 —— 整体入 job 锁(内部 operation API 走 ops_mux,锁序不变)。 */
+    app_cmd_net_job_lock();
     op = app_operation_find(operation_id);
     if (op == NULL || !app_operation_get_status(op, &status)) {
         *err_out = "not_found";
+        app_cmd_net_job_unlock();
         return NULL;
     }
     resp = cJSON_CreateObject();
     if (resp == NULL) {
         *err_out = "out_of_memory";
+        app_cmd_net_job_unlock();
         return NULL;
     }
     cJSON_AddStringToObject(resp, "operation_id", status.id);
@@ -414,6 +448,7 @@ static cJSON *app_cmd_net_operation_status(const char *operation_id, const char 
         cJSON_AddStringToObject(resp, "trial_id", s_net_trial.id);
         cJSON_AddStringToObject(resp, "ssid", s_net_trial.ssid);
     }
+    app_cmd_net_job_unlock();
     return resp;
 }
 
@@ -457,10 +492,20 @@ static bool app_cmd_net_apply_async(const cJSON *params, cJSON **resp_out,
         *err_out = "operation_state";
         return false;
     }
-    if (!s_net_trial.valid || strcmp(s_net_trial.operation_id, status.id) != 0 ||
-        !app_cmd_net_trial_ready(s_net_trial.id)) {
-        *err_out = "trial_invalid";
-        return false;
+    {
+        bool trial_ok;
+
+        /* R8:trial 预检读点入锁;set_state(COMMITTING) 留在锁外,
+         * 它与 cancel/expire 的裁决点语义不变。 */
+        app_cmd_net_job_lock();
+        trial_ok = (s_net_trial.valid &&
+                    strcmp(s_net_trial.operation_id, status.id) == 0 &&
+                    app_cmd_net_trial_ready(s_net_trial.id));
+        app_cmd_net_job_unlock();
+        if (!trial_ok) {
+            *err_out = "trial_invalid";
+            return false;
+        }
     }
     if (app_operation_set_state(op, APP_OP_COMMITTING,
                                 APP_OPERATION_ERR_NONE) != ESP_OK) {
@@ -622,6 +667,8 @@ static cJSON *app_cmd_build_network_status(void)
 
     trial = cJSON_AddObjectToObject(root, "trial");
     if (trial != NULL) {
+        /* R8:trial 读点入锁(与 worker store / 断连 clear 跨任务)。 */
+        app_cmd_net_job_lock();
         if (app_cmd_net_trial_ready(NULL)) {
             cJSON_AddStringToObject(trial, "trial_id", s_net_trial.id);
             cJSON_AddStringToObject(trial, "state", "got_ip");
@@ -629,6 +676,7 @@ static cJSON *app_cmd_build_network_status(void)
         } else {
             cJSON_AddStringToObject(trial, "state", "idle");
         }
+        app_cmd_net_job_unlock();
     }
     return root;
 }
@@ -1527,11 +1575,19 @@ esp_err_t app_cmd_execute_ctx(const app_cmd_context_t *ctx, const cJSON *frame,
             } else if (!cJSON_IsString(ssid_item) || ssid_item->valuestring == NULL ||
                        ssid_item->valuestring[0] == '\0') {
                 err = "params_required";
-            } else if (s_net_async.active || (s_net_trial.valid && app_cmd_net_trial_ready(NULL))) {
+            } else if (s_net_async.active) {
                 err = "busy";
             } else {
-                app_cmd_net_trial_clear();
-                ssid = ssid_item->valuestring;
+                /* R8:trial 忙检/清理入锁;紧随其后的 15s 阻塞试连不持锁
+                 * (断连期间到达的清理会在 store_trial 锁内与其串行)。 */
+                app_cmd_net_job_lock();
+                if (s_net_trial.valid && app_cmd_net_trial_ready(NULL)) {
+                    app_cmd_net_job_unlock();
+                    err = "busy";
+                } else {
+                    app_cmd_net_trial_clear();
+                    app_cmd_net_job_unlock();
+                    ssid = ssid_item->valuestring;
                 password = cJSON_IsString(pass_item) && pass_item->valuestring != NULL
                                ? pass_item->valuestring : "";
                 ESP_LOGI(TAG, "network.tryconnect ssid='%s'", ssid);
@@ -1551,9 +1607,12 @@ esp_err_t app_cmd_execute_ctx(const app_cmd_context_t *ctx, const cJSON *frame,
                         app_cmd_net_trial_clear();
                         err = "out_of_memory";
                     } else {
+                        /* R8:响应字段在锁内拷出,防中途断连清理撕读。 */
+                        app_cmd_net_job_lock();
                         cJSON_AddStringToObject(resp, "trial_id", s_net_trial.id);
                         cJSON_AddStringToObject(resp, "state", "got_ip");
                         cJSON_AddStringToObject(resp, "ssid", s_net_trial.ssid);
+                        app_cmd_net_job_unlock();
                     }
                     break;
                 case APP_WIFI_TRY_WRONG_PASSWORD:
@@ -1578,6 +1637,7 @@ esp_err_t app_cmd_execute_ctx(const app_cmd_context_t *ctx, const cJSON *frame,
                     err = "connect_failed";
                     break;
                 }
+                }
             }
         } else if (strcmp(m, "network.apply") == 0) {
             const cJSON *trial_item = cJSON_IsObject(params)
@@ -1601,8 +1661,12 @@ esp_err_t app_cmd_execute_ctx(const app_cmd_context_t *ctx, const cJSON *frame,
                 esp_err_t apply_err = ESP_FAIL;
 
                 if (patch != NULL) {
+                    /* R8:trial 字段读点入锁(同步 v0 apply 与断连清理跨任务;
+                     * 异步 apply 的内部再入本就持锁,此处递归通过)。 */
+                    app_cmd_net_job_lock();
                     cJSON_AddStringToObject(patch, "sta_ssid", s_net_trial.ssid);
                     cJSON_AddStringToObject(patch, "sta_password", s_net_trial.password);
+                    app_cmd_net_job_unlock();
                     /* BLE-only 配网：提交必须是 STA，不能把 AP-only 旧配置推断成 APSTA。
                      * AP/Web 正在退出，apply 后不应继续保留 AP 的常驻内存开销。 */
                     cJSON_AddStringToObject(patch, "net_mode", "sta");
@@ -1617,8 +1681,10 @@ esp_err_t app_cmd_execute_ctx(const app_cmd_context_t *ctx, const cJSON *frame,
                     app_cmd_net_trial_clear();
                     err = apply_err == ESP_ERR_INVALID_ARG ? "invalid_config" : "save_failed";
                 } else {
+                    app_cmd_net_job_lock();
                     esp_err_t profile_err = app_config_save_wifi_profile(s_net_trial.ssid,
                                                                           s_net_trial.password);
+                    app_cmd_net_job_unlock();
 
                     if (profile_err != ESP_OK) {
                         esp_err_t restore_err = app_config_snapshot_restore();
@@ -1633,7 +1699,9 @@ esp_err_t app_cmd_execute_ctx(const app_cmd_context_t *ctx, const cJSON *frame,
                     } else {
                         char trial_id[sizeof(s_net_trial.id)];
 
+                        app_cmd_net_job_lock();
                         snprintf(trial_id, sizeof(trial_id), "%s", s_net_trial.id);
+                        app_cmd_net_job_unlock();
                         app_config_snapshot_discard();
                         app_cmd_net_trial_clear();
                         resp = cJSON_CreateObject();
@@ -1663,7 +1731,9 @@ esp_err_t app_cmd_execute_ctx(const app_cmd_context_t *ctx, const cJSON *frame,
             } else {
                 char trial_id[sizeof(s_net_trial.id)];
 
+                app_cmd_net_job_lock();
                 snprintf(trial_id, sizeof(trial_id), "%s", s_net_trial.id);
+                app_cmd_net_job_unlock();
                 app_cmd_net_trial_clear();
                 resp = cJSON_CreateObject();
                 if (resp == NULL) {
