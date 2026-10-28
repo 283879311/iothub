@@ -446,3 +446,30 @@ apply 预检、network.status trial 子对象、同步 tryconnect 忙检/清理/
 **仍未实测**：COMMITTING 级 T1/T2 与完整 `tryconnect→GOT_IP→apply` 事务
 （`IOTHUB_WIFI_PASSWORD` 未提供）；正式构建上的事务测试在口令到位后于
 同一 ELF 上补做。
+
+### 9.10 R9：完整事务与 COMMITTING 级 T1/T2 板上闭环（口令到位后）
+
+前置：`IOTHUB_WIFI_PASSWORD` 经 600 权限仓库外文件提供（不入库/不入日志）。
+正式候选 ELF `8c7abd8c…` 在板；COMMITTING 探针用 hooks 构建（ELF
+`0883a72e…`），测毕已刷回正式候选并核对身份。
+
+| 用例 | 结果 |
+| --- | --- |
+| P1 完整事务：`tryconnect(TQ2018,正确口令) → GOT_IP(12.6s) → apply` | **success / saved=true**(1.0s) |
+| P1b 提交持久性与恢复 | `sta_ssid==connected_ssid`、has_ip=true、MQTT 重连在线 |
+| P2 cancel 先到（GOT_IP 态） | cancel=cancelled;**迟到 apply → operation_state 拒绝**;终态=cancelled/error=cancelled;下一 op 健康 |
+| P3 apply 先到（GOT_IP 态） | apply=success;**迟到 cancel → operation_state 拒绝**（终态只裁决一次） |
+| P4 COMMITTING 级确定性探针（hooks 构建,hold 15s） | pause 进入时 `expiring=1 state=got_ip gen=1`;**`set_state(committing)` → ESP_ERR_INVALID_STATE [rejected by expiring gate]**;pause 退出 → finalize=cancelled |
+
+P4 即复审定义的 T1/T2 窗口在 **GOT_IP→COMMITTING** 迁移上的确定性命中：
+cleanup 在飞、状态仍 GOT_IP 时,dispatcher 侧的 COMMITTING 迁移被
+`s_ops_mux` 内的 expiring 闸拒绝——R3 的代码论证至此获得 GOT_IP 态的
+板上实证（此前仅有 CONNECTING 态探针）。
+
+**至此复审三项未闭环项全部关闭**：完整事务 PASS、GOT_IP cancel/apply
+竞争 PASS（双向、单赢家）、COMMITTING 级确定性探针 PASS。
+`cleanup 恰好一次/终态唯一`在各用例中均成立。证据：
+`c1_r9_board_20261029.log`（正式候选,P1/P1b/P2/P3）、
+`c1_r9c_hooks_20261029.log`(P4,已脱敏)。工程事故一则:恢复正式固件时
+P4 的串口抓包进程仍占端口导致首次 flash 失败——结束抓包后重烧成功,
+已核对恢复后身份 `8c7abd8c…` 与设备健康（登录/status/MQTT 全绿）。
