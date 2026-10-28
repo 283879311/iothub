@@ -133,13 +133,28 @@ static void app_cmd_net_trial_clear(void)
 
 void app_cmd_net_on_ble_disconnect(void)
 {
+    app_operation_t *op = NULL;
+
+    /* 评审 R3:owner/op 在 job 锁内快照,消除与持锁 memset 的无同步并发读
+     * (C 内存模型下属数据竞争,不只是"读到旧值")。cancel 必须在锁外调用
+     * —— cancel 会经 cleanup 再取本锁,持锁调用即自锁。
+     * 句柄解锁后的有效性:operation 槽位是静态数组(永不释放),槽位回收
+     * 仅针对终态且需 600s 保留期(RETENTION_MS),本函数从解锁到 cancel
+     * 的窗口远小于该值;cancel 内部另有 s_ops_mux 下的 generation 守卫,
+     * 陈旧 finalize 不会写坏更新的 operation。 */
+    app_cmd_net_job_lock();
     if (s_net_async.active && s_net_async.op != NULL &&
         s_net_async.owner == APP_CMD_SOURCE_BLE) {
+        op = s_net_async.op;
+    }
+    app_cmd_net_job_unlock();
+
+    if (op != NULL) {
         app_operation_status_t status;
 
-        if (app_operation_get_status(s_net_async.op, &status)) {
+        if (app_operation_get_status(op, &status)) {
             if (app_op_state_can_cancel(status.state)) {
-                (void)app_operation_cancel(s_net_async.op);
+                (void)app_operation_cancel(op);
                 ESP_LOGI(TAG, "async network operation cancelled on BLE disconnect");
                 return;
             }

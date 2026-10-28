@@ -208,3 +208,48 @@ no-op；代价是断连方要等 NVS 提交完成（数十 ms 级）。
 
 测试：host 85/85（不变）；固件零告警（app 0x117710）。板上冒烟仍待复审
 通过后在实验构建执行。
+
+### 9.4 R3：`expiring` 与 `COMMITTING` 的状态机互斥 + 断连快照（回应复审 T1/T2）
+
+复审指出 R2 的 job 锁**没有**关闭全部窗口：cleanup 在 job 锁内清完、解锁
+返回后，`operation.c` 还要回 `s_ops_mux` finalize；finalize 之前状态仍是
+GOT_IP，dispatcher 的 `set_state(GOT_IP→COMMITTING)` 仍可成功,随后读到
+已被清零的 job。单纯叠加 job 锁确实不充分——裁决必须上收到状态机。
+
+**修复 1（`operation.c` `set_state`）**：临界区内新增 `expiring` 闸——
+`expiring=true`（cleanup 在飞、op 注定终态）时拒绝一切状态迁移
+（`ESP_ERR_INVALID_STATE`）。由此两个竞争方向由**同一把 `s_ops_mux`
+原子裁决**：
+
+- cleanup 先赢（`expiring=true` 先落锁）→ dispatcher 的 `COMMITTING`
+  迁移被闸拒绝,在读 job 数据之前失败返回；
+- dispatcher 先赢（`COMMITTING` 落锁）→ 后续取消/超时无法启动 cleanup：
+  `cancel` 入口 `can_cancel(COMMITTING)=false`（`operation_state.c:31`），
+  `expire_one` 选中条件要求 `deadline_ms!=0` 而 COMMITTING 已清 0
+  （`operation.c:357-358`）。
+
+两条都满足复审"同一同步机制、不可同时成立"的要求；job 锁此后只负责
+内存访问串行,不再承担状态裁决。
+
+**连带效应（如实记录）**：`run_fn` 的 `set_state(GOT_IP/FAILED/CANCELLED)`
+若恰逢 cleanup 在飞（tryconnect 期间过期/取消）现在会失败,run 返回错误
+后由 `run_pending` 的兜底直接写 FAILED（`s_ops_mux` 内,先检查
+`is_active`）——终态结果等价（FAILED/EXPIRED 二选一,内存安全）,与
+R2 之前"cleanup finalize 与 run 收尾直接互写"的混沌相比是收敛。
+
+**修复 2（`cmd.c` `app_cmd_net_on_ble_disconnect`）**：`owner`/`op` 改为
+job 锁内快照,锁外调用 `app_operation_cancel`（cancel→cleanup 会再取本锁,
+持锁调用即自锁）。句柄有效性论证：operation 槽位是静态数组（`s_ops[4]`,
+永不释放）,回收仅针对终态且需 600s 保留期（`RETENTION_MS`）,本函数解锁
+到 cancel 的窗口远小于该值；cancel 内部 finalize 另有 generation 守卫,
+陈旧 finalize 不会写坏更新的 operation。`s_net_trial` 的无锁访问维持
+现状（既有边界,阶段 3 归属快照一并解决）。
+
+**复审三项要求对账**：①cleanup 已启动 ⇒ `COMMITTING` 失败 ✓（闸）；
+②dispatcher 先进 `COMMITTING` ⇒ 取消/超时无法启动 cleanup ✓（既有
+can_cancel/deadline 双闸,已核实引用行）；③同一同步机制裁决 ✓
+（`s_ops_mux`;job 锁降级为纯内存串行）。
+
+测试：host 85/85（`operation.c` 为设备侧代码,host 单测不覆盖——板上
+`device.info→login→tryconnect→apply` 全事务 + 取消/断连竞争验证待复审
+通过后在实验固件执行）；固件零告警（app 0x117730）。

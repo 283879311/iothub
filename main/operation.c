@@ -346,6 +346,15 @@ esp_err_t app_operation_set_state(app_operation_t *op, app_op_state_t state,
         portEXIT_CRITICAL(&s_ops_mux);
         return ESP_ERR_INVALID_ARG;
     }
+    /* 评审 R3-T1/T2:expiring=true 表示 cancel/expire 的 cleanup 已在飞、
+     * 本 op 注定终态 —— 拒绝一切新状态迁移。由此 "cleanup 已启动" 与
+     * "进入 COMMITTING" 由同一把 s_ops_mux 原子裁决,不可能同时成立:
+     * 输掉竞争的 apply 在读 job 数据之前就被挡下(cleanup 期间状态仍是
+     * GOT_IP,无本闸时 set_state 会成功、随后与 memset 撕裂 job)。 */
+    if (op->expiring) {
+        portEXIT_CRITICAL(&s_ops_mux);
+        return ESP_ERR_INVALID_STATE;
+    }
     if (state == APP_OP_FREE || !app_op_transition_allowed(op->state, state)) {
         portEXIT_CRITICAL(&s_ops_mux);
         return ESP_ERR_INVALID_STATE;
