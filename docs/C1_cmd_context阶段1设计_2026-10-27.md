@@ -253,3 +253,43 @@ can_cancel/deadline 双闸,已核实引用行）；③同一同步机制裁决 �
 测试：host 85/85（`operation.c` 为设备侧代码,host 单测不覆盖——板上
 `device.info→login→tryconnect→apply` 全事务 + 取消/断连竞争验证待复审
 通过后在实验固件执行）；固件零告警（app 0x117730）。
+
+### 9.5 R4：generation 复用保护与 FAILED 兜底终态（复审两重点的代码证据）
+
+**发现 1：generation 校验实际失效（已修）。** 原 `app_operation_start` 先
+`memset(slot,0,…)` 再 `slot->generation++`，每次复用 generation 都回到 **1**。
+槽满时 `app_operation_oldest_terminal_locked()` 会**立即**回收最老终态槽
+（不受 600s 保留期约束），因此"静态数组不释放"不能推出"句柄长期有效"：
+陈旧 cancel/expire 捕获的 generation（1）会与新 op 撞上,绕过 finalize 守卫。
+修复：复用前取 `next_generation = slot->generation + 1`，memset 后写回；
+类型升为 `uint32_t`（内部 `app_operation_t` 与公开 `app_operation_status_t`
+同步）。**代码证据**：`operation.c:287-296`（保留 generation）、
+`operation.c:391/413/421/437`（cancel 捕获与 finalize 守卫）、
+`operation.c:533/558`（expire 同一协议）、`operation.c:289`（slot 复用路径）。
+
+**发现 2：run_pending 兜底写 FAILED 与 cleanup 冲突（已修）。** `run_fn`
+返回错误后，原兜底只检查 `is_active(op->state)`；cleanup 在飞时状态仍是
+active（`expiring=true` 但未 finalize），兜底会写 FAILED，随后 cleanup 的
+finalize 因状态非 active 落空——即"对外 FAILED、清理仍在执行/终态被覆盖"。
+修复：兜底条件增加 `!op->expiring`；`expiring=true` 时终态**独占**交由
+cleanup 裁决（CANCELLED / EXPIRED / FAILED(cleanup_failed)）。**清理恰好
+一次**的论证：`expiring` 只在 `cancel`/`expire_one` 的 `s_ops_mux` 临界区内
+置位，两者互斥；`run_pending` 不再写终态；`reclaim` 只回收终态；因此
+`cleanup_fn` 对本 op 至多执行一次。**代码证据**：`operation.c:509-521`
+（兜底 + expiring 条件）、`operation.c:370-440`（cancel 单次入口）、
+`operation.c:528-568`（expire 单次入口）。
+
+**终态一致性矩阵（expiring 置位后）**：
+
+| 竞争方 | 结果 |
+| --- | --- |
+| cancel/expire 先置 expiring | set_state(任何) 拒绝；run_pending 不写；cleanup finalize CANCELLED/EXPIRED/FAILED(cleanup_failed) |
+| run_pending 先写 FAILED（expiring 仍 false） | cancel/expire 因状态终态/非 active 不启动 cleanup；无重复清理 |
+| run_fn 先成功置 GOT_IP | 之后 cancel/expire 按 can_cancel/deadline 正常进行 |
+
+**仍未解决（按复审裁决登记）**：`s_net_trial` 的无锁访问（worker
+store_trial vs dispatcher cleanup/status）。本轮不宣称已消除；板上竞争
+测试会记录是否命中，若命中另立 R5 用同一 job 锁收口。
+
+测试：host 85/85（operation.c 设备侧，host 不覆盖）；固件零告警
+（app 0x117730）。板上验证见 §9.6。

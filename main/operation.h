@@ -56,7 +56,7 @@ typedef struct {
     int64_t created_ms;
     int64_t deadline_ms;
     int64_t terminal_ms;
-    uint8_t generation;
+    uint32_t generation;
 } app_operation_status_t;
 
 /* 静态表初始化；不创建 worker，不占堆。 */

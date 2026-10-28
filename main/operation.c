@@ -29,7 +29,7 @@ static const char *TAG = "operation";
 struct app_operation {
     bool used;
     bool expiring;
-    uint8_t generation;
+    uint32_t generation;
     app_operation_owner_t owner;
     app_op_state_t state;
     app_operation_error_t error;
@@ -284,9 +284,17 @@ esp_err_t app_operation_start(app_operation_owner_t owner, const char *idem_key,
         reclaimed_age_ms = now_ms - slot->terminal_ms;
     }
 
-    memset(slot, 0, sizeof(*slot));
+    /* 评审 R4:generation 必须在复用前+1并跨 memset 保留 —— 原实现先清零再
+     * ++,每次复用都回到 1,陈旧 cancel/expire 捕获的 generation 会与新 op
+     * 撞上(槽满时 oldest_terminal 立即回收,窗口不是 600s)。32 位回绕仅在
+     * 40 亿次复用后发生,期间槽位早已加速回收,不再作为实际风险。 */
+    {
+        uint32_t next_generation = slot->generation + 1;
+
+        memset(slot, 0, sizeof(*slot));
+        slot->generation = next_generation;
+    }
     slot->used = true;
-    slot->generation++;
     slot->owner = owner;
     slot->state = APP_OP_ACCEPTED;
     slot->error = APP_OPERATION_ERR_NONE;
@@ -380,7 +388,7 @@ esp_err_t app_operation_cancel(app_operation_t *op)
 {
     app_operation_cleanup_fn cleanup = NULL;
     void *ctx = NULL;
-    uint8_t generation;
+    uint32_t generation;
     bool need_cleanup = false;
     bool terminal = false;
 
@@ -503,7 +511,12 @@ static void app_operation_run_pending(void)
 
         ESP_LOGW(TAG, "run %s failed: %s", op->id, esp_err_to_name(err));
         portENTER_CRITICAL(&s_ops_mux);
-        if (op->used && app_op_state_is_active(op->state)) {
+        /* 评审 R4:expiring=true 表示 cleanup 已在飞 —— run_fn 的 set_state
+         * 已被 expiring 闸拒绝,这里不能再把终态改成 FAILED,否则会出现
+         * "对外 FAILED、cleanup 仍在执行",且 cleanup 的 finalize 因状态
+         * 已非 active 而落空。终态交由 cleanup 独占裁决(CANCELLED/
+         * EXPIRED/FAILED(cleanup_failed))。 */
+        if (op->used && !op->expiring && app_op_state_is_active(op->state)) {
             op->state = APP_OP_FAILED;
             op->error = APP_OPERATION_ERR_INTERNAL;
             op->deadline_ms = 0;
@@ -522,7 +535,7 @@ static void app_operation_expire_one(void)
     app_operation_t *op = NULL;
     app_operation_cleanup_fn cleanup = NULL;
     void *ctx = NULL;
-    uint8_t generation = 0;
+    uint32_t generation = 0;
     bool cleanup_ok = true;
     int64_t now_ms = app_operation_now_ms();
 
