@@ -325,6 +325,11 @@ static bool app_ble_cmd_v1_allowed(const char *cmd)
     if (cmd == NULL) {
         return false;
     }
+#ifdef APP_C1_TEST_HOOKS
+    if (strcmp(cmd, "diag.testhook") == 0) {
+        return true;   /* 实验构建专用钩子命令(仍需 token) */
+    }
+#endif
     for (i = 0; i < sizeof(allowed) / sizeof(allowed[0]); i++) {
         if (strcmp(cmd, allowed[i]) == 0) {
             return true;

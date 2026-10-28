@@ -2,6 +2,7 @@ option(APP_BLE_PEER_TEST "Build the A/B four-characteristic central test harness
 option(APP_OPERATION_SELFTEST "Build G3 operation table/worker selftest (default OFF)" OFF)
 option(APP_OPERATION_LIFECYCLE_TEST "Build G3 worker lifecycle/memory measurement (default OFF)" OFF)
 option(APP_OPERATION_WORKER_STATIC "Use static FreeRTOS stack/TCB for the G3 worker (default OFF)" OFF)
+option(APP_C1_TEST_HOOKS "Experiment-only C1 review hooks (cleanup pause + state-machine probe, default OFF)" OFF)
 
 idf_component_register(
     SRCS "main.c" "auth.c" "auth_token.c" "ble_cmd.c" "bootstrap.c" "bt.c" "bt_gattc.c" "bt_gattc_nimble.c" "bt_gatts.c" "bt_gatts_nimble.c" "cmd.c" "cmd_context.c" "common.c" "config.c" "config_apply.c" "data_pipe.c" "diag.c" "identity.c" "mem_guard.c" "mqtt.c" "operation.c" "operation_state.c" "ota.c" "prov_pin.c" "state.c" "transport_ble.c" "uart.c" "wifi.c"
@@ -27,6 +28,9 @@ if(APP_BLE_PEER_TEST)
 endif()
 if(APP_OPERATION_SELFTEST)
     target_compile_definitions(${COMPONENT_LIB} PRIVATE APP_OPERATION_SELFTEST=1)
+endif()
+if(APP_C1_TEST_HOOKS)
+    target_compile_definitions(${COMPONENT_LIB} PRIVATE APP_C1_TEST_HOOKS=1)
 endif()
 if(APP_OPERATION_LIFECYCLE_TEST)
     target_compile_definitions(${COMPONENT_LIB} PRIVATE APP_OPERATION_LIFECYCLE_TEST=1)

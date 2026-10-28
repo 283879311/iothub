@@ -90,3 +90,14 @@ void app_operation_set_test_retention_ms(uint32_t ms);
 #ifdef APP_OPERATION_LIFECYCLE_TEST
 void app_operation_lifecycle_test_start(void);
 #endif
+
+/* ---------------------------------------------------------------------------
+ * 实验构建专用(C1 复审确定性钩子,APP_C1_TEST_HOOKS=ON 才编译):
+ * 武装后,下一次 cancel/expire 的 cleanup 返回、finalize 之前会暂停
+ * hold_ms 毫秒;期间可用 probe_to 对同一 op 直接调 set_state 验证
+ * "expiring 闸拒绝一切迁移"。正式构建不含这些符号。
+ * ------------------------------------------------------------------------- */
+#ifdef APP_C1_TEST_HOOKS
+void app_operation_test_hook_arm(uint32_t hold_ms, int probe_to_state);
+void app_operation_test_hook_clear(void);
+#endif

@@ -1432,6 +1432,76 @@ esp_err_t app_cmd_execute_ctx(const app_cmd_context_t *ctx, const cJSON *frame,
             if (!app_cmd_net_cancel_async(params, &resp, &err)) {
                 /* resp/err 已由 helper 设置 */
             }
+#ifdef APP_C1_TEST_HOOKS
+        } else if (strcmp(m, "diag.testhook") == 0) {
+            /* 实验构建专用:仅 BLE 来源。arm 携带可选 probe_to("got_ip" 等);
+             * try 对 operation_id 直调 set_state 验证 expiring 闸。 */
+            const cJSON *action = cJSON_IsObject(params)
+                                      ? cJSON_GetObjectItemCaseSensitive(params, "action") : NULL;
+            if (source != APP_CMD_SOURCE_BLE) {
+                err = "guard_rejected";
+            } else if (!cJSON_IsString(action) || action->valuestring == NULL) {
+                err = "params_required";
+            } else if (strcmp(action->valuestring, "arm") == 0) {
+                const cJSON *probe = cJSON_GetObjectItemCaseSensitive(params, "probe_to");
+                int probe_state = 0;
+                if (cJSON_IsString(probe) && probe->valuestring != NULL) {
+                    if (strcmp(probe->valuestring, "got_ip") == 0) probe_state = (int)APP_OP_GOT_IP;
+                    else if (strcmp(probe->valuestring, "committing") == 0) probe_state = (int)APP_OP_COMMITTING;
+                    else if (strcmp(probe->valuestring, "failed") == 0) probe_state = (int)APP_OP_FAILED;
+                    else { err = "invalid_param"; }
+                }
+                if (err == NULL) {
+                    const cJSON *hold = cJSON_GetObjectItemCaseSensitive(params, "hold_ms");
+                    uint32_t hold_ms = 8000;
+
+                    if (cJSON_IsNumber(hold) && hold->valueint >= 100 &&
+                        hold->valueint <= 30000) {
+                        hold_ms = (uint32_t)hold->valueint;
+                    }
+                    app_operation_test_hook_arm(hold_ms, probe_state);
+                    resp = cJSON_CreateObject();
+                    if (resp != NULL) {
+                        cJSON_AddBoolToObject(resp, "armed", true);
+                        cJSON_AddNumberToObject(resp, "hold_ms", (double)hold_ms);
+                    }
+                }
+            } else if (strcmp(action->valuestring, "clear") == 0) {
+                app_operation_test_hook_clear();
+                resp = cJSON_CreateObject();
+                if (resp != NULL) cJSON_AddBoolToObject(resp, "armed", false);
+            } else if (strcmp(action->valuestring, "try") == 0) {
+                const cJSON *op_item = cJSON_GetObjectItemCaseSensitive(params, "operation_id");
+                const cJSON *to_item = cJSON_GetObjectItemCaseSensitive(params, "to");
+                app_operation_t *op;
+                app_op_state_t to;
+                esp_err_t s_err;
+
+                if (!cJSON_IsString(op_item) || !cJSON_IsString(to_item)) {
+                    err = "params_required";
+                } else {
+                    op = app_operation_find(op_item->valuestring);
+                    to = (strcmp(to_item->valuestring, "got_ip") == 0) ? APP_OP_GOT_IP
+                       : (strcmp(to_item->valuestring, "committing") == 0) ? APP_OP_COMMITTING
+                       : (strcmp(to_item->valuestring, "failed") == 0) ? APP_OP_FAILED
+                       : APP_OP_STATE_COUNT;
+                    if (op == NULL) {
+                        err = "not_found";
+                    } else if (to == APP_OP_STATE_COUNT) {
+                        err = "invalid_param";
+                    } else {
+                        s_err = app_operation_set_state(op, to, APP_OPERATION_ERR_NONE);
+                        resp = cJSON_CreateObject();
+                        if (resp != NULL) {
+                            cJSON_AddBoolToObject(resp, "rejected", s_err != ESP_OK);
+                            cJSON_AddStringToObject(resp, "result", esp_err_to_name(s_err));
+                        }
+                    }
+                }
+            } else {
+                err = "unknown_command";
+            }
+#endif
         } else if (strcmp(m, "operation.get") == 0) {
             const cJSON *op_item = cJSON_IsObject(params)
                                        ? cJSON_GetObjectItemCaseSensitive(params, "operation_id")

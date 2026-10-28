@@ -346,3 +346,47 @@ finalize 为 CANCELLED 后槽位立即可复用，下一个 tryconnect 复用了
 
 **仍未解决**：`s_net_trial` 无锁访问（复审裁决保留）；完整 GOT_IP/apply
 事务与"cleanup 在飞 vs COMMITTING"的确定性窗口仍需有效 AP 口令与测试钩子。
+
+### 9.7 R7：确定性测试钩子与板上闭环（回应复审"测试钩子"要求）
+
+**钩子设计（仅实验构建）**：`APP_C1_TEST_HOOKS=ON`（独立 CMake option +
+独立构建目录 `build-hooks/`，正式 `build/` 不含钩子符号）。`diag.testhook`
+命令（BLE 来源、仍需 token、正式构建返回 unknown_command）：
+`arm {hold_ms≤30000, probe_to}` / `clear` / `try {operation_id, to}`。
+`operation.c` 在 cancel/expire 的 cleanup 返回与 finalize 之间插入暂停窗
+（单次武装、自动到期），暂停入口对同一 op 直调一次 `set_state(probe_to)`
+并把结果打到串口——"expiring=true 时一切迁移被拒"获得确定性证据，不依赖
+随机调度。
+
+**钩子首测即抓到真崩溃（R7 勘误，已修）**：`fallback skipped` 的
+`ESP_LOGI` 原本写进了 `s_ops_mux` **临界区内部**（ESP_LOG 禁入 spinlock），
+cleanup 在飞 + run 兜底的交错首次命中即 `abort()` 重启。该路径随机压测
+不可达——确定性钩子的直接价值实证。修复：锁内只取判据，日志移到锁外。
+
+**板上确定性结果（hooks 构建 ELF `d772b4d7…` 后续修正版，证据
+`c1_r7_hooks_20261028.log`，已脱敏）**——cancel CONNECTING 操作、hold
+25s，全序列：
+
+```
+(13678) C1 hook: pause cancel_post_cleanup enter (expiring=1 state=connecting gen=1)
+(13688) C1 hook: probe set_state(got_ip) -> ESP_ERR_INVALID_STATE [rejected by expiring gate]
+(26708) run op-… failed: ESP_ERR_INVALID_STATE          ← worker 窗口内返回,set_state(FAILED) 被闸拒
+(26718) run op-… fallback skipped: cleanup owns terminal (expiring=1)
+(37798) C1 hook: pause cancel_post_cleanup exit         ← 25s 后 finalize
+final= cancelled（恰好一次;无第二次 cleanup;无 FAILED 覆盖;无崩溃）
+```
+
+| 复审要求 | 结果 |
+| --- | --- |
+| expiring=true ⇒ 一切 set_state 拒绝 | **确定性 PASS**（探针 + FAILED 写入两路均被拒） |
+| cleanup 在飞 ⇒ 兜底不得写 FAILED | **确定性 PASS**（skip 日志 + 终态 cancelled 而非 failed） |
+| 旧 worker 不读写新一代 job | PASS（R5 板测 `stale after wait, no job touch` + 本轮 generation 一致时行为正确） |
+| 终态只裁决一次、cleanup 不重复 | PASS（单一 finalize;cancel 与 run 兜底互斥由闸保证） |
+| COMMITTING 级完整 T1/T2（GOT_IP 态） | **BLOCKED**：需有效 AP 口令到达 GOT_IP。闸代码与状态无关（同一判据先于迁移表执行）,CONNECTING 级证据已闭环,COMMITTING 级待口令后补一发 |
+| 完整 `tryconnect→GOT_IP→apply` 事务 | **BLOCKED**：同上 |
+
+资源：竞争期间 heap min 34,524 / largest 32,768；`ble_cmd` 栈水位
+1,312B（暂停在该任务执行,4KB 栈余量充足）。日志中唯一 "abort" 匹配为
+MQTT errno 字符串（`Software caused connection abort`），非崩溃；测试后
+设备自动回网,MQTT 在线。设备测试结束时代码在实验 hooks 构建（ELF 见
+证据日志头部）,正式构建（钩子关,ELF `79b5de44…`）未烧录。
