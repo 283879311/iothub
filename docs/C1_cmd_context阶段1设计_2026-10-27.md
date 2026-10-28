@@ -323,17 +323,26 @@ finalize 为 CANCELLED 后槽位立即可复用，下一个 tryconnect 复用了
    未来框架改动再次引入复用窗口。
 3. 终态仍由 §9.5 的规则裁决：cleanup 在飞时 run_pending 不写 FAILED。
 
-**板上阶段性结果（R4；R5 待复测）**：
+**板上结果（R4 发现缺陷 → R5 复测，2026-10-28）**：
 
-| 用例 | 结果 |
-| --- | --- |
-| device.info / 默认管理员登录 / network.status | PASS（token 32、600s，Wi-Fi/MQTT 在线） |
-| 不存在 SSID tryconnect | failed/ap_not_found；apply 被拒（测试用错字段 trial_id，实际 async apply 用 operation_id，记为脚本问题） |
-| CONNECTING 时 cancel | cancel=cancelled；后续 apply 被拒；**下一个 op 在 R4 上 internal_error（本节缺陷）** |
-| CONNECTING 时 BLE 断开 | 重连后 op=cancelled；下一个 op 在 R4 上 internal_error（同缺陷） |
-| 连续 3 次 cancel | 3/3 cancelled，无死锁；下一 op 仍受同缺陷影响 |
-| GOT_IP → apply 成功事务 | **BLOCKED**：未提供 `IOTHUB_WIFI_PASSWORD`，无法构造有效 AP 候选 |
-| 资源（heap/largest/MQTT） | 基线正常；完整竞争轮次待 R5 复测后记录 |
+| 用例 | R4 | R5 复测 |
+| --- | --- | --- |
+| device.info / 默认管理员登录 / network.status | PASS（token 32、600s） | PASS（同） |
+| 不存在 SSID tryconnect | failed/ap_not_found | failed/ap_not_found；apply（operation_id）→ operation_state |
+| CONNECTING 时 cancel | cancelled；**下一 op internal_error（缺陷）** | cancelled；apply→operation_state；下一 op 被受理；重连后查询被中断 op=cancelled，新 absent op=ap_not_found；串口 `stale after wait (gen=1 state=7), no job touch`，无旧 worker 污染 |
+| CONNECTING 时 BLE 断开 | cancelled；下一 op internal_error | cancelled；重连后 op=cancelled；下一 op 被受理（紧随取消的 absent op 得到 `wifi_scan_failed`——Wi-Fi 过渡期预扫描失败，P1-10 既有行为，非 stale job） |
+| 连续 3 次 cancel | 3/3 cancelled，无死锁 | 未重跑（主机 BLE 约 40s 断链，见下）；R4 已证无死锁 |
+| GOT_IP → apply 成功事务 | BLOCKED | **仍 BLOCKED**：`IOTHUB_WIFI_PASSWORD` 未提供 |
+| 资源 | 基线正常 | 竞争期间 heap min 33,028 / free 44,132 / largest 31,744；结束后 free 61,388 / largest 45,056；无 panic/WDT/assert |
+
+**主机 BLE 链路注记**：本次 R5 会话在 44.6s 出现 `central disconnected
+(reason=0x222)`；连接初始参数 45ms/0/420ms 不满足设备策略（监督超时 <4s），
+设备按 P1-1 请求更新、主机未应答——这是已登记的 P1-1 D 分支（主机侧），
+不是 R5 回归。主机 BLE 单次会话因此限制在 ~40s；重连后设备和 op 状态正常。
+
+**R6 附注**：R5 后另修一处 stale 日志路径的未初始化读取（纯日志，无行为
+变化）；R5 板测证据对应 ELF SHA `b3caedeb8…`（`c1_r5_board_20261028.log`，
+已脱敏），R6 未重烧、未重跑板上用例。
 
 **仍未解决**：`s_net_trial` 无锁访问（复审裁决保留）；完整 GOT_IP/apply
 事务与"cleanup 在飞 vs COMMITTING"的确定性窗口仍需有效 AP 口令与测试钩子。
