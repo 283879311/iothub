@@ -249,11 +249,14 @@ static esp_err_t app_cmd_net_async_run(app_operation_t *op, void *ctx)
     /* R5:operation 框架已用 running 标志禁止槽位在 run_fn 返回前复用;
      * 这里再按 generation+state 复核,陈旧/已终态的 run 直接返回,绝不
      * 触碰 job(旧实现用裸 state 判断,槽位复用后会误清新 job)。 */
-    if (!app_operation_get_status(op, &st1) ||
-        st1.generation != generation || st1.state != APP_OP_CONNECTING) {
+    if (!app_operation_get_status(op, &st1)) {
+        ESP_LOGW(TAG, "async tryconnect op=%s status lost after wait, no job touch",
+                 app_operation_id(op));
+        return ESP_ERR_INVALID_ARG;
+    }
+    if (st1.generation != generation || st1.state != APP_OP_CONNECTING) {
         ESP_LOGW(TAG, "async tryconnect op=%s stale after wait (gen=%u state=%d), no job touch",
-                 app_operation_id(op), (unsigned)generation,
-                 st1.generation == generation ? (int)st1.state : -1);
+                 app_operation_id(op), (unsigned)generation, (int)st1.state);
         return ESP_OK;
     }
     if (result == APP_WIFI_TRY_OK) {
