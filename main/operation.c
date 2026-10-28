@@ -29,6 +29,7 @@ static const char *TAG = "operation";
 struct app_operation {
     bool used;
     bool expiring;
+    bool running;      /* run_fn 在飞:期间禁止本槽回收/复用(R5) */
     uint32_t generation;
     app_operation_owner_t owner;
     app_op_state_t state;
@@ -169,7 +170,7 @@ static void app_operation_reclaim_terminal_locked(int64_t now_ms)
     for (i = 0; i < APP_OPERATION_MAX_SLOTS; i++) {
         app_operation_t *op = &s_ops[i];
 
-        if (!op->used || !app_op_state_is_terminal(op->state)) {
+        if (!op->used || op->running || !app_op_state_is_terminal(op->state)) {
             continue;
         }
         if (now_ms - op->terminal_ms < (int64_t)s_retention_ms) {
@@ -190,7 +191,7 @@ static app_operation_t *app_operation_oldest_terminal_locked(void)
     for (i = 0; i < APP_OPERATION_MAX_SLOTS; i++) {
         app_operation_t *op = &s_ops[i];
 
-        if (!op->used || !app_op_state_is_terminal(op->state)) {
+        if (!op->used || op->running || !app_op_state_is_terminal(op->state)) {
             continue;
         }
         if (oldest == NULL || op->terminal_ms < oldest->terminal_ms) {
@@ -496,6 +497,7 @@ static void app_operation_run_pending(void)
         } else {
             op->state = APP_OP_CONNECTING;
             op->error = APP_OPERATION_ERR_NONE;
+            op->running = true;   /* R5:run_fn 返回前禁止本槽回收/复用 */
         }
     }
     portEXIT_CRITICAL(&s_ops_mux);
@@ -506,6 +508,9 @@ static void app_operation_run_pending(void)
 
     ESP_LOGI(TAG, "run %s -> connecting", op->id);
     err = run_fn(op, ctx);
+    portENTER_CRITICAL(&s_ops_mux);
+    op->running = false;   /* run_fn 已返回:此后才允许回收/复用本槽 */
+    portEXIT_CRITICAL(&s_ops_mux);
     if (err != ESP_OK) {
         bool failed = false;
 

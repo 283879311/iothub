@@ -293,3 +293,47 @@ store_trial vs dispatcher cleanup/status）。本轮不宣称已消除；板上�
 
 测试：host 85/85（operation.c 设备侧，host 不覆盖）；固件零告警
 （app 0x117730）。板上验证见 §9.6。
+
+### 9.6 R5：槽位 running 保护与 run_fn 代际校验（板上发现，已修）
+
+**板上发现（R4 实验固件，2026-10-28，取消竞争用例）**：cancel 一个
+CONNECTING 操作后，旧 `run_fn` 仍在 `app_wifi_try_connect_ip` 内阻塞；取消
+finalize 为 CANCELLED 后槽位立即可复用，下一个 tryconnect 复用了同一槽位。
+旧 run 返回时：
+- 裸 `app_operation_state(op)` 读到的是**新 op 的 ACCEPTED/CONNECTING**，
+  不是"已终态"；
+- 旧 run 执行 `app_cmd_net_async_clear_job_sync()`，把**新 op 的 job 清零**；
+- worker 随后启动新 op 时 `job->active` 已为 false → `run failed:
+  ESP_ERR_INVALID_ARG` → 兜底写 `internal_error`。
+
+串口证据（R4 实测）：`accepted op-EC59…` 后 `run op-EC59… -> connecting` →
+`run op-EC59… failed: ESP_ERR_INVALID_ARG`，且此前 `op-45F20…` 的 tryconnect
+在取消后仍完成（`tryconnect failed reason=15`）。这属于复审关注的
+"清理/终态兜底引入新问题"，不是测试脚本问题。
+
+**修复（operation.c + cmd.c）**：
+
+1. `app_operation_t` 增加 `running`：`run_pending` 在置 CONNECTING 的同一
+   临界区内置 true，`run_fn` 返回后（再次持锁）置 false。`reclaim_terminal_
+   locked` 与 `oldest_terminal_locked` 跳过 running 槽——run_fn 在飞期间该槽
+   不可回收/复用（槽满时新请求返回 no_slot/busy，而非踩旧指针）。
+2. `app_cmd_net_async_run` 在阻塞调用前取 `app_operation_get_status` 的
+   `generation`，返回后复核 `generation` 与 `state==CONNECTING`；不一致
+   （陈旧/已终态）直接返回 ESP_OK，**不触碰 job**。这是第二道防线，防止
+   未来框架改动再次引入复用窗口。
+3. 终态仍由 §9.5 的规则裁决：cleanup 在飞时 run_pending 不写 FAILED。
+
+**板上阶段性结果（R4；R5 待复测）**：
+
+| 用例 | 结果 |
+| --- | --- |
+| device.info / 默认管理员登录 / network.status | PASS（token 32、600s，Wi-Fi/MQTT 在线） |
+| 不存在 SSID tryconnect | failed/ap_not_found；apply 被拒（测试用错字段 trial_id，实际 async apply 用 operation_id，记为脚本问题） |
+| CONNECTING 时 cancel | cancel=cancelled；后续 apply 被拒；**下一个 op 在 R4 上 internal_error（本节缺陷）** |
+| CONNECTING 时 BLE 断开 | 重连后 op=cancelled；下一个 op 在 R4 上 internal_error（同缺陷） |
+| 连续 3 次 cancel | 3/3 cancelled，无死锁；下一 op 仍受同缺陷影响 |
+| GOT_IP → apply 成功事务 | **BLOCKED**：未提供 `IOTHUB_WIFI_PASSWORD`，无法构造有效 AP 候选 |
+| 资源（heap/largest/MQTT） | 基线正常；完整竞争轮次待 R5 复测后记录 |
+
+**仍未解决**：`s_net_trial` 无锁访问（复审裁决保留）；完整 GOT_IP/apply
+事务与"cleanup 在飞 vs COMMITTING"的确定性窗口仍需有效 AP 口令与测试钩子。

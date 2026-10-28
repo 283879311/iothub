@@ -225,6 +225,9 @@ static esp_err_t app_cmd_net_async_run(app_operation_t *op, void *ctx)
 {
     app_cmd_net_async_job_t *job = ctx;
     app_wifi_try_result_t result;
+    app_operation_status_t st0;
+    app_operation_status_t st1;
+    uint32_t generation;
     char ssid[33];
     char password[65];
     app_cmd_source_t owner;
@@ -232,6 +235,10 @@ static esp_err_t app_cmd_net_async_run(app_operation_t *op, void *ctx)
     if (op == NULL || job == NULL || !job->active) {
         return ESP_ERR_INVALID_ARG;
     }
+    if (!app_operation_get_status(op, &st0)) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    generation = st0.generation;   /* R5:跨阻塞调用校验槽位未被复用 */
     snprintf(ssid, sizeof(ssid), "%s", job->ssid);
     snprintf(password, sizeof(password), "%s", job->password);
     owner = job->owner;
@@ -239,9 +246,14 @@ static esp_err_t app_cmd_net_async_run(app_operation_t *op, void *ctx)
              app_operation_id(op));
     result = app_wifi_try_connect_ip(ssid, password, 15000);
 
-    /* cancel/expire 可能在 tryconnect 返回前已把 operation 置终态。 */
-    if (app_operation_state(op) != APP_OP_CONNECTING) {
-        app_cmd_net_async_clear_job_sync();
+    /* R5:operation 框架已用 running 标志禁止槽位在 run_fn 返回前复用;
+     * 这里再按 generation+state 复核,陈旧/已终态的 run 直接返回,绝不
+     * 触碰 job(旧实现用裸 state 判断,槽位复用后会误清新 job)。 */
+    if (!app_operation_get_status(op, &st1) ||
+        st1.generation != generation || st1.state != APP_OP_CONNECTING) {
+        ESP_LOGW(TAG, "async tryconnect op=%s stale after wait (gen=%u state=%d), no job touch",
+                 app_operation_id(op), (unsigned)generation,
+                 st1.generation == generation ? (int)st1.state : -1);
         return ESP_OK;
     }
     if (result == APP_WIFI_TRY_OK) {
