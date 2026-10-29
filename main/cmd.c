@@ -50,6 +50,14 @@ static app_cmd_net_trial_t s_net_trial;
 typedef struct {
     bool active;
     app_cmd_source_t owner;
+    /* 评审 R1-P0:受理时快照的完整父上下文(tryconnect 命令的入口 ctx)。
+     * apply 内部再入从这里派生 child,不再由 owner 事后重建 —— origin/trace/
+     * auth_level 是因果链的真实值,不依赖"owner 当前只可能是 BLE"的论证。
+     * 并发:受理写入、apply 再入读取、worker/cleanup 的终态 memset 全部由
+     * s_net_job_lock 串行(评审 R2-P0;协议见设计文档 §9.3)——否则
+     * GOT_IP 300s TTL 过期或 BLE 断连取消的 cleanup 与 apply 再入并发,
+     * memset 会撕碎 parent_ctx。 */
+    app_cmd_context_t parent_ctx;
     char idem_key[65];
     char ssid[33];
     char password[65];
@@ -60,17 +68,56 @@ typedef struct {
 static app_cmd_net_async_job_t s_net_async;
 static bool s_net_async_apply_internal = false;
 
+/* job 生命周期锁(评审 R2-P0):封 "cleanup 在飞 vs dispatcher 已过 COMMITTING"
+ * 的 memset/read 竞态窗口。锁序:本锁 → operation.c 的 s_ops_mux —— 反向
+ * 不存在(ops_mux 临界区不回调 cmd.c,cleanup/run 均在临界区外执行)。
+ * 持本锁期间不得调用 app_cmd_net_async_clear_job()(直接版),用 _sync 版。 */
+static SemaphoreHandle_t s_net_job_lock = NULL;
+static StaticSemaphore_t s_net_job_lock_buf;
+static portMUX_TYPE s_net_job_lock_mux = portMUX_INITIALIZER_UNLOCKED;
+
+static void app_cmd_net_job_lock(void)
+{
+    /* 递归锁(评审 R8):trial 原语内建加锁后,apply 再入(持锁)会再次触发
+     * trial_ready/patch 读点的内层加锁;wifi.c restart/scan 同款递归模式。
+     * 必须用 TakeRecursive —— 普通 Take 对递归互斥不识别属主,同任务
+     * 二次加锁会自锁(R8 首测在 network.status 上实测死锁)。 */
+    xSemaphoreTakeRecursive(app_mutex_ensure(&s_net_job_lock, &s_net_job_lock_buf,
+                                             &s_net_job_lock_mux, true), portMAX_DELAY);
+}
+
+static void app_cmd_net_job_unlock(void)
+{
+    if (s_net_job_lock != NULL) {
+        xSemaphoreGiveRecursive(s_net_job_lock);
+    }
+}
+
 static cJSON *app_cmd_net_operation_status(const char *operation_id, const char **err_out);
 
+/* 直接版:调用方必须已持 s_net_job_lock(受理/apply 尾部在锁内调用)。 */
 static void app_cmd_net_async_clear_job(void)
 {
     memset(&s_net_async, 0, sizeof(s_net_async));
 }
 
+/* 同步版:worker(run 失败路径)与 operation cleanup 在各自任务上下文调用,
+ * 自取锁。 */
+static void app_cmd_net_async_clear_job_sync(void)
+{
+    app_cmd_net_job_lock();
+    app_cmd_net_async_clear_job();
+    app_cmd_net_job_unlock();
+}
+
 static bool app_cmd_net_store_trial(const char *ssid, const char *password,
                                     app_cmd_source_t source, const char *operation_id)
 {
+    /* R8:worker(run 成功)与 dispatcher(同步 tryconnect)都会调用,
+     * 与 NimBLE 断连清理/dispatcher 读点构成跨任务并发 —— 整体入 job 锁。 */
+    app_cmd_net_job_lock();
     if (source == APP_CMD_SOURCE_BLE && !app_ble_gatts_connected()) {
+        app_cmd_net_job_unlock();
         return false;
     }
     snprintf(s_net_trial.id, sizeof(s_net_trial.id), "trial-%08X",
@@ -84,23 +131,43 @@ static bool app_cmd_net_store_trial(const char *ssid, const char *password,
     s_net_trial.expires_ms = esp_timer_get_time() / 1000 + APP_NET_TRIAL_TTL_MS;
     s_net_trial.owner = source;
     s_net_trial.valid = true;
+    app_cmd_net_job_unlock();
     return true;
 }
 
 static void app_cmd_net_trial_clear(void)
 {
+    /* R8:原语内建锁(递归)——调用点有的已持锁(apply 再入/cleanup),
+     * 有的未持(断连/TTL 过期),统一在此收口。 */
+    app_cmd_net_job_lock();
     memset(&s_net_trial, 0, sizeof(s_net_trial));
+    app_cmd_net_job_unlock();
 }
 
 void app_cmd_net_on_ble_disconnect(void)
 {
+    app_operation_t *op = NULL;
+
+    /* 评审 R3:owner/op 在 job 锁内快照,消除与持锁 memset 的无同步并发读
+     * (C 内存模型下属数据竞争,不只是"读到旧值")。cancel 必须在锁外调用
+     * —— cancel 会经 cleanup 再取本锁,持锁调用即自锁。
+     * 句柄解锁后的有效性:operation 槽位是静态数组(永不释放),槽位回收
+     * 仅针对终态且需 600s 保留期(RETENTION_MS),本函数从解锁到 cancel
+     * 的窗口远小于该值;cancel 内部另有 s_ops_mux 下的 generation 守卫,
+     * 陈旧 finalize 不会写坏更新的 operation。 */
+    app_cmd_net_job_lock();
     if (s_net_async.active && s_net_async.op != NULL &&
         s_net_async.owner == APP_CMD_SOURCE_BLE) {
+        op = s_net_async.op;
+    }
+    app_cmd_net_job_unlock();
+
+    if (op != NULL) {
         app_operation_status_t status;
 
-        if (app_operation_get_status(s_net_async.op, &status)) {
+        if (app_operation_get_status(op, &status)) {
             if (app_op_state_can_cancel(status.state)) {
-                (void)app_operation_cancel(s_net_async.op);
+                (void)app_operation_cancel(op);
                 ESP_LOGI(TAG, "async network operation cancelled on BLE disconnect");
                 return;
             }
@@ -110,23 +177,32 @@ void app_cmd_net_on_ble_disconnect(void)
             }
         }
     }
+    /* R8:trial 属主检查 + 清理入锁(NimBLE host 任务,与 worker store /
+     * dispatcher 读点互斥)。 */
+    app_cmd_net_job_lock();
     if (s_net_trial.valid && s_net_trial.owner == APP_CMD_SOURCE_BLE) {
         app_cmd_net_trial_clear();
         ESP_LOGI(TAG, "network trial cleared on BLE disconnect");
     }
+    app_cmd_net_job_unlock();
 }
 
 static bool app_cmd_net_trial_ready(const char *trial_id)
 {
     int64_t now = esp_timer_get_time() / 1000;
+    bool ok;
 
+    app_cmd_net_job_lock();
     if (!s_net_trial.valid || now >= s_net_trial.expires_ms) {
         if (s_net_trial.valid) {
             app_cmd_net_trial_clear();
         }
-        return false;
+        ok = false;
+    } else {
+        ok = (trial_id == NULL || strcmp(trial_id, s_net_trial.id) == 0);
     }
-    return trial_id == NULL || strcmp(trial_id, s_net_trial.id) == 0;
+    app_cmd_net_job_unlock();
+    return ok;
 }
 
 
@@ -139,11 +215,15 @@ static bool app_cmd_net_async_cleanup(app_operation_t *op, void *ctx)
     if (app_operation_state(op) == APP_OP_CONNECTING) {
         (void)app_wifi_try_cancel();
     }
+    /* trial 清理与 job 清理一并入锁:apply 再入期间 cleanup 在此等待,
+     * 不会把 trial/trial_id 从正在提交的 apply 脚下抽走(R2-P0)。 */
+    app_cmd_net_job_lock();
     if (s_net_trial.valid &&
         strcmp(s_net_trial.operation_id, app_operation_id(op)) == 0) {
         app_cmd_net_trial_clear();
     }
     app_cmd_net_async_clear_job();
+    app_cmd_net_job_unlock();
     return true;
 }
 
@@ -167,6 +247,9 @@ static esp_err_t app_cmd_net_async_run(app_operation_t *op, void *ctx)
 {
     app_cmd_net_async_job_t *job = ctx;
     app_wifi_try_result_t result;
+    app_operation_status_t st0;
+    app_operation_status_t st1;
+    uint32_t generation;
     char ssid[33];
     char password[65];
     app_cmd_source_t owner;
@@ -174,6 +257,10 @@ static esp_err_t app_cmd_net_async_run(app_operation_t *op, void *ctx)
     if (op == NULL || job == NULL || !job->active) {
         return ESP_ERR_INVALID_ARG;
     }
+    if (!app_operation_get_status(op, &st0)) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    generation = st0.generation;   /* R5:跨阻塞调用校验槽位未被复用 */
     snprintf(ssid, sizeof(ssid), "%s", job->ssid);
     snprintf(password, sizeof(password), "%s", job->password);
     owner = job->owner;
@@ -181,15 +268,23 @@ static esp_err_t app_cmd_net_async_run(app_operation_t *op, void *ctx)
              app_operation_id(op));
     result = app_wifi_try_connect_ip(ssid, password, 15000);
 
-    /* cancel/expire 可能在 tryconnect 返回前已把 operation 置终态。 */
-    if (app_operation_state(op) != APP_OP_CONNECTING) {
-        app_cmd_net_async_clear_job();
+    /* R5:operation 框架已用 running 标志禁止槽位在 run_fn 返回前复用;
+     * 这里再按 generation+state 复核,陈旧/已终态的 run 直接返回,绝不
+     * 触碰 job(旧实现用裸 state 判断,槽位复用后会误清新 job)。 */
+    if (!app_operation_get_status(op, &st1)) {
+        ESP_LOGW(TAG, "async tryconnect op=%s status lost after wait, no job touch",
+                 app_operation_id(op));
+        return ESP_ERR_INVALID_ARG;
+    }
+    if (st1.generation != generation || st1.state != APP_OP_CONNECTING) {
+        ESP_LOGW(TAG, "async tryconnect op=%s stale after wait (gen=%u state=%d), no job touch",
+                 app_operation_id(op), (unsigned)generation, (int)st1.state);
         return ESP_OK;
     }
     if (result == APP_WIFI_TRY_OK) {
         if (!app_cmd_net_store_trial(ssid, password, owner,
                                      app_operation_id(op))) {
-            app_cmd_net_async_clear_job();
+            app_cmd_net_async_clear_job_sync();
             return app_operation_set_state(op, APP_OP_CANCELLED,
                                            APP_OPERATION_ERR_CANCELLED);
         }
@@ -197,7 +292,7 @@ static esp_err_t app_cmd_net_async_run(app_operation_t *op, void *ctx)
                                        APP_OPERATION_ERR_NONE);
     }
 
-    app_cmd_net_async_clear_job();
+    app_cmd_net_async_clear_job_sync();
     if (result == APP_WIFI_TRY_CANCELLED) {
         return app_operation_set_state(op, APP_OP_CANCELLED,
                                        APP_OPERATION_ERR_CANCELLED);
@@ -206,8 +301,11 @@ static esp_err_t app_cmd_net_async_run(app_operation_t *op, void *ctx)
                                    app_cmd_net_wifi_error(result));
 }
 
-static bool app_cmd_net_tryconnect_async(const cJSON *params, app_cmd_source_t source,
-                                          cJSON **resp_out, const char **err_out)
+/* 受理入口(R1-P0):接收完整上下文而非裸 source —— 快照进 job,异步执行
+ * 阶段从快照派生 child。 */
+static bool app_cmd_net_tryconnect_async(const cJSON *params,
+                                         const app_cmd_context_t *ctx,
+                                         cJSON **resp_out, const char **err_out)
 {
     const cJSON *ssid_item = cJSON_IsObject(params)
                                  ? cJSON_GetObjectItemCaseSensitive(params, "ssid")
@@ -219,6 +317,7 @@ static bool app_cmd_net_tryconnect_async(const cJSON *params, app_cmd_source_t s
                                 ? cJSON_GetObjectItemCaseSensitive(params, "idempotency_key")
                                 : NULL;
     const char *idem_key = cJSON_IsString(key_item) ? key_item->valuestring : NULL;
+    const app_cmd_source_t source = ctx->source;
     app_operation_t *op = NULL;
     esp_err_t err;
 
@@ -267,14 +366,23 @@ static bool app_cmd_net_tryconnect_async(const cJSON *params, app_cmd_source_t s
         *err_out = "busy";
         return false;
     }
-    if (s_net_trial.valid && app_cmd_net_trial_ready(NULL)) {
-        *err_out = "busy";
-        return false;
+    {
+        bool trial_busy;
+
+        app_cmd_net_job_lock();
+        trial_busy = (s_net_trial.valid && app_cmd_net_trial_ready(NULL));
+        app_cmd_net_job_unlock();
+        if (trial_busy) {
+            *err_out = "busy";
+            return false;
+        }
     }
 
+    app_cmd_net_job_lock();
     memset(&s_net_async, 0, sizeof(s_net_async));
     s_net_async.active = true;
     s_net_async.owner = source;
+    s_net_async.parent_ctx = *ctx;   /* R1-P0:真实父上下文快照(先于 operation_start) */
     snprintf(s_net_async.ssid, sizeof(s_net_async.ssid), "%s", ssid_item->valuestring);
     if (cJSON_IsString(pass_item) && pass_item->valuestring != NULL) {
         snprintf(s_net_async.password, sizeof(s_net_async.password), "%s",
@@ -290,12 +398,14 @@ static bool app_cmd_net_tryconnect_async(const cJSON *params, app_cmd_source_t s
         app_cmd_net_async_cleanup, &s_net_async, &op);
     if (err != ESP_OK) {
         app_cmd_net_async_clear_job();
+        app_cmd_net_job_unlock();
         *err_out = (err == ESP_ERR_INVALID_STATE) ? "busy" : "no_slot";
         return false;
     }
     s_net_async.op = op;
     snprintf(s_net_async.operation_id, sizeof(s_net_async.operation_id), "%s",
              app_operation_id(op));
+    app_cmd_net_job_unlock();
 
     {
         cJSON *resp = cJSON_CreateObject();
@@ -316,14 +426,19 @@ static cJSON *app_cmd_net_operation_status(const char *operation_id, const char 
     app_operation_status_t status;
     cJSON *resp;
 
+    /* R8:读取 trial 字段(operation_id/ssid),与 worker store/断连 clear
+     * 跨任务 —— 整体入 job 锁(内部 operation API 走 ops_mux,锁序不变)。 */
+    app_cmd_net_job_lock();
     op = app_operation_find(operation_id);
     if (op == NULL || !app_operation_get_status(op, &status)) {
         *err_out = "not_found";
+        app_cmd_net_job_unlock();
         return NULL;
     }
     resp = cJSON_CreateObject();
     if (resp == NULL) {
         *err_out = "out_of_memory";
+        app_cmd_net_job_unlock();
         return NULL;
     }
     cJSON_AddStringToObject(resp, "operation_id", status.id);
@@ -333,6 +448,7 @@ static cJSON *app_cmd_net_operation_status(const char *operation_id, const char 
         cJSON_AddStringToObject(resp, "trial_id", s_net_trial.id);
         cJSON_AddStringToObject(resp, "ssid", s_net_trial.ssid);
     }
+    app_cmd_net_job_unlock();
     return resp;
 }
 
@@ -376,16 +492,31 @@ static bool app_cmd_net_apply_async(const cJSON *params, cJSON **resp_out,
         *err_out = "operation_state";
         return false;
     }
-    if (!s_net_trial.valid || strcmp(s_net_trial.operation_id, status.id) != 0 ||
-        !app_cmd_net_trial_ready(s_net_trial.id)) {
-        *err_out = "trial_invalid";
-        return false;
+    {
+        bool trial_ok;
+
+        /* R8:trial 预检读点入锁;set_state(COMMITTING) 留在锁外,
+         * 它与 cancel/expire 的裁决点语义不变。 */
+        app_cmd_net_job_lock();
+        trial_ok = (s_net_trial.valid &&
+                    strcmp(s_net_trial.operation_id, status.id) == 0 &&
+                    app_cmd_net_trial_ready(s_net_trial.id));
+        app_cmd_net_job_unlock();
+        if (!trial_ok) {
+            *err_out = "trial_invalid";
+            return false;
+        }
     }
     if (app_operation_set_state(op, APP_OP_COMMITTING,
                                 APP_OPERATION_ERR_NONE) != ESP_OK) {
         *err_out = "operation_state";
         return false;
     }
+    /* R2-P0:COMMITTING 即申请 job 独占 —— GOT_IP TTL 过期 / BLE 断连取消的
+     * cleanup 将在本锁上等待,直到 apply 以一致的终态收场再清理。
+     * set_state(COMMITTING) 是与 cancel/expire 的同步点:输者(状态已被置
+     * CANCELLED/EXPIRED)在此直接失败,不会进入本锁区读 parent_ctx。 */
+    app_cmd_net_job_lock();
 
     frame = cJSON_CreateObject();
     if (frame != NULL) {
@@ -395,9 +526,19 @@ static bool app_cmd_net_apply_async(const cJSON *params, cJSON **resp_out,
             cJSON_AddStringToObject(frame, "method", "network.apply");
             cJSON_AddItemToObject(frame, "params", p);
             s_net_async_apply_internal = true;
-            if (app_cmd_execute_ex(frame, APP_CMD_SOURCE_BLE, &inner, &out,
-                                   &inner_err) == ESP_OK && inner != NULL) {
-                ok = true;
+            {
+                /* C1 阶段 1(R1-P0):从受理时快照的父上下文派生 child ——
+                 * source=INTERNAL、origin/trace/auth 继承 tryconnect 请求的
+                 * 真实值,不由 owner 事后重建。 */
+                app_cmd_context_t inner_ctx;
+
+                if (!app_cmd_ctx_internal_child(&s_net_async.parent_ctx,
+                                                &inner_ctx)) {
+                    inner_err = "internal_error";
+                } else if (app_cmd_execute_ctx(&inner_ctx, frame, &inner, &out,
+                                               &inner_err) == ESP_OK && inner != NULL) {
+                    ok = true;
+                }
             }
             s_net_async_apply_internal = false;
         }
@@ -411,6 +552,7 @@ static bool app_cmd_net_apply_async(const cJSON *params, cJSON **resp_out,
             cJSON *resp = cJSON_CreateObject();
             if (resp == NULL) {
                 *err_out = "out_of_memory";
+                app_cmd_net_job_unlock();
                 return false;
             }
             cJSON_AddStringToObject(resp, "operation_id", status.id);
@@ -419,6 +561,7 @@ static bool app_cmd_net_apply_async(const cJSON *params, cJSON **resp_out,
             cJSON_AddBoolToObject(resp, "applied", true);
             *resp_out = resp;
         }
+        app_cmd_net_job_unlock();
         return true;
     }
 
@@ -437,6 +580,7 @@ static bool app_cmd_net_apply_async(const cJSON *params, cJSON **resp_out,
         app_cmd_net_async_clear_job();
         *err_out = inner_err != NULL ? inner_err : "apply_failed";
     }
+    app_cmd_net_job_unlock();
     return false;
 }
 
@@ -523,6 +667,8 @@ static cJSON *app_cmd_build_network_status(void)
 
     trial = cJSON_AddObjectToObject(root, "trial");
     if (trial != NULL) {
+        /* R8:trial 读点入锁(与 worker store / 断连 clear 跨任务)。 */
+        app_cmd_net_job_lock();
         if (app_cmd_net_trial_ready(NULL)) {
             cJSON_AddStringToObject(trial, "trial_id", s_net_trial.id);
             cJSON_AddStringToObject(trial, "state", "got_ip");
@@ -530,6 +676,7 @@ static cJSON *app_cmd_build_network_status(void)
         } else {
             cJSON_AddStringToObject(trial, "state", "idle");
         }
+        app_cmd_net_job_unlock();
     }
     return root;
 }
@@ -915,9 +1062,13 @@ static void app_cmd_save_profile_from_params(const cJSON *params)
     }
 }
 
-static app_io_source_t app_cmd_io_source(app_cmd_source_t source)
+static app_io_source_t app_cmd_io_source(const app_cmd_context_t *ctx)
 {
-    switch (source) {
+    /* 内部派生执行按 origin 归属 IO 事件(与改造前"硬编码入口 source"等价);
+     * 入口执行按 source。 */
+    app_cmd_source_t s = (ctx->exec_env == APP_CMD_EXEC_INTERNAL) ? ctx->origin
+                                                                  : ctx->source;
+    switch (s) {
     case APP_CMD_SOURCE_MQTT:
         return APP_IO_SOURCE_MQTT;
     case APP_CMD_SOURCE_BLE:
@@ -930,11 +1081,21 @@ static app_io_source_t app_cmd_io_source(app_cmd_source_t source)
     }
 }
 
+/* 兼容入口(C1 阶段 1):等价于显式构造入口上下文后执行。
+ * 四个现有调用点(ble_cmd/mqtt/state/cmd 内部)零改动即可编译。 */
 esp_err_t app_cmd_execute_ex(const cJSON *frame, app_cmd_source_t source,
                              cJSON **resp_out, app_cmd_result_t *out,
                              const char **err_msg)
 {
-    app_io_source_t io_source = app_cmd_io_source(source);
+    app_cmd_context_t ctx = app_cmd_ctx_entry(source);
+
+    return app_cmd_execute_ctx(&ctx, frame, resp_out, out, err_msg);
+}
+
+esp_err_t app_cmd_execute_ctx(const app_cmd_context_t *ctx, const cJSON *frame,
+                              cJSON **resp_out, app_cmd_result_t *out,
+                              const char **err_msg)
+{
     cJSON *method = NULL;
     cJSON *params = NULL;
     const char *err = NULL;
@@ -954,6 +1115,15 @@ esp_err_t app_cmd_execute_ex(const cJSON *frame, app_cmd_source_t source,
     if (out != NULL) {
         memset(out, 0, sizeof(*out));
     }
+    /* C1 阶段 1:来源不可信(UNKNOWN/不变量破坏/NULL)一律拒绝,不执行。 */
+    if (ctx == NULL || !app_cmd_ctx_valid(ctx)) {
+        err = "internal_error";
+        goto done;
+    }
+    /* 阶段 1 保持既有分支逐字不变:全部读 source(内部派生时 source=INTERNAL,
+     * 仅执行的 network.apply 走 trial 校验路径,与改造前硬编码入口等价)。 */
+    const app_cmd_source_t source = ctx->source;
+    app_io_source_t io_source = app_cmd_io_source(ctx);
     if (!cJSON_IsObject(frame)) {
         err = "invalid_json";
         goto done;
@@ -1299,7 +1469,7 @@ esp_err_t app_cmd_execute_ex(const cJSON *frame, app_cmd_source_t source,
                 err = "out_of_memory";
             }
         } else if (strcmp(m, "network.tryconnect.async") == 0) {
-            if (!app_cmd_net_tryconnect_async(params, source, &resp, &err)) {
+            if (!app_cmd_net_tryconnect_async(params, ctx, &resp, &err)) {
                 /* resp/err 已由 helper 设置 */
             }
         } else if (strcmp(m, "network.apply.async") == 0) {
@@ -1310,6 +1480,76 @@ esp_err_t app_cmd_execute_ex(const cJSON *frame, app_cmd_source_t source,
             if (!app_cmd_net_cancel_async(params, &resp, &err)) {
                 /* resp/err 已由 helper 设置 */
             }
+#ifdef APP_C1_TEST_HOOKS
+        } else if (strcmp(m, "diag.testhook") == 0) {
+            /* 实验构建专用:仅 BLE 来源。arm 携带可选 probe_to("got_ip" 等);
+             * try 对 operation_id 直调 set_state 验证 expiring 闸。 */
+            const cJSON *action = cJSON_IsObject(params)
+                                      ? cJSON_GetObjectItemCaseSensitive(params, "action") : NULL;
+            if (source != APP_CMD_SOURCE_BLE) {
+                err = "guard_rejected";
+            } else if (!cJSON_IsString(action) || action->valuestring == NULL) {
+                err = "params_required";
+            } else if (strcmp(action->valuestring, "arm") == 0) {
+                const cJSON *probe = cJSON_GetObjectItemCaseSensitive(params, "probe_to");
+                int probe_state = 0;
+                if (cJSON_IsString(probe) && probe->valuestring != NULL) {
+                    if (strcmp(probe->valuestring, "got_ip") == 0) probe_state = (int)APP_OP_GOT_IP;
+                    else if (strcmp(probe->valuestring, "committing") == 0) probe_state = (int)APP_OP_COMMITTING;
+                    else if (strcmp(probe->valuestring, "failed") == 0) probe_state = (int)APP_OP_FAILED;
+                    else { err = "invalid_param"; }
+                }
+                if (err == NULL) {
+                    const cJSON *hold = cJSON_GetObjectItemCaseSensitive(params, "hold_ms");
+                    uint32_t hold_ms = 8000;
+
+                    if (cJSON_IsNumber(hold) && hold->valueint >= 100 &&
+                        hold->valueint <= 30000) {
+                        hold_ms = (uint32_t)hold->valueint;
+                    }
+                    app_operation_test_hook_arm(hold_ms, probe_state);
+                    resp = cJSON_CreateObject();
+                    if (resp != NULL) {
+                        cJSON_AddBoolToObject(resp, "armed", true);
+                        cJSON_AddNumberToObject(resp, "hold_ms", (double)hold_ms);
+                    }
+                }
+            } else if (strcmp(action->valuestring, "clear") == 0) {
+                app_operation_test_hook_clear();
+                resp = cJSON_CreateObject();
+                if (resp != NULL) cJSON_AddBoolToObject(resp, "armed", false);
+            } else if (strcmp(action->valuestring, "try") == 0) {
+                const cJSON *op_item = cJSON_GetObjectItemCaseSensitive(params, "operation_id");
+                const cJSON *to_item = cJSON_GetObjectItemCaseSensitive(params, "to");
+                app_operation_t *op;
+                app_op_state_t to;
+                esp_err_t s_err;
+
+                if (!cJSON_IsString(op_item) || !cJSON_IsString(to_item)) {
+                    err = "params_required";
+                } else {
+                    op = app_operation_find(op_item->valuestring);
+                    to = (strcmp(to_item->valuestring, "got_ip") == 0) ? APP_OP_GOT_IP
+                       : (strcmp(to_item->valuestring, "committing") == 0) ? APP_OP_COMMITTING
+                       : (strcmp(to_item->valuestring, "failed") == 0) ? APP_OP_FAILED
+                       : APP_OP_STATE_COUNT;
+                    if (op == NULL) {
+                        err = "not_found";
+                    } else if (to == APP_OP_STATE_COUNT) {
+                        err = "invalid_param";
+                    } else {
+                        s_err = app_operation_set_state(op, to, APP_OPERATION_ERR_NONE);
+                        resp = cJSON_CreateObject();
+                        if (resp != NULL) {
+                            cJSON_AddBoolToObject(resp, "rejected", s_err != ESP_OK);
+                            cJSON_AddStringToObject(resp, "result", esp_err_to_name(s_err));
+                        }
+                    }
+                }
+            } else {
+                err = "unknown_command";
+            }
+#endif
         } else if (strcmp(m, "operation.get") == 0) {
             const cJSON *op_item = cJSON_IsObject(params)
                                        ? cJSON_GetObjectItemCaseSensitive(params, "operation_id")
@@ -1335,11 +1575,19 @@ esp_err_t app_cmd_execute_ex(const cJSON *frame, app_cmd_source_t source,
             } else if (!cJSON_IsString(ssid_item) || ssid_item->valuestring == NULL ||
                        ssid_item->valuestring[0] == '\0') {
                 err = "params_required";
-            } else if (s_net_async.active || (s_net_trial.valid && app_cmd_net_trial_ready(NULL))) {
+            } else if (s_net_async.active) {
                 err = "busy";
             } else {
-                app_cmd_net_trial_clear();
-                ssid = ssid_item->valuestring;
+                /* R8:trial 忙检/清理入锁;紧随其后的 15s 阻塞试连不持锁
+                 * (断连期间到达的清理会在 store_trial 锁内与其串行)。 */
+                app_cmd_net_job_lock();
+                if (s_net_trial.valid && app_cmd_net_trial_ready(NULL)) {
+                    app_cmd_net_job_unlock();
+                    err = "busy";
+                } else {
+                    app_cmd_net_trial_clear();
+                    app_cmd_net_job_unlock();
+                    ssid = ssid_item->valuestring;
                 password = cJSON_IsString(pass_item) && pass_item->valuestring != NULL
                                ? pass_item->valuestring : "";
                 ESP_LOGI(TAG, "network.tryconnect ssid='%s'", ssid);
@@ -1359,9 +1607,12 @@ esp_err_t app_cmd_execute_ex(const cJSON *frame, app_cmd_source_t source,
                         app_cmd_net_trial_clear();
                         err = "out_of_memory";
                     } else {
+                        /* R8:响应字段在锁内拷出,防中途断连清理撕读。 */
+                        app_cmd_net_job_lock();
                         cJSON_AddStringToObject(resp, "trial_id", s_net_trial.id);
                         cJSON_AddStringToObject(resp, "state", "got_ip");
                         cJSON_AddStringToObject(resp, "ssid", s_net_trial.ssid);
+                        app_cmd_net_job_unlock();
                     }
                     break;
                 case APP_WIFI_TRY_WRONG_PASSWORD:
@@ -1386,6 +1637,7 @@ esp_err_t app_cmd_execute_ex(const cJSON *frame, app_cmd_source_t source,
                     err = "connect_failed";
                     break;
                 }
+                }
             }
         } else if (strcmp(m, "network.apply") == 0) {
             const cJSON *trial_item = cJSON_IsObject(params)
@@ -1409,8 +1661,12 @@ esp_err_t app_cmd_execute_ex(const cJSON *frame, app_cmd_source_t source,
                 esp_err_t apply_err = ESP_FAIL;
 
                 if (patch != NULL) {
+                    /* R8:trial 字段读点入锁(同步 v0 apply 与断连清理跨任务;
+                     * 异步 apply 的内部再入本就持锁,此处递归通过)。 */
+                    app_cmd_net_job_lock();
                     cJSON_AddStringToObject(patch, "sta_ssid", s_net_trial.ssid);
                     cJSON_AddStringToObject(patch, "sta_password", s_net_trial.password);
+                    app_cmd_net_job_unlock();
                     /* BLE-only 配网：提交必须是 STA，不能把 AP-only 旧配置推断成 APSTA。
                      * AP/Web 正在退出，apply 后不应继续保留 AP 的常驻内存开销。 */
                     cJSON_AddStringToObject(patch, "net_mode", "sta");
@@ -1425,8 +1681,10 @@ esp_err_t app_cmd_execute_ex(const cJSON *frame, app_cmd_source_t source,
                     app_cmd_net_trial_clear();
                     err = apply_err == ESP_ERR_INVALID_ARG ? "invalid_config" : "save_failed";
                 } else {
+                    app_cmd_net_job_lock();
                     esp_err_t profile_err = app_config_save_wifi_profile(s_net_trial.ssid,
                                                                           s_net_trial.password);
+                    app_cmd_net_job_unlock();
 
                     if (profile_err != ESP_OK) {
                         esp_err_t restore_err = app_config_snapshot_restore();
@@ -1441,7 +1699,9 @@ esp_err_t app_cmd_execute_ex(const cJSON *frame, app_cmd_source_t source,
                     } else {
                         char trial_id[sizeof(s_net_trial.id)];
 
+                        app_cmd_net_job_lock();
                         snprintf(trial_id, sizeof(trial_id), "%s", s_net_trial.id);
+                        app_cmd_net_job_unlock();
                         app_config_snapshot_discard();
                         app_cmd_net_trial_clear();
                         resp = cJSON_CreateObject();
@@ -1471,7 +1731,9 @@ esp_err_t app_cmd_execute_ex(const cJSON *frame, app_cmd_source_t source,
             } else {
                 char trial_id[sizeof(s_net_trial.id)];
 
+                app_cmd_net_job_lock();
                 snprintf(trial_id, sizeof(trial_id), "%s", s_net_trial.id);
+                app_cmd_net_job_unlock();
                 app_cmd_net_trial_clear();
                 resp = cJSON_CreateObject();
                 if (resp == NULL) {

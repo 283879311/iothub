@@ -5,19 +5,14 @@
 #include "cJSON.h"
 #include "esp_err.h"
 
+#include "cmd_context.h"
+
 /* ============================================================================
  * 命令内核(1.3-31 / 1.3-32 共用):MQTT RPC 与 BLE CMD 特征走同一分发器。
  * 内核只做"method 分发 + 统一层执行 + 结果组装",不感知 transport;
  * 限频/帧外壳(id/token/主题)由各 transport 自己处理。
+ * 来源上下文定义见 cmd_context.h(C1 阶段 1)。
  * ========================================================================== */
-
-/* 命令入口来源:仅用于状态审计/上报,不改变鉴权语义(各 transport 自己鉴权)。 */
-typedef enum {
-    APP_CMD_SOURCE_MQTT = 0,
-    APP_CMD_SOURCE_BLE,
-    APP_CMD_SOURCE_HTTP,
-    APP_CMD_SOURCE_TOUCH,
-} app_cmd_source_t;
 
 typedef struct {
     bool reboot_after_response; /* effect=reboot:调用方必须先回包再延迟重启 */
@@ -37,6 +32,12 @@ typedef struct {
 esp_err_t app_cmd_execute_ex(const cJSON *frame, app_cmd_source_t source,
                              cJSON **resp_out, app_cmd_result_t *out,
                              const char **err_msg);
+
+/* 显式上下文入口(C1 阶段 1):来源校验失败(UNKNOWN/不变量破坏)拒绝执行,
+ * 映射 internal_error。app_cmd_execute_ex 等价于 ctx_entry(source) 后调用本函数。 */
+esp_err_t app_cmd_execute_ctx(const app_cmd_context_t *ctx, const cJSON *frame,
+                              cJSON **resp_out, app_cmd_result_t *out,
+                              const char **err_msg);
 
 /* BLE 断连:作废属于 BLE 会话的网络候选 trial,避免无会话时遗留可 apply 的凭据。 */
 void app_cmd_net_on_ble_disconnect(void);

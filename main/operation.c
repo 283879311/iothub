@@ -29,7 +29,8 @@ static const char *TAG = "operation";
 struct app_operation {
     bool used;
     bool expiring;
-    uint8_t generation;
+    bool running;      /* run_fn 在飞:期间禁止本槽回收/复用(R5) */
+    uint32_t generation;
     app_operation_owner_t owner;
     app_op_state_t state;
     app_operation_error_t error;
@@ -50,6 +51,68 @@ static TaskHandle_t s_worker = NULL;
 static bool s_worker_started = false;
 static bool s_initialized = false;
 static uint32_t s_retention_ms = APP_OPERATION_DEFAULT_RETENTION_MS;
+
+/* ---------------------------------------------------------------------------
+ * C1 复审确定性钩子(仅 APP_C1_TEST_HOOKS 实验构建):
+ * 武装后,下一次 cancel/expire 在 cleanup 返回、finalize 之前暂停 hold_ms;
+ * 暂停入口对同一 op 直接调一次 set_state(probe_to_state),把结果打到串口
+ * —— "expiring=true 时一切迁移被拒"由此获得确定性证据,不依赖随机调度。
+ * 单次武装;探针在 ops_mux 临界区外调用(此刻两把锁都空闲),安全。
+ * ------------------------------------------------------------------------- */
+#ifdef APP_C1_TEST_HOOKS
+static int64_t app_operation_now_ms(void);
+static bool s_c1_hook_armed;
+static int64_t s_c1_hook_until_ms;
+static bool s_c1_hook_probe;
+static app_op_state_t s_c1_hook_probe_to;
+
+void app_operation_test_hook_arm(uint32_t hold_ms, int probe_to_state)
+{
+    s_c1_hook_until_ms = app_operation_now_ms() + (int64_t)hold_ms;
+    s_c1_hook_probe = (probe_to_state > (int)APP_OP_FREE &&
+                       probe_to_state < (int)APP_OP_STATE_COUNT);
+    s_c1_hook_probe_to = (app_op_state_t)probe_to_state;
+    s_c1_hook_armed = true;
+    ESP_LOGW(TAG, "C1 hook armed: hold=%ums probe=%s", (unsigned)hold_ms,
+             s_c1_hook_probe ? app_op_state_name(s_c1_hook_probe_to) : "none");
+}
+
+void app_operation_test_hook_clear(void)
+{
+    s_c1_hook_armed = false;
+    s_c1_hook_probe = false;
+    ESP_LOGW(TAG, "C1 hook cleared");
+}
+
+static void app_operation_test_hook_pause(const char *tag, app_operation_t *op)
+{
+    int64_t until;
+
+    if (!s_c1_hook_armed) {
+        return;
+    }
+    s_c1_hook_armed = false;
+    until = s_c1_hook_until_ms;
+    ESP_LOGW(TAG, "C1 hook: pause %s enter (expiring=%d state=%s gen=%u)",
+             tag, (int)op->expiring, app_op_state_name(op->state),
+             (unsigned)op->generation);
+    if (s_c1_hook_probe) {
+        esp_err_t probe_err = app_operation_set_state(op, s_c1_hook_probe_to,
+                                                      APP_OPERATION_ERR_NONE);
+        ESP_LOGW(TAG, "C1 hook: probe set_state(%s) -> %s (0x%x)%s",
+                 app_op_state_name(s_c1_hook_probe_to),
+                 esp_err_to_name(probe_err), (unsigned)probe_err,
+                 probe_err == ESP_ERR_INVALID_STATE
+                     ? " [rejected by expiring gate]"
+                     : "");
+        s_c1_hook_probe = false;
+    }
+    while (app_operation_now_ms() < until) {
+        vTaskDelay(pdMS_TO_TICKS(50));
+    }
+    ESP_LOGW(TAG, "C1 hook: pause %s exit", tag);
+}
+#endif
 
 /* 注意单位：ESP-IDF 的 xTaskCreate() 以字节计，但 xTaskCreateStatic() 最终进入
  * prvInitialiseNewTask(uxStackDepth)，按 StackType_t 元素数解释。静态 buffer 要
@@ -169,7 +232,7 @@ static void app_operation_reclaim_terminal_locked(int64_t now_ms)
     for (i = 0; i < APP_OPERATION_MAX_SLOTS; i++) {
         app_operation_t *op = &s_ops[i];
 
-        if (!op->used || !app_op_state_is_terminal(op->state)) {
+        if (!op->used || op->running || !app_op_state_is_terminal(op->state)) {
             continue;
         }
         if (now_ms - op->terminal_ms < (int64_t)s_retention_ms) {
@@ -190,7 +253,7 @@ static app_operation_t *app_operation_oldest_terminal_locked(void)
     for (i = 0; i < APP_OPERATION_MAX_SLOTS; i++) {
         app_operation_t *op = &s_ops[i];
 
-        if (!op->used || !app_op_state_is_terminal(op->state)) {
+        if (!op->used || op->running || !app_op_state_is_terminal(op->state)) {
             continue;
         }
         if (oldest == NULL || op->terminal_ms < oldest->terminal_ms) {
@@ -284,9 +347,17 @@ esp_err_t app_operation_start(app_operation_owner_t owner, const char *idem_key,
         reclaimed_age_ms = now_ms - slot->terminal_ms;
     }
 
-    memset(slot, 0, sizeof(*slot));
+    /* 评审 R4:generation 必须在复用前+1并跨 memset 保留 —— 原实现先清零再
+     * ++,每次复用都回到 1,陈旧 cancel/expire 捕获的 generation 会与新 op
+     * 撞上(槽满时 oldest_terminal 立即回收,窗口不是 600s)。32 位回绕仅在
+     * 40 亿次复用后发生,期间槽位早已加速回收,不再作为实际风险。 */
+    {
+        uint32_t next_generation = slot->generation + 1;
+
+        memset(slot, 0, sizeof(*slot));
+        slot->generation = next_generation;
+    }
     slot->used = true;
-    slot->generation++;
     slot->owner = owner;
     slot->state = APP_OP_ACCEPTED;
     slot->error = APP_OPERATION_ERR_NONE;
@@ -346,6 +417,15 @@ esp_err_t app_operation_set_state(app_operation_t *op, app_op_state_t state,
         portEXIT_CRITICAL(&s_ops_mux);
         return ESP_ERR_INVALID_ARG;
     }
+    /* 评审 R3-T1/T2:expiring=true 表示 cancel/expire 的 cleanup 已在飞、
+     * 本 op 注定终态 —— 拒绝一切新状态迁移。由此 "cleanup 已启动" 与
+     * "进入 COMMITTING" 由同一把 s_ops_mux 原子裁决,不可能同时成立:
+     * 输掉竞争的 apply 在读 job 数据之前就被挡下(cleanup 期间状态仍是
+     * GOT_IP,无本闸时 set_state 会成功、随后与 memset 撕裂 job)。 */
+    if (op->expiring) {
+        portEXIT_CRITICAL(&s_ops_mux);
+        return ESP_ERR_INVALID_STATE;
+    }
     if (state == APP_OP_FREE || !app_op_transition_allowed(op->state, state)) {
         portEXIT_CRITICAL(&s_ops_mux);
         return ESP_ERR_INVALID_STATE;
@@ -371,7 +451,7 @@ esp_err_t app_operation_cancel(app_operation_t *op)
 {
     app_operation_cleanup_fn cleanup = NULL;
     void *ctx = NULL;
-    uint8_t generation;
+    uint32_t generation;
     bool need_cleanup = false;
     bool terminal = false;
 
@@ -416,6 +496,9 @@ esp_err_t app_operation_cancel(app_operation_t *op)
         return ESP_FAIL;
     }
 
+#ifdef APP_C1_TEST_HOOKS
+    app_operation_test_hook_pause("cancel_post_cleanup", op);
+#endif
     portENTER_CRITICAL(&s_ops_mux);
     if (op->used && op->generation == generation && app_op_state_is_active(op->state)) {
         op->state = APP_OP_CANCELLED;
@@ -479,6 +562,7 @@ static void app_operation_run_pending(void)
         } else {
             op->state = APP_OP_CONNECTING;
             op->error = APP_OPERATION_ERR_NONE;
+            op->running = true;   /* R5:run_fn 返回前禁止本槽回收/复用 */
         }
     }
     portEXIT_CRITICAL(&s_ops_mux);
@@ -489,12 +573,25 @@ static void app_operation_run_pending(void)
 
     ESP_LOGI(TAG, "run %s -> connecting", op->id);
     err = run_fn(op, ctx);
+    portENTER_CRITICAL(&s_ops_mux);
+    op->running = false;   /* run_fn 已返回:此后才允许回收/复用本槽 */
+    portEXIT_CRITICAL(&s_ops_mux);
     if (err != ESP_OK) {
         bool failed = false;
+        bool skip_for_cleanup = false;
 
         ESP_LOGW(TAG, "run %s failed: %s", op->id, esp_err_to_name(err));
+        /* 评审 R4:expiring=true 表示 cleanup 已在飞 —— run_fn 的 set_state
+         * 已被 expiring 闸拒绝,这里不能再把终态改成 FAILED,否则会出现
+         * "对外 FAILED、cleanup 仍在执行",且 cleanup 的 finalize 因状态
+         * 已非 active 而落空。终态交由 cleanup 独占裁决(CANCELLED/
+         * EXPIRED/FAILED(cleanup_failed))。
+         * R7 勘误:跳过分支的日志曾在临界区内(ESP_LOG 禁入 spinlock,
+         * 钩子首测即 abort);现在锁内只取判据,日志移到锁外。 */
         portENTER_CRITICAL(&s_ops_mux);
-        if (op->used && app_op_state_is_active(op->state)) {
+        if (op->used && op->expiring) {
+            skip_for_cleanup = true;
+        } else if (op->used && app_op_state_is_active(op->state)) {
             op->state = APP_OP_FAILED;
             op->error = APP_OPERATION_ERR_INTERNAL;
             op->deadline_ms = 0;
@@ -502,6 +599,10 @@ static void app_operation_run_pending(void)
             failed = true;
         }
         portEXIT_CRITICAL(&s_ops_mux);
+        if (skip_for_cleanup) {
+            ESP_LOGI(TAG, "run %s fallback skipped: cleanup owns terminal (expiring=1)",
+                     op->id);
+        }
         if (failed) {
             app_mqtt_defer_restart_end();
         }
@@ -513,7 +614,7 @@ static void app_operation_expire_one(void)
     app_operation_t *op = NULL;
     app_operation_cleanup_fn cleanup = NULL;
     void *ctx = NULL;
-    uint8_t generation = 0;
+    uint32_t generation = 0;
     bool cleanup_ok = true;
     int64_t now_ms = app_operation_now_ms();
 
@@ -542,6 +643,9 @@ static void app_operation_expire_one(void)
         cleanup_ok = cleanup(op, ctx);
     }
 
+#ifdef APP_C1_TEST_HOOKS
+    app_operation_test_hook_pause("expire_post_cleanup", op);
+#endif
     {
         bool expired = false;
 
