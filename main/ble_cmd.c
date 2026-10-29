@@ -814,7 +814,13 @@ esp_err_t app_ble_cmd_start(void)
     if (s_cmd_queue == NULL) {
         return ESP_ERR_NO_MEM;
     }
-    if (xTaskCreate(app_ble_cmd_task, "ble_cmd", 4096, NULL, 4, NULL) != pdPASS) {
+    /* 评审 R10:4096B 在 network.apply 的嵌套路径上实测栈溢出 ——
+     * 2026-10-29 App 手工 #13 对 CMCC-502 执行 apply 时,
+     * "A stack overflow in task ble_cmd has been detected",随后 core dump/
+     * 重启(配置已落盘)。该路径在本任务内嵌套 execute_ctx + config_apply_patch
+     * + profile 保存 + Wi-Fi restart;4096 的余量不足。加到 8192 并保留
+     * 证据;这是独立于 C1 的既有余量缺陷,单独提交。 */
+    if (xTaskCreate(app_ble_cmd_task, "ble_cmd", 8192, NULL, 4, NULL) != pdPASS) {
         ESP_LOGE(TAG, "task create failed");
         return ESP_FAIL;
     }
