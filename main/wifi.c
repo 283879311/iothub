@@ -35,6 +35,14 @@ static const int64_t APP_WIFI_STA_STARTUP_RETRY_INTERVAL_MS = 1000;
 static const int64_t APP_WIFI_RUNTIME_RETRY_BACKOFF_MS[] = {5000, 10000, 30000, 60000};
 #define APP_WIFI_RUNTIME_RETRY_STEPS \
     (sizeof(APP_WIFI_RUNTIME_RETRY_BACKOFF_MS) / sizeof(APP_WIFI_RUNTIME_RETRY_BACKOFF_MS[0]))
+/* BLE 连接期间的降级重试(2026-11-01 产品决策 A):只试正式 SSID,不扫描
+ * profile;120s 一次。目的:解决"配置完忘了关小程序/蓝牙,AP 恢复后设备
+ * 永久离线"——原门控把"连接存在"当成"用户在场",但链路空闲不代表用户
+ * 还在操作。此路径不推进主退避档;BLE 断开后回到完整 5/10/30/60 周期。 */
+static const int64_t APP_WIFI_BLE_FAST_RETRY_MS = 120000;
+static int64_t s_wifi_ble_fast_retry_at_ms = 0; /* 0=尚未排定 */
+static uint32_t s_wifi_ble_fast_cycle = 0;      /* 日志关联 */
+static bool s_wifi_ble_was_connected = false;   /* 连接态跳变时重置计时 */
 /* BLE 连接期间跳轮:用户在场走 BLE 救援/配网,后台扫描只会争射频;
  * 跳轮不推进退避档位,断开后从暂停档继续(不重置回 5s)。 */
 static int64_t s_wifi_rt_retry_at_ms = 0;   /* 下次允许发起的时刻;0=立即 */
@@ -86,6 +94,9 @@ static int64_t s_wifi_startup_retry_at_ms = 0;
 static int64_t s_sta_connected_at_ms = 0;
 static bool s_wifi_sta_connecting = false;
 static bool s_wifi_fast_path_pending = false;
+/* 与 fast_path_pending 配套:为 true 时 connect task 只走正式 SSID,
+ * 失败也不进入 profile 扫描(BLE 连接期间的降级路径)。 */
+static bool s_wifi_formal_only_pending = false;
 static SemaphoreHandle_t s_wifi_restart_lock = NULL;
 static StaticSemaphore_t s_wifi_restart_lock_buf;
 static portMUX_TYPE s_wifi_restart_lock_mux = portMUX_INITIALIZER_UNLOCKED;
@@ -335,10 +346,13 @@ static void app_wifi_stop_startup_connect_window(void)
     s_wifi.startup_connect_active = false;
     s_wifi.startup_connect_deadline_ms = 0;
     s_wifi_fast_path_pending = false;
+    s_wifi_formal_only_pending = false;
     app_wifi_runtime_unlock();
     s_wifi_startup_retry_at_ms = 0;
     s_wifi_sta_connecting = false;
     s_wifi_rt_armed = true;   /* 启动阶段结束,运行时兜底自此常驻 */
+    s_wifi_ble_fast_retry_at_ms = 0;
+    s_wifi_ble_fast_cycle = 0;
 }
 
 static void app_wifi_start_startup_connect_window(void)
@@ -356,12 +370,15 @@ static void app_wifi_start_startup_connect_window(void)
     s_wifi.startup_connect_active = true;
     s_wifi.startup_connect_deadline_ms = app_wifi_now_ms() + APP_WIFI_STA_STARTUP_TIMEOUT_MS;
     s_wifi_fast_path_pending = true;
+    s_wifi_formal_only_pending = false;
     app_wifi_runtime_unlock();
     s_wifi_startup_retry_at_ms = app_wifi_now_ms() + APP_WIFI_STA_STARTUP_RETRY_INTERVAL_MS;
     /* 新的连通性纪元(启动/apply 重启):运行时兜底退避归零 */
     s_wifi_rt_retry_at_ms = 0;
     s_wifi_rt_retry_step = 0;
     s_wifi_rt_retry_cycle = 0;
+    s_wifi_ble_fast_retry_at_ms = 0;
+    s_wifi_ble_fast_cycle = 0;
     app_wifi_set_startup_fallback_reason("none");
 }
 
@@ -652,7 +669,8 @@ static esp_err_t app_wifi_connect_profile_index(int profile_index)
     return esp_wifi_connect();
 }
 
-static esp_err_t app_wifi_connect_best_saved_profile(bool allow_fast_path)
+static esp_err_t app_wifi_connect_best_saved_profile(bool allow_fast_path,
+                                                     bool allow_profile_scan)
 {
     esp_err_t err;
     int profile_index;
@@ -674,6 +692,11 @@ static esp_err_t app_wifi_connect_best_saved_profile(bool allow_fast_path)
 
     /* 静态 IP 与正式 SSID 绑定；即便调用方不允许 fast path，也必须先试正式配置。 */
     if (formal_static) {
+        allow_fast_path = true;
+    }
+    /* 不允许 profile 扫描时,唯一能做的自动动作就是正式 SSID fast path;
+     * 即使调用方没置 fast_path_pending 也强制尝试一次。 */
+    if (!allow_profile_scan) {
         allow_fast_path = true;
     }
 
@@ -718,10 +741,12 @@ static esp_err_t app_wifi_connect_best_saved_profile(bool allow_fast_path)
             app_wifi_runtime_unlock();
             err = esp_wifi_connect();
             if (err == ESP_OK) {
-                ESP_LOGI(TAG, "auto_connect: fast_path ssid=%s", sta_ssid_snapshot);
+                ESP_LOGI(TAG, "auto_connect: fast_path ssid=%s%s", sta_ssid_snapshot,
+                         allow_profile_scan ? "" : " (formal-only, no scan)");
                 return ESP_OK;
             }
-            ESP_LOGW(TAG, "fast_path connect failed: %s, fall back to scan", esp_err_to_name(err));
+            ESP_LOGW(TAG, "fast_path connect failed: %s%s", esp_err_to_name(err),
+                     allow_profile_scan ? ", fall back to scan" : " (formal-only)");
         } else {
             ESP_LOGW(TAG, "fast_path set_config failed: %s, fall back to scan", esp_err_to_name(err));
         }
@@ -736,6 +761,18 @@ static esp_err_t app_wifi_connect_best_saved_profile(bool allow_fast_path)
                  sta_ssid_snapshot);
         s_wifi_sta_connecting = false;
         return ESP_ERR_INVALID_STATE;
+    }
+
+    if (!allow_profile_scan) {
+        /* BLE 连接期间的降级路径:fast path 失败后不扫描 profile。
+         * 必须清 connecting,否则 monitor 会永久等待一个不会到来的事件。 */
+        s_wifi_sta_connecting = false;
+        app_wifi_runtime_lock();
+        app_copy_string(s_wifi.last_disconnect, sizeof(s_wifi.last_disconnect),
+                        "ble_fast_path_failed");
+        app_wifi_runtime_unlock();
+        ESP_LOGW(TAG, "formal-only retry: saved-profile scan skipped (BLE connected)");
+        return ESP_ERR_NOT_FOUND;
     }
 
     app_wifi_profiles_lock();
@@ -849,15 +886,18 @@ static void app_wifi_connect_task_fn(void *arg)
 {
     TickType_t delay_ticks = (TickType_t)(uintptr_t)arg;
     bool allow_fast_path = false;
+    bool allow_profile_scan = true;
 
     if (delay_ticks > 0) {
         vTaskDelay(delay_ticks);
     }
     app_wifi_runtime_lock();
     allow_fast_path = s_wifi_fast_path_pending;
+    allow_profile_scan = !s_wifi_formal_only_pending;
     s_wifi_fast_path_pending = false;
+    s_wifi_formal_only_pending = false;
     app_wifi_runtime_unlock();
-    app_wifi_connect_best_saved_profile(allow_fast_path);
+    app_wifi_connect_best_saved_profile(allow_fast_path, allow_profile_scan);
     s_wifi_connect_task = NULL;
     vTaskDelete(NULL);
 }
@@ -904,6 +944,7 @@ static void app_wifi_boot_monitor_task_fn(void *arg)
         int64_t deadline_ms;
         uint8_t net_mode;
         TaskHandle_t connect_task_snapshot;
+        bool ble_connected;
 
         app_config_lock();
         net_mode = s_config.net_mode;
@@ -916,6 +957,16 @@ static void app_wifi_boot_monitor_task_fn(void *arg)
         app_wifi_runtime_unlock();
         sta_connecting = s_wifi_sta_connecting;
         connect_task_snapshot = s_wifi_connect_task;
+        ble_connected = app_ble_gatts_connected();
+        if (ble_connected != s_wifi_ble_was_connected) {
+            s_wifi_ble_was_connected = ble_connected;
+            s_wifi_ble_fast_retry_at_ms = 0;   /* 连接态跳变:重新计 120s */
+            if (!ble_connected) {
+                s_wifi_formal_only_pending = false;  /* 回到完整重试 */
+            }
+            ESP_LOGI(TAG, "ble fast retry: link %s, timer reset",
+                     ble_connected ? "up" : "down");
+        }
 
         if (startup_connect_active && net_mode == NET_MODE_STA && !sta_has_ip) {
             if (now_ms >= deadline_ms) {
@@ -931,7 +982,7 @@ static void app_wifi_boot_monitor_task_fn(void *arg)
                    connect_task_snapshot == NULL &&
                    !s_tryconnect_active &&
                    !s_wifi_auto_connect_suspended &&
-                   !app_ble_gatts_connected()) {
+                   !ble_connected) {
             /* 运行时断网兜底:复用 schedule_connect_task 单一入口(互斥自动生效),
              * 不在本循环里直接 esp_wifi_connect()。 */
             if (s_wifi_rt_retry_at_ms == 0 || now_ms >= s_wifi_rt_retry_at_ms) {
@@ -946,11 +997,35 @@ static void app_wifi_boot_monitor_task_fn(void *arg)
                 s_wifi_attempted_mask = 0;   /* 新一轮允许重试所有已存 profile */
                 app_wifi_profiles_unlock();
                 s_wifi_fast_path_pending = true;   /* 每轮先试正式 SSID(静态 IP 也走这里) */
+                s_wifi_formal_only_pending = false; /* 完整周期允许 profile 扫描 */
                 app_wifi_schedule_connect_task(0);
                 s_wifi_rt_retry_at_ms = now_ms + backoff_ms;
                 if (s_wifi_rt_retry_step < APP_WIFI_RUNTIME_RETRY_STEPS - 1) {
                     s_wifi_rt_retry_step += 1;
                 }
+            }
+        } else if (s_wifi_rt_armed && !startup_connect_active && net_mode == NET_MODE_STA &&
+                   !sta_connected && !sta_has_ip && !sta_connecting &&
+                   connect_task_snapshot == NULL &&
+                   !s_tryconnect_active &&
+                   !s_wifi_auto_connect_suspended &&
+                   ble_connected) {
+            /* 产品决策 A(2026-11-01):BLE 连接期间只试正式 SSID,不扫描
+             * profile;120s 一次。解决"配置完忘了关小程序/蓝牙,AP 恢复后
+             * 永久离线"——原门控把链路存在当成用户在场。 */
+            if (s_wifi_ble_fast_retry_at_ms == 0) {
+                s_wifi_ble_fast_retry_at_ms = now_ms + APP_WIFI_BLE_FAST_RETRY_MS;
+                ESP_LOGI(TAG, "ble fast retry: first attempt in %lldms "
+                              "(formal SSID only, no scan)",
+                         (long long)APP_WIFI_BLE_FAST_RETRY_MS);
+            } else if (now_ms >= s_wifi_ble_fast_retry_at_ms) {
+                s_wifi_ble_fast_cycle += 1;
+                ESP_LOGI(TAG, "ble fast retry: cycle=%u (formal SSID only, no scan)",
+                         (unsigned)s_wifi_ble_fast_cycle);
+                s_wifi_fast_path_pending = true;
+                s_wifi_formal_only_pending = true;
+                app_wifi_schedule_connect_task(0);
+                s_wifi_ble_fast_retry_at_ms = now_ms + APP_WIFI_BLE_FAST_RETRY_MS;
             }
         }
         if (handle_failure) {
@@ -1281,6 +1356,12 @@ static void app_wifi_event_handler(void *arg, esp_event_base_t event_base, int32
             if (do_retry_direct) {
                 esp_wifi_connect();
             } else if (need_schedule_connect) {
+                if (app_ble_gatts_connected()) {
+                    /* BLE 连接期间不扫描 profile:只给一次正式 SSID
+                     * fast path 机会,失败后交给 120s 降级重试。 */
+                    s_wifi_fast_path_pending = true;
+                    s_wifi_formal_only_pending = true;
+                }
                 app_wifi_schedule_connect_task(pdMS_TO_TICKS(250));
             }
             break;
@@ -1316,6 +1397,8 @@ static void app_wifi_event_handler(void *arg, esp_event_base_t event_base, int32
         s_wifi_rt_retry_at_ms = 0;
         s_wifi_rt_retry_step = 0;
         s_wifi_rt_retry_cycle = 0;
+        s_wifi_ble_fast_retry_at_ms = 0;
+        s_wifi_ble_fast_cycle = 0;
         app_set_sta_ip_strings(&event->ip_info);
         app_wifi_stop_startup_connect_window();
         app_wifi_set_startup_fallback_reason("none");
