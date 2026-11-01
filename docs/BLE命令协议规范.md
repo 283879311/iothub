@@ -248,10 +248,10 @@ v1 客户端只使用正式名；旧名只用于 v0 兼容，不在小程序中�
 | cmd | args | 当前 | v1 状态 | 说明 |
 | --- | --- | --- | --- | --- |
 | `device.info` | `{}` | ✅ v1 | 已实现 | 无 token、无副作用探测；返回型号、固件、设备 ID、`protocol_versions`、`security` |
-| `device.status` | `{}` | `getStatus` 部分 | 未实现 | 网络/BLE/MQTT/堆/分区摘要；MQTT 状态单独字段 |
-| `network.status` | `{}` | ✅ v0/v1 | 已实现 | STA 状态、SSID、IP、失败原因、MQTT 状态、trial 摘要；RSSI 待补 |
-| `gpio.status` | `{}` | `io.get` 部分 | 未实现 | 引脚、输入/输出、策略、io_seq/source |
-| `uart.runtime` | `{}` | HTTP UART GET | 未实现 | UART 参数、驱动状态、统计 |
+| `device.status` | `{}` | ✅ v1 | 已实现（2026-11-01） | 型号/固件/运行时长/复位原因/堆/BLE/MQTT/运行分区/network 摘要 |
+| `network.status` | `{}` | ✅ v0/v1 | 已实现 | STA 状态、SSID、IP、失败原因、MQTT 状态、trial 摘要；**新增 rssi/channel/bssid + rssi_valid**（断连 rssi=-128） |
+| `gpio.status` | `{}` | ✅ v1 | 已实现（2026-11-01） | relay/led/input、io_seq/last_change/io_source、active 极性、上电策略、引脚 |
+| `uart.runtime` | `{}` | ✅ v1 | 已实现（2026-11-01） | UART 帧格式/波特率/引脚 + driver_installed/rx/tx 序号/最近发送/错误；取锁失败时 runtime_available=false |
 
 ### B. Wi-Fi 网络管理
 
