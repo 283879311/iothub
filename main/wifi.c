@@ -1336,6 +1336,16 @@ static void app_wifi_event_handler(void *arg, esp_event_base_t event_base, int32
                 break;
             }
 
+            if (app_ble_gatts_connected()) {
+                /* 产品决策 A:BLE 连接期间不跑事件链的 3 次直连/扫描 ——
+                 * fast path 会把 sta_retries 重置为 0,AP 仍离线时形成
+                 * "3 直连→formal-only→再 3 直连"的快速循环,绕过 120s。
+                 * 这里只落状态,交给 monitor 的 120s formal-only 分支。 */
+                ESP_LOGI(TAG, "STA down with BLE connected: event-chain retry suppressed; "
+                              "120s formal-only monitor owns recovery");
+                break;
+            }
+
             if (app_network_mode_has_sta(net_mode_snapshot) &&
                 active_profile_snapshot >= 0 &&
                 sta_retries_snapshot < APP_WIFI_STA_RETRY_LIMIT) {
