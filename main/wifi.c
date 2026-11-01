@@ -40,6 +40,12 @@ static const int64_t APP_WIFI_RUNTIME_RETRY_BACKOFF_MS[] = {5000, 10000, 30000, 
  * 永久离线"——原门控把"连接存在"当成"用户在场",但链路空闲不代表用户
  * 还在操作。此路径不推进主退避档;BLE 断开后回到完整 5/10/30/60 周期。 */
 static const int64_t APP_WIFI_BLE_FAST_RETRY_MS = 120000;
+/* D1 看门狗:同步 esp_wifi_connect() 失败/扫描失败可能留下
+ * s_wifi_sta_connecting=true 且没有后续断连事件;monitor 两个分支都要求
+ * 该标志为 false,一次踩中会永久停止调度。30s 远大于正常关联(实测最慢
+ * ~15s),超时强制清零并立即重排。 */
+static const int64_t APP_WIFI_CONNECT_STUCK_TIMEOUT_MS = 30000;
+static int64_t s_wifi_connecting_since_ms = 0;
 static int64_t s_wifi_ble_fast_retry_at_ms = 0; /* 0=尚未排定 */
 static uint32_t s_wifi_ble_fast_cycle = 0;      /* 日志关联 */
 static bool s_wifi_ble_was_connected = false;   /* 连接态跳变时重置计时 */
@@ -666,7 +672,18 @@ static esp_err_t app_wifi_connect_profile_index(int profile_index)
     app_wifi_runtime_lock();
     app_copy_string(s_wifi.last_disconnect, sizeof(s_wifi.last_disconnect), "switching_profile");
     app_wifi_runtime_unlock();
-    return esp_wifi_connect();
+    err = esp_wifi_connect();
+    if (err != ESP_OK) {
+        /* D1:同步失败没有断连事件,必须当场清零。 */
+        s_wifi_sta_connecting = false;
+        app_wifi_runtime_lock();
+        app_copy_string(s_wifi.last_disconnect, sizeof(s_wifi.last_disconnect),
+                        "connect_failed");
+        app_wifi_runtime_unlock();
+        ESP_LOGW(TAG, "connect_profile: esp_wifi_connect failed: %s",
+                 esp_err_to_name(err));
+    }
+    return err;
 }
 
 static esp_err_t app_wifi_connect_best_saved_profile(bool allow_fast_path,
@@ -745,6 +762,8 @@ static esp_err_t app_wifi_connect_best_saved_profile(bool allow_fast_path,
                          allow_profile_scan ? "" : " (formal-only, no scan)");
                 return ESP_OK;
             }
+            /* D1:同步失败没有后续断连事件,先清零再决定是否扫描回退。 */
+            s_wifi_sta_connecting = false;
             ESP_LOGW(TAG, "fast_path connect failed: %s%s", esp_err_to_name(err),
                      allow_profile_scan ? ", fall back to scan" : " (formal-only)");
         } else {
@@ -957,6 +976,26 @@ static void app_wifi_boot_monitor_task_fn(void *arg)
         app_wifi_runtime_unlock();
         sta_connecting = s_wifi_sta_connecting;
         connect_task_snapshot = s_wifi_connect_task;
+        /* D1 看门狗:只在没有用户 tryconnect/scan 占用时计时;
+         * 标志 30s 没有被 connected/disconnected 事件回收就强制清零。 */
+        if (!sta_connecting || s_tryconnect_active || s_wifi_auto_connect_suspended) {
+            s_wifi_connecting_since_ms = 0;
+        } else if (s_wifi_connecting_since_ms == 0) {
+            s_wifi_connecting_since_ms = now_ms;
+        } else if (now_ms - s_wifi_connecting_since_ms >= APP_WIFI_CONNECT_STUCK_TIMEOUT_MS) {
+            s_wifi_sta_connecting = false;
+            s_wifi_connecting_since_ms = 0;
+            s_wifi_rt_retry_at_ms = 0;
+            s_wifi_startup_retry_at_ms = 0;
+            s_wifi_ble_fast_retry_at_ms = 0;
+            app_wifi_runtime_lock();
+            app_copy_string(s_wifi.last_disconnect, sizeof(s_wifi.last_disconnect),
+                            "connect_stuck");
+            app_wifi_runtime_unlock();
+            ESP_LOGW(TAG, "wifi connect watchdog: sta_connecting stuck >%lldms, cleared",
+                     (long long)APP_WIFI_CONNECT_STUCK_TIMEOUT_MS);
+            sta_connecting = false;
+        }
         ble_connected = app_ble_gatts_connected();
         if (ble_connected != s_wifi_ble_was_connected) {
             s_wifi_ble_was_connected = ble_connected;
@@ -1331,6 +1370,7 @@ static void app_wifi_event_handler(void *arg, esp_event_base_t event_base, int32
                 s_wifi_sta_connecting = true;
                 ESP_LOGW(TAG, "reason=210: retry once with PMF required (802.11w)");
                 if (app_wifi_retry_with_pmf_required() != ESP_OK) {
+                    s_wifi_sta_connecting = false;
                     ESP_LOGW(TAG, "PMF-required retry could not start");
                 }
                 break;
