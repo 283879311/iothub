@@ -91,6 +91,31 @@ static const char *app_uart_get_apply_error(void)
     return s_uart.last_apply_error[0] != '\0' ? s_uart.last_apply_error : "uart_apply_failed";
 }
 
+/* 只读快照:在 uart 锁内取,避免与 apply 的 driver delete/install 并发。 */
+bool app_uart_get_status(app_uart_status_t *out)
+{
+    if (out == NULL) {
+        return false;
+    }
+    memset(out, 0, sizeof(*out));
+    if (!app_uart_lock(pdMS_TO_TICKS(100))) {
+        return false;
+    }
+    out->driver_installed = s_uart.driver_installed;
+    out->rx_sequence = s_uart.rx_sequence;
+    out->tx_sequence = s_uart.tx_sequence;
+    out->last_bytes_sent = s_uart.last_bytes_sent;
+    out->last_send_at_ms = s_uart.last_send_at_ms;
+    app_copy_string(out->last_apply_error, sizeof(out->last_apply_error),
+                    s_uart.last_apply_error);
+    app_copy_string(out->last_tx_encoding, sizeof(out->last_tx_encoding),
+                    s_uart.last_tx_encoding);
+    app_copy_string(out->last_tx_preview, sizeof(out->last_tx_preview),
+                    s_uart.last_tx_preview);
+    app_uart_unlock();
+    return true;
+}
+
 static void app_uart_build_preview_text(char *buffer, size_t buffer_size,
                                         const uint8_t *payload, size_t payload_len)
 {

@@ -6,6 +6,8 @@
 
 #include "driver/uart.h"
 #include "esp_err.h"
+
+#include "constants.h"
 #include "freertos/FreeRTOS.h"
 
 void app_uart_init(void);
@@ -19,3 +21,18 @@ esp_err_t app_uart_send_data(const char *encoding, const char *data, unsigned *b
 /* 数据面:按长度发送原始字节(二进制安全)+ data_pipe 端口出站函数 */
 esp_err_t app_uart_send_bytes(const uint8_t *data, size_t len, unsigned *bytes_sent);
 bool app_uart_dataplane_write(const uint8_t *data, size_t len, void *ctx);
+
+/* UART 运行态快照(只读;uart.runtime 命令用):
+ * 驱动状态、收发序号、最近发送摘要/错误。与 apply 重配置互斥。 */
+typedef struct {
+    bool driver_installed;
+    uint32_t rx_sequence;
+    uint32_t tx_sequence;
+    uint32_t last_bytes_sent;
+    int64_t last_send_at_ms;
+    char last_apply_error[48];
+    char last_tx_encoding[8];
+    char last_tx_preview[UART_TX_PREVIEW_SIZE];
+} app_uart_status_t;
+
+bool app_uart_get_status(app_uart_status_t *out);

@@ -1,8 +1,14 @@
 #include <stdbool.h>
+#include <stdio.h>
 #include <string.h>
 
 #include "cJSON.h"
+#include "esp_heap_caps.h"
 #include "esp_log.h"
+#include "esp_ota_ops.h"
+#include "esp_partition.h"
+#include "esp_system.h"
+#include "esp_wifi.h"
 
 #include "auth.h"
 #include "bt.h"
@@ -654,6 +660,33 @@ static cJSON *app_cmd_build_network_status(void)
     cJSON_AddNumberToObject(root, "connected_profile", s_wifi.connected_profile);
     app_wifi_runtime_unlock();
 
+    /* 当前 AP 的 RSSI/信道/BSSID(加法字段)。断连时 rssi=-128,
+     * rssi_valid=false;旧客户端忽略这些字段即可。 */
+    {
+        wifi_ap_record_t ap;
+        bool connected_snapshot;
+
+        app_wifi_runtime_lock();
+        connected_snapshot = s_wifi.sta_connected;
+        app_wifi_runtime_unlock();
+        if (connected_snapshot && esp_wifi_sta_get_ap_info(&ap) == ESP_OK) {
+            char bssid[18];
+
+            snprintf(bssid, sizeof(bssid), "%02x:%02x:%02x:%02x:%02x:%02x",
+                     ap.bssid[0], ap.bssid[1], ap.bssid[2],
+                     ap.bssid[3], ap.bssid[4], ap.bssid[5]);
+            cJSON_AddNumberToObject(root, "rssi", (double)ap.rssi);
+            cJSON_AddNumberToObject(root, "channel", (double)ap.primary);
+            cJSON_AddStringToObject(root, "bssid", bssid);
+            cJSON_AddBoolToObject(root, "rssi_valid", true);
+        } else {
+            cJSON_AddNumberToObject(root, "rssi", -128);
+            cJSON_AddNumberToObject(root, "channel", 0);
+            cJSON_AddStringToObject(root, "bssid", "");
+            cJSON_AddBoolToObject(root, "rssi_valid", false);
+        }
+    }
+
     app_config_lock();
     cJSON_AddStringToObject(root, "sta_ssid", s_config.sta_ssid);
     cJSON_AddBoolToObject(root, "password_set", s_config.sta_password[0] != '\0');
@@ -677,6 +710,208 @@ static cJSON *app_cmd_build_network_status(void)
             cJSON_AddStringToObject(trial, "state", "idle");
         }
         app_cmd_net_job_unlock();
+    }
+    return root;
+}
+
+static const char *app_cmd_reset_reason_name(esp_reset_reason_t reason)
+{
+    switch (reason) {
+    case ESP_RST_POWERON:  return "poweron";
+    case ESP_RST_EXT:      return "external";
+    case ESP_RST_SW:       return "software";
+    case ESP_RST_PANIC:    return "panic";
+    case ESP_RST_INT_WDT:  return "int_wdt";
+    case ESP_RST_TASK_WDT: return "task_wdt";
+    case ESP_RST_WDT:      return "wdt";
+    case ESP_RST_DEEPSLEEP:return "deepsleep";
+    case ESP_RST_BROWNOUT: return "brownout";
+    case ESP_RST_SDIO:     return "sdio";
+    default:               return "unknown";
+    }
+}
+
+static const char *app_cmd_ota_state_name(esp_ota_img_states_t state)
+{
+    switch (state) {
+    case ESP_OTA_IMG_NEW:             return "new";
+    case ESP_OTA_IMG_PENDING_VERIFY:  return "pending_verify";
+    case ESP_OTA_IMG_VALID:           return "valid";
+    case ESP_OTA_IMG_INVALID:         return "invalid";
+    case ESP_OTA_IMG_ABORTED:         return "aborted";
+    default:                          return "undefined";
+    }
+}
+
+static cJSON *app_cmd_build_gpio_status(void)
+{
+    app_io_state_t io;
+    cJSON *root;
+    cJSON *pins;
+    uint8_t relay_active_high;
+    uint8_t led_active_high;
+    uint8_t input_active_low;
+    uint8_t relay_policy;
+    uint8_t led_policy;
+
+    app_io_get_state(&io);
+    app_config_lock();
+    relay_active_high = s_config.relay_active_high;
+    led_active_high = s_config.led_active_high;
+    input_active_low = s_config.input_active_low;
+    relay_policy = s_config.relay_power_policy;
+    led_policy = s_config.led_power_policy;
+    app_config_unlock();
+
+    root = cJSON_CreateObject();
+    if (root == NULL) {
+        return NULL;
+    }
+    cJSON_AddBoolToObject(root, "relay_on", io.relay_on);
+    cJSON_AddBoolToObject(root, "led_on", io.led_on);
+    cJSON_AddBoolToObject(root, "input_active", io.input_active);
+    cJSON_AddNumberToObject(root, "io_seq", (double)io.seq);
+    cJSON_AddNumberToObject(root, "io_last_change_ms", (double)io.last_change_ms);
+    cJSON_AddStringToObject(root, "io_source", app_io_source_name(io.last_source));
+    cJSON_AddBoolToObject(root, "relay_active_high", relay_active_high != 0);
+    cJSON_AddBoolToObject(root, "led_active_high", led_active_high != 0);
+    cJSON_AddBoolToObject(root, "input_active_low", input_active_low != 0);
+    cJSON_AddNumberToObject(root, "relay_power_policy", (double)relay_policy);
+    cJSON_AddNumberToObject(root, "led_power_policy", (double)led_policy);
+    pins = cJSON_AddObjectToObject(root, "pins");
+    if (pins != NULL) {
+        cJSON_AddNumberToObject(pins, "relay", (double)RELAY_DEFAULT_GPIO);
+        cJSON_AddNumberToObject(pins, "led", (double)LED_DEFAULT_GPIO);
+        cJSON_AddNumberToObject(pins, "input", (double)INPUT_DEFAULT_GPIO);
+    }
+    return root;
+}
+
+static cJSON *app_cmd_build_uart_runtime(void)
+{
+    app_uart_status_t st;
+    cJSON *root;
+    uint32_t baudrate;
+    uint8_t data_bits;
+    uint8_t stop_bits;
+    uint8_t parity;
+    char frame[16] = "";
+    bool runtime_ok;
+
+    runtime_ok = app_uart_get_status(&st);
+    app_config_lock();
+    baudrate = s_config.uart_baudrate;
+    data_bits = s_config.uart_data_bits;
+    stop_bits = s_config.uart_stop_bits;
+    parity = s_config.uart_parity_mode;
+    app_config_unlock();
+    app_uart_build_frame(frame, sizeof(frame), data_bits, (uart_parity_t)parity, stop_bits);
+
+    root = cJSON_CreateObject();
+    if (root == NULL) {
+        return NULL;
+    }
+    cJSON_AddBoolToObject(root, "runtime_available", runtime_ok);
+    cJSON_AddNumberToObject(root, "baudrate", (double)baudrate);
+    cJSON_AddNumberToObject(root, "data_bits", (double)data_bits);
+    cJSON_AddNumberToObject(root, "stop_bits", (double)stop_bits);
+    cJSON_AddNumberToObject(root, "parity", (double)parity);
+    cJSON_AddStringToObject(root, "frame", frame);
+    cJSON_AddNumberToObject(root, "rx_pin", (double)UART_RX_GPIO);
+    cJSON_AddNumberToObject(root, "tx_pin", (double)UART_TX_GPIO);
+    if (runtime_ok) {
+        cJSON_AddBoolToObject(root, "driver_installed", st.driver_installed);
+        cJSON_AddNumberToObject(root, "rx_sequence", (double)st.rx_sequence);
+        cJSON_AddNumberToObject(root, "tx_sequence", (double)st.tx_sequence);
+        cJSON_AddNumberToObject(root, "last_bytes_sent", (double)st.last_bytes_sent);
+        cJSON_AddNumberToObject(root, "last_send_at_ms", (double)st.last_send_at_ms);
+        cJSON_AddStringToObject(root, "last_apply_error", st.last_apply_error);
+        cJSON_AddStringToObject(root, "last_tx_encoding", st.last_tx_encoding);
+        cJSON_AddStringToObject(root, "last_tx_preview", st.last_tx_preview);
+    }
+    return root;
+}
+
+static cJSON *app_cmd_build_device_status(void)
+{
+    const esp_app_desc_t *desc = esp_app_get_description();
+    cJSON *root;
+    cJSON *heap;
+    cJSON *ble;
+    cJSON *mqtt;
+    cJSON *partition;
+    cJSON *network;
+    uint8_t bt_mode = 0;
+    char bt_error[64] = "";
+    bool mqtt_connected;
+    char mqtt_error[sizeof(s_mqtt.last_error)];
+    const esp_partition_t *running;
+    esp_ota_img_states_t ota_state = ESP_OTA_IMG_UNDEFINED;
+
+    root = cJSON_CreateObject();
+    if (root == NULL) {
+        return NULL;
+    }
+    cJSON_AddStringToObject(root, "model", desc != NULL ? desc->project_name : "iothub");
+    cJSON_AddStringToObject(root, "firmware", desc != NULL ? desc->version : "");
+    cJSON_AddStringToObject(root, "device_id", app_get_hostname());
+    cJSON_AddNumberToObject(root, "uptime_ms", (double)(esp_timer_get_time() / 1000));
+    cJSON_AddStringToObject(root, "reset_reason",
+                            app_cmd_reset_reason_name(esp_reset_reason()));
+
+    heap = cJSON_AddObjectToObject(root, "heap");
+    if (heap != NULL) {
+        cJSON_AddNumberToObject(heap, "free", (double)esp_get_free_heap_size());
+        cJSON_AddNumberToObject(heap, "min_free",
+                                (double)esp_get_minimum_free_heap_size());
+        cJSON_AddNumberToObject(heap, "largest",
+                                (double)heap_caps_get_largest_free_block(MALLOC_CAP_DEFAULT));
+        cJSON_AddNumberToObject(heap, "internal_largest",
+                                (double)heap_caps_get_largest_free_block(
+                                    MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));
+    }
+
+    app_bt_get_status(&bt_mode, bt_error, sizeof(bt_error));
+    ble = cJSON_AddObjectToObject(root, "ble");
+    if (ble != NULL) {
+        cJSON_AddBoolToObject(ble, "advertising", app_bt_advertising());
+        cJSON_AddBoolToObject(ble, "connected", app_ble_gatts_connected());
+        cJSON_AddNumberToObject(ble, "mtu", (double)app_ble_gatts_mtu());
+        cJSON_AddNumberToObject(ble, "adv_retry_count",
+                                (double)app_bt_adv_retry_count());
+        cJSON_AddNumberToObject(ble, "runtime_mode", (double)bt_mode);
+        cJSON_AddStringToObject(ble, "last_error", bt_error);
+    }
+
+    app_mqtt_lock();
+    mqtt_connected = s_mqtt.connected;
+    memcpy(mqtt_error, s_mqtt.last_error, sizeof(mqtt_error));
+    app_mqtt_unlock();
+    mqtt = cJSON_AddObjectToObject(root, "mqtt");
+    if (mqtt != NULL) {
+        cJSON_AddBoolToObject(mqtt, "connected", mqtt_connected);
+        cJSON_AddBoolToObject(mqtt, "connecting", app_mqtt_connecting());
+        cJSON_AddStringToObject(mqtt, "last_error", mqtt_error);
+        cJSON_AddNumberToObject(mqtt, "outbox", (double)app_mqtt_outbox_size());
+        cJSON_AddNumberToObject(mqtt, "telemetry_shed",
+                                (double)app_mqtt_tele_shed_count());
+    }
+
+    running = esp_ota_get_running_partition();
+    partition = cJSON_AddObjectToObject(root, "partition");
+    if (partition != NULL && running != NULL) {
+        cJSON_AddStringToObject(partition, "label", running->label);
+        cJSON_AddNumberToObject(partition, "address", (double)running->address);
+        cJSON_AddNumberToObject(partition, "size", (double)running->size);
+        if (esp_ota_get_state_partition(running, &ota_state) == ESP_OK) {
+            cJSON_AddStringToObject(partition, "ota_state",
+                                    app_cmd_ota_state_name(ota_state));
+        }
+    }
+
+    network = app_cmd_build_network_status();
+    if (network != NULL) {
+        cJSON_AddItemToObject(root, "network", network);
     }
     return root;
 }
@@ -1160,6 +1395,11 @@ esp_err_t app_cmd_execute_ctx(const app_cmd_context_t *ctx, const cJSON *frame,
             if (resp == NULL) {
                 err = "out_of_memory";
             }
+        } else if (strcmp(m, "device.status") == 0) {
+            resp = app_cmd_build_device_status();
+            if (resp == NULL) {
+                err = "out_of_memory";
+            }
         } else if (strcmp(m, "getConfig") == 0 || strcmp(m, "config.get") == 0) {
             const cJSON *domains = cJSON_IsObject(params)
                                        ? cJSON_GetObjectItemCaseSensitive(params, "domains")
@@ -1209,6 +1449,16 @@ esp_err_t app_cmd_execute_ctx(const app_cmd_context_t *ctx, const cJSON *frame,
                 cJSON_AddStringToObject(resp, "net_mode", app_network_mode_to_string(net_mode));
                 cJSON_AddBoolToObject(resp, "sta_has_ip", s_wifi.sta_has_ip);
                 cJSON_AddStringToObject(resp, "sta_ip", s_wifi.sta_ip);
+            }
+        } else if (strcmp(m, "gpio.status") == 0) {
+            resp = app_cmd_build_gpio_status();
+            if (resp == NULL) {
+                err = "out_of_memory";
+            }
+        } else if (strcmp(m, "uart.runtime") == 0) {
+            resp = app_cmd_build_uart_runtime();
+            if (resp == NULL) {
+                err = "out_of_memory";
             }
         } else if (strcmp(m, "led.toggle") == 0 || strcmp(m, "toggleLed") == 0 ||
                    strcmp(m, "relay.toggle") == 0 || strcmp(m, "toggleRelay") == 0) {

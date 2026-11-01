@@ -299,6 +299,9 @@ static bool app_ble_cmd_v1_allowed(const char *cmd)
 {
     static const char *const allowed[] = {
         "device.info",
+        "device.status",
+        "gpio.status",
+        "uart.runtime",
         "auth.login",
         "config.get",
         "config.set",
