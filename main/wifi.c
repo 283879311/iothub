@@ -71,17 +71,143 @@ static esp_err_t app_wifi_retry_with_pmf_required(void);
 /* 210(NO_AP_FOUND_W_COMPAT_SECURITY)兜底:首轮 required=false,失败后带 required=true 只重试一次 */
 static bool s_wifi_pmf_required_tried = false;
 
-/* 试连验证状态(1.3-37):试连期间事件处理器只记结果、不跑正常自动重连逻辑 */
+/* 试连验证状态(1.3-37):tryconnect 从取得 ownership 到 teardown 完成,
+ * 独占 Wi-Fi 连接操作; 只有明确归属当前候选的事件才能修改结果。
+ * 旧链路清理/预扫描窗口/候选连接窗口必须由 phase 明确分开。 */
+typedef enum {
+    APP_WIFI_TRY_PHASE_IDLE = 0,
+    APP_WIFI_TRY_PHASE_PRE_SCAN,
+    APP_WIFI_TRY_PHASE_CLEANUP_OLD,
+    APP_WIFI_TRY_PHASE_WAIT_OLD_DISCONNECT,
+    APP_WIFI_TRY_PHASE_CANDIDATE_STARTING,
+    APP_WIFI_TRY_PHASE_CANDIDATE_CONNECTING,
+    APP_WIFI_TRY_PHASE_DONE,
+} app_wifi_try_phase_t;
+
+typedef enum {
+    APP_WIFI_TRY_MATCH_OLD = 0,
+    APP_WIFI_TRY_MATCH_CANDIDATE,
+    APP_WIFI_TRY_MATCH_UNKNOWN,
+} app_wifi_try_match_t;
+
 static bool s_tryconnect_active = false;
-static volatile bool s_tryconnect_cancel_requested = false;
-static bool s_tryconnect_connecting = false;
+static app_wifi_try_phase_t s_tryconnect_phase = APP_WIFI_TRY_PHASE_IDLE;
+static bool s_tryconnect_cancel_requested = false;
 static bool s_tryconnect_require_ip = false;
 static app_wifi_try_result_t s_tryconnect_result = APP_WIFI_TRY_TIMEOUT;
+static char s_tryconnect_candidate_ssid[33] = {0};
+static uint8_t s_tryconnect_candidate_ssid_len = 0;
+static uint8_t s_tryconnect_candidate_bssid[6] = {0};
+static bool s_tryconnect_candidate_bssid_valid = false;
 static EventGroupHandle_t s_tryconnect_events = NULL;
 static StaticEventGroup_t s_tryconnect_events_buf;
 static portMUX_TYPE s_tryconnect_mux = portMUX_INITIALIZER_UNLOCKED;
 #define APP_WIFI_TRY_DONE_BIT   BIT0
 #define APP_WIFI_TRY_OLD_DISC_BIT BIT1
+
+static void app_wifi_tryconnect_state_lock(void)
+{
+    portENTER_CRITICAL(&s_tryconnect_mux);
+}
+
+static void app_wifi_tryconnect_state_unlock(void)
+{
+    portEXIT_CRITICAL(&s_tryconnect_mux);
+}
+
+static bool app_wifi_tryconnect_is_active(void)
+{
+    bool active;
+
+    app_wifi_tryconnect_state_lock();
+    active = s_tryconnect_active && s_tryconnect_phase != APP_WIFI_TRY_PHASE_IDLE;
+    app_wifi_tryconnect_state_unlock();
+    return active;
+}
+
+static app_wifi_try_phase_t app_wifi_tryconnect_get_phase(void)
+{
+    app_wifi_try_phase_t phase;
+
+    app_wifi_tryconnect_state_lock();
+    phase = s_tryconnect_phase;
+    app_wifi_tryconnect_state_unlock();
+    return phase;
+}
+
+static app_wifi_try_result_t app_wifi_tryconnect_get_result(void)
+{
+    app_wifi_try_result_t result;
+
+    app_wifi_tryconnect_state_lock();
+    result = s_tryconnect_result;
+    app_wifi_tryconnect_state_unlock();
+    return result;
+}
+
+static bool app_wifi_tryconnect_cancel_get(void)
+{
+    bool cancel;
+
+    app_wifi_tryconnect_state_lock();
+    cancel = s_tryconnect_cancel_requested;
+    app_wifi_tryconnect_state_unlock();
+    return cancel;
+}
+
+static bool app_wifi_tryconnect_begin(const char *ssid, bool require_ip)
+{
+    bool ok = false;
+
+    app_wifi_tryconnect_state_lock();
+    if (!s_tryconnect_active && s_tryconnect_phase == APP_WIFI_TRY_PHASE_IDLE) {
+        s_tryconnect_active = true;
+        s_tryconnect_phase = APP_WIFI_TRY_PHASE_PRE_SCAN;
+        s_tryconnect_cancel_requested = false;
+        s_tryconnect_require_ip = require_ip;
+        s_tryconnect_result = APP_WIFI_TRY_TIMEOUT;
+        app_copy_string(s_tryconnect_candidate_ssid, sizeof(s_tryconnect_candidate_ssid), ssid);
+        s_tryconnect_candidate_ssid_len =
+            (uint8_t)strlen(s_tryconnect_candidate_ssid);
+        memset(s_tryconnect_candidate_bssid, 0, sizeof(s_tryconnect_candidate_bssid));
+        s_tryconnect_candidate_bssid_valid = false;
+        ok = true;
+    }
+    app_wifi_tryconnect_state_unlock();
+    return ok;
+}
+
+static void app_wifi_tryconnect_release(void)
+{
+    app_wifi_tryconnect_state_lock();
+    s_tryconnect_active = false;
+    s_tryconnect_phase = APP_WIFI_TRY_PHASE_IDLE;
+    s_tryconnect_cancel_requested = false;
+    s_tryconnect_require_ip = false;
+    s_tryconnect_candidate_ssid[0] = '\0';
+    s_tryconnect_candidate_ssid_len = 0;
+    memset(s_tryconnect_candidate_bssid, 0, sizeof(s_tryconnect_candidate_bssid));
+    s_tryconnect_candidate_bssid_valid = false;
+    app_wifi_tryconnect_state_unlock();
+}
+
+static void app_wifi_tryconnect_set_phase(app_wifi_try_phase_t phase)
+{
+    app_wifi_tryconnect_state_lock();
+    s_tryconnect_phase = phase;
+    app_wifi_tryconnect_state_unlock();
+}
+
+static void app_wifi_tryconnect_set_result_done(app_wifi_try_result_t result)
+{
+    app_wifi_tryconnect_state_lock();
+    if (s_tryconnect_phase != APP_WIFI_TRY_PHASE_IDLE &&
+        s_tryconnect_phase != APP_WIFI_TRY_PHASE_DONE) {
+        s_tryconnect_result = result;
+        s_tryconnect_phase = APP_WIFI_TRY_PHASE_DONE;
+    }
+    app_wifi_tryconnect_state_unlock();
+}
 
 #define APP_WIFI_PROFILE_ATTEMPTED_MASK_BITS ((unsigned)(sizeof(s_wifi_attempted_mask) * 8U))
 
@@ -978,7 +1104,7 @@ static void app_wifi_boot_monitor_task_fn(void *arg)
         connect_task_snapshot = s_wifi_connect_task;
         /* D1 看门狗:只在没有用户 tryconnect/scan 占用时计时;
          * 标志 30s 没有被 connected/disconnected 事件回收就强制清零。 */
-        if (!sta_connecting || s_tryconnect_active || s_wifi_auto_connect_suspended) {
+        if (!sta_connecting || app_wifi_tryconnect_is_active() || s_wifi_auto_connect_suspended) {
             s_wifi_connecting_since_ms = 0;
         } else if (s_wifi_connecting_since_ms == 0) {
             s_wifi_connecting_since_ms = now_ms;
@@ -1019,7 +1145,7 @@ static void app_wifi_boot_monitor_task_fn(void *arg)
         } else if (s_wifi_rt_armed && !startup_connect_active && net_mode == NET_MODE_STA &&
                    !sta_connected && !sta_has_ip && !sta_connecting &&
                    connect_task_snapshot == NULL &&
-                   !s_tryconnect_active &&
+                   !app_wifi_tryconnect_is_active() &&
                    !s_wifi_auto_connect_suspended &&
                    !ble_connected) {
             /* 运行时断网兜底:复用 schedule_connect_task 单一入口(互斥自动生效),
@@ -1046,7 +1172,7 @@ static void app_wifi_boot_monitor_task_fn(void *arg)
         } else if (s_wifi_rt_armed && !startup_connect_active && net_mode == NET_MODE_STA &&
                    !sta_connected && !sta_has_ip && !sta_connecting &&
                    connect_task_snapshot == NULL &&
-                   !s_tryconnect_active &&
+                   !app_wifi_tryconnect_is_active() &&
                    !s_wifi_auto_connect_suspended &&
                    ble_connected) {
             /* 产品决策 A(2026-11-01):BLE 连接期间只试正式 SSID,不扫描
@@ -1210,6 +1336,222 @@ static esp_err_t app_wifi_retry_with_pmf_required(void)
     return esp_wifi_connect();
 }
 
+static app_wifi_try_match_t app_wifi_tryconnect_match_locked(const uint8_t *ssid,
+                                                            uint8_t ssid_len,
+                                                            const uint8_t *bssid)
+{
+    bool have_identity = false;
+    bool ssid_match = false;
+    bool bssid_match = false;
+    bool bssid_nonzero = false;
+    bool bssid_conflict = false;
+    size_t i;
+
+    if (ssid != NULL && ssid_len > 0) {
+        have_identity = true;
+        if (ssid_len == s_tryconnect_candidate_ssid_len &&
+            memcmp(ssid, s_tryconnect_candidate_ssid, ssid_len) == 0) {
+            ssid_match = true;
+        }
+    }
+    if (bssid != NULL) {
+        for (i = 0; i < 6; i++) {
+            if (bssid[i] != 0) {
+                bssid_nonzero = true;
+                break;
+            }
+        }
+        if (bssid_nonzero) {
+            have_identity = true;
+            if (s_tryconnect_candidate_bssid_valid) {
+                if (memcmp(bssid, s_tryconnect_candidate_bssid, 6) == 0) {
+                    bssid_match = true;
+                } else {
+                    bssid_conflict = true;
+                }
+            }
+        }
+    }
+
+    /* BSSID 是更强的归属证据：同一 SSID 的不同 BSSID 不能因 SSID 相同
+     * 就被认领为候选；信息冲突时按 UNKNOWN 处理，不终结候选。 */
+    if (bssid_conflict) {
+        return ssid_match ? APP_WIFI_TRY_MATCH_UNKNOWN : APP_WIFI_TRY_MATCH_OLD;
+    }
+    if (ssid_match || bssid_match) {
+        return APP_WIFI_TRY_MATCH_CANDIDATE;
+    }
+    if (have_identity) {
+        return APP_WIFI_TRY_MATCH_OLD;
+    }
+    return APP_WIFI_TRY_MATCH_UNKNOWN;
+}
+
+static app_wifi_try_result_t app_wifi_tryconnect_classify_reason(uint8_t reason)
+{
+    switch (reason) {
+    case 15:  /* 4WAY_HANDSHAKE_TIMEOUT */
+    case 202: /* AUTH_FAIL */
+    case 2:   /* AUTH_EXPIRE */
+        return APP_WIFI_TRY_WRONG_PASSWORD;
+    case 201: /* NO_AP_FOUND */
+    case 203: /* ASSOC_FAIL */
+        return APP_WIFI_TRY_AP_NOT_FOUND;
+    default:
+        return APP_WIFI_TRY_CONNECT_FAILED;
+    }
+}
+
+/* 返回 true 表示该事件已由 tryconnect 生命周期消费，普通重连逻辑必须跳过。 */
+static bool app_wifi_tryconnect_on_disconnected(const wifi_event_sta_disconnected_t *event)
+{
+    bool handled = false;
+    bool old_event = false;
+    bool done_event = false;
+    bool unknown_event = false;
+    app_wifi_try_phase_t phase;
+    app_wifi_try_result_t result = APP_WIFI_TRY_CONNECT_FAILED;
+    EventGroupHandle_t events;
+
+    app_wifi_tryconnect_state_lock();
+    phase = s_tryconnect_phase;
+    events = s_tryconnect_events;
+    if (s_tryconnect_active && phase != APP_WIFI_TRY_PHASE_IDLE) {
+        handled = true;
+        switch (phase) {
+        case APP_WIFI_TRY_PHASE_PRE_SCAN:
+        case APP_WIFI_TRY_PHASE_CLEANUP_OLD:
+        case APP_WIFI_TRY_PHASE_WAIT_OLD_DISCONNECT:
+            /* 候选连接尚未启动：所有断连都只能属于旧生命周期。 */
+            old_event = true;
+            break;
+        case APP_WIFI_TRY_PHASE_CANDIDATE_STARTING:
+            /* 候选配置/启动窗口：不接受成功，也不接受失败。 */
+            break;
+        case APP_WIFI_TRY_PHASE_CANDIDATE_CONNECTING: {
+            app_wifi_try_match_t match = app_wifi_tryconnect_match_locked(
+                event->ssid, event->ssid_len, event->bssid);
+            if (match == APP_WIFI_TRY_MATCH_CANDIDATE) {
+                result = app_wifi_tryconnect_classify_reason(event->reason);
+                s_tryconnect_result = result;
+                s_tryconnect_phase = APP_WIFI_TRY_PHASE_DONE;
+                done_event = true;
+            } else if (match == APP_WIFI_TRY_MATCH_UNKNOWN) {
+                unknown_event = true;
+            }
+            /* 旧 AP/信息不足的事件不写候选结果；候选失败/超时仍由
+             * 真实候选事件或上层 timeout 收敛。 */
+            break;
+        }
+        case APP_WIFI_TRY_PHASE_DONE:
+            break;
+        default:
+            break;
+        }
+    }
+    app_wifi_tryconnect_state_unlock();
+
+    if (old_event) {
+        ESP_LOGI(TAG, "tryconnect: old disconnect consumed reason=%d(%s)",
+                 event->reason, app_wifi_reason_name(event->reason));
+    }
+    if (done_event) {
+        ESP_LOGI(TAG, "tryconnect failed: reason=%d(%s)",
+                 event->reason, app_wifi_reason_name(event->reason));
+    } else if (unknown_event) {
+        ESP_LOGW(TAG, "tryconnect: unowned disconnect ignored reason=%d(%s)",
+                 event->reason, app_wifi_reason_name(event->reason));
+    }
+    if (events != NULL && old_event) {
+        xEventGroupSetBits(events, APP_WIFI_TRY_OLD_DISC_BIT);
+    }
+    if (events != NULL && done_event) {
+        xEventGroupSetBits(events, APP_WIFI_TRY_DONE_BIT);
+    }
+    return handled;
+}
+
+static bool app_wifi_tryconnect_on_connected(const wifi_event_sta_connected_t *event)
+{
+    bool handled = false;
+    bool done_event = false;
+    bool need_dhcp = false;
+    EventGroupHandle_t events;
+
+    app_wifi_tryconnect_state_lock();
+    events = s_tryconnect_events;
+    if (s_tryconnect_active && s_tryconnect_phase != APP_WIFI_TRY_PHASE_IDLE) {
+        handled = true;
+        if (s_tryconnect_phase == APP_WIFI_TRY_PHASE_CANDIDATE_CONNECTING &&
+            app_wifi_tryconnect_match_locked(event->ssid, event->ssid_len,
+                                             event->bssid) == APP_WIFI_TRY_MATCH_CANDIDATE) {
+            if (!s_tryconnect_require_ip) {
+                s_tryconnect_result = APP_WIFI_TRY_OK;
+                s_tryconnect_phase = APP_WIFI_TRY_PHASE_DONE;
+                done_event = true;
+            } else {
+                need_dhcp = true;
+            }
+        }
+    }
+    app_wifi_tryconnect_state_unlock();
+
+    if (need_dhcp) {
+        esp_err_t stop_err = esp_netif_dhcpc_stop(s_sta_netif);
+        esp_err_t start_err;
+
+        if (stop_err != ESP_OK && stop_err != ESP_ERR_ESP_NETIF_DHCP_ALREADY_STOPPED) {
+            ESP_LOGW(TAG, "tryconnect: dhcpc_stop: %s", esp_err_to_name(stop_err));
+        }
+        start_err = esp_netif_dhcpc_start(s_sta_netif);
+        if (start_err != ESP_OK && start_err != ESP_ERR_ESP_NETIF_DHCP_ALREADY_STARTED) {
+            ESP_LOGW(TAG, "tryconnect: dhcpc_start: %s", esp_err_to_name(start_err));
+        }
+    }
+    if (events != NULL && done_event) {
+        xEventGroupSetBits(events, APP_WIFI_TRY_DONE_BIT);
+    }
+    return handled;
+}
+
+static bool app_wifi_tryconnect_on_got_ip(void)
+{
+    bool handled = false;
+    bool candidate_wait = false;
+    bool done_event = false;
+    EventGroupHandle_t events;
+    wifi_ap_record_t ap_info;
+
+    app_wifi_tryconnect_state_lock();
+    events = s_tryconnect_events;
+    if (s_tryconnect_active && s_tryconnect_phase != APP_WIFI_TRY_PHASE_IDLE) {
+        handled = true;
+        candidate_wait = (s_tryconnect_phase == APP_WIFI_TRY_PHASE_CANDIDATE_CONNECTING &&
+                          s_tryconnect_require_ip);
+    }
+    app_wifi_tryconnect_state_unlock();
+
+    if (candidate_wait && esp_wifi_sta_get_ap_info(&ap_info) == ESP_OK) {
+        size_t ssid_len = strlen((const char *)ap_info.ssid);
+
+        app_wifi_tryconnect_state_lock();
+        if (s_tryconnect_active &&
+            s_tryconnect_phase == APP_WIFI_TRY_PHASE_CANDIDATE_CONNECTING &&
+            s_tryconnect_require_ip &&
+            app_wifi_tryconnect_match_locked(ap_info.ssid, (uint8_t)ssid_len,
+                                             ap_info.bssid) == APP_WIFI_TRY_MATCH_CANDIDATE) {
+            s_tryconnect_result = APP_WIFI_TRY_OK;
+            s_tryconnect_phase = APP_WIFI_TRY_PHASE_DONE;
+            done_event = true;
+        }
+        app_wifi_tryconnect_state_unlock();
+    }
+    /* 查询失败/归属不明：不判成功也不判失败，继续等待有效事件或 timeout。 */
+    if (events != NULL && done_event) {
+        xEventGroupSetBits(events, APP_WIFI_TRY_DONE_BIT);
+    }
+    return handled;
+}
 static void app_wifi_event_handler(void *arg, esp_event_base_t event_base, int32_t event_id, void *event_data)
 {
     (void)arg;
@@ -1232,27 +1574,9 @@ static void app_wifi_event_handler(void *arg, esp_event_base_t event_base, int32
                 app_wifi_set_connected_ssid((const char *)ap_info.ssid);
             }
 
-            /* 试连验证:普通试连以关联成功为准;G2 候选必须继续等 DHCP/IP */
-            if (s_tryconnect_active && s_tryconnect_connecting) {
-                if (!s_tryconnect_require_ip) {
-                    s_tryconnect_result = APP_WIFI_TRY_OK;
-                    if (s_tryconnect_events != NULL) {
-                        xEventGroupSetBits(s_tryconnect_events, APP_WIFI_TRY_DONE_BIT);
-                    }
-                    break;
-                }
-                {
-                    esp_err_t stop_err = esp_netif_dhcpc_stop(s_sta_netif);
-                    esp_err_t start_err;
-
-                    if (stop_err != ESP_OK && stop_err != ESP_ERR_ESP_NETIF_DHCP_ALREADY_STOPPED) {
-                        ESP_LOGW(TAG, "tryconnect: dhcpc_stop: %s", esp_err_to_name(stop_err));
-                    }
-                    start_err = esp_netif_dhcpc_start(s_sta_netif);
-                    if (start_err != ESP_OK && start_err != ESP_ERR_ESP_NETIF_DHCP_ALREADY_STARTED) {
-                        ESP_LOGW(TAG, "tryconnect: dhcpc_start: %s", esp_err_to_name(start_err));
-                    }
-                }
+            /* 试连验证:只有明确匹配当前候选 SSID/BSSID 的事件才可改结果。 */
+            if (app_wifi_tryconnect_on_connected(
+                    (const wifi_event_sta_connected_t *)event_data)) {
                 break;
             }
 
@@ -1299,36 +1623,9 @@ static void app_wifi_event_handler(void *arg, esp_event_base_t event_base, int32
             /* 链路已断，运行态 SSID 立即失效。保留最后连过的值会误导 App 判"还连着"。 */
             app_wifi_set_connected_ssid("");
 
-            /* 试连验证:旧链路拆除的断开事件单独标记,不能算候选失败;
-             * 候选连接失败才记结果;无论如何都跳过正常重连逻辑 */
-            if (s_tryconnect_active) {
-                if (!s_tryconnect_connecting) {
-                    if (s_tryconnect_events != NULL) {
-                        xEventGroupSetBits(s_tryconnect_events, APP_WIFI_TRY_OLD_DISC_BIT);
-                    }
-                    break;
-                }
-                if (s_tryconnect_connecting) {
-                    switch (disconnected->reason) {
-                    case 15:  /* 4WAY_HANDSHAKE_TIMEOUT:口令错误最常见 */
-                    case 202: /* AUTH_FAIL */
-                    case 2:   /* AUTH_EXPIRE */
-                        s_tryconnect_result = APP_WIFI_TRY_WRONG_PASSWORD;
-                        break;
-                    case 201: /* NO_AP_FOUND */
-                    case 203: /* ASSOC_FAIL */
-                        s_tryconnect_result = APP_WIFI_TRY_AP_NOT_FOUND;
-                        break;
-                    default:
-                        s_tryconnect_result = APP_WIFI_TRY_CONNECT_FAILED;
-                        break;
-                    }
-                    ESP_LOGI(TAG, "tryconnect failed: reason=%d(%s)", disconnected->reason,
-                             app_wifi_reason_name(disconnected->reason));
-                    if (s_tryconnect_events != NULL) {
-                    xEventGroupSetBits(s_tryconnect_events, APP_WIFI_TRY_DONE_BIT);
-                }
-                }
+            /* 试连验证:旧链路断开不能终结候选;只有候选 SSID/BSSID
+             * 明确匹配的事件才可写结果。事件归属由 helper 统一处理。 */
+            if (app_wifi_tryconnect_on_disconnected(disconnected)) {
                 break;
             }
 
@@ -1423,14 +1720,9 @@ static void app_wifi_event_handler(void *arg, esp_event_base_t event_base, int32
         ip_event_got_ip_t *event = event_data;
 
         /* 试连验证:拿 IP 属候选连接,不写运行时状态/不回写 profile。
-         * 必须处于候选 connecting 阶段,避免旧连接的迟到 IP 事件误判成功。 */
-        if (s_tryconnect_active) {
-            if (s_tryconnect_require_ip && s_tryconnect_connecting) {
-                s_tryconnect_result = APP_WIFI_TRY_OK;
-                if (s_tryconnect_events != NULL) {
-                    xEventGroupSetBits(s_tryconnect_events, APP_WIFI_TRY_DONE_BIT);
-                }
-            }
+         * GOT_IP 本身不带 SSID，必须用当前 AP info 校验归属；查询失败
+         * 时继续等待有效事件/超时，不能误报成功或失败。 */
+        if (app_wifi_tryconnect_on_got_ip()) {
             return;
         }
 
@@ -1615,8 +1907,40 @@ esp_err_t app_wifi_perform_scan_command(void)
 
 /* ---------------------------------------------------------------------------
  * 试连验证(1.3-37):临时换候选 SSID/口令真连一次验证口令正确性。
- * 期间事件处理器只记结果(见 s_tryconnect_active 分支),结束无条件恢复旧配置,
- * 再交回常规自动重连路径回到原状态。调用方(HTTP handler)会阻塞等待结果。
+ * 事件归属由 tryconnect phase + 候选 SSID/BSSID 匹配决定；结束无条件恢复
+ * 旧配置并交回常规自动重连路径。调用方(HTTP handler)会阻塞等待结果。
+ * ------------------------------------------------------------------------- */
+static app_wifi_try_result_t app_wifi_tryconnect_finish(app_wifi_try_result_t result,
+                                                        bool restore_old,
+                                                        wifi_config_t *old_cfg,
+                                                        bool disconnect_candidate)
+{
+    app_wifi_try_result_t final_result;
+
+    /* 先关闭候选事件写入权限，再 teardown；DONE 期间事件不能改结果。 */
+    app_wifi_tryconnect_set_result_done(result);
+    final_result = app_wifi_tryconnect_get_result();
+
+    if (disconnect_candidate) {
+        esp_wifi_disconnect();
+    }
+    if (restore_old && old_cfg != NULL) {
+        if (esp_wifi_set_config(WIFI_IF_STA, old_cfg) != ESP_OK) {
+            ESP_LOGW(TAG, "tryconnect: restore sta config failed");
+        }
+    }
+    s_wifi_sta_connecting = false;
+    app_wifi_tryconnect_release();
+    app_wifi_auto_connect_resume();
+    app_wifi_schedule_connect_task(pdMS_TO_TICKS(400));
+    return final_result;
+}
+
+/* ---------------------------------------------------------------------------
+ * 试连验证(1.3-37):临时换候选 SSID/口令真连一次验证口令正确性。
+ * tryconnect 从预扫描开始持有 Wi-Fi 连接操作所有权；旧连接清理、候选启动、
+ * 候选连接和 teardown 由 phase 明确分开。候选事件必须匹配候选 SSID/BSSID，
+ * 信息不足的事件不能终结候选。结束无条件恢复旧配置并交回自动重连。
  * ------------------------------------------------------------------------- */
 static app_wifi_try_result_t app_wifi_try_connect_common(const char *ssid, const char *password,
                                                          uint32_t timeout_ms, bool require_ip)
@@ -1625,6 +1949,9 @@ static app_wifi_try_result_t app_wifi_try_connect_common(const char *ssid, const
     wifi_config_t candidate = {0};
     uint16_t scan_count;
     bool ssid_seen = false;
+    bool old_connected = false;
+    bool old_connecting = false;
+    bool candidate_config_set = false;
     EventGroupHandle_t events;
     esp_err_t err;
     int i;
@@ -1635,23 +1962,39 @@ static app_wifi_try_result_t app_wifi_try_connect_common(const char *ssid, const
     if (password == NULL) {
         password = "";
     }
-    if (s_tryconnect_active) {
-        ESP_LOGW(TAG, "tryconnect busy (active=1)");
+
+    /* ownership 必须在预扫描之前建立；预扫描期间的断连不能进入普通重连。 */
+    portENTER_CRITICAL(&s_tryconnect_mux);
+    events = s_tryconnect_events;
+    if (events == NULL) {
+        events = xEventGroupCreateStatic(&s_tryconnect_events_buf);
+        s_tryconnect_events = events;
+    }
+    portEXIT_CRITICAL(&s_tryconnect_mux);
+    if (events == NULL) {
+        return APP_WIFI_TRY_CONNECT_FAILED;
+    }
+    xEventGroupClearBits(events, APP_WIFI_TRY_DONE_BIT | APP_WIFI_TRY_OLD_DISC_BIT);
+    if (!app_wifi_tryconnect_begin(ssid, require_ip)) {
+        ESP_LOGW(TAG, "tryconnect busy (phase=%d)", (int)app_wifi_tryconnect_get_phase());
         return APP_WIFI_TRY_BUSY;
     }
+
     /* BLE 救援优先:暂停自动重连,等当前 connect task 退出后再试连。
-     * 否则 STA 失败重连中的 scan/connect 会和候选流程互相干扰。 */
+     * ownership 已建立,期间的断连由 tryconnect helper 消费。 */
     app_wifi_auto_connect_suspend();
     if (!app_wifi_wait_connect_task_idle(15000)) {
-        app_wifi_auto_connect_resume();
         ESP_LOGW(TAG, "tryconnect busy: auto-connect task still running");
-        return APP_WIFI_TRY_BUSY;
+        return app_wifi_tryconnect_finish(APP_WIFI_TRY_BUSY, false, NULL, false);
     }
 
     if (esp_wifi_get_config(WIFI_IF_STA, &old_cfg) != ESP_OK) {
         ESP_LOGW(TAG, "tryconnect: get sta config failed");
-        app_wifi_auto_connect_resume();
-        return APP_WIFI_TRY_CONNECT_FAILED;
+        return app_wifi_tryconnect_finish(APP_WIFI_TRY_CONNECT_FAILED, false, NULL, false);
+    }
+
+    if (app_wifi_tryconnect_cancel_get()) {
+        return app_wifi_tryconnect_finish(APP_WIFI_TRY_CANCELLED, false, NULL, false);
     }
 
     /* 预检(方案 C→A,P1-10):扫描确认 SSID 在场。隐藏网络扫不到 —— 属预期限制,前端文案说明。
@@ -1661,13 +2004,22 @@ static app_wifi_try_result_t app_wifi_try_connect_common(const char *ssid, const
     {
         esp_err_t scan_err = app_wifi_perform_scan();
 
+        if (app_wifi_tryconnect_cancel_get()) {
+            return app_wifi_tryconnect_finish(APP_WIFI_TRY_CANCELLED, false, NULL, false);
+        }
         if (scan_err != ESP_OK && scan_err != ESP_ERR_INVALID_ARG) {
             ESP_LOGW(TAG, "tryconnect: pre-scan failed (%s), one retry in 500ms",
                      esp_err_to_name(scan_err));
             vTaskDelay(pdMS_TO_TICKS(500));
             scan_err = app_wifi_perform_scan();
         }
+        if (app_wifi_tryconnect_cancel_get()) {
+            return app_wifi_tryconnect_finish(APP_WIFI_TRY_CANCELLED, false, NULL, false);
+        }
         if (scan_err == ESP_OK) {
+            uint8_t candidate_bssid[6] = {0};
+            bool candidate_bssid_valid = false;
+
             app_wifi_runtime_lock();
             scan_count = s_wifi.scan_count;
             app_wifi_runtime_unlock();
@@ -1679,19 +2031,33 @@ static app_wifi_try_result_t app_wifi_try_connect_common(const char *ssid, const
                 if (app_wifi_scan_record_at((uint16_t)i, &seen, &rssi, &auth) &&
                     seen != NULL && strcmp(seen, ssid) == 0) {
                     ssid_seen = true;
+                    app_wifi_runtime_lock();
+                    if ((uint16_t)i < s_wifi.scan_count) {
+                        memcpy(candidate_bssid, S_WIFI_SCAN_RECORDS[i].bssid,
+                               sizeof(candidate_bssid));
+                        candidate_bssid_valid = true;
+                    }
+                    app_wifi_runtime_unlock();
                     break;
                 }
             }
             if (!ssid_seen) {
                 ESP_LOGW(TAG, "tryconnect: ssid '%s' not in scan results", ssid);
-                app_wifi_auto_connect_resume();
-                return APP_WIFI_TRY_AP_NOT_FOUND;
+                return app_wifi_tryconnect_finish(APP_WIFI_TRY_AP_NOT_FOUND,
+                                                  false, NULL, false);
+            }
+            if (candidate_bssid_valid) {
+                app_wifi_tryconnect_state_lock();
+                memcpy(s_tryconnect_candidate_bssid, candidate_bssid,
+                       sizeof(s_tryconnect_candidate_bssid));
+                s_tryconnect_candidate_bssid_valid = true;
+                app_wifi_tryconnect_state_unlock();
             }
         } else {
             ESP_LOGW(TAG, "tryconnect: pre-scan failed twice (%s), abort before connect",
                      esp_err_to_name(scan_err));
-            app_wifi_auto_connect_resume();
-            return APP_WIFI_TRY_SCAN_FAILED;
+            return app_wifi_tryconnect_finish(APP_WIFI_TRY_SCAN_FAILED,
+                                              false, NULL, false);
         }
     }
 
@@ -1703,76 +2069,50 @@ static app_wifi_try_result_t app_wifi_try_connect_common(const char *ssid, const
     candidate.sta.pmf_cfg.required = false;
     candidate.sta.scan_method = WIFI_ALL_CHANNEL_SCAN;
 
-    {
-        EventGroupHandle_t created;
+    app_wifi_runtime_lock();
+    old_connected = s_wifi.sta_connected;
+    app_wifi_runtime_unlock();
+    old_connecting = s_wifi_sta_connecting;
 
-        portENTER_CRITICAL(&s_tryconnect_mux);
-        created = s_tryconnect_events;
-        if (created == NULL) {
-            created = xEventGroupCreateStatic(&s_tryconnect_events_buf);
-            s_tryconnect_events = created;
-        }
-        portEXIT_CRITICAL(&s_tryconnect_mux);
-        events = created;
-    }
-    if (events == NULL) {
-        app_wifi_auto_connect_resume();
-        return APP_WIFI_TRY_CONNECT_FAILED;
-    }
+    app_wifi_tryconnect_set_phase(APP_WIFI_TRY_PHASE_CLEANUP_OLD);
+    s_wifi_sta_connecting = true;   /* 抑制 boot monitor 的自动调度 */
+    esp_wifi_disconnect();
 
-    {
-        bool old_connected;
-
-        app_wifi_runtime_lock();
-        old_connected = s_wifi.sta_connected;
-        app_wifi_runtime_unlock();
-
-        xEventGroupClearBits(events, APP_WIFI_TRY_DONE_BIT | APP_WIFI_TRY_OLD_DISC_BIT);
-        s_tryconnect_result = APP_WIFI_TRY_TIMEOUT;
-        s_tryconnect_require_ip = require_ip;
-        s_tryconnect_cancel_requested = false;
-        s_tryconnect_active = true;
-        s_tryconnect_connecting = false;
-        s_wifi_sta_connecting = true;   /* 抑制 boot monitor 的自动调度 */
-
-        esp_wifi_disconnect();
-        if (old_connected &&
-            xEventGroupWaitBits(events, APP_WIFI_TRY_OLD_DISC_BIT, pdTRUE, pdFALSE,
+    if (old_connected || old_connecting) {
+        app_wifi_tryconnect_set_phase(APP_WIFI_TRY_PHASE_WAIT_OLD_DISCONNECT);
+        if (xEventGroupWaitBits(events, APP_WIFI_TRY_OLD_DISC_BIT, pdTRUE, pdFALSE,
                                 pdMS_TO_TICKS(2000)) == 0) {
-            /* 旧链路断开事件没来,继续候选会把迟到事件误算成候选失败。 */
+            /* 旧链路生命周期未收敛，不能启动候选。 */
             ESP_LOGW(TAG, "tryconnect: old link disconnect not observed, abort");
-            s_tryconnect_active = false;
-            s_tryconnect_connecting = false;
-            s_tryconnect_require_ip = false;
-            s_wifi_sta_connecting = false;
-            (void)esp_wifi_set_config(WIFI_IF_STA, &old_cfg);
-            app_wifi_auto_connect_resume();
-            app_wifi_schedule_connect_task(pdMS_TO_TICKS(400));
-            return APP_WIFI_TRY_CONNECT_FAILED;
+            return app_wifi_tryconnect_finish(APP_WIFI_TRY_CONNECT_FAILED,
+                                              true, &old_cfg, false);
         }
     }
-    err = esp_wifi_set_config(WIFI_IF_STA, &candidate);
-    if (err == ESP_OK) {
-        s_tryconnect_connecting = true;
-        app_wifi_log_sta_cfg("tryconnect", &candidate);
-        err = esp_wifi_connect();
+
+    if (app_wifi_tryconnect_cancel_get()) {
+        return app_wifi_tryconnect_finish(APP_WIFI_TRY_CANCELLED, true, &old_cfg, false);
     }
+
+    app_wifi_tryconnect_set_phase(APP_WIFI_TRY_PHASE_CANDIDATE_STARTING);
+    err = esp_wifi_set_config(WIFI_IF_STA, &candidate);
     if (err != ESP_OK) {
-        ESP_LOGW(TAG, "tryconnect: set_config/connect failed: %s", esp_err_to_name(err));
-        s_tryconnect_active = false;
-        s_tryconnect_connecting = false;
-        s_tryconnect_require_ip = false;
-        s_wifi_sta_connecting = false;
-        (void)esp_wifi_set_config(WIFI_IF_STA, &old_cfg);
-        app_wifi_auto_connect_resume();
-        app_wifi_schedule_connect_task(pdMS_TO_TICKS(400));
-        return APP_WIFI_TRY_CONNECT_FAILED;
+        ESP_LOGW(TAG, "tryconnect: set_config failed: %s", esp_err_to_name(err));
+        return app_wifi_tryconnect_finish(APP_WIFI_TRY_CONNECT_FAILED,
+                                          true, &old_cfg, false);
+    }
+    candidate_config_set = true;
+    app_wifi_tryconnect_set_phase(APP_WIFI_TRY_PHASE_CANDIDATE_CONNECTING);
+    app_wifi_log_sta_cfg("tryconnect", &candidate);
+    err = esp_wifi_connect();
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "tryconnect: connect failed: %s", esp_err_to_name(err));
+        return app_wifi_tryconnect_finish(APP_WIFI_TRY_CONNECT_FAILED,
+                                          true, &old_cfg, candidate_config_set);
     }
 
     {
         int64_t deadline = app_wifi_now_ms() + (int64_t)timeout_ms;
         bool cancelled = false;
-        bool done = false;
 
         while (app_wifi_now_ms() < deadline) {
             int64_t remaining = deadline - app_wifi_now_ms();
@@ -1780,37 +2120,25 @@ static app_wifi_try_result_t app_wifi_try_connect_common(const char *ssid, const
             EventBits_t bits = xEventGroupWaitBits(events, APP_WIFI_TRY_DONE_BIT,
                                                    pdTRUE, pdFALSE, wait_ticks);
             if ((bits & APP_WIFI_TRY_DONE_BIT) != 0) {
-                done = true;
                 break;
             }
-            if (s_tryconnect_cancel_requested) {
+            if (app_wifi_tryconnect_cancel_get()) {
                 cancelled = true;
                 break;
             }
         }
-        if (cancelled) {
-            s_tryconnect_result = APP_WIFI_TRY_CANCELLED;
-        } else if (!done) {
-            s_tryconnect_result = APP_WIFI_TRY_TIMEOUT;
+        if (app_wifi_tryconnect_get_phase() != APP_WIFI_TRY_PHASE_DONE) {
+            if (cancelled) {
+                app_wifi_tryconnect_set_result_done(APP_WIFI_TRY_CANCELLED);
+            } else {
+                app_wifi_tryconnect_set_result_done(APP_WIFI_TRY_TIMEOUT);
+            }
         }
     }
 
-    /* 无条件恢复:断开候选连接,放回旧配置,交回常规自动重连 */
-    esp_wifi_disconnect();
-    s_tryconnect_active = false;
-    s_tryconnect_connecting = false;
-    s_tryconnect_require_ip = false;
-    s_tryconnect_cancel_requested = false;
-    s_wifi_sta_connecting = false;
-    if (esp_wifi_set_config(WIFI_IF_STA, &old_cfg) != ESP_OK) {
-        ESP_LOGW(TAG, "tryconnect: restore sta config failed");
-    }
-    app_wifi_auto_connect_resume();
-    app_wifi_schedule_connect_task(pdMS_TO_TICKS(400));
-
-    ESP_LOGI(TAG, "tryconnect ssid='%s' result=%d require_ip=%d",
-             ssid, (int)s_tryconnect_result, require_ip ? 1 : 0);
-    return s_tryconnect_result;
+    /* teardown 必须先锁定 DONE，再断开候选；DONE 期间事件不能覆盖终态。 */
+    return app_wifi_tryconnect_finish(APP_WIFI_TRY_CONNECT_FAILED,
+                                      true, &old_cfg, candidate_config_set);
 }
 
 app_wifi_try_result_t app_wifi_try_connect(const char *ssid, const char *password,
@@ -1827,11 +2155,15 @@ app_wifi_try_result_t app_wifi_try_connect_ip(const char *ssid, const char *pass
 
 bool app_wifi_try_cancel(void)
 {
-    if (!s_tryconnect_active) {
-        return false;
+    bool cancelled = false;
+
+    app_wifi_tryconnect_state_lock();
+    if (s_tryconnect_active && s_tryconnect_phase != APP_WIFI_TRY_PHASE_IDLE) {
+        s_tryconnect_cancel_requested = true;
+        cancelled = true;
     }
-    s_tryconnect_cancel_requested = true;
-    return true;
+    app_wifi_tryconnect_state_unlock();
+    return cancelled;
 }
 
 static void app_wifi_restart_task_fn(void *arg)
