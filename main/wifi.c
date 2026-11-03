@@ -223,7 +223,9 @@ static void app_wifi_boot_ticket_consume(void)
     if (t.magic != APP_WIFI_BOOT_TICKET_MAGIC ||
         t.version != APP_WIFI_BOOT_TICKET_VERSION ||
         t.crc != app_wifi_boot_ticket_crc(&t)) {
-        if (t.magic != 0 || t.version != 0 || t.stage != 0 || t.count != 0) {
+        if (t.magic != 0 || t.version != 0 || t.stage != 0 || t.count != 0 ||
+            t.reserved[0] != 0 || t.reserved[1] != 0 || t.reserved[2] != 0 ||
+            t.crc != 0) {
             ESP_LOGW(TAG, "ticket_seen=1 invalid=1");
         }
         return;
