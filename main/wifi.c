@@ -103,12 +103,14 @@ typedef struct {
     app_wifi_apply_stage_t fail_stage;
     int fail_count;
     int stop_fail_count;
-    volatile bool hold_armed;
-    volatile bool hold_release;
+    bool hold_armed;
+    bool hold_release;
+    bool hold_claimed;
     int hold_timeout_ms;
     uint32_t hold_seq;
 } app_wifi_test_hook_t;
 static app_wifi_test_hook_t s_wifi_hook;
+static portMUX_TYPE s_wifi_hook_mux = portMUX_INITIALIZER_UNLOCKED;
 static bool app_wifi_test_take_failure(app_wifi_apply_stage_t stage);
 static bool app_wifi_test_take_stop_failure(void);
 static void app_wifi_test_connect_hold_wait(const char *path);
@@ -635,6 +637,14 @@ static esp_err_t app_configure_sta_static_ip(app_wifi_apply_stage_t *stage_out)
     app_copy_string(dns2_str, sizeof(dns2_str), s_config.sta_static_dns2);
     app_config_unlock();
 
+#ifdef APP_WIFI_FAULT_INJECT
+    if (app_wifi_test_take_failure(APP_WIFI_APPLY_STAGE_STATIC_PARSE)) {
+        if (stage_out != NULL) {
+            *stage_out = APP_WIFI_APPLY_STAGE_STATIC_PARSE;
+        }
+        return ESP_ERR_INVALID_ARG;
+    }
+#endif
     if (!app_parse_ipv4_str(ip_str, &ip_info.ip) ||
         !app_parse_ipv4_str(gw_str, &ip_info.gw) ||
         !app_parse_ipv4_str(mask_str, &ip_info.netmask)) {
@@ -2368,80 +2378,136 @@ static bool app_wifi_test_stage_from_name(const char *name, app_wifi_apply_stage
 
 static bool app_wifi_test_take_failure(app_wifi_apply_stage_t stage)
 {
-    if (!s_wifi_hook.active || s_wifi_hook.fail_count <= 0 ||
-        s_wifi_hook.fail_stage != stage) {
-        return false;
+    bool hit = false;
+    int remaining = 0;
+
+    portENTER_CRITICAL(&s_wifi_hook_mux);
+    if (s_wifi_hook.active && s_wifi_hook.fail_count > 0 &&
+        s_wifi_hook.fail_stage == stage) {
+        s_wifi_hook.fail_count -= 1;
+        remaining = s_wifi_hook.fail_count;
+        hit = true;
     }
-    s_wifi_hook.fail_count -= 1;
-    ESP_LOGW(TAG, "hook_apply_fail stage=%s remaining=%d",
-             app_wifi_apply_stage_name(stage), s_wifi_hook.fail_count);
-    return true;
+    portEXIT_CRITICAL(&s_wifi_hook_mux);
+    if (hit) {
+        ESP_LOGW(TAG, "hook_apply_fail stage=%s remaining=%d",
+                 app_wifi_apply_stage_name(stage), remaining);
+    }
+    return hit;
 }
 
 static bool app_wifi_test_take_stop_failure(void)
 {
-    if (!s_wifi_hook.active || s_wifi_hook.stop_fail_count <= 0) {
-        return false;
+    bool hit = false;
+    int remaining = 0;
+
+    portENTER_CRITICAL(&s_wifi_hook_mux);
+    if (s_wifi_hook.active && s_wifi_hook.stop_fail_count > 0) {
+        s_wifi_hook.stop_fail_count -= 1;
+        remaining = s_wifi_hook.stop_fail_count;
+        hit = true;
     }
-    s_wifi_hook.stop_fail_count -= 1;
-    ESP_LOGW(TAG, "hook_stop_fail remaining=%d", s_wifi_hook.stop_fail_count);
-    return true;
+    portEXIT_CRITICAL(&s_wifi_hook_mux);
+    if (hit) {
+        ESP_LOGW(TAG, "hook_stop_fail remaining=%d", remaining);
+    }
+    return hit;
 }
 
 static void app_wifi_test_connect_hold_wait(const char *path)
 {
+    bool claimed = false;
+    bool released = false;
+    int timeout_ms = 0;
+    uint32_t seq = 0;
     int64_t deadline;
-    if (!s_wifi_hook.active || !s_wifi_hook.hold_armed) {
+
+    /* 单次领取:只有第一个 connect 调用拿到 hold,其余不等待 */
+    portENTER_CRITICAL(&s_wifi_hook_mux);
+    if (s_wifi_hook.active && s_wifi_hook.hold_armed && !s_wifi_hook.hold_claimed) {
+        s_wifi_hook.hold_claimed = true;
+        s_wifi_hook.hold_seq += 1;
+        seq = s_wifi_hook.hold_seq;
+        timeout_ms = s_wifi_hook.hold_timeout_ms;
+        claimed = true;
+    }
+    portEXIT_CRITICAL(&s_wifi_hook_mux);
+    if (!claimed) {
         return;
     }
-    s_wifi_hook.hold_seq += 1;
     ESP_LOGW(TAG, "hook_connect_hold_begin path=%s seq=%u timeout=%dms",
-             path, (unsigned)s_wifi_hook.hold_seq, s_wifi_hook.hold_timeout_ms);
-    deadline = app_wifi_now_ms() + s_wifi_hook.hold_timeout_ms;
-    while (!s_wifi_hook.hold_release && app_wifi_now_ms() < deadline) {
-        vTaskDelay(pdMS_TO_TICKS(10));
+             path, (unsigned)seq, timeout_ms);
+    deadline = app_wifi_now_ms() + timeout_ms;
+    for (;;) {
+        portENTER_CRITICAL(&s_wifi_hook_mux);
+        released = s_wifi_hook.hold_release;
+        portEXIT_CRITICAL(&s_wifi_hook_mux);
+        if (released || app_wifi_now_ms() >= deadline) {
+            break;
+        }
+        vTaskDelay(pdMS_TO_TICKS(10));   /* 等待期间不持锁 */
     }
-    if (s_wifi_hook.hold_release) {
-        ESP_LOGW(TAG, "hook_connect_hold_end path=%s seq=%u (released)",
-                 path, (unsigned)s_wifi_hook.hold_seq);
-    } else {
-        ESP_LOGE(TAG, "hook_connect_hold_timeout path=%s seq=%u",
-                 path, (unsigned)s_wifi_hook.hold_seq);
-    }
+    portENTER_CRITICAL(&s_wifi_hook_mux);
+    s_wifi_hook.hold_claimed = false;
     s_wifi_hook.hold_armed = false;
     s_wifi_hook.hold_release = false;
+    portEXIT_CRITICAL(&s_wifi_hook_mux);
+    if (released) {
+        ESP_LOGW(TAG, "hook_connect_hold_end path=%s seq=%u (released)",
+                 path, (unsigned)seq);
+    } else {
+        ESP_LOGE(TAG, "hook_connect_hold_timeout path=%s seq=%u",
+                 path, (unsigned)seq);
+    }
 }
 
 esp_err_t app_wifi_test_hook(const char *action, const char *stage,
                              int count, int timeout_ms)
 {
-    if (action == NULL) return ESP_ERR_INVALID_ARG;
+    if (action == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
     if (strcmp(action, "apply_fail") == 0) {
         app_wifi_apply_stage_t st;
-        if (!app_wifi_test_stage_from_name(stage, &st) || count <= 0) return ESP_ERR_INVALID_ARG;
+        if (!app_wifi_test_stage_from_name(stage, &st) || count <= 0) {
+            return ESP_ERR_INVALID_ARG;
+        }
+        portENTER_CRITICAL(&s_wifi_hook_mux);
         s_wifi_hook.active = true;
         s_wifi_hook.fail_stage = st;
         s_wifi_hook.fail_count = count;
+        portEXIT_CRITICAL(&s_wifi_hook_mux);
         ESP_LOGW(TAG, "hook_armed apply_fail stage=%s count=%d", stage, count);
         return ESP_OK;
     }
     if (strcmp(action, "stop_fail") == 0) {
         if (count <= 0) return ESP_ERR_INVALID_ARG;
+        portENTER_CRITICAL(&s_wifi_hook_mux);
         s_wifi_hook.active = true;
         s_wifi_hook.stop_fail_count = count;
+        portEXIT_CRITICAL(&s_wifi_hook_mux);
         ESP_LOGW(TAG, "hook_armed stop_fail count=%d", count);
         return ESP_OK;
     }
     if (strcmp(action, "connect_hold") == 0) {
+        if (timeout_ms > 10000) {
+            return ESP_ERR_INVALID_ARG;   /* 上限 10s,防止误操作长期占用许可 */
+        }
+        portENTER_CRITICAL(&s_wifi_hook_mux);
         s_wifi_hook.active = true;
         s_wifi_hook.hold_armed = true;
+        s_wifi_hook.hold_claimed = false;
         s_wifi_hook.hold_release = false;
         s_wifi_hook.hold_timeout_ms = (timeout_ms > 0) ? timeout_ms : 2000;
-        ESP_LOGW(TAG, "hook_armed connect_hold timeout=%dms", s_wifi_hook.hold_timeout_ms);
+        portEXIT_CRITICAL(&s_wifi_hook_mux);
+        ESP_LOGW(TAG, "hook_armed connect_hold timeout=%dms",
+                 (timeout_ms > 0) ? timeout_ms : 2000);
         return ESP_OK;
     }
     if (strcmp(action, "connect_release") == 0) {
+        portENTER_CRITICAL(&s_wifi_hook_mux);
         s_wifi_hook.hold_release = true;
+        portEXIT_CRITICAL(&s_wifi_hook_mux);
         ESP_LOGW(TAG, "hook_connect_release");
         return ESP_OK;
     }
@@ -2451,17 +2517,43 @@ esp_err_t app_wifi_test_hook(const char *action, const char *stage,
         return ESP_OK;
     }
     if (strcmp(action, "status") == 0) {
+        bool active;
+        app_wifi_apply_stage_t st;
+        int fail_count;
+        int stop_count;
+        bool hold_armed;
+        bool await;
+        uint32_t consumed;
+        uint32_t completed;
+
+        portENTER_CRITICAL(&s_wifi_hook_mux);
+        active = s_wifi_hook.active;
+        st = s_wifi_hook.fail_stage;
+        fail_count = s_wifi_hook.fail_count;
+        stop_count = s_wifi_hook.stop_fail_count;
+        hold_armed = s_wifi_hook.hold_armed;
+        portEXIT_CRITICAL(&s_wifi_hook_mux);
+        app_wifi_runtime_lock();
+        await = s_wifi_apply_await_start;
+        consumed = s_wifi_apply_start_consumed_gen;
+        completed = s_wifi_apply_start_completed_gen;
+        app_wifi_runtime_unlock();
         ESP_LOGI(TAG, "hook_status active=%d fail_stage=%s fail_count=%d stop_fail=%d "
                       "hold_armed=%d await=%d consumed=%u completed=%u",
-                 (int)s_wifi_hook.active, app_wifi_apply_stage_name(s_wifi_hook.fail_stage),
-                 s_wifi_hook.fail_count, s_wifi_hook.stop_fail_count,
-                 (int)s_wifi_hook.hold_armed, (int)s_wifi_apply_await_start,
-                 (unsigned)s_wifi_apply_start_consumed_gen,
-                 (unsigned)s_wifi_apply_start_completed_gen);
+                 (int)active, app_wifi_apply_stage_name(st), fail_count, stop_count,
+                 (int)hold_armed, (int)await, (unsigned)consumed, (unsigned)completed);
         return ESP_OK;
     }
     if (strcmp(action, "clear") == 0) {
-        memset(&s_wifi_hook, 0, sizeof(s_wifi_hook));
+        portENTER_CRITICAL(&s_wifi_hook_mux);
+        /* 释放可能正在等待的 hold,再清状态(不 memset,避免丢 release 唤醒) */
+        s_wifi_hook.hold_release = true;
+        s_wifi_hook.hold_armed = false;
+        s_wifi_hook.active = false;
+        s_wifi_hook.fail_count = 0;
+        s_wifi_hook.stop_fail_count = 0;
+        s_wifi_hook.hold_timeout_ms = 0;
+        portEXIT_CRITICAL(&s_wifi_hook_mux);
         ESP_LOGW(TAG, "hook_cleared");
         return ESP_OK;
     }
