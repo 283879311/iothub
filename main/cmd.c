@@ -1354,6 +1354,10 @@ static void app_cmd_m1hook(const cJSON *params, app_cmd_source_t source,
     if (*resp_out == NULL) { *err_out = "out_of_memory"; return; }
     cJSON_AddBoolToObject(*resp_out, "ok", true);
     cJSON_AddStringToObject(*resp_out, "action", action->valuestring);
+    if (strcmp(action->valuestring, "boot_fail") == 0 ||
+        strcmp(action->valuestring, "rtc_probe") == 0) {
+        cJSON_AddBoolToObject(*resp_out, "reboot_required", true);
+    }
 }
 #endif
 

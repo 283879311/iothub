@@ -3,6 +3,10 @@
 
 #include "esp_event.h"
 #include "esp_log.h"
+#ifdef APP_WIFI_FAULT_INJECT
+#include "esp_attr.h"
+#include "esp_rom_crc.h"
+#endif
 #include "esp_netif.h"
 #include "esp_netif_defaults.h"
 #include "esp_netif_net_stack.h"
@@ -112,9 +116,117 @@ typedef struct {
 } app_wifi_test_hook_t;
 static app_wifi_test_hook_t s_wifi_hook;
 static portMUX_TYPE s_wifi_hook_mux = portMUX_INITIALIZER_UNLOCKED;
+
+/* ---- T5/T6 启动期一次性票据(RTC_NOINIT,不落 NVS) ---- */
+#define APP_WIFI_BOOT_TICKET_MAGIC 0x4D314246u   /* 'M1BF' */
+#define APP_WIFI_BOOT_TICKET_VERSION 1u
+#define APP_WIFI_BOOT_TICKET_PROBE_STAGE 0xFFFFu
+
+typedef struct {
+    uint32_t magic;
+    uint16_t version;
+    uint16_t stage;
+    uint8_t  count;
+    uint8_t  reserved[3];
+    uint32_t crc;
+} app_wifi_boot_ticket_t;
+
+RTC_NOINIT_ATTR static app_wifi_boot_ticket_t s_wifi_boot_ticket;
+static const char *app_wifi_apply_stage_name(app_wifi_apply_stage_t stage);
+
+static uint32_t app_wifi_boot_ticket_crc(const app_wifi_boot_ticket_t *t)
+{
+    uint8_t buf[12];
+    buf[0] = (uint8_t)(t->magic & 0xff);
+    buf[1] = (uint8_t)((t->magic >> 8) & 0xff);
+    buf[2] = (uint8_t)((t->magic >> 16) & 0xff);
+    buf[3] = (uint8_t)((t->magic >> 24) & 0xff);
+    buf[4] = (uint8_t)(t->version & 0xff);
+    buf[5] = (uint8_t)((t->version >> 8) & 0xff);
+    buf[6] = (uint8_t)(t->stage & 0xff);
+    buf[7] = (uint8_t)((t->stage >> 8) & 0xff);
+    buf[8] = t->count;
+    buf[9] = t->reserved[0];
+    buf[10] = t->reserved[1];
+    buf[11] = t->reserved[2];
+    return esp_rom_crc32_le(0xffffffffu, buf, sizeof(buf));
+}
+
+static void app_wifi_boot_ticket_clear(void)
+{
+    memset(&s_wifi_boot_ticket, 0, sizeof(s_wifi_boot_ticket));
+}
+
+static bool app_wifi_boot_stage_allowed(uint16_t stage)
+{
+    return stage == (uint16_t)APP_WIFI_APPLY_STAGE_STATIC_DHCPC_STOP ||
+           stage == (uint16_t)APP_WIFI_APPLY_STAGE_STATIC_SET_IP;
+}
+
+static esp_err_t app_wifi_boot_ticket_write(uint16_t stage, uint8_t count)
+{
+    app_wifi_boot_ticket_t t = {0};
+
+    if (stage == APP_WIFI_BOOT_TICKET_PROBE_STAGE) {
+        if (count != 0) {
+            return ESP_ERR_INVALID_ARG;
+        }
+    } else if (!app_wifi_boot_stage_allowed(stage) || count != 1) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    t.magic = APP_WIFI_BOOT_TICKET_MAGIC;
+    t.version = APP_WIFI_BOOT_TICKET_VERSION;
+    t.stage = stage;
+    t.count = count;
+    t.crc = app_wifi_boot_ticket_crc(&t);
+    memcpy(&s_wifi_boot_ticket, &t, sizeof(t));
+    ESP_LOGW(TAG, "boot_ticket_armed stage=%u count=%u", (unsigned)stage, (unsigned)count);
+    return ESP_OK;
+}
+
+/* 启动最早调用:读→校验→清 RTC→复制到 RAM(票据一次性) */
+static void app_wifi_boot_ticket_consume(void)
+{
+    app_wifi_boot_ticket_t t;
+
+    memcpy(&t, &s_wifi_boot_ticket, sizeof(t));
+    app_wifi_boot_ticket_clear();
+
+    if (t.magic != APP_WIFI_BOOT_TICKET_MAGIC ||
+        t.version != APP_WIFI_BOOT_TICKET_VERSION ||
+        t.crc != app_wifi_boot_ticket_crc(&t)) {
+        if (t.magic != 0 || t.version != 0 || t.stage != 0 || t.count != 0) {
+            ESP_LOGW(TAG, "ticket_seen=1 invalid=1");
+        }
+        return;
+    }
+    if (t.stage == APP_WIFI_BOOT_TICKET_PROBE_STAGE && t.count == 0) {
+        ESP_LOGW(TAG, "ticket_seen=1 probe=1");
+        return;
+    }
+    if (!app_wifi_boot_stage_allowed(t.stage) || t.count != 1) {
+        ESP_LOGW(TAG, "ticket_seen=1 invalid=1");
+        return;
+    }
+    portENTER_CRITICAL(&s_wifi_hook_mux);
+    if (s_wifi_hook.fail_count > 0) {
+        portEXIT_CRITICAL(&s_wifi_hook_mux);
+        ESP_LOGW(TAG, "ticket_seen=1 stage=%u busy=1", (unsigned)t.stage);
+        return;
+    }
+    s_wifi_hook.active = true;
+    s_wifi_hook.fail_stage = (app_wifi_apply_stage_t)t.stage;
+    s_wifi_hook.fail_count = 1;
+    portEXIT_CRITICAL(&s_wifi_hook_mux);
+    ESP_LOGW(TAG, "ticket_seen=1 stage=%s count=1 injected=1",
+             app_wifi_apply_stage_name((app_wifi_apply_stage_t)t.stage));
+}
 static bool app_wifi_test_take_failure(app_wifi_apply_stage_t stage);
 static bool app_wifi_test_take_stop_failure(void);
 static void app_wifi_test_connect_hold_wait(const char *path);
+static void app_wifi_boot_ticket_consume(void);
+static const char *app_wifi_apply_stage_name(app_wifi_apply_stage_t stage);
+static esp_err_t app_wifi_boot_ticket_write(uint16_t stage, uint8_t count);
 #endif
 
 /* 前向声明:该函数定义在断连原因码表附近(约 800 行),而连接路径(约 600 行)先用到它 */
@@ -2493,16 +2605,35 @@ esp_err_t app_wifi_test_hook(const char *action, const char *stage,
     }
     if (strcmp(action, "apply_fail") == 0) {
         app_wifi_apply_stage_t st;
+        esp_err_t ret = ESP_OK;
         if (!app_wifi_test_stage_from_name(stage, &st) || count <= 0) {
             return ESP_ERR_INVALID_ARG;
         }
         portENTER_CRITICAL(&s_wifi_hook_mux);
-        s_wifi_hook.active = true;
-        s_wifi_hook.fail_stage = st;
-        s_wifi_hook.fail_count = count;
+        if (s_wifi_hook.fail_count > 0) {
+            ret = ESP_ERR_INVALID_STATE;   /* 已有未消费注入(boot 票据/RAM):不覆盖 */
+        } else {
+            s_wifi_hook.active = true;
+            s_wifi_hook.fail_stage = st;
+            s_wifi_hook.fail_count = count;
+        }
         portEXIT_CRITICAL(&s_wifi_hook_mux);
+        if (ret != ESP_OK) {
+            ESP_LOGW(TAG, "hook_apply_fail_busy");
+            return ret;
+        }
         ESP_LOGW(TAG, "hook_armed apply_fail stage=%s count=%d", stage, count);
         return ESP_OK;
+    }
+    if (strcmp(action, "boot_fail") == 0) {
+        app_wifi_apply_stage_t st;
+        if (!app_wifi_test_stage_from_name(stage, &st) || count != 1) {
+            return ESP_ERR_INVALID_ARG;
+        }
+        return app_wifi_boot_ticket_write((uint16_t)st, 1);
+    }
+    if (strcmp(action, "rtc_probe") == 0) {
+        return app_wifi_boot_ticket_write(APP_WIFI_BOOT_TICKET_PROBE_STAGE, 0);
     }
     if (strcmp(action, "stop_fail") == 0) {
         if (count <= 0) return ESP_ERR_INVALID_ARG;
@@ -2969,6 +3100,10 @@ static void app_wifi_boot_apply_or_recover(void)
     app_wifi_apply_stage_t stage = APP_WIFI_APPLY_STAGE_NONE;
     esp_err_t err;
 
+#ifdef APP_WIFI_FAULT_INJECT
+    /* T5/T6:启动最早消费一次性 RTC 票据(读→校验→清→seed RAM) */
+    app_wifi_boot_ticket_consume();
+#endif
     /* A8:链入口取得 OP_APPLY;启动期无 tryconnect 竞争者,不等待 */
     if (!app_wifi_op_claim_apply(0)) {
         ESP_LOGW(TAG, "boot apply abandoned (op busy)");
