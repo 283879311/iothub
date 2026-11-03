@@ -106,6 +106,7 @@ typedef struct {
     bool hold_armed;
     bool hold_release;
     bool hold_claimed;
+    uint32_t hold_gen;
     int hold_timeout_ms;
     uint32_t hold_seq;
 } app_wifi_test_hook_t;
@@ -1759,11 +1760,23 @@ static void app_wifi_event_handler(void *arg, esp_event_base_t event_base, int32
                     xEventGroupSetBits(s_wifi_start_events, APP_WIFI_START_EVENT_BIT);
                 }
 #ifdef APP_WIFI_FAULT_INJECT
-                if (s_wifi_hook.active) {
-                    ESP_LOGI(TAG, "hook_sta_start t=%lldms gen=%u consumed=%u completed=%u",
-                             (long long)app_wifi_now_ms(), (unsigned)await_gen,
-                             (unsigned)s_wifi_apply_start_consumed_gen,
-                             (unsigned)s_wifi_apply_start_completed_gen);
+                {
+                    bool hook_active;
+                    uint32_t hook_consumed;
+                    uint32_t hook_completed;
+
+                    portENTER_CRITICAL(&s_wifi_hook_mux);
+                    hook_active = s_wifi_hook.active;
+                    portEXIT_CRITICAL(&s_wifi_hook_mux);
+                    app_wifi_runtime_lock();
+                    hook_consumed = s_wifi_apply_start_consumed_gen;
+                    hook_completed = s_wifi_apply_start_completed_gen;
+                    app_wifi_runtime_unlock();
+                    if (hook_active) {
+                        ESP_LOGI(TAG, "hook_sta_start t=%lldms gen=%u consumed=%u completed=%u",
+                                 (long long)app_wifi_now_ms(), (unsigned)await_gen,
+                                 (unsigned)hook_consumed, (unsigned)hook_completed);
+                    }
                 }
 #endif
                 break;
@@ -2420,14 +2433,17 @@ static void app_wifi_test_connect_hold_wait(const char *path)
     bool released = false;
     int timeout_ms = 0;
     uint32_t seq = 0;
+    uint32_t my_gen = 0;
     int64_t deadline;
 
-    /* 单次领取:只有第一个 connect 调用拿到 hold,其余不等待 */
+    /* 单次领取:只有第一个 connect 调用拿到本轮 hold;保存本轮 generation,
+     * 退出时只有 generation 未变才允许清理状态,避免覆盖新一轮布防。 */
     portENTER_CRITICAL(&s_wifi_hook_mux);
     if (s_wifi_hook.active && s_wifi_hook.hold_armed && !s_wifi_hook.hold_claimed) {
         s_wifi_hook.hold_claimed = true;
         s_wifi_hook.hold_seq += 1;
         seq = s_wifi_hook.hold_seq;
+        my_gen = s_wifi_hook.hold_gen;
         timeout_ms = s_wifi_hook.hold_timeout_ms;
         claimed = true;
     }
@@ -2435,22 +2451,30 @@ static void app_wifi_test_connect_hold_wait(const char *path)
     if (!claimed) {
         return;
     }
-    ESP_LOGW(TAG, "hook_connect_hold_begin path=%s seq=%u timeout=%dms",
-             path, (unsigned)seq, timeout_ms);
+    ESP_LOGW(TAG, "hook_connect_hold_begin path=%s seq=%u gen=%u timeout=%dms",
+             path, (unsigned)seq, (unsigned)my_gen, timeout_ms);
     deadline = app_wifi_now_ms() + timeout_ms;
     for (;;) {
+        bool superseded;
         portENTER_CRITICAL(&s_wifi_hook_mux);
         released = s_wifi_hook.hold_release;
+        superseded = (s_wifi_hook.hold_gen != my_gen);
         portEXIT_CRITICAL(&s_wifi_hook_mux);
+        if (superseded) {
+            ESP_LOGW(TAG, "hook_connect_hold_superseded gen=%u", (unsigned)my_gen);
+            break;
+        }
         if (released || app_wifi_now_ms() >= deadline) {
             break;
         }
         vTaskDelay(pdMS_TO_TICKS(10));   /* 等待期间不持锁 */
     }
     portENTER_CRITICAL(&s_wifi_hook_mux);
-    s_wifi_hook.hold_claimed = false;
-    s_wifi_hook.hold_armed = false;
-    s_wifi_hook.hold_release = false;
+    if (s_wifi_hook.hold_gen == my_gen) {   /* 只有本轮仍有效才清理 */
+        s_wifi_hook.hold_claimed = false;
+        s_wifi_hook.hold_armed = false;
+        s_wifi_hook.hold_release = false;
+    }
     portEXIT_CRITICAL(&s_wifi_hook_mux);
     if (released) {
         ESP_LOGW(TAG, "hook_connect_hold_end path=%s seq=%u (released)",
@@ -2490,16 +2514,26 @@ esp_err_t app_wifi_test_hook(const char *action, const char *stage,
         return ESP_OK;
     }
     if (strcmp(action, "connect_hold") == 0) {
+        esp_err_t ret = ESP_OK;
         if (timeout_ms > 10000) {
             return ESP_ERR_INVALID_ARG;   /* 上限 10s,防止误操作长期占用许可 */
         }
         portENTER_CRITICAL(&s_wifi_hook_mux);
-        s_wifi_hook.active = true;
-        s_wifi_hook.hold_armed = true;
-        s_wifi_hook.hold_claimed = false;
-        s_wifi_hook.hold_release = false;
-        s_wifi_hook.hold_timeout_ms = (timeout_ms > 0) ? timeout_ms : 2000;
+        if (s_wifi_hook.hold_claimed) {
+            ret = ESP_ERR_INVALID_STATE;  /* 上一轮 hold 尚未结束:拒绝覆盖 */
+        } else {
+            s_wifi_hook.active = true;
+            s_wifi_hook.hold_armed = true;
+            s_wifi_hook.hold_claimed = false;
+            s_wifi_hook.hold_release = false;
+            s_wifi_hook.hold_gen += 1;
+            s_wifi_hook.hold_timeout_ms = (timeout_ms > 0) ? timeout_ms : 2000;
+        }
         portEXIT_CRITICAL(&s_wifi_hook_mux);
+        if (ret != ESP_OK) {
+            ESP_LOGW(TAG, "hook_connect_hold_busy");
+            return ret;
+        }
         ESP_LOGW(TAG, "hook_armed connect_hold timeout=%dms",
                  (timeout_ms > 0) ? timeout_ms : 2000);
         return ESP_OK;
@@ -2546,9 +2580,12 @@ esp_err_t app_wifi_test_hook(const char *action, const char *stage,
     }
     if (strcmp(action, "clear") == 0) {
         portENTER_CRITICAL(&s_wifi_hook_mux);
-        /* 释放可能正在等待的 hold,再清状态(不 memset,避免丢 release 唤醒) */
+        /* 先推进 generation 使旧等待者退出时不清理新状态;
+         * 置 release 唤醒等待者;claimed 归零允许后续重新布防。 */
+        s_wifi_hook.hold_gen += 1;
         s_wifi_hook.hold_release = true;
         s_wifi_hook.hold_armed = false;
+        s_wifi_hook.hold_claimed = false;
         s_wifi_hook.active = false;
         s_wifi_hook.fail_count = 0;
         s_wifi_hook.stop_fail_count = 0;

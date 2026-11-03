@@ -1348,6 +1348,7 @@ static void app_cmd_m1hook(const cJSON *params, app_cmd_source_t source,
         *err_out = "params_required"; return;
     }
     hook_err = app_wifi_test_hook(action->valuestring, stage_str, count, timeout_ms);
+    if (hook_err == ESP_ERR_INVALID_STATE) { *err_out = "busy"; return; }
     if (hook_err != ESP_OK) { *err_out = "invalid_param"; return; }
     *resp_out = cJSON_CreateObject();
     if (*resp_out == NULL) { *err_out = "out_of_memory"; return; }
