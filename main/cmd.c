@@ -1350,12 +1350,24 @@ static void app_cmd_m1hook(const cJSON *params, app_cmd_source_t source,
     }
     if (strcmp(action->valuestring, "reboot") == 0) {
         /* V1 RTC probe:软件复位(esp_restart 延迟 1.5s,先回包) */
-        app_reboot_schedule("m1_probe_reboot");
-        *resp_out = cJSON_CreateObject();
-        if (*resp_out == NULL) { *err_out = "out_of_memory"; return; }
-        cJSON_AddBoolToObject(*resp_out, "ok", true);
-        cJSON_AddStringToObject(*resp_out, "action", "reboot");
-        cJSON_AddBoolToObject(*resp_out, "reboot_scheduled", true);
+        app_reboot_result_t rr;
+        cJSON *r = cJSON_CreateObject();
+
+        if (r == NULL) { *err_out = "out_of_memory"; return; }
+        rr = app_reboot_schedule("m1_probe_reboot");
+        if (rr == APP_REBOOT_SCHEDULE_FAILED) {
+            cJSON_Delete(r);
+            *err_out = "reboot_failed";
+            return;
+        }
+        cJSON_AddBoolToObject(r, "ok", true);
+        cJSON_AddStringToObject(r, "action", "reboot");
+        if (rr == APP_REBOOT_SCHEDULED) {
+            cJSON_AddBoolToObject(r, "reboot_scheduled", true);
+        } else {
+            cJSON_AddBoolToObject(r, "already_pending", true);
+        }
+        *resp_out = r;
         return;
     }
     hook_err = app_wifi_test_hook(action->valuestring, stage_str, count, timeout_ms);

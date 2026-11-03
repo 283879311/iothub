@@ -186,14 +186,29 @@ void app_reboot_task(void *arg)
 static StaticTask_t s_reboot_task_buf;
 static StackType_t s_reboot_stack[APP_OTA_REBOOT_STACK_BYTES];
 static bool s_reboot_pending = false;
+static portMUX_TYPE s_reboot_mux = portMUX_INITIALIZER_UNLOCKED;
 
-void app_reboot_schedule(const char *task_name)
+app_reboot_result_t app_reboot_schedule(const char *task_name)
 {
+    TaskHandle_t created;
+
+    /* 先占位防并发重复调度;任务创建失败时必须回滚占位。 */
+    portENTER_CRITICAL(&s_reboot_mux);
     if (s_reboot_pending) {
-        return;   /* 已有重启在途,esp_restart 不会回来 */
+        portEXIT_CRITICAL(&s_reboot_mux);
+        return APP_REBOOT_ALREADY_PENDING;
     }
     s_reboot_pending = true;
-    (void)xTaskCreateStatic(app_reboot_task, task_name, APP_OTA_REBOOT_STACK_BYTES,
-                            NULL, 5, s_reboot_stack, &s_reboot_task_buf);
+    portEXIT_CRITICAL(&s_reboot_mux);
+
+    created = xTaskCreateStatic(app_reboot_task, task_name, APP_OTA_REBOOT_STACK_BYTES,
+                                NULL, 5, s_reboot_stack, &s_reboot_task_buf);
+    if (created == NULL) {
+        portENTER_CRITICAL(&s_reboot_mux);
+        s_reboot_pending = false;
+        portEXIT_CRITICAL(&s_reboot_mux);
+        return APP_REBOOT_SCHEDULE_FAILED;
+    }
+    return APP_REBOOT_SCHEDULED;
 }
 
