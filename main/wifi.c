@@ -97,6 +97,23 @@ static uint32_t s_wifi_apply_start_completed_gen = 0;
 static EventGroupHandle_t s_wifi_start_events = NULL;
 static StaticEventGroup_t s_wifi_start_events_buf;
 
+#ifdef APP_WIFI_FAULT_INJECT
+typedef struct {
+    bool active;
+    app_wifi_apply_stage_t fail_stage;
+    int fail_count;
+    int stop_fail_count;
+    volatile bool hold_armed;
+    volatile bool hold_release;
+    int hold_timeout_ms;
+    uint32_t hold_seq;
+} app_wifi_test_hook_t;
+static app_wifi_test_hook_t s_wifi_hook;
+static bool app_wifi_test_take_failure(app_wifi_apply_stage_t stage);
+static bool app_wifi_test_take_stop_failure(void);
+static void app_wifi_test_connect_hold_wait(const char *path);
+#endif
+
 /* 前向声明:该函数定义在断连原因码表附近(约 800 行),而连接路径(约 600 行)先用到它 */
 static const char *app_wifi_auth_name(uint8_t auth);
 static void app_wifi_log_sta_cfg(const char *where, const wifi_config_t *cfg);
@@ -631,6 +648,12 @@ static esp_err_t app_configure_sta_static_ip(app_wifi_apply_stage_t *stage_out)
     /* M1-04(2026-11-02 裁决):dhcpc_stop 失败立即中止静态应用,不得带病
      * 继续 set_ip_info —— DHCP 客户端未停止时写静态地址会让 netif 处于
      * 不一致状态。失败进入恢复决策链,由恢复链决定救援路径。 */
+#ifdef APP_WIFI_FAULT_INJECT
+    if (app_wifi_test_take_failure(APP_WIFI_APPLY_STAGE_STATIC_DHCPC_STOP)) {
+        if (stage_out != NULL) *stage_out = APP_WIFI_APPLY_STAGE_STATIC_DHCPC_STOP;
+        return ESP_FAIL;
+    }
+#endif
     err = esp_netif_dhcpc_stop(s_sta_netif);
     if (err != ESP_OK && err != ESP_ERR_ESP_NETIF_DHCP_ALREADY_STOPPED) {
         ESP_LOGE(TAG, "static ip: dhcpc_stop failed: %s", esp_err_to_name(err));
@@ -640,6 +663,12 @@ static esp_err_t app_configure_sta_static_ip(app_wifi_apply_stage_t *stage_out)
         return err;
     }
 
+#ifdef APP_WIFI_FAULT_INJECT
+    if (app_wifi_test_take_failure(APP_WIFI_APPLY_STAGE_STATIC_SET_IP)) {
+        if (stage_out != NULL) *stage_out = APP_WIFI_APPLY_STAGE_STATIC_SET_IP;
+        return ESP_FAIL;
+    }
+#endif
     err = esp_netif_set_ip_info(s_sta_netif, &ip_info);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "static ip: set_ip_info failed: %s", esp_err_to_name(err));
@@ -1719,6 +1748,14 @@ static void app_wifi_event_handler(void *arg, esp_event_base_t event_base, int32
                 if (s_wifi_start_events != NULL) {
                     xEventGroupSetBits(s_wifi_start_events, APP_WIFI_START_EVENT_BIT);
                 }
+#ifdef APP_WIFI_FAULT_INJECT
+                if (s_wifi_hook.active) {
+                    ESP_LOGI(TAG, "hook_sta_start t=%lldms gen=%u consumed=%u completed=%u",
+                             (long long)app_wifi_now_ms(), (unsigned)await_gen,
+                             (unsigned)s_wifi_apply_start_consumed_gen,
+                             (unsigned)s_wifi_apply_start_completed_gen);
+                }
+#endif
                 break;
             }
 
@@ -2118,6 +2155,9 @@ static bool app_wifi_connect_begin(const char *path)
     app_wifi_runtime_unlock();
     if (allowed) {
         ESP_LOGD(TAG, "connect_begin inflight=%u path=%s", (unsigned)inflight, path);
+#ifdef APP_WIFI_FAULT_INJECT
+        app_wifi_test_connect_hold_wait(path);
+#endif
     } else if (over_limit) {
         /* 配对异常信号:不得静默忽略 */
         ESP_LOGE(TAG, "connect_begin_refused inflight=%u path=%s", (unsigned)inflight, path);
@@ -2305,6 +2345,130 @@ static bool app_wifi_apply_drain_inflight(void)
     }
 }
 
+#ifdef APP_WIFI_FAULT_INJECT
+/* ===== M1 测试构建专用故障注入(默认 OFF;与 APP_C1_TEST_HOOKS 独立) ===== */
+static bool app_wifi_test_stage_from_name(const char *name, app_wifi_apply_stage_t *out)
+{
+    static const struct { const char *n; app_wifi_apply_stage_t s; } map[] = {
+        {"wifi_stop", APP_WIFI_APPLY_STAGE_WIFI_STOP},
+        {"set_mode", APP_WIFI_APPLY_STAGE_SET_MODE},
+        {"set_config", APP_WIFI_APPLY_STAGE_SET_CONFIG},
+        {"static_dhcpc_stop", APP_WIFI_APPLY_STAGE_STATIC_DHCPC_STOP},
+        {"static_parse", APP_WIFI_APPLY_STAGE_STATIC_PARSE},
+        {"static_set_ip", APP_WIFI_APPLY_STAGE_STATIC_SET_IP},
+        {"dhcpc_start", APP_WIFI_APPLY_STAGE_DHCPC_START},
+        {"wifi_start", APP_WIFI_APPLY_STAGE_WIFI_START},
+    };
+    if (name == NULL) return false;
+    for (size_t i = 0; i < sizeof(map)/sizeof(map[0]); i++) {
+        if (strcmp(name, map[i].n) == 0) { *out = map[i].s; return true; }
+    }
+    return false;
+}
+
+static bool app_wifi_test_take_failure(app_wifi_apply_stage_t stage)
+{
+    if (!s_wifi_hook.active || s_wifi_hook.fail_count <= 0 ||
+        s_wifi_hook.fail_stage != stage) {
+        return false;
+    }
+    s_wifi_hook.fail_count -= 1;
+    ESP_LOGW(TAG, "hook_apply_fail stage=%s remaining=%d",
+             app_wifi_apply_stage_name(stage), s_wifi_hook.fail_count);
+    return true;
+}
+
+static bool app_wifi_test_take_stop_failure(void)
+{
+    if (!s_wifi_hook.active || s_wifi_hook.stop_fail_count <= 0) {
+        return false;
+    }
+    s_wifi_hook.stop_fail_count -= 1;
+    ESP_LOGW(TAG, "hook_stop_fail remaining=%d", s_wifi_hook.stop_fail_count);
+    return true;
+}
+
+static void app_wifi_test_connect_hold_wait(const char *path)
+{
+    int64_t deadline;
+    if (!s_wifi_hook.active || !s_wifi_hook.hold_armed) {
+        return;
+    }
+    s_wifi_hook.hold_seq += 1;
+    ESP_LOGW(TAG, "hook_connect_hold_begin path=%s seq=%u timeout=%dms",
+             path, (unsigned)s_wifi_hook.hold_seq, s_wifi_hook.hold_timeout_ms);
+    deadline = app_wifi_now_ms() + s_wifi_hook.hold_timeout_ms;
+    while (!s_wifi_hook.hold_release && app_wifi_now_ms() < deadline) {
+        vTaskDelay(pdMS_TO_TICKS(10));
+    }
+    if (s_wifi_hook.hold_release) {
+        ESP_LOGW(TAG, "hook_connect_hold_end path=%s seq=%u (released)",
+                 path, (unsigned)s_wifi_hook.hold_seq);
+    } else {
+        ESP_LOGE(TAG, "hook_connect_hold_timeout path=%s seq=%u",
+                 path, (unsigned)s_wifi_hook.hold_seq);
+    }
+    s_wifi_hook.hold_armed = false;
+    s_wifi_hook.hold_release = false;
+}
+
+esp_err_t app_wifi_test_hook(const char *action, const char *stage,
+                             int count, int timeout_ms)
+{
+    if (action == NULL) return ESP_ERR_INVALID_ARG;
+    if (strcmp(action, "apply_fail") == 0) {
+        app_wifi_apply_stage_t st;
+        if (!app_wifi_test_stage_from_name(stage, &st) || count <= 0) return ESP_ERR_INVALID_ARG;
+        s_wifi_hook.active = true;
+        s_wifi_hook.fail_stage = st;
+        s_wifi_hook.fail_count = count;
+        ESP_LOGW(TAG, "hook_armed apply_fail stage=%s count=%d", stage, count);
+        return ESP_OK;
+    }
+    if (strcmp(action, "stop_fail") == 0) {
+        if (count <= 0) return ESP_ERR_INVALID_ARG;
+        s_wifi_hook.active = true;
+        s_wifi_hook.stop_fail_count = count;
+        ESP_LOGW(TAG, "hook_armed stop_fail count=%d", count);
+        return ESP_OK;
+    }
+    if (strcmp(action, "connect_hold") == 0) {
+        s_wifi_hook.active = true;
+        s_wifi_hook.hold_armed = true;
+        s_wifi_hook.hold_release = false;
+        s_wifi_hook.hold_timeout_ms = (timeout_ms > 0) ? timeout_ms : 2000;
+        ESP_LOGW(TAG, "hook_armed connect_hold timeout=%dms", s_wifi_hook.hold_timeout_ms);
+        return ESP_OK;
+    }
+    if (strcmp(action, "connect_release") == 0) {
+        s_wifi_hook.hold_release = true;
+        ESP_LOGW(TAG, "hook_connect_release");
+        return ESP_OK;
+    }
+    if (strcmp(action, "force_offline") == 0) {
+        ESP_LOGW(TAG, "hook_force_offline");
+        app_wifi_enter_offline();
+        return ESP_OK;
+    }
+    if (strcmp(action, "status") == 0) {
+        ESP_LOGI(TAG, "hook_status active=%d fail_stage=%s fail_count=%d stop_fail=%d "
+                      "hold_armed=%d await=%d consumed=%u completed=%u",
+                 (int)s_wifi_hook.active, app_wifi_apply_stage_name(s_wifi_hook.fail_stage),
+                 s_wifi_hook.fail_count, s_wifi_hook.stop_fail_count,
+                 (int)s_wifi_hook.hold_armed, (int)s_wifi_apply_await_start,
+                 (unsigned)s_wifi_apply_start_consumed_gen,
+                 (unsigned)s_wifi_apply_start_completed_gen);
+        return ESP_OK;
+    }
+    if (strcmp(action, "clear") == 0) {
+        memset(&s_wifi_hook, 0, sizeof(s_wifi_hook));
+        ESP_LOGW(TAG, "hook_cleared");
+        return ESP_OK;
+    }
+    return ESP_ERR_INVALID_ARG;
+}
+#endif /* APP_WIFI_FAULT_INJECT */
+
 static esp_err_t app_wifi_apply_cfg(const app_wifi_apply_cfg_t *cfg,
                                     app_wifi_apply_stage_t *stage_out)
 {
@@ -2350,6 +2514,12 @@ static esp_err_t app_wifi_apply_cfg(const app_wifi_apply_cfg_t *cfg,
              (int)cfg->sta_use_static);
 
     stage = APP_WIFI_APPLY_STAGE_WIFI_STOP;
+#ifdef APP_WIFI_FAULT_INJECT
+    if (app_wifi_test_take_failure(APP_WIFI_APPLY_STAGE_WIFI_STOP)) {
+        err = ESP_FAIL;
+        goto out_fail;
+    }
+#endif
     err = esp_wifi_stop();
     if (err != ESP_OK && err != ESP_ERR_WIFI_NOT_STARTED && err != ESP_ERR_WIFI_NOT_INIT) {
         ESP_LOGE(TAG, "apply_cfg: wifi_stop failed: %s", esp_err_to_name(err));
@@ -2359,6 +2529,12 @@ static esp_err_t app_wifi_apply_cfg(const app_wifi_apply_cfg_t *cfg,
     app_wifi_apply_cfg_common_reset();
 
     stage = APP_WIFI_APPLY_STAGE_SET_MODE;
+#ifdef APP_WIFI_FAULT_INJECT
+    if (app_wifi_test_take_failure(APP_WIFI_APPLY_STAGE_SET_MODE)) {
+        err = ESP_FAIL;
+        goto out_fail;
+    }
+#endif
     err = esp_wifi_set_mode(WIFI_MODE_STA);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "apply_cfg: set_mode STA failed: %s", esp_err_to_name(err));
@@ -2366,6 +2542,12 @@ static esp_err_t app_wifi_apply_cfg(const app_wifi_apply_cfg_t *cfg,
     }
 
     stage = APP_WIFI_APPLY_STAGE_SET_CONFIG;
+#ifdef APP_WIFI_FAULT_INJECT
+    if (app_wifi_test_take_failure(APP_WIFI_APPLY_STAGE_SET_CONFIG)) {
+        err = ESP_FAIL;
+        goto out_fail;
+    }
+#endif
     err = esp_wifi_set_config(WIFI_IF_STA, &sta_cfg);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "apply_cfg: set sta config failed: %s", esp_err_to_name(err));
@@ -2383,6 +2565,12 @@ static esp_err_t app_wifi_apply_cfg(const app_wifi_apply_cfg_t *cfg,
          * 不得带病返回成功 —— 救援语义要求 DHCP 真正启动。ALREADY_STARTED
          * 视为成功;netif 未 UP 时 IDF 返回 OK 并置 INIT(连接后启动)。 */
         stage = APP_WIFI_APPLY_STAGE_DHCPC_START;
+#ifdef APP_WIFI_FAULT_INJECT
+    if (app_wifi_test_take_failure(APP_WIFI_APPLY_STAGE_DHCPC_START)) {
+        err = ESP_FAIL;
+        goto out_fail;
+    }
+#endif
         err = esp_netif_dhcpc_start(s_sta_netif);
         if (err != ESP_OK && err != ESP_ERR_ESP_NETIF_DHCP_ALREADY_STARTED) {
             ESP_LOGE(TAG, "apply_cfg: dhcpc_start failed: %s", esp_err_to_name(err));
@@ -2393,6 +2581,12 @@ static esp_err_t app_wifi_apply_cfg(const app_wifi_apply_cfg_t *cfg,
     /* A8:置 await 后启动;门控/hold 的释放在 STA_START 处理器内完成
      * (driver 已 start 且窗口逻辑同点执行),此处不做任何提前释放。 */
     stage = APP_WIFI_APPLY_STAGE_WIFI_START;
+#ifdef APP_WIFI_FAULT_INJECT
+    if (app_wifi_test_take_failure(APP_WIFI_APPLY_STAGE_WIFI_START)) {
+        err = ESP_FAIL;
+        goto out_fail;
+    }
+#endif
     app_wifi_runtime_lock();
     s_wifi_apply_await_start = true;
     s_wifi_apply_start_consumed_gen = 0;
@@ -2519,7 +2713,14 @@ static void app_wifi_enter_offline(void)
     }
 
     ESP_LOGI(TAG, "wifi_stop_begin");
-    stop_err = esp_wifi_stop();
+#ifdef APP_WIFI_FAULT_INJECT
+    if (app_wifi_test_take_stop_failure()) {
+        stop_err = ESP_FAIL;
+    } else
+#endif
+    {
+        stop_err = esp_wifi_stop();
+    }
     ESP_LOGI(TAG, "wifi_stop_end err=%s",
              stop_err == ESP_OK ? "none" : esp_err_to_name(stop_err));
     if (stop_err == ESP_OK || stop_err == ESP_ERR_WIFI_NOT_STARTED ||

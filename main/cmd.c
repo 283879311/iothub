@@ -1329,6 +1329,33 @@ esp_err_t app_cmd_execute_ex(const cJSON *frame, app_cmd_source_t source,
     return app_cmd_execute_ctx(&ctx, frame, resp_out, out, err_msg);
 }
 
+#ifdef APP_WIFI_FAULT_INJECT
+static void app_cmd_m1hook(const cJSON *params, app_cmd_source_t source,
+                           cJSON **resp_out, const char **err_out)
+{
+    const cJSON *action = cJSON_IsObject(params)
+                              ? cJSON_GetObjectItemCaseSensitive(params, "action") : NULL;
+    const cJSON *stage = cJSON_GetObjectItemCaseSensitive(params, "stage");
+    const cJSON *count_item = cJSON_GetObjectItemCaseSensitive(params, "count");
+    const cJSON *timeout_item = cJSON_GetObjectItemCaseSensitive(params, "timeout_ms");
+    const char *stage_str = cJSON_IsString(stage) ? stage->valuestring : NULL;
+    int count = cJSON_IsNumber(count_item) ? count_item->valueint : 1;
+    int timeout_ms = cJSON_IsNumber(timeout_item) ? timeout_item->valueint : 0;
+    esp_err_t hook_err;
+
+    if (source != APP_CMD_SOURCE_BLE) { *err_out = "guard_rejected"; return; }
+    if (!cJSON_IsString(action) || action->valuestring == NULL) {
+        *err_out = "params_required"; return;
+    }
+    hook_err = app_wifi_test_hook(action->valuestring, stage_str, count, timeout_ms);
+    if (hook_err != ESP_OK) { *err_out = "invalid_param"; return; }
+    *resp_out = cJSON_CreateObject();
+    if (*resp_out == NULL) { *err_out = "out_of_memory"; return; }
+    cJSON_AddBoolToObject(*resp_out, "ok", true);
+    cJSON_AddStringToObject(*resp_out, "action", action->valuestring);
+}
+#endif
+
 esp_err_t app_cmd_execute_ctx(const app_cmd_context_t *ctx, const cJSON *frame,
                               cJSON **resp_out, app_cmd_result_t *out,
                               const char **err_msg)
@@ -1371,6 +1398,14 @@ esp_err_t app_cmd_execute_ctx(const app_cmd_context_t *ctx, const cJSON *frame,
 
     if (cJSON_IsString(method)) {
         const char *m = method->valuestring;
+
+#ifdef APP_WIFI_FAULT_INJECT
+        if (strcmp(m, "diag.m1hook") == 0) {
+            app_cmd_m1hook(params, source, &resp, &err);
+            handled = true;
+            goto done;
+        }
+#endif
 
         handled = true;
         if (strcmp(m, "setConfig") == 0 || strcmp(m, "config.set") == 0) {

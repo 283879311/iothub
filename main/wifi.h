@@ -52,3 +52,13 @@ app_wifi_try_result_t app_wifi_try_connect_ip(const char *ssid, const char *pass
                                               uint32_t timeout_ms);
 /* 请求取消正在进行的 tryconnect；true 表示当时有活动试连。 */
 bool app_wifi_try_cancel(void);
+
+#ifdef APP_WIFI_FAULT_INJECT
+/* M1 测试构建专用(默认 OFF,与 APP_C1_TEST_HOOKS 独立):
+ * action: "apply_fail"(stage,count) / "stop_fail"(count) /
+ *         "connect_hold"(timeout_ms) / "connect_release" /
+ *         "force_offline" / "status" / "clear"。
+ * 仅注入故障/记录时序,不改变正常路径行为;正式构建不编译。 */
+esp_err_t app_wifi_test_hook(const char *action, const char *stage,
+                             int count, int timeout_ms);
+#endif
