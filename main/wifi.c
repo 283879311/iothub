@@ -163,9 +163,23 @@ static bool app_wifi_boot_stage_allowed(uint16_t stage)
            stage == (uint16_t)APP_WIFI_APPLY_STAGE_STATIC_SET_IP;
 }
 
+static bool app_wifi_boot_ticket_valid(const app_wifi_boot_ticket_t *t)
+{
+    if (t->magic != APP_WIFI_BOOT_TICKET_MAGIC ||
+        t->version != APP_WIFI_BOOT_TICKET_VERSION ||
+        t->crc != app_wifi_boot_ticket_crc(t)) {
+        return false;
+    }
+    if (t->stage == APP_WIFI_BOOT_TICKET_PROBE_STAGE) {
+        return t->count == 0;
+    }
+    return app_wifi_boot_stage_allowed(t->stage) && t->count == 1;
+}
+
 static esp_err_t app_wifi_boot_ticket_write(uint16_t stage, uint8_t count)
 {
     app_wifi_boot_ticket_t t = {0};
+    bool pending;
 
     if (stage == APP_WIFI_BOOT_TICKET_PROBE_STAGE) {
         if (count != 0) {
@@ -179,7 +193,18 @@ static esp_err_t app_wifi_boot_ticket_write(uint16_t stage, uint8_t count)
     t.stage = stage;
     t.count = count;
     t.crc = app_wifi_boot_ticket_crc(&t);
-    memcpy(&s_wifi_boot_ticket, &t, sizeof(t));
+
+    /* 有未消费的有效票据时禁止覆盖(空/无效票据允许覆盖) */
+    portENTER_CRITICAL(&s_wifi_hook_mux);
+    pending = app_wifi_boot_ticket_valid(&s_wifi_boot_ticket);
+    if (!pending) {
+        memcpy(&s_wifi_boot_ticket, &t, sizeof(t));
+    }
+    portEXIT_CRITICAL(&s_wifi_hook_mux);
+    if (pending) {
+        ESP_LOGW(TAG, "boot_ticket_busy stage=%u", (unsigned)stage);
+        return ESP_ERR_INVALID_STATE;
+    }
     ESP_LOGW(TAG, "boot_ticket_armed stage=%u count=%u", (unsigned)stage, (unsigned)count);
     return ESP_OK;
 }
@@ -189,8 +214,11 @@ static void app_wifi_boot_ticket_consume(void)
 {
     app_wifi_boot_ticket_t t;
 
+    /* 读+清同一临界区,避免与运行期写入交错 */
+    portENTER_CRITICAL(&s_wifi_hook_mux);
     memcpy(&t, &s_wifi_boot_ticket, sizeof(t));
     app_wifi_boot_ticket_clear();
+    portEXIT_CRITICAL(&s_wifi_hook_mux);
 
     if (t.magic != APP_WIFI_BOOT_TICKET_MAGIC ||
         t.version != APP_WIFI_BOOT_TICKET_VERSION ||
@@ -209,17 +237,19 @@ static void app_wifi_boot_ticket_consume(void)
         return;
     }
     portENTER_CRITICAL(&s_wifi_hook_mux);
-    if (s_wifi_hook.fail_count > 0) {
-        portEXIT_CRITICAL(&s_wifi_hook_mux);
-        ESP_LOGW(TAG, "ticket_seen=1 stage=%u busy=1", (unsigned)t.stage);
-        return;
-    }
+    bool override_ram = (s_wifi_hook.fail_count > 0);
+    /* 规则:boot 票据优先。若 RAM 已有未消费注入(BLE 抢跑),以票据覆盖并记录 */
     s_wifi_hook.active = true;
     s_wifi_hook.fail_stage = (app_wifi_apply_stage_t)t.stage;
     s_wifi_hook.fail_count = 1;
     portEXIT_CRITICAL(&s_wifi_hook_mux);
-    ESP_LOGW(TAG, "ticket_seen=1 stage=%s count=1 injected=1",
-             app_wifi_apply_stage_name((app_wifi_apply_stage_t)t.stage));
+    if (override_ram) {
+        ESP_LOGW(TAG, "ticket_seen=1 stage=%s count=1 injected=1 override=1",
+                 app_wifi_apply_stage_name((app_wifi_apply_stage_t)t.stage));
+    } else {
+        ESP_LOGW(TAG, "ticket_seen=1 stage=%s count=1 injected=1",
+                 app_wifi_apply_stage_name((app_wifi_apply_stage_t)t.stage));
+    }
 }
 static bool app_wifi_test_take_failure(app_wifi_apply_stage_t stage);
 static bool app_wifi_test_take_stop_failure(void);
