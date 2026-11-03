@@ -241,6 +241,8 @@ static app_operation_error_t app_cmd_net_wifi_error(app_wifi_try_result_t result
     case APP_WIFI_TRY_SCAN_FAILED:    return APP_OPERATION_ERR_SCAN_FAILED;
     case APP_WIFI_TRY_TIMEOUT:        return APP_OPERATION_ERR_TIMEOUT;
     case APP_WIFI_TRY_CANCELLED:      return APP_OPERATION_ERR_CANCELLED;
+    /* M1 R9:离线门控拒绝,独立错误,不得混入 connect_failed */
+    case APP_WIFI_TRY_CONFIG_OFFLINE: return APP_OPERATION_ERR_WIFI_CONFIG_OFFLINE;
     case APP_WIFI_TRY_OK:
     case APP_WIFI_TRY_CONNECT_FAILED:
     case APP_WIFI_TRY_BUSY:
@@ -1882,6 +1884,10 @@ esp_err_t app_cmd_execute_ctx(const app_cmd_context_t *ctx, const cJSON *frame,
                     break;
                 case APP_WIFI_TRY_INVALID_ARG:
                     err = "invalid_param";
+                    break;
+                case APP_WIFI_TRY_CONFIG_OFFLINE:
+                    /* M1 R9:离线门控拒绝(v0 字符串) */
+                    err = "wifi_config_offline";
                     break;
                 default:
                     err = "connect_failed";

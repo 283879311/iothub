@@ -45,6 +45,11 @@ static const int64_t APP_WIFI_BLE_FAST_RETRY_MS = 120000;
  * 该标志为 false,一次踩中会永久停止调度。30s 远大于正常关联(实测最慢
  * ~15s),超时强制清零并立即重排。 */
 static const int64_t APP_WIFI_CONNECT_STUCK_TIMEOUT_MS = 30000;
+/* M1 离线 quiesce(设计稿 §3.6 R3.1/§10.2-7):总等待上限由调用方传入(默认 1000ms),
+ * 200ms 告警阈值为内部常量 —— 超限绝不执行 esp_wifi_stop(),宁可暂时
+ * 不停止 Wi-Fi,也不让 stop 与 connect 并发。 */
+#define APP_WIFI_QUIESCE_WARN_MS 200
+static const int64_t APP_WIFI_QUIESCE_LIMIT_DEFAULT_MS = 1000;
 static int64_t s_wifi_connecting_since_ms = 0;
 static int64_t s_wifi_ble_fast_retry_at_ms = 0; /* 0=尚未排定 */
 static uint32_t s_wifi_ble_fast_cycle = 0;      /* 日志关联 */
@@ -63,10 +68,64 @@ static bool s_wifi_rt_armed = false;
  * 阈值只作"最低可接受"用,WPA_PSK 已足以挡住开放/弱加密 AP;量产若需收紧改此一处即可。 */
 #define APP_WIFI_STA_AUTHMODE_MIN WIFI_AUTH_WPA_PSK
 
+/* ===== A7/A8 连接许可与操作所有权原语(定义集中在文件头,供早期函数使用) ===== */
+/* A7:危险段(esp_wifi_stop/配置写入)连接许可封锁,begin 拒绝条件含本标志。
+ * A8:释放点改为 STA_START 处理器(apply_cfg 只在危险段前置位,事件里清)。 */
+static bool s_wifi_apply_hold = false;
+
+/* A8:Wi-Fi 操作所有权 —— 与 tryconnect_begin 同一 spinlock(s_tryconnect_mux)
+ * 内 claim/release,保证 apply 与 tryconnect 事务级互斥。 */
+typedef enum {
+    APP_WIFI_OP_NONE = 0,
+    APP_WIFI_OP_APPLY,
+    APP_WIFI_OP_TRYX,
+} app_wifi_op_owner_t;
+static app_wifi_op_owner_t s_wifi_op_owner = APP_WIFI_OP_NONE;
+
+/* A8:apply 等待自己发起的 STA_START —— 事件处理器在置位期间负责释放
+ * 门控/hold、开启动窗口,并置位事件位;apply 侧有界等待,超时按失败处理。 */
+static bool s_wifi_apply_await_start = false;
+static uint32_t s_wifi_apply_start_gen = 0;
+/* A8-修正2:两阶段完成状态 ——
+ * consumed_gen: 处理器已消费本次 await(事件已到);
+ * completed_gen: 启动窗口+首次调度已完成(处理器尾部);
+ * apply 只有在 completed_gen 匹配时才把本次 start 视为完成。 */
+static uint32_t s_wifi_apply_start_consumed_gen = 0;
+static uint32_t s_wifi_apply_start_completed_gen = 0;
+#define APP_WIFI_START_EVENT_BIT BIT0
+#define APP_WIFI_START_WAIT_MS 2000
+static EventGroupHandle_t s_wifi_start_events = NULL;
+static StaticEventGroup_t s_wifi_start_events_buf;
+
 /* 前向声明:该函数定义在断连原因码表附近(约 800 行),而连接路径(约 600 行)先用到它 */
 static const char *app_wifi_auth_name(uint8_t auth);
 static void app_wifi_log_sta_cfg(const char *where, const wifi_config_t *cfg);
 static esp_err_t app_wifi_retry_with_pmf_required(void);
+
+/* ===== M1 启动安全(设计稿 静态IP_M1启动安全设计稿_2026-11-03.md §3)=====
+ * 定义分散在原 apply/static 配置区与恢复链区;先集中声明,调用点遍布本文件。 */
+static esp_err_t app_configure_sta_static_ip(app_wifi_apply_stage_t *stage_out);
+static esp_err_t app_wifi_apply_cfg(const app_wifi_apply_cfg_t *cfg,
+                                    app_wifi_apply_stage_t *stage_out);
+static void app_wifi_build_cfg_from_config(app_wifi_apply_cfg_t *out);
+static void app_wifi_lkg_capture(const app_wifi_apply_cfg_t *cfg);
+static bool app_wifi_lkg_equals(const app_wifi_apply_cfg_t *cfg);
+static bool app_wifi_connect_blocked(void);
+static bool app_wifi_connect_begin(const char *path);
+static void app_wifi_connect_end(const char *path);
+static bool app_wifi_wait_connect_inflight(int64_t limit_ms, bool recovery);
+static bool app_wifi_tryconnect_entry_blocked(void);
+static void app_wifi_apply_hold_clear(void);
+static void app_wifi_offline_gate_clear_if_set(void);
+static bool app_wifi_op_claim_apply(uint32_t wait_ms);
+static void app_wifi_op_release_apply(void);
+static bool app_wifi_recover_quiesce(void);
+static void app_wifi_enter_offline(void);
+static void app_wifi_recover_from_apply_failure(const app_wifi_apply_cfg_t *failed);
+static void app_wifi_boot_apply_or_recover(void);
+static void app_wifi_set_cfg_state(app_net_cfg_state_t state);
+static void app_wifi_record_apply_failure(app_wifi_apply_stage_t stage, esp_err_t err,
+                                          bool static_mode);
 
 /* 210(NO_AP_FOUND_W_COMPAT_SECURITY)兜底:首轮 required=false,失败后带 required=true 只重试一次 */
 static bool s_wifi_pmf_required_tried = false;
@@ -160,7 +219,9 @@ static bool app_wifi_tryconnect_begin(const char *ssid, bool require_ip)
     bool ok = false;
 
     app_wifi_tryconnect_state_lock();
-    if (!s_tryconnect_active && s_tryconnect_phase == APP_WIFI_TRY_PHASE_IDLE) {
+    if (!s_tryconnect_active && s_tryconnect_phase == APP_WIFI_TRY_PHASE_IDLE &&
+        s_wifi_op_owner == APP_WIFI_OP_NONE) {
+        s_wifi_op_owner = APP_WIFI_OP_TRYX;   /* A8:claim 与状态取得同一临界区 */
         s_tryconnect_active = true;
         s_tryconnect_phase = APP_WIFI_TRY_PHASE_PRE_SCAN;
         s_tryconnect_cancel_requested = false;
@@ -180,6 +241,9 @@ static bool app_wifi_tryconnect_begin(const char *ssid, bool require_ip)
 static void app_wifi_tryconnect_release(void)
 {
     app_wifi_tryconnect_state_lock();
+    if (s_wifi_op_owner == APP_WIFI_OP_TRYX) {
+        s_wifi_op_owner = APP_WIFI_OP_NONE;   /* A8:finish 唯一释放点 */
+    }
     s_tryconnect_active = false;
     s_tryconnect_phase = APP_WIFI_TRY_PHASE_IDLE;
     s_tryconnect_cancel_requested = false;
@@ -528,7 +592,7 @@ static bool app_parse_ipv4_str(const char *s, esp_ip4_addr_t *out)
     return true;
 }
 
-static esp_err_t app_configure_sta_static_ip(void)
+static esp_err_t app_configure_sta_static_ip(app_wifi_apply_stage_t *stage_out)
 {
     esp_netif_ip_info_t ip_info = {0};
     esp_netif_dns_info_t dns_info = {0};
@@ -540,6 +604,9 @@ static esp_err_t app_configure_sta_static_ip(void)
     esp_err_t err;
 
     if (s_sta_netif == NULL) {
+        if (stage_out != NULL) {
+            *stage_out = APP_WIFI_APPLY_STAGE_STATIC_PARSE;
+        }
         return ESP_ERR_INVALID_STATE;
     }
 
@@ -555,17 +622,30 @@ static esp_err_t app_configure_sta_static_ip(void)
         !app_parse_ipv4_str(gw_str, &ip_info.gw) ||
         !app_parse_ipv4_str(mask_str, &ip_info.netmask)) {
         ESP_LOGE(TAG, "static ip parse failed");
+        if (stage_out != NULL) {
+            *stage_out = APP_WIFI_APPLY_STAGE_STATIC_PARSE;
+        }
         return ESP_ERR_INVALID_ARG;
     }
 
+    /* M1-04(2026-11-02 裁决):dhcpc_stop 失败立即中止静态应用,不得带病
+     * 继续 set_ip_info —— DHCP 客户端未停止时写静态地址会让 netif 处于
+     * 不一致状态。失败进入恢复决策链,由恢复链决定救援路径。 */
     err = esp_netif_dhcpc_stop(s_sta_netif);
     if (err != ESP_OK && err != ESP_ERR_ESP_NETIF_DHCP_ALREADY_STOPPED) {
-        ESP_LOGW(TAG, "static ip: dhcpc_stop: %s", esp_err_to_name(err));
+        ESP_LOGE(TAG, "static ip: dhcpc_stop failed: %s", esp_err_to_name(err));
+        if (stage_out != NULL) {
+            *stage_out = APP_WIFI_APPLY_STAGE_STATIC_DHCPC_STOP;
+        }
+        return err;
     }
 
     err = esp_netif_set_ip_info(s_sta_netif, &ip_info);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "static ip: set_ip_info failed: %s", esp_err_to_name(err));
+        if (stage_out != NULL) {
+            *stage_out = APP_WIFI_APPLY_STAGE_STATIC_SET_IP;
+        }
         return err;
     }
 
@@ -712,9 +792,8 @@ static int app_wifi_select_best_profile_index(uint8_t exclude_mask)
     return best_index;
 }
 
-static esp_err_t app_apply_wifi_config(void);
 static void app_wifi_handle_startup_sta_failure(const char *reason);
-static void app_wifi_schedule_connect_task(TickType_t delay_ticks);
+static bool app_wifi_schedule_connect_task(TickType_t delay_ticks);
 
 /* 记录"实际连上的 SSID"。
  * 取 esp_wifi_sta_get_ap_info() 的关联结果而不是 s_wifi_active_profile_index：
@@ -798,7 +877,13 @@ static esp_err_t app_wifi_connect_profile_index(int profile_index)
     app_wifi_runtime_lock();
     app_copy_string(s_wifi.last_disconnect, sizeof(s_wifi.last_disconnect), "switching_profile");
     app_wifi_runtime_unlock();
+    /* M1 调用点 1/5(R3.2):原子许可 —— begin/end 配对,end 在所有路径执行 */
+    if (!app_wifi_connect_begin("profile")) {
+        s_wifi_sta_connecting = false;
+        return ESP_ERR_INVALID_STATE;
+    }
     err = esp_wifi_connect();
+    app_wifi_connect_end("profile");
     if (err != ESP_OK) {
         /* D1:同步失败没有断连事件,必须当场清零。 */
         s_wifi_sta_connecting = false;
@@ -882,7 +967,13 @@ static esp_err_t app_wifi_connect_best_saved_profile(bool allow_fast_path,
             app_wifi_runtime_lock();
             app_copy_string(s_wifi.last_disconnect, sizeof(s_wifi.last_disconnect), "fast_path");
             app_wifi_runtime_unlock();
+            /* M1 调用点 2/5(R3.2):原子许可 —— begin/end 配对 */
+            if (!app_wifi_connect_begin("fast_path")) {
+                s_wifi_sta_connecting = false;
+                return ESP_ERR_INVALID_STATE;
+            }
             err = esp_wifi_connect();
+            app_wifi_connect_end("fast_path");
             if (err == ESP_OK) {
                 ESP_LOGI(TAG, "auto_connect: fast_path ssid=%s%s", sta_ssid_snapshot,
                          allow_profile_scan ? "" : " (formal-only, no scan)");
@@ -1036,6 +1127,12 @@ static void app_wifi_connect_task_fn(void *arg)
     if (delay_ticks > 0) {
         vTaskDelay(delay_ticks);
     }
+    /* M1 R4:已排队任务延时结束后二次检查离线门控;被门控时直接退出,
+     * 不改 s_wifi_sta_connecting,也不发起任何连接。 */
+    if (app_wifi_connect_blocked()) {
+        s_wifi_connect_task = NULL;
+        vTaskDelete(NULL);
+    }
     app_wifi_runtime_lock();
     allow_fast_path = s_wifi_fast_path_pending;
     allow_profile_scan = !s_wifi_formal_only_pending;
@@ -1090,6 +1187,7 @@ static void app_wifi_boot_monitor_task_fn(void *arg)
         uint8_t net_mode;
         TaskHandle_t connect_task_snapshot;
         bool ble_connected;
+        bool cfg_offline;
 
         app_config_lock();
         net_mode = s_config.net_mode;
@@ -1099,6 +1197,7 @@ static void app_wifi_boot_monitor_task_fn(void *arg)
         sta_has_ip = s_wifi.sta_has_ip;
         sta_connected = s_wifi.sta_connected;
         deadline_ms = s_wifi.startup_connect_deadline_ms;
+        cfg_offline = s_wifi.cfg_offline;
         app_wifi_runtime_unlock();
         sta_connecting = s_wifi_sta_connecting;
         connect_task_snapshot = s_wifi_connect_task;
@@ -1147,6 +1246,7 @@ static void app_wifi_boot_monitor_task_fn(void *arg)
                    connect_task_snapshot == NULL &&
                    !app_wifi_tryconnect_is_active() &&
                    !s_wifi_auto_connect_suspended &&
+                   !cfg_offline &&   /* M1 R2:离线门控,禁止 monitor 兜底重连 */
                    !ble_connected) {
             /* 运行时断网兜底:复用 schedule_connect_task 单一入口(互斥自动生效),
              * 不在本循环里直接 esp_wifi_connect()。 */
@@ -1174,6 +1274,7 @@ static void app_wifi_boot_monitor_task_fn(void *arg)
                    connect_task_snapshot == NULL &&
                    !app_wifi_tryconnect_is_active() &&
                    !s_wifi_auto_connect_suspended &&
+                   !cfg_offline &&   /* M1 R2:离线门控,BLE 期间 120s 重试同样禁止 */
                    ble_connected) {
             /* 产品决策 A(2026-11-01):BLE 连接期间只试正式 SSID,不扫描
              * profile;120s 一次。解决"配置完忘了关小程序/蓝牙,AP 恢复后
@@ -1223,23 +1324,31 @@ static bool app_wifi_wait_connect_task_idle(uint32_t timeout_ms)
     return s_wifi_connect_task == NULL;
 }
 
-static void app_wifi_schedule_connect_task(TickType_t delay_ticks)
+/* 返回 true 表示调度请求已提交(任务创建成功);false=被门控/已存在/创建失败。
+ * 首次调度失败不影响 apply 完成语义:窗口已建立,monitor 1s 内重试。 */
+static bool app_wifi_schedule_connect_task(TickType_t delay_ticks)
 {
     uint8_t net_mode;
     if (s_wifi_auto_connect_suspended) {
-        return;
+        return false;
+    }
+    /* M1 R2/R4:离线门控在调度入口拒绝;已排队任务由 task_fn 延时后二次检查拦截 */
+    if (app_wifi_connect_blocked()) {
+        return false;
     }
     app_config_lock();
     net_mode = s_config.net_mode;
     app_config_unlock();
     if (s_wifi_connect_task != NULL || !app_network_mode_has_sta(net_mode)) {
-        return;
+        return false;
     }
     if (xTaskCreate(app_wifi_connect_task_fn, "wifi_auto_connect", 4096,
                     (void *)(uintptr_t)delay_ticks, 5, &s_wifi_connect_task) != pdPASS) {
         s_wifi_connect_task = NULL;
         ESP_LOGE(TAG, "Failed to create Wi-Fi auto-connect task");
+        return false;
     }
+    return true;
 }
 
 /* STA 断连原因码 → 可读名(问题与版本优化.md 1.3-08)。
@@ -1333,7 +1442,13 @@ static esp_err_t app_wifi_retry_with_pmf_required(void)
         ESP_LOGW(TAG, "PMF retry set_config failed: %s", esp_err_to_name(err));
         return err;
     }
-    return esp_wifi_connect();
+    /* M1 调用点 3/5(R3.2):原子许可 —— begin/end 配对,end 在所有路径执行 */
+    if (!app_wifi_connect_begin("pmf_retry")) {
+        return ESP_ERR_INVALID_STATE;
+    }
+    err = esp_wifi_connect();
+    app_wifi_connect_end("pmf_retry");
+    return err;
 }
 
 static app_wifi_try_match_t app_wifi_tryconnect_match_locked(const uint8_t *ssid,
@@ -1558,16 +1673,70 @@ static void app_wifi_event_handler(void *arg, esp_event_base_t event_base, int32
 
     if (event_base == WIFI_EVENT) {
         switch (event_id) {
-        case WIFI_EVENT_STA_START:
+        case WIFI_EVENT_STA_START: {
+            bool await_start = false;
+            uint32_t await_gen = 0;
+
             app_wifi_profiles_lock();
             s_wifi_attempted_mask = 0;
             app_wifi_profiles_unlock();
+
+            /* A8:本次 apply 等待的 START —— 释放门控/hold 并开窗口,
+             * 释放与窗口逻辑同点执行,避免事件先于释放被 R5 吞掉。 */
+            app_wifi_runtime_lock();
+            await_start = s_wifi_apply_await_start;
+            await_gen = s_wifi_apply_start_gen;
+            if (await_start) {
+                /* 消费与完成标记同一临界区:超时侧不会看到"已消费未完成" */
+                s_wifi_apply_await_start = false;
+                s_wifi_apply_start_consumed_gen = await_gen;
+            }
+            app_wifi_runtime_unlock();
+            if (await_start) {
+                bool sched_ok;
+                ESP_LOGI(TAG, "apply_start_released gen=%u", (unsigned)await_gen);
+                /* 顺序(A8-r10):先建立启动窗口状态(此时门控仍关闭,任何
+                 * 已排队任务都无法取得许可),再释放 gate/hold,最后调度;
+                 * 保证许可释放后不会出现"窗口尚未就绪"的连接。 */
+                app_wifi_start_startup_connect_window();
+                app_wifi_offline_gate_clear_if_set();
+                app_wifi_apply_hold_clear();
+                sched_ok = app_wifi_schedule_connect_task(0);
+                if (!sched_ok) {
+                    /* 窗口已建立;monitor 会在 1s 内重试首次调度 */
+                    ESP_LOGW(TAG, "first schedule deferred to monitor (gen=%u)",
+                             (unsigned)await_gen);
+                }
+                /* 完成标记 = 窗口已建立 + 首次调度已尝试;在通知之前置位,
+                 * 保证等待方看到 bit 时 completed_gen 已可见。 */
+                app_wifi_runtime_lock();
+                s_wifi_apply_start_completed_gen = await_gen;
+                app_wifi_runtime_unlock();
+                if (s_wifi_start_events != NULL) {
+                    xEventGroupSetBits(s_wifi_start_events, APP_WIFI_START_EVENT_BIT);
+                }
+                break;
+            }
+
+            /* M1 R5:离线门控下 STA_START 只记录,不开 90s 窗口、不调度连接
+             * (受控恢复走 apply 链,由 offline_gate_clear 显式放行)。 */
+            if (app_wifi_connect_blocked()) {
+                ESP_LOGI(TAG, "offline gate: STA_START ignored");
+                break;
+            }
             app_wifi_start_startup_connect_window();
             app_wifi_schedule_connect_task(0);
             break;
+        }
         case WIFI_EVENT_STA_CONNECTED: {
             bool use_static = false;
             wifi_ap_record_t ap_info;
+
+            /* M1 R5:离线门控下迟到的关联事件只记录,不改运行态、不动 DHCP。 */
+            if (app_wifi_connect_blocked()) {
+                ESP_LOGI(TAG, "offline gate: STA_CONNECTED ignored");
+                break;
+            }
 
             /* 运行态 SSID 以实际关联结果为准：试连与自动回退都能如实反映 */
             if (esp_wifi_sta_get_ap_info(&ap_info) == ESP_OK) {
@@ -1657,6 +1826,13 @@ static void app_wifi_event_handler(void *arg, esp_event_base_t event_base, int32
                      (int)app_network_mode_has_sta(net_mode_snapshot),
                      active_profile_snapshot);
 
+            /* M1 R5:迟到的断开事件在离线态只保留上面的状态卫生,
+             * 之后任何重试动作(PMF 重试/直连/调度)一律禁止。 */
+            if (app_wifi_connect_blocked()) {
+                ESP_LOGI(TAG, "offline gate: disconnect event retry suppressed");
+                break;
+            }
+
             /* 1.3-21:210 在"AP 要求 PMF(802.11w)"时也会出现 —— 首轮 required=false 失败后,
              * 带 required=true 再试一次(每次启动只试一次,避免反复翻转)。 */
             if (disconnected->reason == 210 && !s_wifi_pmf_required_tried) {
@@ -1701,7 +1877,12 @@ static void app_wifi_event_handler(void *arg, esp_event_base_t event_base, int32
                 need_schedule_connect = true;
             }
             if (do_retry_direct) {
-                esp_wifi_connect();
+                /* M1 调用点 4/5(R3.2/R5):事件链直连绕过 schedule 入口,
+                 * 必须纳入原子许可 —— 门控时整支跳过,不进入 begin。 */
+                if (app_wifi_connect_begin("retry_direct")) {
+                    esp_wifi_connect();
+                    app_wifi_connect_end("retry_direct");
+                }
             } else if (need_schedule_connect) {
                 if (app_ble_gatts_connected()) {
                     /* BLE 连接期间不扫描 profile:只给一次正式 SSID
@@ -1723,6 +1904,12 @@ static void app_wifi_event_handler(void *arg, esp_event_base_t event_base, int32
          * GOT_IP 本身不带 SSID，必须用当前 AP info 校验归属；查询失败
          * 时继续等待有效事件/超时，不能误报成功或失败。 */
         if (app_wifi_tryconnect_on_got_ip()) {
+            return;
+        }
+
+        /* M1 R5:离线门控下迟到的 GOT_IP 只记录,不写运行态、不启动冲突检测。 */
+        if (app_wifi_connect_blocked()) {
+            ESP_LOGI(TAG, "offline gate: GOT_IP ignored");
             return;
         }
 
@@ -1769,37 +1956,241 @@ static void app_wifi_event_handler(void *arg, esp_event_base_t event_base, int32
     }
 }
 
-static esp_err_t app_apply_wifi_config(void)
+/* ===== M1 启动安全:apply 拆分 / 失败记录 / LKG / 恢复链 / 离线门控 =====
+ * 设计依据:docs/静态IP_M1启动安全设计稿_2026-11-03.md(冻结版)
+ * 日志行为规格化的 §3.1 清单约束,发射点不得增删改格式(T15/T16 断言依据)。 */
+
+static const char *app_wifi_apply_stage_name(app_wifi_apply_stage_t stage)
 {
-    wifi_config_t sta_cfg = {0};
-    esp_err_t err;
-    char sta_ssid_log[sizeof(s_config.sta_ssid)];
-    char sta_pwd_log[sizeof(s_config.sta_password)];
-    bool sta_use_static = false;
-
-    app_config_lock();
-    sta_use_static = s_config.sta_use_static;
-    app_copy_fixed_bytes(sta_cfg.sta.ssid, sizeof(sta_cfg.sta.ssid), s_config.sta_ssid);
-    app_copy_fixed_bytes(sta_cfg.sta.password, sizeof(sta_cfg.sta.password), s_config.sta_password);
-    app_copy_string(sta_ssid_log, sizeof(sta_ssid_log), s_config.sta_ssid);
-    app_copy_string(sta_pwd_log, sizeof(sta_pwd_log), s_config.sta_password);
-    app_config_unlock();
-
-    sta_cfg.sta.threshold.authmode =
-        (strlen((const char *)sta_cfg.sta.password) >= 8) ? APP_WIFI_STA_AUTHMODE_MIN : WIFI_AUTH_OPEN;
-    sta_cfg.sta.pmf_cfg.capable = true;
-    sta_cfg.sta.pmf_cfg.required = false;
-    sta_cfg.sta.scan_method = WIFI_FAST_SCAN;
-    app_wifi_log_sta_cfg("apply_wifi_config", &sta_cfg);
-    ESP_LOGI(TAG, "apply_wifi_config: STA-only sta_ssid='%s' sta_pwd_len=%u",
-             sta_ssid_log[0] != '\0' ? sta_ssid_log : "<empty>",
-             (unsigned)strlen(sta_pwd_log));
-
-    err = esp_wifi_stop();
-    if (err != ESP_OK && err != ESP_ERR_WIFI_NOT_STARTED && err != ESP_ERR_WIFI_NOT_INIT) {
-        return err;
+    switch (stage) {
+    case APP_WIFI_APPLY_STAGE_WIFI_STOP:          return "wifi_stop";
+    case APP_WIFI_APPLY_STAGE_SET_MODE:           return "set_mode";
+    case APP_WIFI_APPLY_STAGE_SET_CONFIG:         return "set_config";
+    case APP_WIFI_APPLY_STAGE_STATIC_DHCPC_STOP:  return "static_dhcpc_stop";
+    case APP_WIFI_APPLY_STAGE_STATIC_PARSE:       return "static_parse";
+    case APP_WIFI_APPLY_STAGE_STATIC_SET_IP:      return "static_set_ip";
+    case APP_WIFI_APPLY_STAGE_STATIC_SET_DNS:     return "static_set_dns";
+    case APP_WIFI_APPLY_STAGE_DHCPC_START:        return "dhcpc_start";
+    case APP_WIFI_APPLY_STAGE_WIFI_START:         return "wifi_start";
+    default:                                      return "none";
     }
+}
 
+static const char *app_wifi_cfg_state_name(app_net_cfg_state_t state)
+{
+    switch (state) {
+    case APP_NET_CFG_STATE_DHCP:                  return "dhcp";
+    case APP_NET_CFG_STATE_STATIC:                return "static";
+    case APP_NET_CFG_STATE_FALLBACK:              return "fallback";
+    case APP_NET_CFG_STATE_OFFLINE:               return "offline_pending_config";
+    case APP_NET_CFG_STATE_OFFLINE_STOP_FAILED:   return "offline_stop_failed";
+    case APP_NET_CFG_STATE_OFFLINE_QUIESCE_TIMEOUT: return "offline_quiesce_timeout";
+    default:                                      return "unknown";
+    }
+}
+
+static void app_wifi_set_cfg_state(app_net_cfg_state_t state)
+{
+    app_wifi_runtime_lock();
+    s_wifi.cfg_state = state;
+    app_wifi_runtime_unlock();
+    ESP_LOGI(TAG, "net_config_state=%s", app_wifi_cfg_state_name(state));
+}
+
+static void app_wifi_record_apply_failure(app_wifi_apply_stage_t stage, esp_err_t err,
+                                          bool static_mode)
+{
+    app_wifi_runtime_lock();
+    if (!s_wifi.apply_failure.valid) {
+        /* 首个失败=根因,后续恢复失败不覆盖(设计稿 §3.1) */
+        s_wifi.apply_failure.valid = true;
+        s_wifi.apply_failure.stage = stage;
+        s_wifi.apply_failure.err = err;
+        s_wifi.apply_failure.static_mode = static_mode;
+    }
+    /* attempts 在 app_wifi_apply_cfg 入口计数(候选/LKG/救援各计 1,成功也计) */
+    app_wifi_runtime_unlock();
+    ESP_LOGE(TAG, "apply_failed stage=%s err=%s mode=%s attempt=%u",
+             app_wifi_apply_stage_name(stage), esp_err_to_name(err),
+             static_mode ? "static" : "dhcp",
+             (unsigned)s_wifi.apply_failure.attempts);
+}
+
+static void app_wifi_build_cfg_from_config(app_wifi_apply_cfg_t *out)
+{
+    memset(out, 0, sizeof(*out));
+    app_config_lock();
+    out->sta_use_static = (s_config.sta_use_static != 0);
+    app_copy_string(out->ssid, sizeof(out->ssid), s_config.sta_ssid);
+    app_copy_string(out->password, sizeof(out->password), s_config.sta_password);
+    app_copy_string(out->static_ip, sizeof(out->static_ip), s_config.sta_static_ip);
+    app_copy_string(out->static_gw, sizeof(out->static_gw), s_config.sta_static_gateway);
+    app_copy_string(out->static_mask, sizeof(out->static_mask), s_config.sta_static_netmask);
+    app_copy_string(out->static_dns1, sizeof(out->static_dns1), s_config.sta_static_dns1);
+    app_copy_string(out->static_dns2, sizeof(out->static_dns2), s_config.sta_static_dns2);
+    app_config_unlock();
+    out->valid = true;
+}
+
+/* LKG:只接受"成功应用"的快照(设计稿 §3.5 生命周期表);
+ * 候选失败绝不 capture,config.set 仅保存(reboot 生效)也不经过这里。 */
+static void app_wifi_lkg_capture(const app_wifi_apply_cfg_t *cfg)
+{
+    if (cfg == NULL || !cfg->valid) {
+        return;
+    }
+    app_wifi_runtime_lock();
+    s_wifi.lkg = *cfg;
+    app_wifi_runtime_unlock();
+}
+
+static bool app_wifi_lkg_equals(const app_wifi_apply_cfg_t *cfg)
+{
+    bool equals;
+
+    if (cfg == NULL) {
+        return false;
+    }
+    app_wifi_runtime_lock();
+    equals = s_wifi.lkg.valid &&
+             s_wifi.lkg.sta_use_static == cfg->sta_use_static &&
+             strcmp(s_wifi.lkg.ssid, cfg->ssid) == 0 &&
+             strcmp(s_wifi.lkg.password, cfg->password) == 0 &&
+             strcmp(s_wifi.lkg.static_ip, cfg->static_ip) == 0 &&
+             strcmp(s_wifi.lkg.static_gw, cfg->static_gw) == 0 &&
+             strcmp(s_wifi.lkg.static_mask, cfg->static_mask) == 0 &&
+             strcmp(s_wifi.lkg.static_dns1, cfg->static_dns1) == 0 &&
+             strcmp(s_wifi.lkg.static_dns2, cfg->static_dns2) == 0;
+    app_wifi_runtime_unlock();
+    return equals;
+}
+
+/* 原子连接许可(R3/R3.2):同一临界区内"检查离线 + inflight++"。
+ * 返回 true 的调用方必须在所有路径调用 app_wifi_connect_end()。 */
+static bool app_wifi_connect_blocked(void)
+{
+    bool blocked;
+
+    app_wifi_runtime_lock();
+    blocked = s_wifi.cfg_offline;
+    app_wifi_runtime_unlock();
+    return blocked;
+}
+
+/* A8:R9 入口拒绝条件 = 离线门控 || apply 危险段 hold || 等待启动事件。
+ * 仅用于给出更准确的错误码;真正的互斥由 s_wifi_op_owner 保证。 */
+static bool app_wifi_tryconnect_entry_blocked(void)
+{
+    bool blocked;
+
+    app_wifi_runtime_lock();
+    blocked = s_wifi.cfg_offline || s_wifi_apply_hold || s_wifi_apply_await_start;
+    app_wifi_runtime_unlock();
+    return blocked;
+}
+
+/* in-flight 上限防御:正常并发远低于此值;触顶说明配对异常,拒绝并显式报错 */
+#define APP_WIFI_CONNECT_INFLIGHT_MAX 16
+
+/* A7/A8 原语声明集中在文件头(见 s_wifi_apply_hold 定义) */
+
+static bool app_wifi_connect_begin(const char *path)
+{
+    bool allowed = false;
+    bool over_limit = false;
+    uint32_t inflight = 0;
+
+    app_wifi_runtime_lock();
+    if (!s_wifi.cfg_offline && !s_wifi_apply_hold) {   /* A7:危险段 hold 同样拒绝新许可 */
+        if (s_wifi.connect_inflight >= APP_WIFI_CONNECT_INFLIGHT_MAX) {
+            over_limit = true;
+            inflight = s_wifi.connect_inflight;
+        } else {
+            s_wifi.connect_inflight += 1;
+            inflight = s_wifi.connect_inflight;
+            allowed = true;
+        }
+    }
+    app_wifi_runtime_unlock();
+    if (allowed) {
+        ESP_LOGD(TAG, "connect_begin inflight=%u path=%s", (unsigned)inflight, path);
+    } else if (over_limit) {
+        /* 配对异常信号:不得静默忽略 */
+        ESP_LOGE(TAG, "connect_begin_refused inflight=%u path=%s", (unsigned)inflight, path);
+    }
+    return allowed;
+}
+
+static void app_wifi_connect_end(const char *path)
+{
+    uint32_t inflight;
+    bool unpaired = false;
+
+    app_wifi_runtime_lock();
+    if (s_wifi.connect_inflight > 0) {
+        s_wifi.connect_inflight -= 1;
+    } else {
+        /* 多 end/漏 begin 的配对异常:显式报错,不静默吞掉 */
+        unpaired = true;
+    }
+    inflight = s_wifi.connect_inflight;
+    app_wifi_runtime_unlock();
+    if (unpaired) {
+        ESP_LOGE(TAG, "connect_end_unpaired inflight=%u path=%s", (unsigned)inflight, path);
+    } else {
+        ESP_LOGD(TAG, "connect_end inflight=%u path=%s", (unsigned)inflight, path);
+    }
+}
+
+/* quiesce 等待(R3.1):200ms 告警,limit_ms 为总上限;未归零返回 false,
+ * 调用方禁止执行 esp_wifi_stop()。recovery=true 用 recover_ 前缀日志,
+ * false 用 offline_ 前缀日志。 */
+static bool app_wifi_wait_connect_inflight(int64_t limit_ms, bool recovery)
+{
+    int64_t start_ms = app_wifi_now_ms();
+    int64_t deadline_ms = start_ms + limit_ms;
+    bool warned = false;
+
+    for (;;) {
+        app_wifi_runtime_lock();
+        uint32_t inflight = s_wifi.connect_inflight;
+        app_wifi_runtime_unlock();
+
+        if (inflight == 0) {
+            if (recovery) {
+                ESP_LOGI(TAG, "recover_quiesce_done inflight=0 elapsed=%ums",
+                         (unsigned)(app_wifi_now_ms() - start_ms));
+            }
+            return true;
+        }
+        int64_t elapsed = app_wifi_now_ms() - start_ms;
+        if (!warned && elapsed >= APP_WIFI_QUIESCE_WARN_MS) {
+            warned = true;
+            if (recovery) {
+                ESP_LOGI(TAG, "recover_quiesce_wait inflight=%u elapsed=%ums",
+                         (unsigned)inflight, (unsigned)elapsed);
+            } else {
+                ESP_LOGW(TAG, "offline_quiesce_wait: inflight=%u elapsed=%ums",
+                         (unsigned)inflight, (unsigned)elapsed);
+            }
+        }
+        if (app_wifi_now_ms() >= deadline_ms) {
+            /* 日志行按冻结规格 §3.1 逐字对齐(两条格式不同,不得合并) */
+            if (recovery) {
+                ESP_LOGE(TAG, "recover_quiesce_timeout inflight=%u, recovery rejected",
+                         (unsigned)inflight);
+            } else {
+                ESP_LOGE(TAG, "offline_quiesce_timeout: inflight=%u elapsed=%ums, wifi_stop NOT called",
+                         (unsigned)inflight, (unsigned)elapsed);
+            }
+            return false;
+        }
+        vTaskDelay(pdMS_TO_TICKS(20));
+    }
+}
+
+static void app_wifi_apply_cfg_common_reset(void)
+{
     app_wifi_runtime_lock();
     s_wifi.sta_connected = false;
     s_wifi.sta_has_ip = false;
@@ -1815,39 +2206,460 @@ static esp_err_t app_apply_wifi_config(void)
     app_wifi_stop_startup_connect_window();
     app_wifi_set_startup_fallback_reason("none");
     app_set_sta_ip_strings(NULL);
+}
 
+/* 核心 apply(设计稿 §3.2):成功返回 ESP_OK 并记 *stage_out=NONE;
+ * 失败返回错误码并记最后执行阶段(首个失败由 record 层固化)。 */
+/* A8:apply 链所有权在链入口 claim、链出口 release(含恢复链全程),
+ * 与 tryconnect 通过 s_wifi_op_owner 事务级互斥。claim 失败不是配置应用
+ * 失败:调用方只记录并放弃本轮,不进入恢复链。 */
+static bool app_wifi_op_claim_apply_once(void)
+{
+    bool ok = false;
+
+    app_wifi_tryconnect_state_lock();
+    if (s_wifi_op_owner == APP_WIFI_OP_NONE) {
+        s_wifi_op_owner = APP_WIFI_OP_APPLY;
+        ok = true;
+    }
+    app_wifi_tryconnect_state_unlock();
+    return ok;
+}
+
+static bool app_wifi_op_claim_apply(uint32_t wait_ms)
+{
+    int64_t deadline = app_wifi_now_ms() + (int64_t)wait_ms;
+
+    for (;;) {
+        if (app_wifi_op_claim_apply_once()) {
+            return true;
+        }
+        if (app_wifi_now_ms() >= deadline) {
+            ESP_LOGW(TAG, "APPLY_BUSY_TRYX: apply abandoned after %ums", (unsigned)wait_ms);
+            return false;
+        }
+        vTaskDelay(pdMS_TO_TICKS(50));
+    }
+}
+
+static void app_wifi_op_release_apply(void)
+{
+    app_wifi_tryconnect_state_lock();
+    if (s_wifi_op_owner == APP_WIFI_OP_APPLY) {
+        s_wifi_op_owner = APP_WIFI_OP_NONE;
+    }
+    app_wifi_tryconnect_state_unlock();
+}
+
+static void app_wifi_apply_hold_set(void)
+{
+    app_wifi_runtime_lock();
+    s_wifi_apply_hold = true;
+    app_wifi_runtime_unlock();
+}
+
+static void app_wifi_apply_hold_clear(void)
+{
+    app_wifi_runtime_lock();
+    bool was = s_wifi_apply_hold;
+    s_wifi_apply_hold = false;
+    app_wifi_runtime_unlock();
+    if (was) {
+        ESP_LOGD(TAG, "apply_hold_clear");
+    }
+}
+
+static void app_wifi_offline_gate_clear_if_set(void)
+{
+    app_wifi_runtime_lock();
+    bool was = s_wifi.cfg_offline;
+    s_wifi.cfg_offline = false;
+    app_wifi_runtime_unlock();
+    if (was) {
+        ESP_LOGI(TAG, "offline_gate_clear");   /* §3.1 规格行(发射点见 A7) */
+    }
+}
+
+/* apply 危险段前的 in-flight 排空;1000ms 上限,超时按"本轮放弃"处理。
+ * D/W 级日志,不属 §3.1 规格行。 */
+static bool app_wifi_apply_drain_inflight(void)
+{
+    int64_t deadline = app_wifi_now_ms() + APP_WIFI_QUIESCE_LIMIT_DEFAULT_MS;
+
+    for (;;) {
+        app_wifi_runtime_lock();
+        uint32_t inflight = s_wifi.connect_inflight;
+        app_wifi_runtime_unlock();
+        if (inflight == 0) {
+            return true;
+        }
+        if (app_wifi_now_ms() >= deadline) {
+            ESP_LOGW(TAG, "apply_drain_timeout inflight=%u", (unsigned)inflight);
+            return false;
+        }
+        vTaskDelay(pdMS_TO_TICKS(20));
+    }
+}
+
+static esp_err_t app_wifi_apply_cfg(const app_wifi_apply_cfg_t *cfg,
+                                    app_wifi_apply_stage_t *stage_out)
+{
+    wifi_config_t sta_cfg = {0};
+    esp_err_t err;
+    app_wifi_apply_stage_t stage = APP_WIFI_APPLY_STAGE_NONE;
+
+    /* A8:所有权由链入口 claim(调用方),这里只在本 apply 内封锁新许可并
+     * 排空已获许可的自动连接调用;tryconnect 互斥由 OP_APPLY 保证。 */
+    app_wifi_apply_hold_set();
+    if (!app_wifi_apply_drain_inflight()) {
+        app_wifi_apply_hold_clear();
+        if (stage_out != NULL) {
+            *stage_out = APP_WIFI_APPLY_STAGE_NONE;
+        }
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    if (cfg == NULL || !cfg->valid || s_sta_netif == NULL) {
+        app_wifi_apply_hold_clear();
+        if (stage_out != NULL) {
+            *stage_out = APP_WIFI_APPLY_STAGE_SET_MODE;
+        }
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    /* attempts 计数(§3.1/A5):参数有效、真正进入应用流程才计 1;
+     * 候选/LKG/救援均计,成功也计 —— boot 正常=1,恢复链最多 3。 */
+    app_wifi_runtime_lock();
+    s_wifi.apply_failure.attempts += 1;
+    app_wifi_runtime_unlock();
+
+    app_copy_fixed_bytes(sta_cfg.sta.ssid, sizeof(sta_cfg.sta.ssid), cfg->ssid);
+    app_copy_fixed_bytes(sta_cfg.sta.password, sizeof(sta_cfg.sta.password), cfg->password);
+    sta_cfg.sta.threshold.authmode =
+        (strlen((const char *)sta_cfg.sta.password) >= 8) ? APP_WIFI_STA_AUTHMODE_MIN : WIFI_AUTH_OPEN;
+    sta_cfg.sta.pmf_cfg.capable = true;
+    sta_cfg.sta.pmf_cfg.required = false;
+    sta_cfg.sta.scan_method = WIFI_FAST_SCAN;
+    app_wifi_log_sta_cfg("apply_cfg", &sta_cfg);
+    ESP_LOGI(TAG, "apply_cfg: STA-only sta_pwd_len=%u static=%d",
+             (unsigned)strlen((const char *)sta_cfg.sta.password),
+             (int)cfg->sta_use_static);
+
+    stage = APP_WIFI_APPLY_STAGE_WIFI_STOP;
+    err = esp_wifi_stop();
+    if (err != ESP_OK && err != ESP_ERR_WIFI_NOT_STARTED && err != ESP_ERR_WIFI_NOT_INIT) {
+        ESP_LOGE(TAG, "apply_cfg: wifi_stop failed: %s", esp_err_to_name(err));
+        goto out_fail;
+    }
+
+    app_wifi_apply_cfg_common_reset();
+
+    stage = APP_WIFI_APPLY_STAGE_SET_MODE;
     err = esp_wifi_set_mode(WIFI_MODE_STA);
     if (err != ESP_OK) {
-        ESP_LOGE(TAG, "apply_wifi_config: set_mode STA failed: %s", esp_err_to_name(err));
-        return err;
+        ESP_LOGE(TAG, "apply_cfg: set_mode STA failed: %s", esp_err_to_name(err));
+        goto out_fail;
     }
 
+    stage = APP_WIFI_APPLY_STAGE_SET_CONFIG;
     err = esp_wifi_set_config(WIFI_IF_STA, &sta_cfg);
     if (err != ESP_OK) {
-        ESP_LOGE(TAG, "apply_wifi_config: set sta config failed: %s", esp_err_to_name(err));
-        return err;
+        ESP_LOGE(TAG, "apply_cfg: set sta config failed: %s", esp_err_to_name(err));
+        goto out_fail;
     }
-    if (sta_use_static) {
-        err = app_configure_sta_static_ip();
+
+    if (cfg->sta_use_static) {
+        err = app_configure_sta_static_ip(&stage);
         if (err != ESP_OK) {
-            ESP_LOGE(TAG, "apply_wifi_config: static ip config failed: %s", esp_err_to_name(err));
-            return err;
+            ESP_LOGE(TAG, "apply_cfg: static ip config failed: %s", esp_err_to_name(err));
+            goto out_fail;
         }
     } else {
-        esp_err_t start_err = esp_netif_dhcpc_start(s_sta_netif);
-        if (start_err != ESP_OK && start_err != ESP_ERR_ESP_NETIF_DHCP_ALREADY_STARTED) {
-            ESP_LOGW(TAG, "apply_wifi_config: dhcpc_start: %s", esp_err_to_name(start_err));
+        /* A4(§10.7):DHCP client 启动硬错误属 apply 失败(阶段 dhcpc_start),
+         * 不得带病返回成功 —— 救援语义要求 DHCP 真正启动。ALREADY_STARTED
+         * 视为成功;netif 未 UP 时 IDF 返回 OK 并置 INIT(连接后启动)。 */
+        stage = APP_WIFI_APPLY_STAGE_DHCPC_START;
+        err = esp_netif_dhcpc_start(s_sta_netif);
+        if (err != ESP_OK && err != ESP_ERR_ESP_NETIF_DHCP_ALREADY_STARTED) {
+            ESP_LOGE(TAG, "apply_cfg: dhcpc_start failed: %s", esp_err_to_name(err));
+            goto out_fail;
         }
     }
 
-    ESP_LOGI(TAG, "apply_wifi_config: calling esp_wifi_start...");
+    /* A8:置 await 后启动;门控/hold 的释放在 STA_START 处理器内完成
+     * (driver 已 start 且窗口逻辑同点执行),此处不做任何提前释放。 */
+    stage = APP_WIFI_APPLY_STAGE_WIFI_START;
+    app_wifi_runtime_lock();
+    s_wifi_apply_await_start = true;
+    s_wifi_apply_start_consumed_gen = 0;
+    s_wifi_apply_start_completed_gen = 0;
+    s_wifi_apply_start_gen += 1;
+    uint32_t start_gen = s_wifi_apply_start_gen;
+    app_wifi_runtime_unlock();
+    if (s_wifi_start_events != NULL) {
+        xEventGroupClearBits(s_wifi_start_events, APP_WIFI_START_EVENT_BIT);
+    }
+    ESP_LOGI(TAG, "apply_await_start gen=%u", (unsigned)start_gen);
+
     err = esp_wifi_start();
     if (err != ESP_OK) {
-        ESP_LOGE(TAG, "apply_wifi_config: start failed: %s", esp_err_to_name(err));
-        return err;
+        ESP_LOGE(TAG, "apply_cfg: start failed: %s", esp_err_to_name(err));
+        app_wifi_runtime_lock();
+        s_wifi_apply_await_start = false;
+        app_wifi_runtime_unlock();
+        goto out_fail;
     }
-    ESP_LOGI(TAG, "apply_wifi_config: esp_wifi_start returned OK");
+
+    /* 等待本次 START 事件:事件处理器释放门控/hold、开启动窗口并置位。
+     * 超时不得强放门控(A8 裁决):按 apply 失败进入恢复链。 */
+    {
+        /* 以 completed_gen 为唯一完成判据(event bit 只是唤醒手段):
+         * 事件已消费但窗口/调度未完成时,继续有界等待,不提前返回。 */
+        int64_t deadline = app_wifi_now_ms() + APP_WIFI_START_WAIT_MS;
+        bool completed = false;
+
+        while (app_wifi_now_ms() < deadline) {
+            if (s_wifi_start_events != NULL) {
+                xEventGroupWaitBits(s_wifi_start_events, APP_WIFI_START_EVENT_BIT,
+                                    pdTRUE, pdFALSE, pdMS_TO_TICKS(100));
+            } else {
+                vTaskDelay(pdMS_TO_TICKS(20));
+            }
+            app_wifi_runtime_lock();
+            completed = (s_wifi_apply_start_completed_gen == start_gen);
+            app_wifi_runtime_unlock();
+            if (completed) {
+                break;
+            }
+        }
+        if (!completed) {
+            bool consumed;
+            app_wifi_runtime_lock();
+            consumed = (s_wifi_apply_start_consumed_gen == start_gen);
+            if (!consumed) {
+                s_wifi_apply_await_start = false;
+            }
+            app_wifi_runtime_unlock();
+            if (consumed) {
+                /* 已消费未完成:再给窗口/调度一个有界窗口 */
+                int64_t grace = app_wifi_now_ms() + 500;
+                while (app_wifi_now_ms() < grace) {
+                    vTaskDelay(pdMS_TO_TICKS(20));
+                    app_wifi_runtime_lock();
+                    completed = (s_wifi_apply_start_completed_gen == start_gen);
+                    app_wifi_runtime_unlock();
+                    if (completed) { break; }
+                }
+            }
+            if (!completed) {
+                ESP_LOGE(TAG, "apply_start_timeout gen=%u, gate stays closed",
+                         (unsigned)start_gen);
+                err = ESP_ERR_TIMEOUT;
+                stage = APP_WIFI_APPLY_STAGE_WIFI_START;
+                goto out_fail;
+            }
+            ESP_LOGW(TAG, "apply_start_completed_late gen=%u, treat as started",
+                     (unsigned)start_gen);
+        }
+    }
+
+    /* A5:LKG 统一更新点 —— 只有 apply 成功出口负责 capture,
+     * 调用方不再自行 capture;失败候选不可能覆盖上次成功配置。 */
+    app_wifi_lkg_capture(cfg);
+    if (stage_out != NULL) {
+        *stage_out = APP_WIFI_APPLY_STAGE_NONE;
+    }
+    ESP_LOGI(TAG, "apply_cfg: started (gen=%u)", (unsigned)start_gen);
     return ESP_OK;
+
+out_fail:
+    /* A8:本 apply 已停过 driver 却未成功 start —— 必须进入离线门控,
+     * 不允许失败候选留下开放连接窗口(在线 restart 同样适用)。
+     * 顺序要求:同一临界区内先关门、再清 hold,不暴露 (gate=0,hold=0) 中间态。 */
+    app_wifi_runtime_lock();
+    bool was_offline = s_wifi.cfg_offline;
+    bool hold_was = s_wifi_apply_hold;
+    s_wifi.cfg_offline = true;
+    s_wifi_apply_hold = false;
+    app_wifi_runtime_unlock();
+    if (hold_was) {
+        ESP_LOGD(TAG, "apply_hold_clear");
+    }
+    if (!was_offline) {
+        ESP_LOGW(TAG, "gate_set by apply failure stage=%s", app_wifi_apply_stage_name(stage));
+    }
+    if (stage_out != NULL) {
+        *stage_out = stage;
+    }
+    return err;
+}
+
+/* 离线进入(设计稿 §3.6 固定顺序):先门控,后 quiesce,最后才允许 stop;
+ * in-flight 未归零绝不 stop(R3.1)。stop 成功时统一复位连接中标志
+ * (§10.2-6:esp_wifi_stop() 不保证产生 STA_DISCONNECTED)。 */
+static void app_wifi_enter_offline(void)
+{
+    esp_err_t stop_err;
+
+    app_wifi_runtime_lock();
+    s_wifi.cfg_offline = true;
+    app_wifi_runtime_unlock();
+    ESP_LOGI(TAG, "offline_gate_set");
+
+    app_wifi_stop_startup_connect_window();
+
+    if (!app_wifi_wait_connect_inflight(APP_WIFI_QUIESCE_LIMIT_DEFAULT_MS, false)) {
+        app_wifi_set_cfg_state(APP_NET_CFG_STATE_OFFLINE_QUIESCE_TIMEOUT);
+        /* 门控保持;不 stop、不重试、不重启;BLE 救援可用 */
+        return;
+    }
+
+    ESP_LOGI(TAG, "wifi_stop_begin");
+    stop_err = esp_wifi_stop();
+    ESP_LOGI(TAG, "wifi_stop_end err=%s",
+             stop_err == ESP_OK ? "none" : esp_err_to_name(stop_err));
+    if (stop_err == ESP_OK || stop_err == ESP_ERR_WIFI_NOT_STARTED ||
+        stop_err == ESP_ERR_WIFI_NOT_INIT) {
+        /* §10.2-6 定稿:离线进入时统一复位连接中状态,避免残留 true
+         * 抑制恢复链 apply 后的新连接调度。 */
+        /* 注意:connect_inflight 不在此复位 —— 它是同步原语状态,只能由
+         * begin/end 改写(§10.7-A6);quiesce 已证明其为 0,保持原值。 */
+        app_wifi_runtime_lock();
+        s_wifi.sta_connected = false;
+        s_wifi.sta_has_ip = false;
+        s_wifi.sta_ip_conflict = false;
+        s_wifi.sta_retries = 0;
+        app_wifi_runtime_unlock();
+        s_wifi_sta_connecting = false;
+        s_wifi_connecting_since_ms = 0;
+        app_wifi_set_connected_ssid("");
+        app_set_sta_ip_strings(NULL);
+        app_wifi_runtime_lock();
+        s_wifi.apply_failure.offline_stop_err = ESP_OK;
+        app_wifi_runtime_unlock();
+        app_wifi_set_cfg_state(APP_NET_CFG_STATE_OFFLINE);
+        ESP_LOGE(TAG, "offline_pending_config: wifi stopped, BLE rescue only");
+    } else {
+        app_wifi_runtime_lock();
+        s_wifi.apply_failure.offline_stop_err = stop_err;
+        app_wifi_runtime_unlock();
+        app_wifi_set_cfg_state(APP_NET_CFG_STATE_OFFLINE_STOP_FAILED);
+        ESP_LOGE(TAG, "offline_stop_failed err=%s, gate remains, BLE rescue only",
+                 esp_err_to_name(stop_err));
+    }
+}
+
+/* 恢复链(设计稿 §3.3):LKG(仅运行期且与失败候选不同)→ DHCP 救援 → 离线;
+ * 每个启动周期最多一次,禁止重启兜底,禁止重复同一失败配置。 */
+static void app_wifi_recover_from_apply_failure(const app_wifi_apply_cfg_t *failed)
+{
+    app_wifi_apply_cfg_t rescue;
+    app_wifi_apply_stage_t stage = APP_WIFI_APPLY_STAGE_NONE;
+    esp_err_t err;
+
+    /* ① LKG 恢复:仅当 LKG 有效且与失败候选不同(§1.3 硬约束) */
+    if (!app_wifi_lkg_equals(failed)) {
+        app_wifi_runtime_lock();
+        app_wifi_apply_cfg_t lkg_copy = s_wifi.lkg;
+        app_wifi_runtime_unlock();
+        if (lkg_copy.valid) {
+            ESP_LOGW(TAG, "recover action=lkg_restore begin");
+            err = app_wifi_apply_cfg(&lkg_copy, &stage);
+            if (err == ESP_OK) {
+                app_wifi_runtime_lock();
+                app_copy_string(s_wifi.apply_failure.recovery,
+                                sizeof(s_wifi.apply_failure.recovery), "lkg_restore");
+                app_wifi_runtime_unlock();
+                app_wifi_set_cfg_state(lkg_copy.sta_use_static ? APP_NET_CFG_STATE_STATIC
+                                                               : APP_NET_CFG_STATE_DHCP);
+                ESP_LOGW(TAG, "recover action=lkg_restore result=ok");
+                return;
+            }
+            if (stage == APP_WIFI_APPLY_STAGE_NONE) {
+                ESP_LOGW(TAG, "recover action=lkg_restore abandoned (busy/drain)");
+            } else {
+                app_wifi_record_apply_failure(stage, err, lkg_copy.sta_use_static);
+                ESP_LOGW(TAG, "recover action=lkg_restore result=fail err=%s",
+                         esp_err_to_name(err));
+            }
+        }
+    }
+
+    /* ② DHCP 救援:沿用 SSID/口令,仅 IP 模式降级;不改 s_config/NVS */
+    rescue = *failed;
+    rescue.sta_use_static = false;
+    ESP_LOGW(TAG, "recover action=dhcp_rescue begin");
+    err = app_wifi_apply_cfg(&rescue, &stage);
+    if (err == ESP_OK) {
+        /* LKG 已由 apply_cfg 成功出口统一 capture(A5) */
+        app_wifi_runtime_lock();
+        app_copy_string(s_wifi.apply_failure.recovery,
+                        sizeof(s_wifi.apply_failure.recovery), "dhcp_rescue");
+        app_wifi_runtime_unlock();
+        app_wifi_set_cfg_state(APP_NET_CFG_STATE_FALLBACK);
+        ESP_LOGW(TAG, "recover action=dhcp_rescue result=ok state=fallback");
+        return;
+    }
+    if (stage == APP_WIFI_APPLY_STAGE_NONE) {
+        ESP_LOGW(TAG, "recover action=dhcp_rescue abandoned (busy/drain)");
+    } else {
+        app_wifi_record_apply_failure(stage, err, rescue.sta_use_static);
+        ESP_LOGW(TAG, "recover action=dhcp_rescue result=fail err=%s", esp_err_to_name(err));
+    }
+
+    /* ③ 离线待配置(先门控,后 stop;quiesce 超限则不 stop) */
+    app_wifi_enter_offline();
+}
+
+/* 受控恢复的 quiesce 前置(R6):恢复不是绕过 quiesce 的通道。
+ * 离线态下先重新等待 in-flight 归零;仍超限则拒绝本次恢复,门控保持。 */
+static bool app_wifi_recover_quiesce(void)
+{
+    app_wifi_runtime_lock();
+    bool offline = s_wifi.cfg_offline;
+    app_wifi_runtime_unlock();
+    if (!offline) {
+        /* 非离线 restart:apply_cfg 内部的 hold+drain 提供与连接的互斥(A7) */
+        return true;
+    }
+    /* A7 修正:只确认 quiesce,绝不清门控 —— 门控由胜出 apply 的危险段
+     * 结束处(esp_wifi_start 前)统一释放;超时则拒绝本轮恢复,门控保持。 */
+    return app_wifi_wait_connect_inflight(APP_WIFI_QUIESCE_LIMIT_DEFAULT_MS, true);
+}
+
+/* 启动路径(设计稿 §3.2):失败不再 abort,按恢复动作处理;
+ * 平台级初始化的 ESP_ERROR_CHECK 保留在 app_start_wifi,不在本函数。 */
+static void app_wifi_boot_apply_or_recover(void)
+{
+    app_wifi_apply_cfg_t cfg;
+    app_wifi_apply_stage_t stage = APP_WIFI_APPLY_STAGE_NONE;
+    esp_err_t err;
+
+    /* A8:链入口取得 OP_APPLY;启动期无 tryconnect 竞争者,不等待 */
+    if (!app_wifi_op_claim_apply(0)) {
+        ESP_LOGW(TAG, "boot apply abandoned (op busy)");
+        return;
+    }
+    app_wifi_build_cfg_from_config(&cfg);
+    ESP_LOGI(TAG, "apply_begin mode=%s source=boot",
+             cfg.sta_use_static ? "static" : "dhcp");
+    err = app_wifi_apply_cfg(&cfg, &stage);
+    if (err == ESP_OK) {
+        /* LKG 已由 apply_cfg 成功出口统一 capture(A5) */
+        app_wifi_set_cfg_state(cfg.sta_use_static ? APP_NET_CFG_STATE_STATIC
+                                                  : APP_NET_CFG_STATE_DHCP);
+        app_wifi_op_release_apply();
+        return;
+    }
+    if (stage == APP_WIFI_APPLY_STAGE_NONE) {
+        /* A5/A8:drain 放弃 —— 启动期无并发链,理论不可达;保持 BLE 可用 */
+        ESP_LOGW(TAG, "boot apply abandoned (drain)");
+        app_wifi_op_release_apply();
+        return;
+    }
+    app_wifi_record_apply_failure(stage, err, cfg.sta_use_static);
+    app_wifi_recover_from_apply_failure(&cfg);
+    app_wifi_op_release_apply();
 }
 
 static esp_err_t app_wifi_perform_scan_impl(void)
@@ -1961,6 +2773,13 @@ static app_wifi_try_result_t app_wifi_try_connect_common(const char *ssid, const
     }
     if (password == NULL) {
         password = "";
+    }
+
+    /* M1 R9 + A8:取得候选所有权之前拒绝(离线/apply 危险段/等待启动)。
+     * 只新增一个早期返回;事件归属状态机与正常模式生命周期不变。 */
+    if (app_wifi_tryconnect_entry_blocked()) {
+        ESP_LOGW(TAG, "tryconnect rejected: wifi config offline/busy");
+        return APP_WIFI_TRY_CONFIG_OFFLINE;
     }
 
     /* ownership 必须在预扫描之前建立；预扫描期间的断连不能进入普通重连。 */
@@ -2171,14 +2990,47 @@ static void app_wifi_restart_task_fn(void *arg)
     (void)arg;
     for (;;) {
         BaseType_t notified;
+        app_wifi_apply_cfg_t cfg;
+        app_wifi_apply_stage_t stage = APP_WIFI_APPLY_STAGE_NONE;
+        esp_err_t err;
+
         notified = xTaskNotifyWaitIndexed(0, 0, ULONG_MAX, NULL, portMAX_DELAY);
         if (notified != pdPASS) {
             continue;
         }
         vTaskDelay(pdMS_TO_TICKS(250));
-        if (app_apply_wifi_config() != ESP_OK) {
-            ESP_LOGE(TAG, "Wi-Fi reconfigure failed");
+        /* A8:claim OP_APPLY —— 遇 tryconnect 有界等待 15s,超时放弃本轮 */
+        if (!app_wifi_op_claim_apply(15000)) {
+            continue;   /* APPLY_BUSY_TRYX 已记录;不算配置失败,不进恢复链 */
         }
+        /* M1 R6/A8:离线态先确认 quiesce(不清门控);超限拒绝本轮 */
+        if (!app_wifi_recover_quiesce()) {
+            app_wifi_op_release_apply();
+            continue;
+        }
+        app_wifi_build_cfg_from_config(&cfg);
+        ESP_LOGI(TAG, "apply_begin mode=%s source=runtime_restart",
+                 cfg.sta_use_static ? "static" : "dhcp");
+        err = app_wifi_apply_cfg(&cfg, &stage);
+        if (err == ESP_OK) {
+            /* LKG 已由 apply_cfg 成功出口统一 capture(A5);门控已在
+             * STA_START 处理器内释放(A8) */
+            app_wifi_set_cfg_state(cfg.sta_use_static ? APP_NET_CFG_STATE_STATIC
+                                                      : APP_NET_CFG_STATE_DHCP);
+            app_wifi_op_release_apply();
+            continue;
+        }
+        if (stage == APP_WIFI_APPLY_STAGE_NONE) {
+            /* A5/A8:drain 放弃 —— 不算配置应用失败,不进恢复链 */
+            ESP_LOGW(TAG, "restart apply abandoned (drain)");
+            app_wifi_op_release_apply();
+            continue;
+        }
+        /* 运行期 re-apply 失败走统一恢复链:LKG → DHCP 救援 → 离线(M1-03);
+         * 恢复链全程持有 OP_APPLY,避免 tryconnect 在链中途插入。 */
+        app_wifi_record_apply_failure(stage, err, cfg.sta_use_static);
+        app_wifi_recover_from_apply_failure(&cfg);
+        app_wifi_op_release_apply();
     }
 }
 
@@ -2232,6 +3084,12 @@ void app_start_wifi(void)
     }
 
     ESP_ERROR_CHECK(esp_wifi_init(&cfg));
+    if (s_wifi_start_events == NULL) {
+        s_wifi_start_events = xEventGroupCreateStatic(&s_wifi_start_events_buf);
+        if (s_wifi_start_events == NULL) {
+            ESP_LOGE(TAG, "create start event group failed (apply will fail-closed)");
+        }
+    }
     {
         esp_err_t storage_err = esp_wifi_set_storage(WIFI_STORAGE_RAM);
         if (storage_err != ESP_OK) {
@@ -2270,5 +3128,7 @@ void app_start_wifi(void)
             }
         }
     }
-    ESP_ERROR_CHECK(app_apply_wifi_config());
+    /* M1-01:启动路径移除 ESP_ERROR_CHECK abort —— 静态/配置应用失败按
+     * 恢复动作处理(LKG→DHCP 救援→离线),BLE 救援始终可用,不重启循环。 */
+    app_wifi_boot_apply_or_recover();
 }

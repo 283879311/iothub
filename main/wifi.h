@@ -42,6 +42,7 @@ typedef enum {
     APP_WIFI_TRY_CANCELLED,       /* 操作取消 */
     APP_WIFI_TRY_INVALID_ARG,
     APP_WIFI_TRY_SCAN_FAILED,     /* P1-10:预扫描两次失败,未进入连接(勿伪装成 connect_failed) */
+    APP_WIFI_TRY_CONFIG_OFFLINE,  /* M1 R9:离线门控,入口拒绝,未进入候选生命周期 */
 } app_wifi_try_result_t;
 
 app_wifi_try_result_t app_wifi_try_connect(const char *ssid, const char *password,
