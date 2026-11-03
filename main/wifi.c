@@ -857,6 +857,12 @@ static esp_err_t app_wifi_connect_profile_index(int profile_index)
         sta_cfg.sta.scan_method = WIFI_ALL_CHANNEL_SCAN;
     }
 
+    /* M1-A9:许可覆盖完整驱动区间(disconnect/set_config/connect),
+     * 使 apply drain 等待整段操作,而不是仅最后一次 connect */
+    if (!app_wifi_connect_begin("profile")) {
+        s_wifi_sta_connecting = false;
+        return ESP_ERR_INVALID_STATE;
+    }
     esp_wifi_disconnect();
     if (!same_profile) {
         app_wifi_log_sta_cfg("connect_profile", &sta_cfg);
@@ -864,6 +870,7 @@ static esp_err_t app_wifi_connect_profile_index(int profile_index)
         if (err != ESP_OK) {
             s_wifi_sta_connecting = false;
             ESP_LOGE(TAG, "connect_profile: set sta config failed: %s", esp_err_to_name(err));
+            app_wifi_connect_end("profile");
             return err;
         }
         app_wifi_profiles_lock();
@@ -877,11 +884,6 @@ static esp_err_t app_wifi_connect_profile_index(int profile_index)
     app_wifi_runtime_lock();
     app_copy_string(s_wifi.last_disconnect, sizeof(s_wifi.last_disconnect), "switching_profile");
     app_wifi_runtime_unlock();
-    /* M1 调用点 1/5(R3.2):原子许可 —— begin/end 配对,end 在所有路径执行 */
-    if (!app_wifi_connect_begin("profile")) {
-        s_wifi_sta_connecting = false;
-        return ESP_ERR_INVALID_STATE;
-    }
     err = esp_wifi_connect();
     app_wifi_connect_end("profile");
     if (err != ESP_OK) {
@@ -952,6 +954,11 @@ static esp_err_t app_wifi_connect_best_saved_profile(bool allow_fast_path,
             }
         }
         app_wifi_profiles_unlock();
+        /* M1-A9:许可覆盖 disconnect/set_config/connect 全区间 */
+        if (!app_wifi_connect_begin("fast_path")) {
+            s_wifi_sta_connecting = false;
+            return ESP_ERR_INVALID_STATE;
+        }
         esp_wifi_disconnect();
         err = esp_wifi_set_config(WIFI_IF_STA, &sta_cfg);
         if (err == ESP_OK) {
@@ -967,11 +974,6 @@ static esp_err_t app_wifi_connect_best_saved_profile(bool allow_fast_path,
             app_wifi_runtime_lock();
             app_copy_string(s_wifi.last_disconnect, sizeof(s_wifi.last_disconnect), "fast_path");
             app_wifi_runtime_unlock();
-            /* M1 调用点 2/5(R3.2):原子许可 —— begin/end 配对 */
-            if (!app_wifi_connect_begin("fast_path")) {
-                s_wifi_sta_connecting = false;
-                return ESP_ERR_INVALID_STATE;
-            }
             err = esp_wifi_connect();
             app_wifi_connect_end("fast_path");
             if (err == ESP_OK) {
@@ -984,6 +986,7 @@ static esp_err_t app_wifi_connect_best_saved_profile(bool allow_fast_path,
             ESP_LOGW(TAG, "fast_path connect failed: %s%s", esp_err_to_name(err),
                      allow_profile_scan ? ", fall back to scan" : " (formal-only)");
         } else {
+            app_wifi_connect_end("fast_path");
             ESP_LOGW(TAG, "fast_path set_config failed: %s, fall back to scan", esp_err_to_name(err));
         }
     }
@@ -1436,15 +1439,16 @@ static esp_err_t app_wifi_retry_with_pmf_required(void)
     sta_cfg.sta.pmf_cfg.required = true;
     sta_cfg.sta.scan_method = WIFI_ALL_CHANNEL_SCAN;
 
+    /* M1-A9:许可在 set_config 之前取得,覆盖配置写入与连接 */
+    if (!app_wifi_connect_begin("pmf_retry")) {
+        return ESP_ERR_INVALID_STATE;
+    }
     app_wifi_log_sta_cfg("pmf_required_retry", &sta_cfg);
     err = esp_wifi_set_config(WIFI_IF_STA, &sta_cfg);
     if (err != ESP_OK) {
         ESP_LOGW(TAG, "PMF retry set_config failed: %s", esp_err_to_name(err));
+        app_wifi_connect_end("pmf_retry");
         return err;
-    }
-    /* M1 调用点 3/5(R3.2):原子许可 —— begin/end 配对,end 在所有路径执行 */
-    if (!app_wifi_connect_begin("pmf_retry")) {
-        return ESP_ERR_INVALID_STATE;
     }
     err = esp_wifi_connect();
     app_wifi_connect_end("pmf_retry");
