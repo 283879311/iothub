@@ -18,6 +18,7 @@
 #include "common.h"
 #include "config.h"
 #include "config_apply.h"
+#include "ota.h"
 #include "constants.h"
 #include "data_pipe.h"
 #include "esp_app_desc.h"
@@ -1346,6 +1347,16 @@ static void app_cmd_m1hook(const cJSON *params, app_cmd_source_t source,
     if (source != APP_CMD_SOURCE_BLE) { *err_out = "guard_rejected"; return; }
     if (!cJSON_IsString(action) || action->valuestring == NULL) {
         *err_out = "params_required"; return;
+    }
+    if (strcmp(action->valuestring, "reboot") == 0) {
+        /* V1 RTC probe:软件复位(esp_restart 延迟 1.5s,先回包) */
+        app_reboot_schedule("m1_probe_reboot");
+        *resp_out = cJSON_CreateObject();
+        if (*resp_out == NULL) { *err_out = "out_of_memory"; return; }
+        cJSON_AddBoolToObject(*resp_out, "ok", true);
+        cJSON_AddStringToObject(*resp_out, "action", "reboot");
+        cJSON_AddBoolToObject(*resp_out, "reboot_scheduled", true);
+        return;
     }
     hook_err = app_wifi_test_hook(action->valuestring, stage_str, count, timeout_ms);
     if (hook_err == ESP_ERR_INVALID_STATE) { *err_out = "busy"; return; }
