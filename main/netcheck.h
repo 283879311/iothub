@@ -66,6 +66,10 @@ app_netcheck_state_t app_netcheck_state(void);
 /* 最近一次收尾的阶段名(拷贝出参,锁内快照):"none"/"internet"/"mqtt"/"skipped"。 */
 void app_netcheck_last_stage(char *out, size_t out_size);
 
+/* F-1:最近一次 netcheck 的 TCP 探测失败次数与最后 errno(只读;
+ * start 清零;network.status 以 nc_tcp_fails_last/nc_tcp_last_errno 暴露) */
+void app_netcheck_tcp_stats(uint32_t *fails_out, int *last_errno_out);
+
 /* outcome → 阶段名(同一词汇表):FAIL_INTERNET→"internet"、FAIL_MQTT→"mqtt"、
  * 其余(CANCELLED/TIMEOUT/GEN_MISMATCH)→"none"。apply 拒绝细分用。 */
 const char *app_netcheck_outcome_stage(app_netcheck_outcome_t o);

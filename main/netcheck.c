@@ -42,6 +42,11 @@ typedef struct {
     bool cancel_req;
     char last_stage[12];
     TaskHandle_t task;
+    /* F-1(小程序侧预留 tcp探败=<N> 双向证据):最近一次 netcheck 的 TCP
+     * 探测失败次数与最后 errno——start 时清零,失败出口累加;
+     * network.status 只读暴露,不改行为 */
+    uint32_t tcp_fails_last;
+    int tcp_last_errno;
     /* 选 B 条件 4:按代次归档的不可变终局快照——收尾时写入,只读,
      * 直到下一次收尾才覆盖;worker 只读自己代次的快照,不读 live 状态 */
     bool done_valid;
@@ -68,6 +73,8 @@ static struct {
 };
 
 static void (*s_observer)(uint32_t gen, bool ok, const char *stage) = NULL;
+/* F-1:最近一次 TCP 探测的 errno(仅 netcheck 任务读写) */
+static int s_tcp_probe_errno;
 
 static int64_t nc_now_ms(void)
 {
@@ -156,14 +163,17 @@ static bool nc_tcp_probe(const ip_addr_t *addr, uint16_t port, uint32_t timeout_
 
             if (lwip_getsockopt(sock, SOL_SOCKET, SO_ERROR, &soerr, &len) == 0) {
                 ok = (soerr == 0);
+                s_tcp_probe_errno = soerr;
                 if (!ok) {
                     ESP_LOGI(TAG, "tcp soerr=%d", soerr);
                 }
             }
         } else {
+            s_tcp_probe_errno = errno;
             ESP_LOGI(TAG, "tcp select=%d errno=%d", sel, errno);
         }
     } else {
+        s_tcp_probe_errno = errno;
         ESP_LOGI(TAG, "tcp connect rc=%d errno=%d", rc, errno);
     }
     lwip_close(sock);
@@ -285,6 +295,11 @@ static app_netcheck_state_t nc_run_once(uint32_t gen, char *stage_out,
                                         (uint32_t)(left < APP_NETCHECK_TCP_TIMEOUT_MS
                                                        ? (uint32_t)left
                                                        : APP_NETCHECK_TCP_TIMEOUT_MS));
+            if (!facts.tcp_ok) {
+                /* F-1:失败探测计数(F-1 双向证据;errno 取自 nc_tcp_probe) */
+                s_nc.tcp_fails_last += 1;
+                s_nc.tcp_last_errno = s_tcp_probe_errno;
+            }
             if (facts.tcp_ok) {
                 break;
             }
@@ -468,6 +483,8 @@ esp_err_t app_netcheck_start(uint32_t link_gen)
         s_nc.run_gen = link_gen;
         s_nc.pending_gen = 0;
         s_nc.cancel_req = false;
+        s_nc.tcp_fails_last = 0;
+        s_nc.tcp_last_errno = 0;
         snprintf(s_nc.last_stage, sizeof(s_nc.last_stage), "none");
         need_task = (s_nc.task == NULL);
     }
@@ -586,6 +603,19 @@ app_netcheck_state_t app_netcheck_state(void)
     st = s_nc.state;
     portEXIT_CRITICAL(&s_nc.mux);
     return st;
+}
+
+/* F-1:最近一次 netcheck 的 TCP 探测失败统计(只读;network.status 暴露) */
+void app_netcheck_tcp_stats(uint32_t *fails_out, int *last_errno_out)
+{
+    portENTER_CRITICAL(&s_nc.mux);
+    if (fails_out != NULL) {
+        *fails_out = s_nc.tcp_fails_last;
+    }
+    if (last_errno_out != NULL) {
+        *last_errno_out = s_nc.tcp_last_errno;
+    }
+    portEXIT_CRITICAL(&s_nc.mux);
 }
 
 void app_netcheck_last_stage(char *out, size_t out_size)

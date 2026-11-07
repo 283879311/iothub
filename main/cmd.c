@@ -992,6 +992,16 @@ static cJSON *app_cmd_build_network_status(void)
     cJSON_AddBoolToObject(root, "internet_verified", s_wifi.net_verified);
     cJSON_AddStringToObject(root, "net_verify_stage", s_wifi.net_verify_stage);
     app_wifi_runtime_unlock();
+    /* F-1:最近一次 netcheck 的 TCP 探测失败计数与 errno(双向证据——
+     * >0 且 got_ip = 探测失败被重试救回;连续 =0 = 样本 W≈0) */
+    {
+        uint32_t tcp_fails = 0;
+        int tcp_errno = 0;
+
+        app_netcheck_tcp_stats(&tcp_fails, &tcp_errno);
+        cJSON_AddNumberToObject(root, "nc_tcp_fails_last", (double)tcp_fails);
+        cJSON_AddNumberToObject(root, "nc_tcp_last_errno", (double)tcp_errno);
+    }
 
     /* 当前 AP 的 RSSI/信道/BSSID(加法字段)。断连时 rssi=-128,
      * rssi_valid=false;旧客户端忽略这些字段即可。 */
