@@ -40,12 +40,27 @@ with ser, open(OUT, "ab") as f:
         termios.tcsetattr(ser.fileno(), termios.TCSANOW, attrs)
     except (termios.error, OSError):
         pass
+    # 2026-11-07:每 60s 写一行心跳(# 注释行,SHA256SUMS 的 sha256sum -c 会
+    # 跳过非 "哈希 文件名" 形态的行……不会——sha256sum -c 遇非法行会报错。
+    # 故心跳写进独立 <logfile>.heartbeat,不污染 SUMS 校验对象)。
+    import time as _t
+    _last_beat = 0.0
     try:
         while True:
             data = ser.read(4096)
             if data:
                 f.write(data)
                 f.flush()
+            now = _t.time()
+            if now - _last_beat >= 60.0:
+                _last_beat = now
+                try:
+                    with open(OUT + ".heartbeat", "a") as hf:
+                        hf.write("# heartbeat pid=%d bytes=%d %s\n" % (
+                            __import__("os").getpid(), f.tell(),
+                            _t.strftime("%Y-%m-%dT%H:%M:%S")))
+                except OSError:
+                    pass
     finally:
         try:
             ser.dtr = False
