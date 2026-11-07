@@ -807,20 +807,35 @@ static bool app_cmd_net_apply_async(const app_cmd_context_t *ctx,
         *err_out = "forbidden";
         return false;
     }
-    /* DEF-NET-001 兜底:GOT_IP 窗口(≤300s)内链路可能已变化(断链/换代)。
-     * 提交前复核"当前链路代次"的验证结论仍成立;不成立按阶段细分拒绝,
-     * 绝不把结论过期的 trial 提交落盘。 */
+    /* DEF-NET-001 兜底 + 选 B 修正(2026-11-07 t6 首跑实锤):tryconnect 拆链
+     * 重连后链路换代,重验证在飞时"紧贴 got_ip 的 apply"曾被误拒
+     * (stage 透传了候选链路的旧判决 → 误报 mqtt_unavailable)。
+     * 通过条件(任一):
+     *   a) 当前代次已验证(ok_for_gen);
+     *   b) 代次未变 = 试用验证时的链路(拆链消耗性断开不换代,判决已 OK);
+     *   c) 当前代次重验证在飞 → 有界等待 10s(紧贴 got_ip 的正常节奏)。
+     * 仍不通过才按阶段拒绝;等待到期归 verify_timeout。 */
     {
         uint32_t cur_gen = app_wifi_link_generation();
+        bool ok = app_netcheck_ok_for_gen(cur_gen) ||
+                  cur_gen == s_net_async.netcheck_gen;
 
-        if (!app_netcheck_ok_for_gen(cur_gen)) {
+        if (!ok && app_netcheck_running_for_gen(cur_gen)) {
+            app_netcheck_result_t dres;
+
+            ok = app_netcheck_wait(cur_gen, 10000, &dres);
+            ESP_LOGI(TAG, "apply wait reverify gen=%u -> %d", cur_gen, (int)ok);
+        }
+        if (!ok) {
             char stage[12];
 
             app_netcheck_last_stage(stage, sizeof(stage));
             ESP_LOGW(TAG, "apply rejected: netcheck not ok for gen=%u stage=%s op=%s",
                      cur_gen, stage, status.id);
-            *err_out = (strcmp(stage, "mqtt") == 0) ? "mqtt_unavailable"
-                                                    : "internet_unverified";
+            *err_out = (app_netcheck_state() == APP_NETCHECK_RUNNING)
+                           ? "verify_timeout"
+                           : (strcmp(stage, "mqtt") == 0) ? "mqtt_unavailable"
+                                                          : "internet_unverified";
             return false;
         }
     }
