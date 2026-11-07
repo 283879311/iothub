@@ -1,0 +1,78 @@
+/home/tc/WorkBuddy/2026-10-24-00-22-40/mqtt_v1_test/broker.py:25: DeprecationWarning: Loading plugins from EntryPoints is deprecated and will be removed in a future version. Use `plugins` section of config instead.
+  broker = Broker(config)
+Configuration parameter 'password-file' not found
+'sys_interval' key is not set or is None
+[broker] listening on 0.0.0.0:21883
+Timeout waiting for PUBACK for packet ID 43
+Task failed and will be skipped: <Task finished name='Task-1694' coro=<ProtocolHandler.mqtt_publish() done, defined at /home/tc/.workbuddy/binaries/python/envs/default/lib/python3.13/site-packages/amqtt/mqtt/protocol/handler.py:195> exception=TimeoutError('Timeout waiting for PUBACK for packet ID 43')>
+Traceback (most recent call last):
+  File "/home/tc/.workbuddy/binaries/python/envs/default/lib/python3.13/site-packages/amqtt/broker.py", line 968, in _broadcast_loop
+    task.result()
+  File "/home/tc/.workbuddy/binaries/python/envs/default/lib/python3.13/site-packages/amqtt/mqtt/protocol/handler.py", line 229, in mqtt_publish
+    await self._handle_message_flow(message)
+  File "/home/tc/.workbuddy/binaries/python/envs/default/lib/python3.13/site-packages/amqtt/mqtt/protocol/handler.py", line 244, in _handle_message_flow
+    await self._handle_qos1_message_flow(app_message)
+  File "/home/tc/.workbuddy/binaries/python/envs/default/lib/python3.13/site-packages/amqtt/mqtt/protocol/handler.py", line 324, in _handle_qos1_message_flow
+    raise TimeoutError(msg) from None
+TimeoutError: Timeout waiting for PUBACK for packet ID 43
+Timeout waiting for PUBACK for packet ID 44
+Task failed and will be skipped: <Task finished name='Task-1716' coro=<ProtocolHandler.mqtt_publish() done, defined at /home/tc/.workbuddy/binaries/python/envs/default/lib/python3.13/site-packages/amqtt/mqtt/protocol/handler.py:195> exception=TimeoutError('Timeout waiting for PUBACK for packet ID 44')>
+Traceback (most recent call last):
+  File "/home/tc/.workbuddy/binaries/python/envs/default/lib/python3.13/site-packages/amqtt/broker.py", line 968, in _broadcast_loop
+    task.result()
+  File "/home/tc/.workbuddy/binaries/python/envs/default/lib/python3.13/site-packages/amqtt/mqtt/protocol/handler.py", line 229, in mqtt_publish
+    await self._handle_message_flow(message)
+  File "/home/tc/.workbuddy/binaries/python/envs/default/lib/python3.13/site-packages/amqtt/mqtt/protocol/handler.py", line 244, in _handle_message_flow
+    await self._handle_qos1_message_flow(app_message)
+  File "/home/tc/.workbuddy/binaries/python/envs/default/lib/python3.13/site-packages/amqtt/mqtt/protocol/handler.py", line 324, in _handle_qos1_message_flow
+    raise TimeoutError(msg) from None
+TimeoutError: Timeout waiting for PUBACK for packet ID 44
+Timeout waiting for PUBACK for packet ID 45
+Task failed and will be skipped: <Task finished name='Task-1731' coro=<ProtocolHandler.mqtt_publish() done, defined at /home/tc/.workbuddy/binaries/python/envs/default/lib/python3.13/site-packages/amqtt/mqtt/protocol/handler.py:195> exception=TimeoutError('Timeout waiting for PUBACK for packet ID 45')>
+Traceback (most recent call last):
+  File "/home/tc/.workbuddy/binaries/python/envs/default/lib/python3.13/site-packages/amqtt/broker.py", line 968, in _broadcast_loop
+    task.result()
+  File "/home/tc/.workbuddy/binaries/python/envs/default/lib/python3.13/site-packages/amqtt/mqtt/protocol/handler.py", line 229, in mqtt_publish
+    await self._handle_message_flow(message)
+  File "/home/tc/.workbuddy/binaries/python/envs/default/lib/python3.13/site-packages/amqtt/mqtt/protocol/handler.py", line 244, in _handle_message_flow
+    await self._handle_qos1_message_flow(app_message)
+  File "/home/tc/.workbuddy/binaries/python/envs/default/lib/python3.13/site-packages/amqtt/mqtt/protocol/handler.py", line 324, in _handle_qos1_message_flow
+    raise TimeoutError(msg) from None
+TimeoutError: Timeout waiting for PUBACK for packet ID 45
+Timeout waiting for PUBACK for packet ID 46
+Task failed and will be skipped: <Task finished name='Task-1746' coro=<ProtocolHandler.mqtt_publish() done, defined at /home/tc/.workbuddy/binaries/python/envs/default/lib/python3.13/site-packages/amqtt/mqtt/protocol/handler.py:195> exception=TimeoutError('Timeout waiting for PUBACK for packet ID 46')>
+Traceback (most recent call last):
+  File "/home/tc/.workbuddy/binaries/python/envs/default/lib/python3.13/site-packages/amqtt/broker.py", line 968, in _broadcast_loop
+    task.result()
+  File "/home/tc/.workbuddy/binaries/python/envs/default/lib/python3.13/site-packages/amqtt/mqtt/protocol/handler.py", line 229, in mqtt_publish
+    await self._handle_message_flow(message)
+  File "/home/tc/.workbuddy/binaries/python/envs/default/lib/python3.13/site-packages/amqtt/mqtt/protocol/handler.py", line 244, in _handle_message_flow
+    await self._handle_qos1_message_flow(app_message)
+  File "/home/tc/.workbuddy/binaries/python/envs/default/lib/python3.13/site-packages/amqtt/mqtt/protocol/handler.py", line 324, in _handle_qos1_message_flow
+    raise TimeoutError(msg) from None
+TimeoutError: Timeout waiting for PUBACK for packet ID 46
+Timeout waiting for PUBACK for packet ID 47
+Task failed and will be skipped: <Task finished name='Task-1761' coro=<ProtocolHandler.mqtt_publish() done, defined at /home/tc/.workbuddy/binaries/python/envs/default/lib/python3.13/site-packages/amqtt/mqtt/protocol/handler.py:195> exception=TimeoutError('Timeout waiting for PUBACK for packet ID 47')>
+Traceback (most recent call last):
+  File "/home/tc/.workbuddy/binaries/python/envs/default/lib/python3.13/site-packages/amqtt/broker.py", line 968, in _broadcast_loop
+    task.result()
+  File "/home/tc/.workbuddy/binaries/python/envs/default/lib/python3.13/site-packages/amqtt/mqtt/protocol/handler.py", line 229, in mqtt_publish
+    await self._handle_message_flow(message)
+  File "/home/tc/.workbuddy/binaries/python/envs/default/lib/python3.13/site-packages/amqtt/mqtt/protocol/handler.py", line 244, in _handle_message_flow
+    await self._handle_qos1_message_flow(app_message)
+  File "/home/tc/.workbuddy/binaries/python/envs/default/lib/python3.13/site-packages/amqtt/mqtt/protocol/handler.py", line 324, in _handle_qos1_message_flow
+    raise TimeoutError(msg) from None
+TimeoutError: Timeout waiting for PUBACK for packet ID 47
+Timeout waiting for PUBACK for packet ID 48
+Task failed and will be skipped: <Task finished name='Task-1783' coro=<ProtocolHandler.mqtt_publish() done, defined at /home/tc/.workbuddy/binaries/python/envs/default/lib/python3.13/site-packages/amqtt/mqtt/protocol/handler.py:195> exception=TimeoutError('Timeout waiting for PUBACK for packet ID 48')>
+Traceback (most recent call last):
+  File "/home/tc/.workbuddy/binaries/python/envs/default/lib/python3.13/site-packages/amqtt/broker.py", line 968, in _broadcast_loop
+    task.result()
+  File "/home/tc/.workbuddy/binaries/python/envs/default/lib/python3.13/site-packages/amqtt/mqtt/protocol/handler.py", line 229, in mqtt_publish
+    await self._handle_message_flow(message)
+  File "/home/tc/.workbuddy/binaries/python/envs/default/lib/python3.13/site-packages/amqtt/mqtt/protocol/handler.py", line 244, in _handle_message_flow
+    await self._handle_qos1_message_flow(app_message)
+  File "/home/tc/.workbuddy/binaries/python/envs/default/lib/python3.13/site-packages/amqtt/mqtt/protocol/handler.py", line 324, in _handle_qos1_message_flow
+    raise TimeoutError(msg) from None
+TimeoutError: Timeout waiting for PUBACK for packet ID 48
+Timeout waiting for PUBACK for packet ID 4

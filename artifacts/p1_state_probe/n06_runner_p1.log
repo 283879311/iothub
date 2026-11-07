@@ -1,0 +1,45 @@
+== MQTT v1 回归: 127.0.0.1:21883 ==
+  [预检] fw=None build_variant=mqtt_net_txn=on protocol_versions=['1.0']
+-- A. 传输层 / envelope --
+  [PASS] T01 v0帧(无version)→unsupported_version
+  [PASS] T02 version=2.0→unsupported_version
+  [PASS] T03 缺id→invalid_argument
+  [PASS] T04 缺cmd→invalid_argument
+  [PASS] T05 args非对象→invalid_argument
+  [PASS] T06 未知命令→unknown_command
+  [PASS] T07 非JSON静默丢弃(无响应)
+  [PASS] T08 200ms内连发第二发→rate_limited
+-- B. 正向命令 --
+  [PASS] P01 device.info→ok+data
+  [PASS] P02 device.status→ok+data
+  [PASS] P03 gpio.status→ok+data
+  [PASS] P04 uart.runtime→ok+data
+  [PASS] P05 config.get→ok+data
+  [PASS] P07 io.get→ok+data
+  [PASS] P08 led.toggle→ok+data
+  [PASS] P09 network.status→ok+data
+  [PASS] P05b config.get未知域→invalid_argument(message=domain_not_supported)
+  [PASS] P06 config.set(gpio/data_route域)→ok
+  [PASS] P12 数字id回包为字符串'777'
+  [PASS] P11 自定义主题 iothub/rpc（TB backend 预期无响应）
+  [PASS] P10 operation.get未知id→not_found
+-- C. MQTT 源禁止路径 --
+  [PASS] F01 network.scan(BLE-only)→forbidden
+  [PASS] F02 network.profile.list(BLE-only)→forbidden
+  [PASS] F03 network.profile.delete(BLE-only)→forbidden
+  [PASS] F04 network.reconnect(BLE-only)→forbidden
+  [PASS] F05 auth.login(BLE-only)→forbidden
+  [PASS] F06 auth.admin.set(BLE-only)→forbidden
+  [PASS] F07 provisioning.pin.set(BLE-only)→forbidden
+  [PASS] F08 uart.send(BLE-only)→forbidden
+  [PASS] F09 data.loopback(BLE-only)→forbidden
+  [PASS] F10 config.set改网络域→forbidden(guard_rejected映射)
+-- D. 网络事务 --
+  [PASS] N01 tryconnect缺ssid→invalid_argument(params_required)
+  [PASS] N02 tryconnect假SSID→受理 或 静态锁(static_ip_pinned)
+  [PASS] N04 apply缺operation_id→invalid_argument(params_required)
+  [PASS] N05 apply未知id→not_found
+  [FAIL] N06a tryconnect真AP受理  -- 实际 None
+
+== 结果: 35/38 PASS, 1 FAIL, 2 SKIP ==
+报告已写入 /home/tc/esp/workspace/iothub/artifacts/p1_state_probe/n06_report_device_p1.json

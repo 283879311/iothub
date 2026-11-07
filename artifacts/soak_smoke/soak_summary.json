@@ -1,0 +1,39 @@
+{
+  "started": "2026-11-06T07:10:35.384716",
+  "finished": "2026-11-06T07:13:15.470348",
+  "duration_s": 160,
+  "cycles": 8,
+  "sessions_total": 8,
+  "sessions_ok": 8,
+  "sessions_err": 0,
+  "uptime_first_ms": 3812,
+  "uptime_last_ms": 141511,
+  "heap_free_first": 43288,
+  "heap_free_last": 42860,
+  "heap_free_min": 42832,
+  "adv_retry_max": 0,
+  "serial": {
+    "counts": {
+      "rst": 1,
+      "guru_abort_assert": 0,
+      "idle_terminate": 0,
+      "adv_watchdog": 0,
+      "heap_new_low": 0,
+      "mqtt_connected": 1,
+      "mqtt_restart_attempt": 1,
+      "disconnect_0x222": 0,
+      "disconnect_total": 8
+    },
+    "idle_terminate_attributed": []
+  },
+  "checks": {
+    "no_reboot": true,
+    "heap_no_decline": true,
+    "adv_retry_stable": true,
+    "idle_terminate_zero": true,
+    "no_crash": true,
+    "adv_watchdog_zero": true,
+    "no_ll_timeout": true
+  },
+  "verdict": "PASS"
+}

@@ -1,0 +1,7 @@
+Traceback (most recent call last):
+  File "/home/tc/esp/workspace/iothub/tools/capture_serial.py", line 40, in <module>
+    termios.tcsetattr(ser.fileno(), termios.TCSANOW, attrs)
+               ^^^^^^^^^^^^^^
+  File "/home/tc/esp/workspace/iothub/.venv-bleak/lib/python3.12/site-packages/serial/serialposix.py", line 595, in read
+    raise SerialException(
+serial.serialutil.SerialException: device reports readiness to read but returned no data (device disconnected or multiple access on port?)

@@ -1,0 +1,17 @@
+[18:54:08] inject broker listening :21883 mode=cut
+[18:54:15] device connected from 192.168.1.50:59256
+[18:54:15] CONNECT -> CONNACK
+[18:54:15] SUBSCRIBE pid=3064 -> SUBACK
+[18:54:15] SUBSCRIBE pid=59343 -> SUBACK
+[18:54:15] SUBSCRIBE pid=36006 -> SUBACK
+[18:54:15] PUBLISH topic=v1/devices/me/attributes qos=1 pid=58865 {"fw_version":"1.2-a35eef9-dirty","net_mode":"sta","sta_ssid":"CMCC-502","sta_ip":"192.168.1.50","bt_mode":"ble","uart_f
+[18:54:15] PUBLISH topic=v1/devices/me/telemetry qos=1 pid=53810 {"relay_on":false,"led_on":false,"input_active":false,"io_seq":1,"io_source":"mqtt","bt_mode":"ble","net_mode":"sta","st
+[18:54:15] PUBLISH topic=v1/devices/me/attributes/request/25053 qos=1 pid=32446 {"sharedKeys":"data"}
+[18:54:18] PUBLISH topic=v1/devices/me/attributes qos=1 pid=18350 {"fw_version":"1.2-a35eef9-dirty","net_mode":"sta","sta_ssid":"CMCC-502","sta_ip":"192.168.1.50","bt_mode":"ble","uart_f
+[18:54:18] PUBLISH topic=v1/devices/me/telemetry qos=1 pid=2165 {"relay_on":false,"led_on":false,"input_active":false,"io_seq":1,"io_source":"mqtt","bt_mode":"ble","net_mode":"sta","st
+[18:54:21] -> request v1/devices/me/rpc/request/9001 id=inj-1793876061
+[18:54:21] -> request v1/devices/me/rpc/request/9001 id=inj-1793876061
+[18:54:21] -> request v1/devices/me/rpc/request/9001 id=inj-1793876061
+[18:54:26] PUBLISH topic=v1/devices/me/rpc/response/9001 qos=1 pid=64281 {"id":"inj-1793876061","ok":true,"data":{"operation_id":"op-D1181E0A40172AD6","state":"accepted"}}
+[18:54:26] !! cut mode: closing socket WITHOUT PUBACK (response)
+[18:54:26] connection closed; waiting for next

@@ -1,0 +1,7 @@
+/home/tc/WorkBuddy/2026-10-24-00-22-40/mqtt_v1_test/broker.py:25: DeprecationWarning: Loading plugins from EntryPoints is deprecated and will be removed in a future version. Use `plugins` section of config instead.
+  broker = Broker(config)
+Configuration parameter 'password-file' not found
+'sys_interval' key is not set or is None
+[broker] listening on 0.0.0.0:21883
+No data from (client @=192.168.1.19:55712) : No data to decode MQTT packet fixed header
+Failed to initialize client session: No data to decode MQTT packet fixed header

@@ -1,0 +1,5 @@
+capture_start=2026-11-06T21:27:35+0800
+anchor: wall=(1793971698.360034053..1793971698.374365332) uptime_ms=31485
+port=/dev/ttyUSB1 pid=47820 file=serial_t4.log
+note=单路长抓；open 触发一次 POWERON 复位（capture_serial.py 固有），此后不再短抓
+precapture=serial_precapture_2040-2127.log（20:40 复位后的串口，含 20:41 只读复核会话）

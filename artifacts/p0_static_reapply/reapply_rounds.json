@@ -1,0 +1,99 @@
+{
+  "address": "B0:A7:32:28:C8:E6",
+  "mode": "reapply",
+  "started": "2026-11-05T09:52:08",
+  "rounds": [
+    {
+      "round": 1,
+      "accepted": true,
+      "error": null,
+      "elapsed_s": 3.7,
+      "wifi_stop_to_connected_s": 4.6,
+      "status": {
+        "sta_connected": true,
+        "sta_has_ip": true,
+        "sta_ip": "192.168.1.50",
+        "connected_ssid": "CMCC-502",
+        "sta_ssid": "CMCC-502",
+        "persistent_use_static": true,
+        "persistent_static_ip": "192.168.1.50",
+        "cfg_state": "static",
+        "mqtt_connected": false,
+        "mqtt_last_error": "disconnected",
+        "password_set": true
+      },
+      "ip_matches_baseline": true
+    },
+    {
+      "round": 2,
+      "accepted": true,
+      "error": null,
+      "elapsed_s": 3.9,
+      "wifi_stop_to_connected_s": 4.6,
+      "status": {
+        "sta_connected": true,
+        "sta_has_ip": true,
+        "sta_ip": "192.168.1.50",
+        "connected_ssid": "CMCC-502",
+        "sta_ssid": "CMCC-502",
+        "persistent_use_static": true,
+        "persistent_static_ip": "192.168.1.50",
+        "cfg_state": "static",
+        "mqtt_connected": false,
+        "mqtt_last_error": "disconnected",
+        "password_set": true
+      },
+      "ip_matches_baseline": true
+    },
+    {
+      "round": 3,
+      "accepted": true,
+      "error": null,
+      "elapsed_s": 3.7,
+      "wifi_stop_to_connected_s": 4.3,
+      "status": {
+        "sta_connected": true,
+        "sta_has_ip": true,
+        "sta_ip": "192.168.1.50",
+        "connected_ssid": "CMCC-502",
+        "sta_ssid": "CMCC-502",
+        "persistent_use_static": true,
+        "persistent_static_ip": "192.168.1.50",
+        "cfg_state": "static",
+        "mqtt_connected": false,
+        "mqtt_last_error": "disconnected",
+        "password_set": true
+      },
+      "ip_matches_baseline": true
+    }
+  ],
+  "device_info": {
+    "model": "iothub",
+    "firmware": "1.2-a35eef9-dirty",
+    "device_id": "IotHub-C8E4",
+    "build_variant": "mqtt_net_txn=on",
+    "protocol_versions": [
+      "1.0"
+    ],
+    "security": {
+      "link_encrypted": false,
+      "bonded": false,
+      "l2_ready": false,
+      "sensitive_writes_allowed": false
+    }
+  },
+  "baseline": {
+    "sta_connected": true,
+    "sta_has_ip": true,
+    "sta_ip": "192.168.1.50",
+    "connected_ssid": "CMCC-502",
+    "sta_ssid": "CMCC-502",
+    "persistent_use_static": true,
+    "persistent_static_ip": "192.168.1.50",
+    "cfg_state": "static",
+    "mqtt_connected": true,
+    "mqtt_last_error": "",
+    "password_set": true
+  },
+  "finished": "2026-11-05T09:53:05"
+}

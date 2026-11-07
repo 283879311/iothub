@@ -1,0 +1,370 @@
+ets Jul 29 2019 12:21:46
+
+rst:0x1 (POWERON_RESET),boot:0x13 (SPI_FAST_FLASH_BOOT)
+configsip: 0, SPIWP:0xee
+clk_drv:0x00,q_drv:0x00,d_drv:0x00,cs0_drv:0x00,hd_drv:0x00,wp_drv:0x00
+mode:DIO, clock div:2
+load:0x3fff0040,len:6172
+ho 0 tail 12 room 4
+load:0x40078000,len:15908
+load:0x40080400,len:3876
+entry 0x4008063c
+I (29) boot: ESP-IDF v6.0.3-707-gdac489c6718 2nd stage bootloader
+I (29) boot: compile time Nov  1 2026 23:34:54
+I (30) boot: chip revision: v3.1
+I (32) boot.esp32: SPI Speed      : 40MHz
+I (36) boot.esp32: SPI Mode       : DIO
+I (39) boot.esp32: SPI Flash Size : 4MB
+I (43) boot: Partition Table:
+I (45) boot: ## Label            Usage          Type ST Offset   Length
+I (52) boot:  0 nvs              WiFi data        01 02 00009000 00004000
+I (58) boot:  1 otadata          OTA data         01 00 0000d000 00002000
+I (65) boot:  2 phy_init         RF data          01 01 0000f000 00001000
+I (71) boot:  3 ota_0            OTA app          00 10 00010000 001e0000
+I (78) boot:  4 ota_1            OTA app          00 11 001f0000 001e0000
+I (84) boot:  5 storage          Unknown data     01 83 003d0000 00010000
+I (91) boot:  6 coredump         Unknown data     01 03 003e0000 00008000
+I (98) esp_image: segment 0: paddr=00010020 vaddr=3f400020 size=33674h (210548) map
+I (181) esp_image: segment 1: paddr=0004369c vaddr=3ffbdb60 size=062e8h ( 25320) load
+I (191) esp_image: segment 2: paddr=0004998c vaddr=40080000 size=0668ch ( 26252) load
+I (202) esp_image: segment 3: paddr=00050020 vaddr=400d0020 size=c4694h (804500) map
+I (492) esp_image: segment 4: paddr=001146bc vaddr=4008668c size=16a14h ( 92692) load
+I (530) esp_image: segment 5: paddr=0012b0d8 vaddr=50000000 size=00028h (    40) load
+I (545) boot: Loaded app from partition at offset 0x10000
+I (551) cpu_start: Multicore app
+I (560) cpu_start: GPIO 3 and 1 are used as console UART I/O pins
+I (560) cpu_start: Pro cpu start user code
+I (560) cpu_start: cpu freq: 160000000 Hz
+I (562) app_init: Application information:
+I (566) app_init: Project name:     iothub
+I (569) app_init: App version:      1.2-a35eef9-dirty
+I (574) app_init: Compile time:     Nov  5 2026 10:25:31
+I (579) app_init: ELF file SHA256:  bd4f02f21...
+I (584) app_init: ESP-IDF:          v6.0.3-707-gdac489c6718
+I (589) efuse_init: Min chip rev:     v0.0
+I (593) efuse_init: Max chip rev:     v3.99 
+I (597) efuse_init: Chip rev:         v3.1
+I (601) heap_init: Initializing. RAM available for dynamic allocation:
+I (607) heap_init: At 3FFAFF10 len 000000F0 (0 KiB): DRAM
+I (612) heap_init: At 3FFB6388 len 00001C78 (7 KiB): DRAM
+I (617) heap_init: At 3FFB9A20 len 00004108 (16 KiB): DRAM
+I (622) heap_init: At 3FFD3510 len 0000CAF0 (50 KiB): DRAM
+I (627) heap_init: At 3FFE0440 len 00003AE0 (14 KiB): D/IRAM
+I (633) heap_init: At 3FFE4350 len 0001BCB0 (111 KiB): D/IRAM
+I (638) heap_init: At 4009D0A0 len 00002F60 (11 KiB): IRAM
+I (645) spi_flash: detected chip: generic
+I (647) spi_flash: flash io: dio
+I (651) esp_core_dump_flash: Init core dump to flash
+I (656) esp_core_dump_flash: Found partition 'coredump' @ 3e0000 32768 bytes
+E (720) esp_core_dump_flash: Core dump data check failed:
+Calculated checksum='85b9f743ff56d94ade0f88fce1451216bfafb821ca6a4e3d15d95979d226a4d2'
+Image checksum='0000000000000000000000000000000000000000000000000000000000000000'
+I (729) coexist: coex firmware version: eec362d
+I (734) main_task: Started on CPU0
+I (734) main_task: Calling app_main()
+I (734) iothub: [boot-1] app_uart_init
+I (734) iothub: [boot-3] nvs_flash_init
+I (754) iothub: [boot-4] app_bootstrap_load_config
+I (754) iothub: [boot-4a] config_apply_init
+I (754) cfg_apply: config_apply ready: 32 fields, 0 problem(s); wired domains: gpio/mqtt/net/bt/web_auth/datapipe
+I (764) iothub: [boot-4a2] app_operation_init
+I (764) operation: operation table ready: slots=4
+I (764) iothub: [boot-4b] app_config_force_ble_peripheral
+I (774) iothub: [boot-4c] app_bt_release_unused_memory
+I (774) app_bt: BT memory release skipped (mode=ble role=1, BLE always-on)
+I (784) iothub: [boot-4d] app_bt_apply_config (always-on peripheral)
+I (794) BTDM_INIT: BT controller compile version [919c7f4]
+I (794) BTDM_INIT: Using main XTAL as clock source
+I (804) BTDM_INIT: Bluetooth MAC: b0:a7:32:28:c8:e6
+I (804) phy_init: phy_version 4863,a3a4459,Oct 28 2025,14:30:06
+I (894) phy_init: Saving new calibration data due to checksum failure or outdated calibration data, mode(0)
+I (1174) data_pipe: port 1 registered
+I (1184) ble_cmd: ble cmd shell ready (line=512, queue=8)
+I (1184) ble_data: BLE data plane started (peripheral: notify)
+I (1184) iothub: mem after_ble          total_free=130520 internal_free=130520 internal_largest=110592 total_largest=110592
+I (1194) iothub: [boot-5] app_configure_gpio
+I (1204) state: boot policy: relay=0(off) led=1(on), outputs relay=0 led=1
+I (1214) state: touch channel 7 -> GPIO27 (expected GPIO27)
+I (1224) bt_gatts: on_sync from task nimble_host
+I (1224) bt_gatts: svc defs staged (rx_h=0 tx_h=0 cmd_rx_h=0 cmd_tx_h=0)
+I (1224) bt_gatts: NUS data service started (nimble, rx_h=3 tx_h=5 cmd_rx_h=8 cmd_tx_h=10)
+I (1234) NimBLE: GAP procedure initiated: advertise; 
+I (1234) NimBLE: disc_mode=2
+I (1234) NimBLE:  adv_channel_map=0 own_addr_type=0 adv_filter_policy=0 adv_itvl_min=32 adv_itvl_max=64
+I (1244) NimBLE: 
+
+I (1254) app_bt: BLE advertising started
+I (1284) state: touch ready: channel=7 baseline=2045 threshold=2004 (2%)
+I (1284) state: input initial state: inactive
+I (1284) iothub: [boot-7] app_start_wifi
+I (1294) wifi:wifi driver task: 3ffe3424, prio:23, stack:6656, core=1
+I (1294) wifi:wifi firmware version: 003ef6c
+I (1294) wifi:wifi certification version: v7.0
+I (1294) wifi:config NVS flash: enabled
+I (1304) wifi:config nano formatting: disabled
+I (1304) wifi:Init data frame dynamic rx buffer num: 10
+I (1314) wifi:Init static rx mgmt buffer num: 5
+I (1314) wifi:Init management short buffer num: 32
+I (1314) wifi:Init dynamic tx buffer num: 4
+I (1324) wifi:Init static rx buffer size: 1600
+I (1324) wifi:Init static rx buffer num: 6
+I (1334) wifi:Init dynamic rx buffer num: 10
+I (1334) wifi_init: rx ba win: 4
+I (1334) wifi_init: accept mbox: 6
+I (1344) wifi_init: tcpip mbox: 32
+I (1344) wifi_init: udp mbox: 6
+I (1344) wifi_init: tcp mbox: 6
+I (1354) wifi_init: tcp tx win: 2880
+I (1354) wifi_init: tcp rx win: 2880
+I (1354) wifi_init: tcp mss: 1440
+I (1354) wifi_init: WiFi IRAM OP enabled
+I (1364) wifi_init: WiFi RX IRAM OP enabled
+I (1364) wifi: apply_begin mode=static source=boot
+I (1374) wifi: apply_cfg: ssid='CMCC-502' pwd_len=10 threshold=2(WPA) pmf(capable=1,required=0) scan=0
+I (1384) wifi: apply_cfg: STA-only sta_pwd_len=10 static=1
+I (1384) wifi: static ip configured: ip=192.168.1.50 gw=192.168.1.1 mask=255.255.255.0 dns1=223.5.5.5 dns2=8.8.8.8
+I (1394) wifi: apply_await_start gen=1
+I (1404) wifi:mode : sta (b0:a7:32:28:c8:e4)
+I (1404) wifi:enable tsf
+I (1404) wifi: sta_start_evt gen=1 await=1 consumed=0 completed=0 probed=0
+I (1414) wifi: apply_start_released gen=1
+I (1414) wifi: apply_cfg: started (gen=1)
+I (1414) wifi: fast_path: ssid='CMCC-502' pwd_len=10 threshold=2(WPA) pmf(capable=1,required=0) scan=0
+I (1424) wifi: net_config_state=static
+I (1434) iothub: mem after_wifi         total_free=78160 internal_free=78160 internal_largest=77824 total_largest=77824
+I (1434) wifi: auto_connect: fast_path ssid=CMCC-502
+I (1444) iothub: [boot-9] app_uart_apply_config
+I (1454) uart: ALREADY NULL
+I (1474) uart: uart1 rx reader started (inbound -> data_pipe, chunk=256)
+I (1474) iothub: [boot-9b] data_pipe (uart1 / ble / mqtt)
+I (1474) data_pipe: data pipe ready (chunk=256, depth=16)
+I (1484) data_pipe: port 0 registered
+I (1484) data_pipe: data pipe enabled
+I (1484) data_pipe: routes applied: uart1=0x2 ble=0x5 mqtt=0x2 (loopback=0)
+I (1494) iothub: [boot-10] app_mqtt_start
+I (1494) iothub: [boot-11] app_factory_reset_start_task
+I (1504) iothub: [boot-13] app_ota_confirm_running_image
+I (1504) ota: Running OTA image: label=ota_0 offset=0x00010000 state=2
+I (1514) iothub: [boot-13b] app_diag_start
+I (1514) diag: core_affinity: wifi=1 tcpip=1
+I (1524) diag: heap free=60980 min=60976 largest=59392 level=normal | wifi mode=1 ch=1/0 adv=1 conn=0 cf=7 rx_age=-1 role=ble mqtt_outbox=0 mqtt_shed=0 pipe_yield=0
+I (1524) iothub: mem after_diag         total_free=60852 internal_free=60852 internal_largest=59392 total_largest=59392
+I (1544) iothub: iothub phase-4 ready: mode=sta, STA SSID='CMCC-502' (BLE-only management)
+I (1554) main_task: Returned from app_main()
+I (2204) wifi:new:<3,0>, old:<1,0>, ap:<255,255>, sta:<3,0>, prof:1, snd_ch_cfg:0x0
+I (2204) wifi:state: init -> auth (0xb0)
+I (2214) wifi:state: auth -> assoc (0x0)
+I (2214) wifi:state: assoc -> run (0x10)
+I (2244) wifi:connected with CMCC-502, aid = 65, channel 3, BW20, bssid = 5c:c0:a0:bd:f6:28
+I (2244) wifi:security: WPA2-PSK, phy: bgn, rssi: -75, cipher(pairwise:0x3, group:0x1), pmf:0
+I (2254) wifi:pm start, type: 1
+
+I (2254) wifi:dp: 1, bi: 102400, li: 3, scale listen interval from 307200 us to 307200 us
+I (2264) wifi: STA_CONNECTED: static ip mode (connected at t=1626ms)
+I (2264) esp_netif_handlers: sta ip: 192.168.1.50, mask: 255.255.255.0, gw: 192.168.1.1
+I (2274) wifi: IP_EVENT_STA_GOT_IP: 192.168.1.50 (t=1636ms from boot, 10ms from connected)
+I (2294) wifi:AP's beacon interval = 102400 us, DTIM period = 1
+W (4284) mqtt: mqtt restart attempt (backoff step 1)
+I (4284) data_pipe: port 2 registered
+I (4284) mqtt: Starting MQTT: uri=mqtt://192.168.1.19:21883, client_id=iothub-B0A73228C8E4, token_len=13, tls=no, will=v1/devices/me/attributes
+I (4884) wifi: static ip 192.168.1.50: no ARP answer, no conflict
+E (9304) esp-tls: [sock=40] select() timeout
+E (9304) transport_base: Failed to open a new connection: 32774
+E (9304) mqtt_client: Error transport connect
+E (9304) mqtt: MQTT_EVENT_ERROR: type=1 connect_rc=0
+W (9304) mqtt: MQTT_EVENT_DISCONNECTED
+W (14314) mqtt: mqtt restart attempt (backoff step 2)
+I (14314) mqtt: Telemetry task exiting on stop request
+I (16814) data_pipe: port 2 registered
+I (16814) mqtt: Starting MQTT: uri=mqtt://192.168.1.19:21883, client_id=iothub-B0A73228C8E4, token_len=13, tls=no, will=v1/devices/me/attributes
+E (21834) esp-tls: [sock=40] select() timeout
+E (21834) transport_base: Failed to open a new connection: 32774
+E (21834) mqtt_client: Error transport connect
+E (21834) mqtt: MQTT_EVENT_ERROR: type=1 connect_rc=0
+W (21834) mqtt: MQTT_EVENT_DISCONNECTED
+I (31534) diag: heap free=47788 min=42688 largest=45056 level=normal | wifi mode=1 ch=3/0 adv=1 conn=0 cf=7 rx_age=-1 role=ble mqtt_outbox=0 mqtt_shed=0 pipe_yield=0
+W (31844) mqtt: mqtt restart attempt (backoff step 3)
+I (31844) mqtt: Telemetry task exiting on stop request
+I (34344) data_pipe: port 2 registered
+I (34344) mqtt: Starting MQTT: uri=mqtt://192.168.1.19:21883, client_id=iothub-B0A73228C8E4, token_len=13, tls=no, will=v1/devices/me/attributes
+E (39364) esp-tls: [sock=40] select() timeout
+E (39364) transport_base: Failed to open a new connection: 32774
+E (39364) mqtt_client: Error transport connect
+E (39364) mqtt: MQTT_EVENT_ERROR: type=1 connect_rc=0
+W (39374) mqtt: MQTT_EVENT_DISCONNECTED
+W (41534) app_bt: adv flag desync: flag=1 host=0 last_writer=start_adv (treat host as truth)
+I (41584) bt_gatts: central connected (conn=0) peer_ota=F8:A2:D6:CD:BD:94 type=0 peer_id=F8:A2:D6:CD:BD:94 type=0
+I (41584) bt_gatts: conn params policy: itvl=50ms lat=0 sup=6000ms -> satisfied, skip update request
+I (41734) bt_gatts: mtu negotiated: 256 (payload 253)
+I (42364) wifi: ble fast retry: link up, timer reset
+I (42774) bt_gatts: cmd TX subscribe on (handle=10)
+I (43064) state: input active (seq=1)
+I (43064) state: outputs relay=0 led=0 seq=2 source=input
+I (43074) bt_gatts: cmd RX write: 20 byte(s) last=0x72 newline=0
+I (43124) state: input inactive (seq=3)
+I (43174) bt_gatts: cmd RX write: 20 byte(s) last=0x61 newline=0
+I (43274) bt_gatts: cmd RX write: 20 byte(s) last=0x22 newline=0
+I (43384) bt_gatts: cmd RX write: 20 byte(s) last=0x70 newline=0
+I (43474) bt_gatts: cmd RX write: 20 byte(s) last=0x0A newline=1
+I (43484) ble_cmd: cmd line queued (99 bytes)
+I (43484) ble_cmd: rx v1 cmd=auth.login id=login-1
+I (43484) ble_cmd: ble cmd login ok, token issued (ttl=600s)
+I (43484) NimBLE: GATT procedure initiated: notify; 
+I (43494) NimBLE: att_handle=10
+
+I (43824) bt_gatts: cmd RX write: 20 byte(s) last=0x69 newline=0
+I (43924) bt_gatts: cmd RX write: 20 byte(s) last=0x6E newline=0
+I (44024) bt_gatts: cmd RX write: 20 byte(s) last=0x61 newline=0
+I (44124) bt_gatts: cmd RX write: 20 byte(s) last=0x32 newline=0
+I (44324) bt_gatts: cmd RX write: 20 byte(s) last=0x44 newline=0
+I (44424) bt_gatts: cmd RX write: 20 byte(s) last=0x33 newline=0
+I (44524) bt_gatts: cmd RX write: 7 byte(s) last=0x0A newline=1
+I (44534) ble_cmd: cmd line queued (126 bytes)
+I (44534) ble_cmd: rx v1 cmd=config.set id=p22-2
+I (44544) NimBLE: GATT procedure initiated: notify; 
+I (44544) NimBLE: att_handle=10
+
+I (46874) bt_gatts: cmd TX subscribe off (handle=10)
+W (46874) bt_gatts: central disconnected (reason=0x213)
+I (46884) ble_cmd: cmd session token invalidated (disconnect)
+I (46884) NimBLE: GAP procedure initiated: advertise; 
+I (46884) NimBLE: disc_mode=2
+I (46894) NimBLE:  adv_channel_map=0 own_addr_type=0 adv_filter_policy=0 adv_itvl_min=32 adv_itvl_max=64
+I (46904) NimBLE: 
+
+I (46914) app_bt: advertising restart requested (after disconnect)
+I (47364) wifi: ble fast retry: link down, timer reset
+W (59374) mqtt: mqtt restart attempt (backoff step 4)
+I (59374) mqtt: Telemetry task exiting on stop request
+I (61534) diag: core idle: core0=74% core1=96%
+I (61534) diag: heap free=50976 min=42688 largest=47104 level=normal | wifi mode=1 ch=3/0 adv=1 conn=0 cf=7 rx_age=-1 role=ble mqtt_outbox=0 mqtt_shed=0 pipe_yield=0
+I (61544) diag: stack water: min=IDLE1:976B low:mqtt_restart=1816B app_diag=1728B Tmr Svc=1660B IDLE0=980B IDLE1=976B
+I (61874) data_pipe: port 2 registered
+I (61874) mqtt: Starting MQTT: uri=mqtt://192.168.1.19:22, client_id=iothub-B0A73228C8E4, token_len=13, tls=no, will=v1/devices/me/attributes
+I (63844) wifi:<ba-add>idx:0 (ifx:0, 5c:c0:a0:bd:f6:28), tid:6, ssn:1051, winSize:64
+E (66894) esp-tls: [sock=40] select() timeout
+E (66894) transport_base: Failed to open a new connection: 32774
+E (66894) mqtt_client: Error transport connect
+E (66894) mqtt: MQTT_EVENT_ERROR: type=1 connect_rc=0
+W (66894) mqtt: MQTT_EVENT_DISCONNECTED
+I (91544) diag: core idle: core0=75% core1=96%
+I (91544) diag: heap free=47728 min=42688 largest=45056 level=normal | wifi mode=1 ch=3/0 adv=1 conn=0 cf=7 rx_age=-1 role=ble mqtt_outbox=0 mqtt_shed=0 pipe_yield=0
+W (91874) mqtt: mqtt restart attempt (backoff step 5)
+I (91874) mqtt: Telemetry task exiting on stop request
+I (91904) data_pipe: port 2 registered
+I (91904) mqtt: Starting MQTT: uri=mqtt://192.168.1.19:22, client_id=iothub-B0A73228C8E4, token_len=13, tls=no, will=v1/devices/me/attributes
+E (92004) mqtt_client: mqtt_message_receive: received a message with an invalid header=0x53
+E (92004) mqtt: MQTT_EVENT_ERROR: type=1 connect_rc=0
+E (92004) mqtt_client: esp_mqtt_connect: mqtt_message_receive() returned -2
+E (92014) mqtt_client: MQTT connect failed
+W (92014) mqtt: MQTT_EVENT_DISCONNECTED
+I (92034) wifi:<ba-add>idx:1 (ifx:0, 5c:c0:a0:bd:f6:28), tid:0, ssn:69, winSize:64
+I (111274) bt_gatts: central connected (conn=0) peer_ota=F8:A2:D6:CD:BD:94 type=0 peer_id=F8:A2:D6:CD:BD:94 type=0
+I (111284) bt_gatts: conn params policy: itvl=50ms lat=0 sup=6000ms -> satisfied, skip update request
+I (111364) wifi: ble fast retry: link up, timer reset
+I (111434) bt_gatts: mtu negotiated: 256 (payload 253)
+I (112524) bt_gatts: cmd TX subscribe on (handle=10)
+I (112874) bt_gatts: cmd RX write: 20 byte(s) last=0x72 newline=0
+I (112974) bt_gatts: cmd RX write: 20 byte(s) last=0x61 newline=0
+I (113074) bt_gatts: cmd RX write: 20 byte(s) last=0x22 newline=0
+I (113174) bt_gatts: cmd RX write: 20 byte(s) last=0x70 newline=0
+I (113274) bt_gatts: cmd RX write: 20 byte(s) last=0x0A newline=1
+I (113274) ble_cmd: cmd line queued (99 bytes)
+I (113284) ble_cmd: rx v1 cmd=auth.login id=login-1
+I (113284) ble_cmd: ble cmd login ok, token issued (ttl=600s)
+I (113284) NimBLE: GATT procedure initiated: notify; 
+I (113294) NimBLE: att_handle=10
+
+I (113674) bt_gatts: cmd RX write: 20 byte(s) last=0x6F newline=0
+I (113774) bt_gatts: cmd RX write: 20 byte(s) last=0x66 newline=0
+I (113874) bt_gatts: cmd RX write: 20 byte(s) last=0x74 newline=0
+I (113974) bt_gatts: cmd RX write: 20 byte(s) last=0x33 newline=0
+I (114074) bt_gatts: cmd RX write: 20 byte(s) last=0x6F newline=0
+I (114174) bt_gatts: cmd RX write: 20 byte(s) last=0x3A newline=0
+I (114274) bt_gatts: cmd RX write: 20 byte(s) last=0x31 newline=0
+I (114374) bt_gatts: cmd RX write: 16 byte(s) last=0x0A newline=1
+I (114374) ble_cmd: cmd line queued (155 bytes)
+I (114384) ble_cmd: rx v1 cmd=config.set id=tb-2
+I (114394) NimBLE: GATT procedure initiated: notify; 
+I (114394) NimBLE: att_handle=10
+
+I (114424) NimBLE: GATT procedure initiated: notify; 
+I (114424) NimBLE: att_handle=10
+
+I (116524) bt_gatts: cmd RX write: 20 byte(s) last=0x69 newline=0
+I (116624) bt_gatts: cmd RX write: 20 byte(s) last=0x74 newline=0
+I (116824) bt_gatts: cmd RX write: 20 byte(s) last=0x3A newline=0
+I (116924) bt_gatts: cmd RX write: 20 byte(s) last=0x43 newline=0
+I (117024) bt_gatts: cmd RX write: 20 byte(s) last=0x46 newline=0
+I (117124) bt_gatts: cmd RX write: 7 byte(s) last=0x0A newline=1
+I (117124) ble_cmd: cmd line queued (106 bytes)
+I (117124) ble_cmd: rx v1 cmd=network.status id=tb2-3
+I (117134) NimBLE: GATT procedure initiated: notify; 
+I (117134) NimBLE: att_handle=10
+
+I (117164) NimBLE: GATT procedure initiated: notify; 
+I (117164) NimBLE: att_handle=10
+
+I (117184) state: input active (seq=4)
+I (117184) state: outputs relay=0 led=1 seq=5 source=input
+I (117244) state: input inactive (seq=6)
+I (119234) bt_gatts: cmd RX write: 20 byte(s) last=0x69 newline=0
+I (119324) bt_gatts: cmd RX write: 20 byte(s) last=0x74 newline=0
+I (119424) bt_gatts: cmd RX write: 20 byte(s) last=0x3A newline=0
+I (119524) bt_gatts: cmd RX write: 20 byte(s) last=0x43 newline=0
+I (119624) bt_gatts: cmd RX write: 20 byte(s) last=0x46 newline=0
+I (119724) bt_gatts: cmd RX write: 7 byte(s) last=0x0A newline=1
+I (119724) ble_cmd: cmd line queued (106 bytes)
+I (119724) ble_cmd: rx v1 cmd=network.status id=tb2-4
+I (119734) NimBLE: GATT procedure initiated: notify; 
+I (119734) NimBLE: att_handle=10
+
+I (119764) NimBLE: GATT procedure initiated: notify; 
+I (119764) NimBLE: att_handle=10
+
+I (121544) diag: core idle: core0=74% core1=96%
+I (121544) diag: heap free=47412 min=42688 largest=45056 level=normal | wifi mode=1 ch=3/0 adv=0 conn=1 cf=0 rx_age=1815 role=ble mqtt_outbox=0 mqtt_shed=0 pipe_yield=0
+I (121824) bt_gatts: cmd RX write: 20 byte(s) last=0x69 newline=0
+W (121904) mqtt: mqtt restart attempt (backoff step 6)
+I (121904) mqtt: Telemetry task exiting on stop request
+I (121924) bt_gatts: cmd RX write: 20 byte(s) last=0x74 newline=0
+I (122024) data_pipe: port 2 registered
+I (122024) mqtt: Starting MQTT: uri=mqtt://139.9.93.245:21883, client_id=iothub-B0A73228C8E4, token_len=13, tls=no, will=v1/devices/me/attributes
+I (122024) bt_gatts: cmd RX write: 20 byte(s) last=0x3A newline=0
+I (122174) bt_gatts: cmd RX write: 20 byte(s) last=0x43 newline=0
+I (122374) bt_gatts: cmd RX write: 20 byte(s) last=0x46 newline=0
+I (122554) mqtt: Requested initial attributes: v1/devices/me/attributes/request/12172
+I (122554) mqtt: MQTT connected: subscribed RPC + shared attrs, requested initial attrs
+I (122564) mqtt: MQTT_EVENT_SUBSCRIBED: msg_id=43783
+I (122564) mqtt: MQTT_EVENT_SUBSCRIBED: msg_id=48726
+I (122574) mqtt: MQTT_EVENT_SUBSCRIBED: msg_id=37726
+I (122574) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=63478 total_published=1
+I (122574) bt_gatts: cmd RX write: 7 byte(s) last=0x0A newline=1
+I (122584) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=1504 total_published=1
+I (122584) ble_cmd: cmd line queued (106 bytes)
+I (122584) ble_cmd: rx v1 cmd=network.status id=tb2-5
+I (122604) NimBLE: GATT procedure initiated: notify; 
+I (122604) NimBLE: att_handle=10
+
+I (122634) NimBLE: GATT procedure initiated: notify; 
+I (122634) NimBLE: att_handle=10
+
+I (122674) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=44904 total_published=1
+I (122724) mqtt: MQTT RX topic='v1/devices/me/attributes/response/12172' len=2 data_preview='{}'
+I (124874) bt_gatts: cmd TX subscribe off (handle=10)
+W (124874) bt_gatts: central disconnected (reason=0x213)
+I (124874) ble_cmd: cmd session token invalidated (disconnect)
+I (124884) NimBLE: GAP procedure initiated: advertise; 
+I (124884) NimBLE: disc_mode=2
+I (124884) NimBLE:  adv_channel_map=0 own_addr_type=0 adv_filter_policy=0 adv_itvl_min=32 adv_itvl_max=64
+I (124894) NimBLE: 
+
+I (124914) app_bt: advertising restart requested (after disconnect)
+I (125364) wifi: ble fast retry: link down, timer reset
+I (125564) mqtt: 3s boost: re-publish attributes + state to ensure liveness
+I (125634) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=28384 total_published=2
+I (125724) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=50099 total_published=2
+I (132074) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=36387 total_published=3
+I (142174) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=11448 total_published=4
+I (151544) diag: core idle: core0=75% core1=96%
+I (151544) diag: heap free=43960 min=39664 largest=38912 level=normal | wifi mode=1 ch=3/0 adv=1 conn=0 cf=7 rx_age=-1 role=ble mqtt_outbox=0 mqtt_shed=0 pipe_yield=0

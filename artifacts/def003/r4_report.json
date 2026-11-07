@@ -1,0 +1,258 @@
+{
+  "target": "127.0.0.1:21883",
+  "time": "2026-11-05 21:53:58",
+  "summary": {
+    "total": 41,
+    "passed": 39,
+    "failed": 0,
+    "skipped": 2
+  },
+  "cases": [
+    {
+      "id": "T01",
+      "name": "v0帧(无version)→unsupported_version",
+      "status": "PASS",
+      "detail": "实际 {\"success\": false, \"error\": \"unsupported_version\"}"
+    },
+    {
+      "id": "T01b",
+      "name": "v0帧数值id→拒绝壳回带id=4242",
+      "status": "PASS",
+      "detail": "实际 {\"id\": 4242, \"success\": false, \"error\": \"unsupported_version\"}"
+    },
+    {
+      "id": "T02",
+      "name": "version=2.0→unsupported_version",
+      "status": "PASS",
+      "detail": "期望 code=unsupported_version, 实际 {\"id\": \"\", \"ok\": false, \"error\": {\"code\": \"unsupported_version\", \"message\": \"2.0\"}}"
+    },
+    {
+      "id": "T03",
+      "name": "缺id→invalid_argument",
+      "status": "PASS",
+      "detail": "期望 code=invalid_argument, 实际 {\"id\": \"\", \"ok\": false, \"error\": {\"code\": \"invalid_argument\", \"message\": \"id required\"}}"
+    },
+    {
+      "id": "T04",
+      "name": "缺cmd→invalid_argument",
+      "status": "PASS",
+      "detail": "期望 code=invalid_argument, 实际 {\"id\": \"t04\", \"ok\": false, \"error\": {\"code\": \"invalid_argument\", \"message\": \"cmd/args required\"}}"
+    },
+    {
+      "id": "T05",
+      "name": "args非对象→invalid_argument",
+      "status": "PASS",
+      "detail": "期望 code=invalid_argument, 实际 {\"id\": \"t05\", \"ok\": false, \"error\": {\"code\": \"invalid_argument\", \"message\": \"cmd/args required\"}}"
+    },
+    {
+      "id": "T06",
+      "name": "未知命令→unknown_command",
+      "status": "PASS",
+      "detail": "期望 code=unknown_command, 实际 {\"id\": \"t06\", \"ok\": false, \"error\": {\"code\": \"unknown_command\", \"message\": \"foo.bar\"}}"
+    },
+    {
+      "id": "T07",
+      "name": "非JSON静默丢弃(无响应)",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "id": "T08",
+      "name": "200ms内连发第二发→rate_limited",
+      "status": "PASS",
+      "detail": "实际 {\"id\": \"t08b\", \"ok\": false, \"error\": {\"code\": \"rate_limited\", \"message\": \"rate_limited\"}}"
+    },
+    {
+      "id": "P01",
+      "name": "device.info→ok+data",
+      "status": "PASS",
+      "detail": "实际响应 {\"id\": \"P01\", \"ok\": true, \"data\": {\"model\": \"iothub\", \"firmware\": \"1.2-a35eef9-dirty\", \"device_id\": \"IotHub-C8E4\", \"buil"
+    },
+    {
+      "id": "P02",
+      "name": "device.status→ok+data",
+      "status": "PASS",
+      "detail": "实际响应 {\"id\": \"P02\", \"ok\": true, \"data\": {\"model\": \"iothub\", \"firmware\": \"1.2-a35eef9-dirty\", \"device_id\": \"IotHub-C8E4\", \"upti"
+    },
+    {
+      "id": "P03",
+      "name": "gpio.status→ok+data",
+      "status": "PASS",
+      "detail": "实际响应 {\"id\": \"P03\", \"ok\": true, \"data\": {\"relay_on\": false, \"led_on\": true, \"input_active\": false, \"io_seq\": 0, \"io_last_chang"
+    },
+    {
+      "id": "P04",
+      "name": "uart.runtime→ok+data",
+      "status": "PASS",
+      "detail": "实际响应 {\"id\": \"P04\", \"ok\": true, \"data\": {\"runtime_available\": true, \"baudrate\": 115200, \"data_bits\": 8, \"stop_bits\": 1, \"parit"
+    },
+    {
+      "id": "P05",
+      "name": "config.get→ok+data",
+      "status": "PASS",
+      "detail": "实际响应 {\"id\": \"P05\", \"ok\": true, \"data\": {\"network\": {\"net_mode\": \"sta\", \"sta_ssid\": \"CMCC-502\", \"sta_password_set\": true, \"sta"
+    },
+    {
+      "id": "P07",
+      "name": "io.get→ok+data",
+      "status": "PASS",
+      "detail": "实际响应 {\"id\": \"P07\", \"ok\": true, \"data\": {\"relay_on\": false, \"led_on\": true, \"input_active\": false, \"io_seq\": 0, \"io_source\": \""
+    },
+    {
+      "id": "P08",
+      "name": "led.toggle→ok+data",
+      "status": "PASS",
+      "detail": "实际响应 {\"id\": \"P08\", \"ok\": true, \"data\": {\"success\": true, \"changed\": [\"led_on\"], \"effect\": \"none\", \"relay_on\": false, \"led_on\""
+    },
+    {
+      "id": "P09",
+      "name": "network.status→ok+data",
+      "status": "PASS",
+      "detail": "实际响应 {\"id\": \"P09\", \"ok\": true, \"data\": {\"sta_connected\": true, \"sta_has_ip\": true, \"sta_ip\": \"192.168.1.50\", \"last_disconnect"
+    },
+    {
+      "id": "P05b",
+      "name": "config.get未知域→invalid_argument(message=domain_not_supported)",
+      "status": "PASS",
+      "detail": "期望 code=domain_not_supported, 实际 {\"id\": \"P05b\", \"ok\": false, \"error\": {\"code\": \"invalid_argument\", \"message\": \"domain_not_supported\"}}"
+    },
+    {
+      "id": "P06",
+      "name": "config.set(gpio/data_route域)→ok",
+      "status": "PASS",
+      "detail": "实际响应 {\"id\": \"P06\", \"ok\": true, \"data\": {\"success\": true, \"changed\": [], \"effect\": \"none\", \"relay_on\": false, \"led_on\": false,"
+    },
+    {
+      "id": "P12",
+      "name": "数字id回包为字符串'777'",
+      "status": "PASS",
+      "detail": "实际 {\"id\": \"777\", \"ok\": true, \"data\": {\"model\": \"iothub\", \"firmware\": \"1.2-a35eef9-dirty\", \"device_id\": \"IotHub-C8E4\", \"buil"
+    },
+    {
+      "id": "P11",
+      "name": "自定义主题 iothub/rpc（TB backend 预期无响应）",
+      "status": "PASS",
+      "detail": "实际 None"
+    },
+    {
+      "id": "P10",
+      "name": "operation.get未知id→not_found",
+      "status": "PASS",
+      "detail": "期望 code=not_found, 实际 {\"id\": \"P10\", \"ok\": false, \"error\": {\"code\": \"not_found\", \"message\": \"not_found\"}}"
+    },
+    {
+      "id": "F01",
+      "name": "network.scan(BLE-only)→forbidden",
+      "status": "PASS",
+      "detail": "期望 code=forbidden, 实际 {\"id\": \"F01\", \"ok\": false, \"error\": {\"code\": \"forbidden\", \"message\": \"network.scan\"}}"
+    },
+    {
+      "id": "F02",
+      "name": "network.profile.list(BLE-only)→forbidden",
+      "status": "PASS",
+      "detail": "期望 code=forbidden, 实际 {\"id\": \"F02\", \"ok\": false, \"error\": {\"code\": \"forbidden\", \"message\": \"network.profile.list\"}}"
+    },
+    {
+      "id": "F03",
+      "name": "network.profile.delete(BLE-only)→forbidden",
+      "status": "PASS",
+      "detail": "期望 code=forbidden, 实际 {\"id\": \"F03\", \"ok\": false, \"error\": {\"code\": \"forbidden\", \"message\": \"network.profile.delete\"}}"
+    },
+    {
+      "id": "F04",
+      "name": "network.reconnect(BLE-only)→forbidden",
+      "status": "PASS",
+      "detail": "期望 code=forbidden, 实际 {\"id\": \"F04\", \"ok\": false, \"error\": {\"code\": \"forbidden\", \"message\": \"network.reconnect\"}}"
+    },
+    {
+      "id": "F05",
+      "name": "auth.login(BLE-only)→forbidden",
+      "status": "PASS",
+      "detail": "期望 code=forbidden, 实际 {\"id\": \"F05\", \"ok\": false, \"error\": {\"code\": \"forbidden\", \"message\": \"auth.login\"}}"
+    },
+    {
+      "id": "F06",
+      "name": "auth.admin.set(BLE-only)→forbidden",
+      "status": "PASS",
+      "detail": "期望 code=forbidden, 实际 {\"id\": \"F06\", \"ok\": false, \"error\": {\"code\": \"forbidden\", \"message\": \"auth.admin.set\"}}"
+    },
+    {
+      "id": "F07",
+      "name": "provisioning.pin.set(BLE-only)→forbidden",
+      "status": "PASS",
+      "detail": "期望 code=forbidden, 实际 {\"id\": \"F07\", \"ok\": false, \"error\": {\"code\": \"forbidden\", \"message\": \"provisioning.pin.set\"}}"
+    },
+    {
+      "id": "F08",
+      "name": "uart.send(BLE-only)→forbidden",
+      "status": "PASS",
+      "detail": "期望 code=forbidden, 实际 {\"id\": \"F08\", \"ok\": false, \"error\": {\"code\": \"forbidden\", \"message\": \"uart.send\"}}"
+    },
+    {
+      "id": "F09",
+      "name": "data.loopback(BLE-only)→forbidden",
+      "status": "PASS",
+      "detail": "期望 code=forbidden, 实际 {\"id\": \"F09\", \"ok\": false, \"error\": {\"code\": \"forbidden\", \"message\": \"data.loopback\"}}"
+    },
+    {
+      "id": "F10",
+      "name": "config.set改网络域→forbidden(guard_rejected映射)",
+      "status": "PASS",
+      "detail": "期望 code=forbidden, 实际 {\"id\": \"F10\", \"ok\": false, \"error\": {\"code\": \"forbidden\", \"message\": \"guard_rejected\"}}"
+    },
+    {
+      "id": "N01",
+      "name": "tryconnect缺ssid→invalid_argument(params_required)",
+      "status": "PASS",
+      "detail": "期望 code=params_required, 实际 {\"id\": \"N01\", \"ok\": false, \"error\": {\"code\": \"invalid_argument\", \"message\": \"params_required\"}}"
+    },
+    {
+      "id": "N02",
+      "name": "tryconnect假SSID→受理 或 静态锁(static_ip_pinned)",
+      "status": "PASS",
+      "detail": "实际 {\"id\": \"N02\", \"ok\": false, \"error\": {\"code\": \"static_ip_pinned\", \"message\": \"static_ip_pinned\"}}"
+    },
+    {
+      "id": "N03",
+      "name": "假SSID操作终态=failed",
+      "status": "SKIP",
+      "detail": "静态锁下未受理事务，N03 跳过"
+    },
+    {
+      "id": "N07",
+      "name": "cancel受理中的操作",
+      "status": "SKIP",
+      "detail": "静态锁下未受理事务，N07 跳过"
+    },
+    {
+      "id": "N04",
+      "name": "apply缺operation_id→invalid_argument(params_required)",
+      "status": "PASS",
+      "detail": "期望 code=params_required, 实际 {\"id\": \"N04\", \"ok\": false, \"error\": {\"code\": \"invalid_argument\", \"message\": \"params_required\"}}"
+    },
+    {
+      "id": "N05",
+      "name": "apply未知id→not_found",
+      "status": "PASS",
+      "detail": "期望 code=not_found, 实际 {\"id\": \"N05\", \"ok\": false, \"error\": {\"code\": \"not_found\", \"message\": \"not_found\"}}"
+    },
+    {
+      "id": "N06a",
+      "name": "tryconnect真AP受理",
+      "status": "PASS",
+      "detail": "实际 {\"id\": \"N06\", \"ok\": true, \"data\": {\"operation_id\": \"op-26C17C056FC3DAD9\", \"state\": \"accepted\"}}"
+    },
+    {
+      "id": "N06b",
+      "name": "真AP到达got_ip/success",
+      "status": "PASS",
+      "detail": "终态 {\"operation_id\": \"op-26C17C056FC3DAD9\", \"state\": \"got_ip\", \"error\": \"none\", \"trial_id\": \"trial-726D2A93\", \"ssid\": \"CMCC-502\"}"
+    },
+    {
+      "id": "N06c",
+      "name": "apply提交→success",
+      "status": "PASS",
+      "detail": "实际响应 {\"id\": \"N06c\", \"ok\": true, \"data\": {\"operation_id\": \"op-26C17C056FC3DAD9\", \"state\": \"success\", \"saved\": true, \"applied\":"
+    }
+  ]
+}
