@@ -1,0 +1,278 @@
+/home/tc/esp/workspace/iothub/.venv-bleak/lib/python3.12/site-packages/bleak/backends/bluezdbus/client.py:646: UserWarning: Using default MTU value. Call _acquire_mtu() or set _mtu_size first to avoid this warning.
+  warnings.warn(
+[scan-filtered] 1 hit(s) in 8s
+  HIT B0:A7:32:28:C8:E6 name='IotHubBLE-C8E4' local_name='IotHubBLE-C8E4' rssi=-42 uuids=['6e400001-b5a3-f393-e0a9-e50e24dcca9e']
+>9.790s TX id=login-1 100B {"id": "login-1", "version": "1.0", "cmd": "auth.login", "args": {"username": "admin", "password": "<redacted>"}}
+[tx] chunked 100B into 5 GATT writes (<= 20B each)
+<10.445s> RX id=login-1 95B frags=1 sizes=[95] {"id": "login-1", "ok": true, "data": {"token": "<redacted>", "expires_in": 600}}
+[auth] login ok (token redacted)
+=== 第 1 轮 ===
+>10.446s TX id=ab0-tc-2 155B {"id": "ab0-tc-2", "version": "1.0", "cmd": "network.tryconnect", "args": {"ssid": "CMCC-502", "password": "<redacted>"}, "token": "<redacted>"}
+[tx] chunked 155B into 8 GATT writes (<= 20B each)
+<11.570s> RX id=ab0-tc-2 92B frags=1 sizes=[92] {"id": "ab0-tc-2", "ok": true, "data": {"operation_id": "op-9DCF1313C6614D30", "state": "accepted"}}
+>12.076s TX id=ab0-p0-3 145B {"id": "ab0-p0-3", "version": "1.0", "cmd": "operation.get", "args": {"operation_id": "op-9DCF1313C6614D30"}, "token": "<redacted>"}
+[tx] chunked 145B into 8 GATT writes (<= 20B each)
+<13.639s> RX id=ab0-p0-3 212B frags=1 sizes=[212] {"id": "ab0-p0-3", "ok": true, "data": {"operation_id": "op-9DCF1313C6614D30", "state": "connecting", "error": "none", "stages": {"wifi_connected": false, "ip_acquired": false, "internet_verified": false, "mqtt_connected": false}}}
+  +2.07s op: connecting err=none
+>14.146s TX id=ab0-p1-4 145B {"id": "ab0-p1-4", "version": "1.0", "cmd": "operation.get", "args": {"operation_id": "op-9DCF1313C6614D30"}, "token": "<redacted>"}
+[tx] chunked 145B into 8 GATT writes (<= 20B each)
+<15.304s> RX id=ab0-p1-4 212B frags=1 sizes=[212] {"id": "ab0-p1-4", "ok": true, "data": {"operation_id": "op-9DCF1313C6614D30", "state": "connecting", "error": "none", "stages": {"wifi_connected": false, "ip_acquired": false, "internet_verified": false, "mqtt_connected": false}}}
+>15.806s TX id=ab0-p2-5 145B {"id": "ab0-p2-5", "version": "1.0", "cmd": "operation.get", "args": {"operation_id": "op-9DCF1313C6614D30"}, "token": "<redacted>"}
+[tx] chunked 145B into 8 GATT writes (<= 20B each)
+<17.106s> RX id=ab0-p2-5 212B frags=1 sizes=[212] {"id": "ab0-p2-5", "ok": true, "data": {"operation_id": "op-9DCF1313C6614D30", "state": "connecting", "error": "none", "stages": {"wifi_connected": false, "ip_acquired": false, "internet_verified": false, "mqtt_connected": false}}}
+>17.612s TX id=ab0-p3-6 145B {"id": "ab0-p3-6", "version": "1.0", "cmd": "operation.get", "args": {"operation_id": "op-9DCF1313C6614D30"}, "token": "<redacted>"}
+[tx] chunked 145B into 8 GATT writes (<= 20B each)
+<18.771s> RX id=ab0-p3-6 212B frags=1 sizes=[212] {"id": "ab0-p3-6", "ok": true, "data": {"operation_id": "op-9DCF1313C6614D30", "state": "connecting", "error": "none", "stages": {"wifi_connected": false, "ip_acquired": false, "internet_verified": false, "mqtt_connected": false}}}
+>19.273s TX id=ab0-p4-7 145B {"id": "ab0-p4-7", "version": "1.0", "cmd": "operation.get", "args": {"operation_id": "op-9DCF1313C6614D30"}, "token": "<redacted>"}
+[tx] chunked 145B into 8 GATT writes (<= 20B each)
+<20.303s> RX id=ab0-p4-7 212B frags=1 sizes=[212] {"id": "ab0-p4-7", "ok": true, "data": {"operation_id": "op-9DCF1313C6614D30", "state": "connecting", "error": "none", "stages": {"wifi_connected": false, "ip_acquired": false, "internet_verified": false, "mqtt_connected": false}}}
+>20.805s TX id=ab0-p5-8 145B {"id": "ab0-p5-8", "version": "1.0", "cmd": "operation.get", "args": {"operation_id": "op-9DCF1313C6614D30"}, "token": "<redacted>"}
+[tx] chunked 145B into 8 GATT writes (<= 20B each)
+<22.240s> RX id=ab0-p5-8 212B frags=1 sizes=[212] {"id": "ab0-p5-8", "ok": true, "data": {"operation_id": "op-9DCF1313C6614D30", "state": "connecting", "error": "none", "stages": {"wifi_connected": false, "ip_acquired": false, "internet_verified": false, "mqtt_connected": false}}}
+>22.746s TX id=ab0-p6-9 145B {"id": "ab0-p6-9", "version": "1.0", "cmd": "operation.get", "args": {"operation_id": "op-9DCF1313C6614D30"}, "token": "<redacted>"}
+[tx] chunked 145B into 8 GATT writes (<= 20B each)
+<23.854s> RX id=ab0-p6-9 212B frags=1 sizes=[212] {"id": "ab0-p6-9", "ok": true, "data": {"operation_id": "op-9DCF1313C6614D30", "state": "connecting", "error": "none", "stages": {"wifi_connected": false, "ip_acquired": false, "internet_verified": false, "mqtt_connected": false}}}
+>24.357s TX id=ab0-p7-10 146B {"id": "ab0-p7-10", "version": "1.0", "cmd": "operation.get", "args": {"operation_id": "op-9DCF1313C6614D30"}, "token": "<redacted>"}
+[tx] chunked 146B into 8 GATT writes (<= 20B each)
+<25.345s> RX id=ab0-p7-10 213B frags=1 sizes=[213] {"id": "ab0-p7-10", "ok": true, "data": {"operation_id": "op-9DCF1313C6614D30", "state": "connecting", "error": "none", "stages": {"wifi_connected": false, "ip_acquired": false, "internet_verified": false, "mqtt_connected": false}}}
+>25.851s TX id=ab0-p8-11 146B {"id": "ab0-p8-11", "version": "1.0", "cmd": "operation.get", "args": {"operation_id": "op-9DCF1313C6614D30"}, "token": "<redacted>"}
+[tx] chunked 146B into 8 GATT writes (<= 20B each)
+<26.830s> RX id=ab0-p8-11 213B frags=1 sizes=[213] {"id": "ab0-p8-11", "ok": true, "data": {"operation_id": "op-9DCF1313C6614D30", "state": "connecting", "error": "none", "stages": {"wifi_connected": false, "ip_acquired": false, "internet_verified": false, "mqtt_connected": false}}}
+>27.337s TX id=ab0-p9-12 146B {"id": "ab0-p9-12", "version": "1.0", "cmd": "operation.get", "args": {"operation_id": "op-9DCF1313C6614D30"}, "token": "<redacted>"}
+[tx] chunked 146B into 8 GATT writes (<= 20B each)
+<28.406s> RX id=ab0-p9-12 251B frags=1 sizes=[251] {"id": "ab0-p9-12", "ok": true, "data": {"operation_id": "op-9DCF1313C6614D30", "state": "got_ip", "error": "none", "trial_id": "trial-8EF754B0", "ssid": "CMCC-502", "stages": {"wifi_connected": true, "ip_acquired": true, "internet_verified": true, "mqtt_connected": true}}}
+  +16.84s op: got_ip err=none
+>28.912s TX id=ab0-p10-13 147B {"id": "ab0-p10-13", "version": "1.0", "cmd": "operation.get", "args": {"operation_id": "op-9DCF1313C6614D30"}, "token": "<redacted>"}
+[tx] chunked 147B into 8 GATT writes (<= 20B each)
+<30.066s> RX id=ab0-p10-13 252B frags=1 sizes=[252] {"id": "ab0-p10-13", "ok": true, "data": {"operation_id": "op-9DCF1313C6614D30", "state": "got_ip", "error": "none", "trial_id": "trial-8EF754B0", "ssid": "CMCC-502", "stages": {"wifi_connected": true, "ip_acquired": true, "internet_verified": true, "mqtt_connected": true}}}
+>30.571s TX id=ab0-p11-14 147B {"id": "ab0-p11-14", "version": "1.0", "cmd": "operation.get", "args": {"operation_id": "op-9DCF1313C6614D30"}, "token": "<redacted>"}
+[tx] chunked 147B into 8 GATT writes (<= 20B each)
+<31.774s> RX id=ab0-p11-14 252B frags=1 sizes=[252] {"id": "ab0-p11-14", "ok": true, "data": {"operation_id": "op-9DCF1313C6614D30", "state": "got_ip", "error": "none", "trial_id": "trial-8EF754B0", "ssid": "CMCC-502", "stages": {"wifi_connected": true, "ip_acquired": true, "internet_verified": true, "mqtt_connected": true}}}
+>32.278s TX id=ab0-p12-15 147B {"id": "ab0-p12-15", "version": "1.0", "cmd": "operation.get", "args": {"operation_id": "op-9DCF1313C6614D30"}, "token": "<redacted>"}
+[tx] chunked 147B into 8 GATT writes (<= 20B each)
+<33.398s> RX id=ab0-p12-15 252B frags=1 sizes=[252] {"id": "ab0-p12-15", "ok": true, "data": {"operation_id": "op-9DCF1313C6614D30", "state": "got_ip", "error": "none", "trial_id": "trial-8EF754B0", "ssid": "CMCC-502", "stages": {"wifi_connected": true, "ip_acquired": true, "internet_verified": true, "mqtt_connected": true}}}
+>33.903s TX id=ab0-p13-16 147B {"id": "ab0-p13-16", "version": "1.0", "cmd": "operation.get", "args": {"operation_id": "op-9DCF1313C6614D30"}, "token": "<redacted>"}
+[tx] chunked 147B into 8 GATT writes (<= 20B each)
+<34.929s> RX id=ab0-p13-16 252B frags=1 sizes=[252] {"id": "ab0-p13-16", "ok": true, "data": {"operation_id": "op-9DCF1313C6614D30", "state": "got_ip", "error": "none", "trial_id": "trial-8EF754B0", "ssid": "CMCC-502", "stages": {"wifi_connected": true, "ip_acquired": true, "internet_verified": true, "mqtt_connected": true}}}
+>35.431s TX id=ab0-p14-17 147B {"id": "ab0-p14-17", "version": "1.0", "cmd": "operation.get", "args": {"operation_id": "op-9DCF1313C6614D30"}, "token": "<redacted>"}
+[tx] chunked 147B into 8 GATT writes (<= 20B each)
+<36.815s> RX id=ab0-p14-17 252B frags=1 sizes=[252] {"id": "ab0-p14-17", "ok": true, "data": {"operation_id": "op-9DCF1313C6614D30", "state": "got_ip", "error": "none", "trial_id": "trial-8EF754B0", "ssid": "CMCC-502", "stages": {"wifi_connected": true, "ip_acquired": true, "internet_verified": true, "mqtt_connected": true}}}
+>37.318s TX id=ab0-p15-18 147B {"id": "ab0-p15-18", "version": "1.0", "cmd": "operation.get", "args": {"operation_id": "op-9DCF1313C6614D30"}, "token": "<redacted>"}
+[tx] chunked 147B into 8 GATT writes (<= 20B each)
+<38.171s> RX id=ab0-p15-18 252B frags=1 sizes=[252] {"id": "ab0-p15-18", "ok": true, "data": {"operation_id": "op-9DCF1313C6614D30", "state": "got_ip", "error": "none", "trial_id": "trial-8EF754B0", "ssid": "CMCC-502", "stages": {"wifi_connected": true, "ip_acquired": true, "internet_verified": true, "mqtt_connected": true}}}
+>38.677s TX id=ab0-p16-19 147B {"id": "ab0-p16-19", "version": "1.0", "cmd": "operation.get", "args": {"operation_id": "op-9DCF1313C6614D30"}, "token": "<redacted>"}
+[tx] chunked 147B into 8 GATT writes (<= 20B each)
+<39.789s> RX id=ab0-p16-19 252B frags=1 sizes=[252] {"id": "ab0-p16-19", "ok": true, "data": {"operation_id": "op-9DCF1313C6614D30", "state": "got_ip", "error": "none", "trial_id": "trial-8EF754B0", "ssid": "CMCC-502", "stages": {"wifi_connected": true, "ip_acquired": true, "internet_verified": true, "mqtt_connected": true}}}
+>40.293s TX id=ab0-p17-20 147B {"id": "ab0-p17-20", "version": "1.0", "cmd": "operation.get", "args": {"operation_id": "op-9DCF1313C6614D30"}, "token": "<redacted>"}
+[tx] chunked 147B into 8 GATT writes (<= 20B each)
+<41.138s> RX id=ab0-p17-20 252B frags=1 sizes=[252] {"id": "ab0-p17-20", "ok": true, "data": {"operation_id": "op-9DCF1313C6614D30", "state": "got_ip", "error": "none", "trial_id": "trial-8EF754B0", "ssid": "CMCC-502", "stages": {"wifi_connected": true, "ip_acquired": true, "internet_verified": true, "mqtt_connected": true}}}
+>41.644s TX id=ab0-p18-21 147B {"id": "ab0-p18-21", "version": "1.0", "cmd": "operation.get", "args": {"operation_id": "op-9DCF1313C6614D30"}, "token": "<redacted>"}
+[tx] chunked 147B into 8 GATT writes (<= 20B each)
+<42.446s> RX id=ab0-p18-21 252B frags=1 sizes=[252] {"id": "ab0-p18-21", "ok": true, "data": {"operation_id": "op-9DCF1313C6614D30", "state": "got_ip", "error": "none", "trial_id": "trial-8EF754B0", "ssid": "CMCC-502", "stages": {"wifi_connected": true, "ip_acquired": true, "internet_verified": true, "mqtt_connected": true}}}
+>42.950s TX id=ab0-p19-22 147B {"id": "ab0-p19-22", "version": "1.0", "cmd": "operation.get", "args": {"operation_id": "op-9DCF1313C6614D30"}, "token": "<redacted>"}
+[tx] chunked 147B into 8 GATT writes (<= 20B each)
+<43.839s> RX id=ab0-p19-22 252B frags=1 sizes=[252] {"id": "ab0-p19-22", "ok": true, "data": {"operation_id": "op-9DCF1313C6614D30", "state": "got_ip", "error": "none", "trial_id": "trial-8EF754B0", "ssid": "CMCC-502", "stages": {"wifi_connected": true, "ip_acquired": true, "internet_verified": true, "mqtt_connected": true}}}
+>44.340s TX id=ab0-p20-23 147B {"id": "ab0-p20-23", "version": "1.0", "cmd": "operation.get", "args": {"operation_id": "op-9DCF1313C6614D30"}, "token": "<redacted>"}
+[tx] chunked 147B into 8 GATT writes (<= 20B each)
+<45.147s> RX id=ab0-p20-23 252B frags=1 sizes=[252] {"id": "ab0-p20-23", "ok": true, "data": {"operation_id": "op-9DCF1313C6614D30", "state": "got_ip", "error": "none", "trial_id": "trial-8EF754B0", "ssid": "CMCC-502", "stages": {"wifi_connected": true, "ip_acquired": true, "internet_verified": true, "mqtt_connected": true}}}
+>45.653s TX id=ab0-p21-24 147B {"id": "ab0-p21-24", "version": "1.0", "cmd": "operation.get", "args": {"operation_id": "op-9DCF1313C6614D30"}, "token": "<redacted>"}
+[tx] chunked 147B into 8 GATT writes (<= 20B each)
+<46.807s> RX id=ab0-p21-24 252B frags=1 sizes=[252] {"id": "ab0-p21-24", "ok": true, "data": {"operation_id": "op-9DCF1313C6614D30", "state": "got_ip", "error": "none", "trial_id": "trial-8EF754B0", "ssid": "CMCC-502", "stages": {"wifi_connected": true, "ip_acquired": true, "internet_verified": true, "mqtt_connected": true}}}
+>47.312s TX id=ab0-p22-25 147B {"id": "ab0-p22-25", "version": "1.0", "cmd": "operation.get", "args": {"operation_id": "op-9DCF1313C6614D30"}, "token": "<redacted>"}
+[tx] chunked 147B into 8 GATT writes (<= 20B each)
+[conn] link lost during id=ab0-p22-25 (ConnectionLost: write failed after disconnect: (<BleakGATTProtocolErrorCode.UNLIKELY_ERROR: 14>, 'GATT Protocol Error: Unlikely Error')); reconnecting and retrying
+[conn] reconnect #1 starting
+>50.380s TX id=login-26 101B {"id": "login-26", "version": "1.0", "cmd": "auth.login", "args": {"username": "admin", "password": "<redacted>"}}
+[tx] chunked 101B into 6 GATT writes (<= 20B each)
+<50.989s> RX id=login-26 96B frags=1 sizes=[96] {"id": "login-26", "ok": true, "data": {"token": "<redacted>", "expires_in": 600}}
+[auth] login ok (token redacted)
+[conn] reconnect #1 ok
+>51.034s TX id=ab0-p22-25 147B {"id": "ab0-p22-25", "version": "1.0", "cmd": "operation.get", "args": {"operation_id": "op-9DCF1313C6614D30"}, "token": "<redacted>"}
+[tx] chunked 147B into 8 GATT writes (<= 20B each)
+<52.296s> RX id=ab0-p22-25 217B frags=1 sizes=[217] {"id": "ab0-p22-25", "ok": true, "data": {"operation_id": "op-9DCF1313C6614D30", "state": "cancelled", "error": "cancelled", "stages": {"wifi_connected": true, "ip_acquired": false, "internet_verified": false, "mqtt_connected": false}}}
+  +40.72s op: cancelled err=cancelled
+  终态: cancelled (耗时 40.7s)
+>52.297s TX id=ab0-ns-27 111B {"id": "ab0-ns-27", "version": "1.0", "cmd": "network.status", "args": {}, "token": "<redacted>"}
+[tx] chunked 111B into 6 GATT writes (<= 20B each)
+<53.254s> RX id=ab0-ns-27 515B frags=3 sizes=[253, 253, 9] {"id": "ab0-ns-27", "ok": true, "data": {"sta_connected": true, "sta_has_ip": false, "sta_ip": "0.0.0.0", "last_disconnect": "none", "connected_ssid": "CMCC-502", "connected_profile": 0, "internet_verified": false, "net_verify_stage": "none", "rssi": -63, "channel": 3, "bssid": "5c:c0:a0:bd:f6:28", "rssi_valid": true, "sta_ssid": "CMCC-502", "password_set": true, "mode": "sta", "persistent_use_static": false, "persistent_static_ip": "192.168.1.50", "cfg_state": "dhcp", "mqtt_connected": false, "mqtt_last_error": "disconnected", "trial": {"state": "idle"}}}
+  快照: ip=0.0.0.0 verified=False stage=none
+=== 第 2 轮 ===
+>53.256s TX id=ab1-tc-28 156B {"id": "ab1-tc-28", "version": "1.0", "cmd": "network.tryconnect", "args": {"ssid": "CMCC-502", "password": "<redacted>"}, "token": "<redacted>"}
+[tx] chunked 156B into 8 GATT writes (<= 20B each)
+<54.997s> RX id=ab1-tc-28 93B frags=1 sizes=[93] {"id": "ab1-tc-28", "ok": true, "data": {"operation_id": "op-56B5CB073D5EC5AE", "state": "accepted"}}
+>55.500s TX id=ab1-p0-29 146B {"id": "ab1-p0-29", "version": "1.0", "cmd": "operation.get", "args": {"operation_id": "op-56B5CB073D5EC5AE"}, "token": "<redacted>"}
+[tx] chunked 146B into 8 GATT writes (<= 20B each)
+<56.618s> RX id=ab1-p0-29 213B frags=1 sizes=[213] {"id": "ab1-p0-29", "ok": true, "data": {"operation_id": "op-56B5CB073D5EC5AE", "state": "connecting", "error": "none", "stages": {"wifi_connected": false, "ip_acquired": false, "internet_verified": false, "mqtt_connected": false}}}
+  +1.62s op: connecting err=none
+>57.124s TX id=ab1-p1-30 146B {"id": "ab1-p1-30", "version": "1.0", "cmd": "operation.get", "args": {"operation_id": "op-56B5CB073D5EC5AE"}, "token": "<redacted>"}
+[tx] chunked 146B into 8 GATT writes (<= 20B each)
+<58.235s> RX id=ab1-p1-30 213B frags=1 sizes=[213] {"id": "ab1-p1-30", "ok": true, "data": {"operation_id": "op-56B5CB073D5EC5AE", "state": "connecting", "error": "none", "stages": {"wifi_connected": false, "ip_acquired": false, "internet_verified": false, "mqtt_connected": false}}}
+>58.737s TX id=ab1-p2-31 146B {"id": "ab1-p2-31", "version": "1.0", "cmd": "operation.get", "args": {"operation_id": "op-56B5CB073D5EC5AE"}, "token": "<redacted>"}
+[tx] chunked 146B into 8 GATT writes (<= 20B each)
+<59.815s> RX id=ab1-p2-31 213B frags=1 sizes=[213] {"id": "ab1-p2-31", "ok": true, "data": {"operation_id": "op-56B5CB073D5EC5AE", "state": "connecting", "error": "none", "stages": {"wifi_connected": false, "ip_acquired": false, "internet_verified": false, "mqtt_connected": false}}}
+>60.321s TX id=ab1-p3-32 146B {"id": "ab1-p3-32", "version": "1.0", "cmd": "operation.get", "args": {"operation_id": "op-56B5CB073D5EC5AE"}, "token": "<redacted>"}
+[tx] chunked 146B into 8 GATT writes (<= 20B each)
+<61.345s> RX id=ab1-p3-32 213B frags=1 sizes=[213] {"id": "ab1-p3-32", "ok": true, "data": {"operation_id": "op-56B5CB073D5EC5AE", "state": "connecting", "error": "none", "stages": {"wifi_connected": false, "ip_acquired": false, "internet_verified": false, "mqtt_connected": false}}}
+>61.851s TX id=ab1-p4-33 146B {"id": "ab1-p4-33", "version": "1.0", "cmd": "operation.get", "args": {"operation_id": "op-56B5CB073D5EC5AE"}, "token": "<redacted>"}
+[tx] chunked 146B into 8 GATT writes (<= 20B each)
+<62.964s> RX id=ab1-p4-33 213B frags=1 sizes=[213] {"id": "ab1-p4-33", "ok": true, "data": {"operation_id": "op-56B5CB073D5EC5AE", "state": "connecting", "error": "none", "stages": {"wifi_connected": false, "ip_acquired": false, "internet_verified": false, "mqtt_connected": false}}}
+>63.465s TX id=ab1-p5-34 146B {"id": "ab1-p5-34", "version": "1.0", "cmd": "operation.get", "args": {"operation_id": "op-56B5CB073D5EC5AE"}, "token": "<redacted>"}
+[tx] chunked 146B into 8 GATT writes (<= 20B each)
+<64.449s> RX id=ab1-p5-34 213B frags=1 sizes=[213] {"id": "ab1-p5-34", "ok": true, "data": {"operation_id": "op-56B5CB073D5EC5AE", "state": "connecting", "error": "none", "stages": {"wifi_connected": false, "ip_acquired": false, "internet_verified": false, "mqtt_connected": false}}}
+>64.956s TX id=ab1-p6-35 146B {"id": "ab1-p6-35", "version": "1.0", "cmd": "operation.get", "args": {"operation_id": "op-56B5CB073D5EC5AE"}, "token": "<redacted>"}
+[tx] chunked 146B into 8 GATT writes (<= 20B each)
+<65.889s> RX id=ab1-p6-35 213B frags=1 sizes=[213] {"id": "ab1-p6-35", "ok": true, "data": {"operation_id": "op-56B5CB073D5EC5AE", "state": "connecting", "error": "none", "stages": {"wifi_connected": false, "ip_acquired": false, "internet_verified": false, "mqtt_connected": false}}}
+>66.391s TX id=ab1-p7-36 146B {"id": "ab1-p7-36", "version": "1.0", "cmd": "operation.get", "args": {"operation_id": "op-56B5CB073D5EC5AE"}, "token": "<redacted>"}
+[tx] chunked 146B into 8 GATT writes (<= 20B each)
+<67.330s> RX id=ab1-p7-36 213B frags=1 sizes=[213] {"id": "ab1-p7-36", "ok": true, "data": {"operation_id": "op-56B5CB073D5EC5AE", "state": "connecting", "error": "none", "stages": {"wifi_connected": false, "ip_acquired": false, "internet_verified": false, "mqtt_connected": false}}}
+>67.836s TX id=ab1-p8-37 146B {"id": "ab1-p8-37", "version": "1.0", "cmd": "operation.get", "args": {"operation_id": "op-56B5CB073D5EC5AE"}, "token": "<redacted>"}
+[tx] chunked 146B into 8 GATT writes (<= 20B each)
+<68.905s> RX id=ab1-p8-37 213B frags=1 sizes=[213] {"id": "ab1-p8-37", "ok": true, "data": {"operation_id": "op-56B5CB073D5EC5AE", "state": "connecting", "error": "none", "stages": {"wifi_connected": false, "ip_acquired": false, "internet_verified": false, "mqtt_connected": false}}}
+>69.411s TX id=ab1-p9-38 146B {"id": "ab1-p9-38", "version": "1.0", "cmd": "operation.get", "args": {"operation_id": "op-56B5CB073D5EC5AE"}, "token": "<redacted>"}
+[tx] chunked 146B into 8 GATT writes (<= 20B each)
+<70.479s> RX id=ab1-p9-38 251B frags=1 sizes=[251] {"id": "ab1-p9-38", "ok": true, "data": {"operation_id": "op-56B5CB073D5EC5AE", "state": "got_ip", "error": "none", "trial_id": "trial-95418694", "ssid": "CMCC-502", "stages": {"wifi_connected": true, "ip_acquired": true, "internet_verified": true, "mqtt_connected": true}}}
+  +15.48s op: got_ip err=none
+>70.983s TX id=ab1-p10-39 147B {"id": "ab1-p10-39", "version": "1.0", "cmd": "operation.get", "args": {"operation_id": "op-56B5CB073D5EC5AE"}, "token": "<redacted>"}
+[tx] chunked 147B into 8 GATT writes (<= 20B each)
+<72.236s> RX id=ab1-p10-39 252B frags=1 sizes=[252] {"id": "ab1-p10-39", "ok": true, "data": {"operation_id": "op-56B5CB073D5EC5AE", "state": "got_ip", "error": "none", "trial_id": "trial-95418694", "ssid": "CMCC-502", "stages": {"wifi_connected": true, "ip_acquired": true, "internet_verified": true, "mqtt_connected": true}}}
+>72.740s TX id=ab1-p11-40 147B {"id": "ab1-p11-40", "version": "1.0", "cmd": "operation.get", "args": {"operation_id": "op-56B5CB073D5EC5AE"}, "token": "<redacted>"}
+[tx] chunked 147B into 8 GATT writes (<= 20B each)
+<73.850s> RX id=ab1-p11-40 252B frags=1 sizes=[252] {"id": "ab1-p11-40", "ok": true, "data": {"operation_id": "op-56B5CB073D5EC5AE", "state": "got_ip", "error": "none", "trial_id": "trial-95418694", "ssid": "CMCC-502", "stages": {"wifi_connected": true, "ip_acquired": true, "internet_verified": true, "mqtt_connected": true}}}
+>74.356s TX id=ab1-p12-41 147B {"id": "ab1-p12-41", "version": "1.0", "cmd": "operation.get", "args": {"operation_id": "op-56B5CB073D5EC5AE"}, "token": "<redacted>"}
+[tx] chunked 147B into 8 GATT writes (<= 20B each)
+<75.340s> RX id=ab1-p12-41 252B frags=1 sizes=[252] {"id": "ab1-p12-41", "ok": true, "data": {"operation_id": "op-56B5CB073D5EC5AE", "state": "got_ip", "error": "none", "trial_id": "trial-95418694", "ssid": "CMCC-502", "stages": {"wifi_connected": true, "ip_acquired": true, "internet_verified": true, "mqtt_connected": true}}}
+>75.846s TX id=ab1-p13-42 147B {"id": "ab1-p13-42", "version": "1.0", "cmd": "operation.get", "args": {"operation_id": "op-56B5CB073D5EC5AE"}, "token": "<redacted>"}
+[tx] chunked 147B into 8 GATT writes (<= 20B each)
+<76.827s> RX id=ab1-p13-42 252B frags=1 sizes=[252] {"id": "ab1-p13-42", "ok": true, "data": {"operation_id": "op-56B5CB073D5EC5AE", "state": "got_ip", "error": "none", "trial_id": "trial-95418694", "ssid": "CMCC-502", "stages": {"wifi_connected": true, "ip_acquired": true, "internet_verified": true, "mqtt_connected": true}}}
+>77.331s TX id=ab1-p14-43 147B {"id": "ab1-p14-43", "version": "1.0", "cmd": "operation.get", "args": {"operation_id": "op-56B5CB073D5EC5AE"}, "token": "<redacted>"}
+[tx] chunked 147B into 8 GATT writes (<= 20B each)
+<78.447s> RX id=ab1-p14-43 252B frags=1 sizes=[252] {"id": "ab1-p14-43", "ok": true, "data": {"operation_id": "op-56B5CB073D5EC5AE", "state": "got_ip", "error": "none", "trial_id": "trial-95418694", "ssid": "CMCC-502", "stages": {"wifi_connected": true, "ip_acquired": true, "internet_verified": true, "mqtt_connected": true}}}
+>78.951s TX id=ab1-p15-44 147B {"id": "ab1-p15-44", "version": "1.0", "cmd": "operation.get", "args": {"operation_id": "op-56B5CB073D5EC5AE"}, "token": "<redacted>"}
+[tx] chunked 147B into 8 GATT writes (<= 20B each)
+<80.201s> RX id=ab1-p15-44 252B frags=1 sizes=[252] {"id": "ab1-p15-44", "ok": true, "data": {"operation_id": "op-56B5CB073D5EC5AE", "state": "got_ip", "error": "none", "trial_id": "trial-95418694", "ssid": "CMCC-502", "stages": {"wifi_connected": true, "ip_acquired": true, "internet_verified": true, "mqtt_connected": true}}}
+>80.706s TX id=ab1-p16-45 147B {"id": "ab1-p16-45", "version": "1.0", "cmd": "operation.get", "args": {"operation_id": "op-56B5CB073D5EC5AE"}, "token": "<redacted>"}
+[tx] chunked 147B into 8 GATT writes (<= 20B each)
+<81.732s> RX id=ab1-p16-45 252B frags=1 sizes=[252] {"id": "ab1-p16-45", "ok": true, "data": {"operation_id": "op-56B5CB073D5EC5AE", "state": "got_ip", "error": "none", "trial_id": "trial-95418694", "ssid": "CMCC-502", "stages": {"wifi_connected": true, "ip_acquired": true, "internet_verified": true, "mqtt_connected": true}}}
+>82.236s TX id=ab1-p17-46 147B {"id": "ab1-p17-46", "version": "1.0", "cmd": "operation.get", "args": {"operation_id": "op-56B5CB073D5EC5AE"}, "token": "<redacted>"}
+[tx] chunked 147B into 8 GATT writes (<= 20B each)
+<83.261s> RX id=ab1-p17-46 252B frags=1 sizes=[252] {"id": "ab1-p17-46", "ok": true, "data": {"operation_id": "op-56B5CB073D5EC5AE", "state": "got_ip", "error": "none", "trial_id": "trial-95418694", "ssid": "CMCC-502", "stages": {"wifi_connected": true, "ip_acquired": true, "internet_verified": true, "mqtt_connected": true}}}
+>83.767s TX id=ab1-p18-47 147B {"id": "ab1-p18-47", "version": "1.0", "cmd": "operation.get", "args": {"operation_id": "op-56B5CB073D5EC5AE"}, "token": "<redacted>"}
+[tx] chunked 147B into 8 GATT writes (<= 20B each)
+<84.694s> RX id=ab1-p18-47 252B frags=1 sizes=[252] {"id": "ab1-p18-47", "ok": true, "data": {"operation_id": "op-56B5CB073D5EC5AE", "state": "got_ip", "error": "none", "trial_id": "trial-95418694", "ssid": "CMCC-502", "stages": {"wifi_connected": true, "ip_acquired": true, "internet_verified": true, "mqtt_connected": true}}}
+>85.199s TX id=ab1-p19-48 147B {"id": "ab1-p19-48", "version": "1.0", "cmd": "operation.get", "args": {"operation_id": "op-56B5CB073D5EC5AE"}, "token": "<redacted>"}
+[tx] chunked 147B into 8 GATT writes (<= 20B each)
+<85.962s> RX id=ab1-p19-48 252B frags=1 sizes=[252] {"id": "ab1-p19-48", "ok": true, "data": {"operation_id": "op-56B5CB073D5EC5AE", "state": "got_ip", "error": "none", "trial_id": "trial-95418694", "ssid": "CMCC-502", "stages": {"wifi_connected": true, "ip_acquired": true, "internet_verified": true, "mqtt_connected": true}}}
+>86.467s TX id=ab1-p20-49 147B {"id": "ab1-p20-49", "version": "1.0", "cmd": "operation.get", "args": {"operation_id": "op-56B5CB073D5EC5AE"}, "token": "<redacted>"}
+[tx] chunked 147B into 8 GATT writes (<= 20B each)
+<87.311s> RX id=ab1-p20-49 252B frags=1 sizes=[252] {"id": "ab1-p20-49", "ok": true, "data": {"operation_id": "op-56B5CB073D5EC5AE", "state": "got_ip", "error": "none", "trial_id": "trial-95418694", "ssid": "CMCC-502", "stages": {"wifi_connected": true, "ip_acquired": true, "internet_verified": true, "mqtt_connected": true}}}
+>87.817s TX id=ab1-p21-50 147B {"id": "ab1-p21-50", "version": "1.0", "cmd": "operation.get", "args": {"operation_id": "op-56B5CB073D5EC5AE"}, "token": "<redacted>"}
+[tx] chunked 147B into 8 GATT writes (<= 20B each)
+<88.660s> RX id=ab1-p21-50 252B frags=1 sizes=[252] {"id": "ab1-p21-50", "ok": true, "data": {"operation_id": "op-56B5CB073D5EC5AE", "state": "got_ip", "error": "none", "trial_id": "trial-95418694", "ssid": "CMCC-502", "stages": {"wifi_connected": true, "ip_acquired": true, "internet_verified": true, "mqtt_connected": true}}}
+>89.167s TX id=ab1-p22-51 147B {"id": "ab1-p22-51", "version": "1.0", "cmd": "operation.get", "args": {"operation_id": "op-56B5CB073D5EC5AE"}, "token": "<redacted>"}
+[tx] chunked 147B into 8 GATT writes (<= 20B each)
+[conn] link lost during id=ab1-p22-51 (ConnectionLost: write failed after disconnect: (<BleakGATTProtocolErrorCode.UNLIKELY_ERROR: 14>, 'GATT Protocol Error: Unlikely Error')); reconnecting and retrying
+[conn] reconnect #2 starting
+>91.646s TX id=login-52 101B {"id": "login-52", "version": "1.0", "cmd": "auth.login", "args": {"username": "admin", "password": "<redacted>"}}
+[tx] chunked 101B into 6 GATT writes (<= 20B each)
+<92.121s> RX id=login-52 96B frags=1 sizes=[96] {"id": "login-52", "ok": true, "data": {"token": "<redacted>", "expires_in": 600}}
+[auth] login ok (token redacted)
+[conn] reconnect #2 ok
+>92.209s TX id=ab1-p22-51 147B {"id": "ab1-p22-51", "version": "1.0", "cmd": "operation.get", "args": {"operation_id": "op-56B5CB073D5EC5AE"}, "token": "<redacted>"}
+[tx] chunked 147B into 8 GATT writes (<= 20B each)
+<93.565s> RX id=ab1-p22-51 217B frags=1 sizes=[217] {"id": "ab1-p22-51", "ok": true, "data": {"operation_id": "op-56B5CB073D5EC5AE", "state": "cancelled", "error": "cancelled", "stages": {"wifi_connected": true, "ip_acquired": false, "internet_verified": false, "mqtt_connected": false}}}
+  +38.57s op: cancelled err=cancelled
+  终态: cancelled (耗时 38.6s)
+>93.565s TX id=ab1-ns-53 111B {"id": "ab1-ns-53", "version": "1.0", "cmd": "network.status", "args": {}, "token": "<redacted>"}
+[tx] chunked 111B into 6 GATT writes (<= 20B each)
+<94.692s> RX id=ab1-ns-53 517B frags=3 sizes=[253, 253, 11] {"id": "ab1-ns-53", "ok": true, "data": {"sta_connected": true, "sta_has_ip": false, "sta_ip": "0.0.0.0", "last_disconnect": "none", "connected_ssid": "CMCC-502", "connected_profile": 0, "internet_verified": false, "net_verify_stage": "none", "rssi": -64, "channel": 3, "bssid": "5c:c0:a0:bd:f6:28", "rssi_valid": true, "sta_ssid": "CMCC-502", "password_set": true, "mode": "sta", "persistent_use_static": false, "persistent_static_ip": "192.168.1.50", "cfg_state": "dhcp", "mqtt_connected": false, "mqtt_last_error": "waiting_sta_ip", "trial": {"state": "idle"}}}
+  快照: ip=0.0.0.0 verified=False stage=none
+=== 第 3 轮 ===
+>94.692s TX id=ab2-tc-54 156B {"id": "ab2-tc-54", "version": "1.0", "cmd": "network.tryconnect", "args": {"ssid": "CMCC-502", "password": "<redacted>"}, "token": "<redacted>"}
+[tx] chunked 156B into 8 GATT writes (<= 20B each)
+<96.169s> RX id=ab2-tc-54 93B frags=1 sizes=[93] {"id": "ab2-tc-54", "ok": true, "data": {"operation_id": "op-012CCA48604FC16B", "state": "accepted"}}
+>96.672s TX id=ab2-p0-55 146B {"id": "ab2-p0-55", "version": "1.0", "cmd": "operation.get", "args": {"operation_id": "op-012CCA48604FC16B"}, "token": "<redacted>"}
+[tx] chunked 146B into 8 GATT writes (<= 20B each)
+<97.834s> RX id=ab2-p0-55 213B frags=1 sizes=[213] {"id": "ab2-p0-55", "ok": true, "data": {"operation_id": "op-012CCA48604FC16B", "state": "connecting", "error": "none", "stages": {"wifi_connected": false, "ip_acquired": false, "internet_verified": false, "mqtt_connected": false}}}
+  +1.67s op: connecting err=none
+>98.338s TX id=ab2-p1-56 146B {"id": "ab2-p1-56", "version": "1.0", "cmd": "operation.get", "args": {"operation_id": "op-012CCA48604FC16B"}, "token": "<redacted>"}
+[tx] chunked 146B into 8 GATT writes (<= 20B each)
+<99.325s> RX id=ab2-p1-56 213B frags=1 sizes=[213] {"id": "ab2-p1-56", "ok": true, "data": {"operation_id": "op-012CCA48604FC16B", "state": "connecting", "error": "none", "stages": {"wifi_connected": false, "ip_acquired": false, "internet_verified": false, "mqtt_connected": false}}}
+>99.832s TX id=ab2-p2-57 146B {"id": "ab2-p2-57", "version": "1.0", "cmd": "operation.get", "args": {"operation_id": "op-012CCA48604FC16B"}, "token": "<redacted>"}
+[tx] chunked 146B into 8 GATT writes (<= 20B each)
+<100.852s> RX id=ab2-p2-57 213B frags=1 sizes=[213] {"id": "ab2-p2-57", "ok": true, "data": {"operation_id": "op-012CCA48604FC16B", "state": "connecting", "error": "none", "stages": {"wifi_connected": false, "ip_acquired": false, "internet_verified": false, "mqtt_connected": false}}}
+>101.357s TX id=ab2-p3-58 146B {"id": "ab2-p3-58", "version": "1.0", "cmd": "operation.get", "args": {"operation_id": "op-012CCA48604FC16B"}, "token": "<redacted>"}
+[tx] chunked 146B into 8 GATT writes (<= 20B each)
+<102.610s> RX id=ab2-p3-58 213B frags=1 sizes=[213] {"id": "ab2-p3-58", "ok": true, "data": {"operation_id": "op-012CCA48604FC16B", "state": "connecting", "error": "none", "stages": {"wifi_connected": false, "ip_acquired": false, "internet_verified": false, "mqtt_connected": false}}}
+>103.117s TX id=ab2-p4-59 146B {"id": "ab2-p4-59", "version": "1.0", "cmd": "operation.get", "args": {"operation_id": "op-012CCA48604FC16B"}, "token": "<redacted>"}
+[tx] chunked 146B into 8 GATT writes (<= 20B each)
+<104.096s> RX id=ab2-p4-59 213B frags=1 sizes=[213] {"id": "ab2-p4-59", "ok": true, "data": {"operation_id": "op-012CCA48604FC16B", "state": "connecting", "error": "none", "stages": {"wifi_connected": false, "ip_acquired": false, "internet_verified": false, "mqtt_connected": false}}}
+>104.601s TX id=ab2-p5-60 146B {"id": "ab2-p5-60", "version": "1.0", "cmd": "operation.get", "args": {"operation_id": "op-012CCA48604FC16B"}, "token": "<redacted>"}
+[tx] chunked 146B into 8 GATT writes (<= 20B each)
+<105.805s> RX id=ab2-p5-60 213B frags=1 sizes=[213] {"id": "ab2-p5-60", "ok": true, "data": {"operation_id": "op-012CCA48604FC16B", "state": "connecting", "error": "none", "stages": {"wifi_connected": false, "ip_acquired": false, "internet_verified": false, "mqtt_connected": false}}}
+>106.312s TX id=ab2-p6-61 146B {"id": "ab2-p6-61", "version": "1.0", "cmd": "operation.get", "args": {"operation_id": "op-012CCA48604FC16B"}, "token": "<redacted>"}
+[tx] chunked 146B into 8 GATT writes (<= 20B each)
+<107.198s> RX id=ab2-p6-61 213B frags=1 sizes=[213] {"id": "ab2-p6-61", "ok": true, "data": {"operation_id": "op-012CCA48604FC16B", "state": "connecting", "error": "none", "stages": {"wifi_connected": false, "ip_acquired": false, "internet_verified": false, "mqtt_connected": false}}}
+>107.701s TX id=ab2-p7-62 146B {"id": "ab2-p7-62", "version": "1.0", "cmd": "operation.get", "args": {"operation_id": "op-012CCA48604FC16B"}, "token": "<redacted>"}
+[tx] chunked 146B into 8 GATT writes (<= 20B each)
+<108.594s> RX id=ab2-p7-62 213B frags=1 sizes=[213] {"id": "ab2-p7-62", "ok": true, "data": {"operation_id": "op-012CCA48604FC16B", "state": "connecting", "error": "none", "stages": {"wifi_connected": false, "ip_acquired": false, "internet_verified": false, "mqtt_connected": false}}}
+>109.095s TX id=ab2-p8-63 146B {"id": "ab2-p8-63", "version": "1.0", "cmd": "operation.get", "args": {"operation_id": "op-012CCA48604FC16B"}, "token": "<redacted>"}
+[tx] chunked 146B into 8 GATT writes (<= 20B each)
+<110.171s> RX id=ab2-p8-63 213B frags=1 sizes=[213] {"id": "ab2-p8-63", "ok": true, "data": {"operation_id": "op-012CCA48604FC16B", "state": "connecting", "error": "none", "stages": {"wifi_connected": false, "ip_acquired": false, "internet_verified": false, "mqtt_connected": false}}}
+>110.677s TX id=ab2-p9-64 146B {"id": "ab2-p9-64", "version": "1.0", "cmd": "operation.get", "args": {"operation_id": "op-012CCA48604FC16B"}, "token": "<redacted>"}
+[tx] chunked 146B into 8 GATT writes (<= 20B each)
+<111.787s> RX id=ab2-p9-64 251B frags=1 sizes=[251] {"id": "ab2-p9-64", "ok": true, "data": {"operation_id": "op-012CCA48604FC16B", "state": "got_ip", "error": "none", "trial_id": "trial-A291F09F", "ssid": "CMCC-502", "stages": {"wifi_connected": true, "ip_acquired": true, "internet_verified": true, "mqtt_connected": true}}}
+  +15.62s op: got_ip err=none
+>112.292s TX id=ab2-p10-65 147B {"id": "ab2-p10-65", "version": "1.0", "cmd": "operation.get", "args": {"operation_id": "op-012CCA48604FC16B"}, "token": "<redacted>"}
+[tx] chunked 147B into 8 GATT writes (<= 20B each)
+<113.497s> RX id=ab2-p10-65 252B frags=1 sizes=[252] {"id": "ab2-p10-65", "ok": true, "data": {"operation_id": "op-012CCA48604FC16B", "state": "got_ip", "error": "none", "trial_id": "trial-A291F09F", "ssid": "CMCC-502", "stages": {"wifi_connected": true, "ip_acquired": true, "internet_verified": true, "mqtt_connected": true}}}
+>114.001s TX id=ab2-p11-66 147B {"id": "ab2-p11-66", "version": "1.0", "cmd": "operation.get", "args": {"operation_id": "op-012CCA48604FC16B"}, "token": "<redacted>"}
+[tx] chunked 147B into 8 GATT writes (<= 20B each)
+<115.430s> RX id=ab2-p11-66 252B frags=1 sizes=[252] {"id": "ab2-p11-66", "ok": true, "data": {"operation_id": "op-012CCA48604FC16B", "state": "got_ip", "error": "none", "trial_id": "trial-A291F09F", "ssid": "CMCC-502", "stages": {"wifi_connected": true, "ip_acquired": true, "internet_verified": true, "mqtt_connected": true}}}
+>115.934s TX id=ab2-p12-67 147B {"id": "ab2-p12-67", "version": "1.0", "cmd": "operation.get", "args": {"operation_id": "op-012CCA48604FC16B"}, "token": "<redacted>"}
+[tx] chunked 147B into 8 GATT writes (<= 20B each)
+<117.055s> RX id=ab2-p12-67 252B frags=1 sizes=[252] {"id": "ab2-p12-67", "ok": true, "data": {"operation_id": "op-012CCA48604FC16B", "state": "got_ip", "error": "none", "trial_id": "trial-A291F09F", "ssid": "CMCC-502", "stages": {"wifi_connected": true, "ip_acquired": true, "internet_verified": true, "mqtt_connected": true}}}
+>117.561s TX id=ab2-p13-68 147B {"id": "ab2-p13-68", "version": "1.0", "cmd": "operation.get", "args": {"operation_id": "op-012CCA48604FC16B"}, "token": "<redacted>"}
+[tx] chunked 147B into 8 GATT writes (<= 20B each)
+<118.451s> RX id=ab2-p13-68 252B frags=1 sizes=[252] {"id": "ab2-p13-68", "ok": true, "data": {"operation_id": "op-012CCA48604FC16B", "state": "got_ip", "error": "none", "trial_id": "trial-A291F09F", "ssid": "CMCC-502", "stages": {"wifi_connected": true, "ip_acquired": true, "internet_verified": true, "mqtt_connected": true}}}
+>118.955s TX id=ab2-p14-69 147B {"id": "ab2-p14-69", "version": "1.0", "cmd": "operation.get", "args": {"operation_id": "op-012CCA48604FC16B"}, "token": "<redacted>"}
+[tx] chunked 147B into 8 GATT writes (<= 20B each)
+<119.936s> RX id=ab2-p14-69 252B frags=1 sizes=[252] {"id": "ab2-p14-69", "ok": true, "data": {"operation_id": "op-012CCA48604FC16B", "state": "got_ip", "error": "none", "trial_id": "trial-A291F09F", "ssid": "CMCC-502", "stages": {"wifi_connected": true, "ip_acquired": true, "internet_verified": true, "mqtt_connected": true}}}
+>120.439s TX id=ab2-p15-70 147B {"id": "ab2-p15-70", "version": "1.0", "cmd": "operation.get", "args": {"operation_id": "op-012CCA48604FC16B"}, "token": "<redacted>"}
+[tx] chunked 147B into 8 GATT writes (<= 20B each)
+<121.505s> RX id=ab2-p15-70 252B frags=1 sizes=[252] {"id": "ab2-p15-70", "ok": true, "data": {"operation_id": "op-012CCA48604FC16B", "state": "got_ip", "error": "none", "trial_id": "trial-A291F09F", "ssid": "CMCC-502", "stages": {"wifi_connected": true, "ip_acquired": true, "internet_verified": true, "mqtt_connected": true}}}
+>122.008s TX id=ab2-p16-71 147B {"id": "ab2-p16-71", "version": "1.0", "cmd": "operation.get", "args": {"operation_id": "op-012CCA48604FC16B"}, "token": "<redacted>"}
+[tx] chunked 147B into 8 GATT writes (<= 20B each)
+<122.770s> RX id=ab2-p16-71 252B frags=1 sizes=[252] {"id": "ab2-p16-71", "ok": true, "data": {"operation_id": "op-012CCA48604FC16B", "state": "got_ip", "error": "none", "trial_id": "trial-A291F09F", "ssid": "CMCC-502", "stages": {"wifi_connected": true, "ip_acquired": true, "internet_verified": true, "mqtt_connected": true}}}
+>123.277s TX id=ab2-p17-72 147B {"id": "ab2-p17-72", "version": "1.0", "cmd": "operation.get", "args": {"operation_id": "op-012CCA48604FC16B"}, "token": "<redacted>"}
+[tx] chunked 147B into 8 GATT writes (<= 20B each)
+<124.294s> RX id=ab2-p17-72 252B frags=1 sizes=[252] {"id": "ab2-p17-72", "ok": true, "data": {"operation_id": "op-012CCA48604FC16B", "state": "got_ip", "error": "none", "trial_id": "trial-A291F09F", "ssid": "CMCC-502", "stages": {"wifi_connected": true, "ip_acquired": true, "internet_verified": true, "mqtt_connected": true}}}
+>124.798s TX id=ab2-p18-73 147B {"id": "ab2-p18-73", "version": "1.0", "cmd": "operation.get", "args": {"operation_id": "op-012CCA48604FC16B"}, "token": "<redacted>"}
+[tx] chunked 147B into 8 GATT writes (<= 20B each)
+<125.608s> RX id=ab2-p18-73 252B frags=1 sizes=[252] {"id": "ab2-p18-73", "ok": true, "data": {"operation_id": "op-012CCA48604FC16B", "state": "got_ip", "error": "none", "trial_id": "trial-A291F09F", "ssid": "CMCC-502", "stages": {"wifi_connected": true, "ip_acquired": true, "internet_verified": true, "mqtt_connected": true}}}
+>126.110s TX id=ab2-p19-74 147B {"id": "ab2-p19-74", "version": "1.0", "cmd": "operation.get", "args": {"operation_id": "op-012CCA48604FC16B"}, "token": "<redacted>"}
+[tx] chunked 147B into 8 GATT writes (<= 20B each)
+<126.955s> RX id=ab2-p19-74 252B frags=1 sizes=[252] {"id": "ab2-p19-74", "ok": true, "data": {"operation_id": "op-012CCA48604FC16B", "state": "got_ip", "error": "none", "trial_id": "trial-A291F09F", "ssid": "CMCC-502", "stages": {"wifi_connected": true, "ip_acquired": true, "internet_verified": true, "mqtt_connected": true}}}
+>127.462s TX id=ab2-p20-75 147B {"id": "ab2-p20-75", "version": "1.0", "cmd": "operation.get", "args": {"operation_id": "op-012CCA48604FC16B"}, "token": "<redacted>"}
+[tx] chunked 147B into 8 GATT writes (<= 20B each)
+<128.441s> RX id=ab2-p20-75 252B frags=1 sizes=[252] {"id": "ab2-p20-75", "ok": true, "data": {"operation_id": "op-012CCA48604FC16B", "state": "got_ip", "error": "none", "trial_id": "trial-A291F09F", "ssid": "CMCC-502", "stages": {"wifi_connected": true, "ip_acquired": true, "internet_verified": true, "mqtt_connected": true}}}
+>128.947s TX id=ab2-p21-76 147B {"id": "ab2-p21-76", "version": "1.0", "cmd": "operation.get", "args": {"operation_id": "op-012CCA48604FC16B"}, "token": "<redacted>"}
+[tx] chunked 147B into 8 GATT writes (<= 20B each)
+<130.372s> RX id=ab2-p21-76 252B frags=1 sizes=[252] {"id": "ab2-p21-76", "ok": true, "data": {"operation_id": "op-012CCA48604FC16B", "state": "got_ip", "error": "none", "trial_id": "trial-A291F09F", "ssid": "CMCC-502", "stages": {"wifi_connected": true, "ip_acquired": true, "internet_verified": true, "mqtt_connected": true}}}
+>130.875s TX id=ab2-p22-77 147B {"id": "ab2-p22-77", "version": "1.0", "cmd": "operation.get", "args": {"operation_id": "op-012CCA48604FC16B"}, "token": "<redacted>"}
+[tx] chunked 147B into 8 GATT writes (<= 20B each)
+[conn] link lost during id=ab2-p22-77 (ConnectionLost: write failed after disconnect: (<BleakGATTProtocolErrorCode.UNLIKELY_ERROR: 14>, 'GATT Protocol Error: Unlikely Error')); reconnecting and retrying
+[conn] reconnect #3 starting
+>133.225s TX id=login-78 101B {"id": "login-78", "version": "1.0", "cmd": "auth.login", "args": {"username": "admin", "password": "<redacted>"}}
+[tx] chunked 101B into 6 GATT writes (<= 20B each)
+<134.106s> RX id=login-78 96B frags=1 sizes=[96] {"id": "login-78", "ok": true, "data": {"token": "<redacted>", "expires_in": 600}}
+[auth] login ok (token redacted)
+[conn] reconnect #3 ok
+>134.284s TX id=ab2-p22-77 147B {"id": "ab2-p22-77", "version": "1.0", "cmd": "operation.get", "args": {"operation_id": "op-012CCA48604FC16B"}, "token": "<redacted>"}
+[tx] chunked 147B into 8 GATT writes (<= 20B each)
+<136.000s> RX id=ab2-p22-77 217B frags=1 sizes=[217] {"id": "ab2-p22-77", "ok": true, "data": {"operation_id": "op-012CCA48604FC16B", "state": "cancelled", "error": "cancelled", "stages": {"wifi_connected": true, "ip_acquired": false, "internet_verified": false, "mqtt_connected": false}}}
+  +39.83s op: cancelled err=cancelled
+  终态: cancelled (耗时 39.8s)
+>136.006s TX id=ab2-ns-79 111B {"id": "ab2-ns-79", "version": "1.0", "cmd": "network.status", "args": {}, "token": "<redacted>"}
+[tx] chunked 111B into 6 GATT writes (<= 20B each)
+<137.435s> RX id=ab2-ns-79 515B frags=3 sizes=[253, 253, 9] {"id": "ab2-ns-79", "ok": true, "data": {"sta_connected": true, "sta_has_ip": false, "sta_ip": "0.0.0.0", "last_disconnect": "none", "connected_ssid": "CMCC-502", "connected_profile": 0, "internet_verified": false, "net_verify_stage": "none", "rssi": -62, "channel": 3, "bssid": "5c:c0:a0:bd:f6:28", "rssi_valid": true, "sta_ssid": "CMCC-502", "password_set": true, "mode": "sta", "persistent_use_static": false, "persistent_static_ip": "192.168.1.50", "cfg_state": "dhcp", "mqtt_connected": false, "mqtt_last_error": "disconnected", "trial": {"state": "idle"}}}
+  快照: ip=0.0.0.0 verified=False stage=none
