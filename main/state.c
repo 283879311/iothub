@@ -136,23 +136,17 @@ static bool app_input_read_sample(void)
 static bool app_input_toggle_led_via_command(void)
 {
 #if CONFIG_INPUT_IS_TOUCH && CONFIG_INPUT_TOUCH_TOGGLES_LED
-    cJSON *frame = cJSON_CreateObject();
+    app_cmd_context_t ctx = app_cmd_ctx_entry(APP_CMD_SOURCE_TOUCH);
     cJSON *resp = NULL;
     app_cmd_result_t out = {0};
     const char *err = NULL;
     bool ok;
 
-    if (frame == NULL) {
-        return false;
-    }
-    cJSON_AddStringToObject(frame, "method", "led.toggle");
-    cJSON_AddObjectToObject(frame, "params");
-    ok = (app_cmd_execute_ex(frame, APP_CMD_SOURCE_TOUCH, &resp, &out, &err) == ESP_OK);
+    ok = (app_cmd_execute_method(&ctx, "led.toggle", NULL, &resp, &out, &err) == ESP_OK);
     if (!ok) {
         ESP_LOGW(TAG, "touch led.toggle failed: %s", err != NULL ? err : "unknown");
     }
     cJSON_Delete(resp);
-    cJSON_Delete(frame);
     return ok;
 #else
     return false;

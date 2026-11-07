@@ -877,6 +877,13 @@ esp_err_t app_config_delete_wifi_profile(const char *ssid)
         return ESP_ERR_NOT_FOUND;
     }
     app_config_normalize_wifi_profiles(&s_blob);
+    if (s_blob.count == 0) {
+        /* Ordinary delete must not remove the last usable profile. The
+         * factory-reset path uses app_config_factory_clear_wifi_profiles() instead. */
+        nvs_close(nvs_handle);
+        app_wifi_profiles_unlock();
+        return ESP_ERR_INVALID_STATE;
+    }
     {
         esp_err_t err = app_config_store_wifi_profiles_blob(nvs_handle, &s_blob);
         nvs_close(nvs_handle);
@@ -888,7 +895,9 @@ esp_err_t app_config_delete_wifi_profile(const char *ssid)
     }
 }
 
-esp_err_t app_config_clear_wifi_profiles(void)
+/* Factory-reset only. This is the single explicit full-clear path; ordinary
+ * callers must use app_config_delete_wifi_profile() instead. */
+esp_err_t app_config_factory_clear_wifi_profiles(void)
 {
     nvs_handle_t nvs_handle;
     esp_err_t err;

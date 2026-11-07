@@ -29,5 +29,15 @@ void app_mqtt_unlock(void);
  * 多个 schedule 请求在 defer 期间合并为一个 pending 请求；超过 15 秒自动放行。 */
 esp_err_t app_mqtt_defer_restart_begin(void);
 void app_mqtt_defer_restart_end(void);
+/* 诊断版:多打一行 defer_end site=...,用于定位"谁提前放行重启"(DEF-MQTT-001)。 */
+void app_mqtt_defer_restart_end_at(const char *site);
 bool app_mqtt_restart_is_deferred(void);
+/* DEF-MQTT-001:tryconnect worker 在第一次 WiFi 动作前调用 —— 先等受理回包
+ * 发布(≤300ms),再等 broker PUBACK(≤1.2s),避免拆链早于回包确认。 */
+void app_mqtt_resp_delivery_begin(void);
+void app_mqtt_wait_resp_delivery(void);
 bool app_mqtt_restart_is_pending(void);
+/* DEF-NET-001(netcheck P2-3 修订):联网验证等待 MQTT 时用 —— 退避归零再
+ * 拉起。高退避档(20/30s)下光 schedule 的 pending restart 仍要等完整档,
+ * 验证窗口必超时;归零只由 mqtt.c 内写者维护(与 CONNECTED 复位同语义)。 */
+void app_mqtt_poke_restart(void);

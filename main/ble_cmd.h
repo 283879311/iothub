@@ -14,3 +14,7 @@
 esp_err_t app_ble_cmd_start(void);                    /* 幂等,启动分发任务 */
 void app_ble_cmd_on_write(const uint8_t *data, size_t len);  /* CMD RX 写回调(任意上下文,只入队) */
 void app_ble_cmd_on_disconnect(void);                 /* 断连:作废短时 token */
+
+/* DEF-BLE-001:BLE 侧快照 —— 有在途网络操作或已打开的配置事务时返回 true。
+ * 空闲断链用它避免"断链 → cancel → cleanup → restore"打断正常配网。 */
+bool app_ble_cmd_net_busy(void);

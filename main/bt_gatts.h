@@ -40,6 +40,18 @@ int app_ble_gatts_cmd_notify(const uint8_t *data, size_t len);
 bool app_ble_gatts_connected(void);
 uint16_t app_ble_gatts_mtu(void);
 
+/* ---- DEF-BLE-001 诊断(2026-11-05)----
+ * 现场症状:广播消失时 diag 行 `adv=0 conn=1`,而 conn 取的是应用层
+ * s_connected,与看门狗门禁同源,导致看门狗无法自救。这两个接口把
+ * "应用层认为连着"与"协议栈是否真持有链路"分开暴露:
+ *   - conn_find:0=协议栈仍持有链路;非 0=无链路(ble_gap_conn_find 错误码);
+ *   - rx_age_ms:距最近一次 GATT 写的毫秒数;-1=本次连接从未写入。
+ * 只读,不改变任何状态。Bluedroid 构建返回 1/-1(无此诊断)。 */
+int app_ble_gatts_conn_find(void);
+/* DEF-BLE-001 A 方案:空闲断链回收(diag 1s 节拍调用)。 */
+void app_ble_gatts_idle_reap_poll(void);
+int32_t app_ble_gatts_rx_age_ms(void);
+
 /* ---- 内部(NimBLE 单 GAP 回调模型,1.3-56)----
  * NimBLE 只有一条全局 GAP 回调(ble_hs_cfg.gap_cb,由 bt.c 注册),连接/断开/
  * 订阅/MTU 事件由 bt.c 转发到本模块;Bluedroid 构建不使用(各自回调体系)。

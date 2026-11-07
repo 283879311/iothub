@@ -49,6 +49,7 @@ static app_operation_t s_ops[APP_OPERATION_MAX_SLOTS];
 static portMUX_TYPE s_ops_mux = portMUX_INITIALIZER_UNLOCKED;
 static TaskHandle_t s_worker = NULL;
 static bool s_worker_started = false;
+static bool s_expire_started = false;
 static bool s_initialized = false;
 static uint32_t s_retention_ms = APP_OPERATION_DEFAULT_RETENTION_MS;
 
@@ -203,6 +204,12 @@ const char *app_operation_error_name(app_operation_error_t error)
     case APP_OPERATION_ERR_STORAGE_FAILED: return "storage_failed";
     case APP_OPERATION_ERR_ROLLBACK_FAILED:return "rollback_failed";
     case APP_OPERATION_ERR_SCAN_FAILED:   return "wifi_scan_failed";
+    case APP_OPERATION_ERR_WIFI_CONFIG_OFFLINE: return "wifi_config_offline";
+    case APP_OPERATION_ERR_MQTT_UNAVAILABLE: return "mqtt_unavailable";
+    case APP_OPERATION_ERR_INTERNET_UNVERIFIED: return "internet_unverified";
+    case APP_OPERATION_ERR_STATIC_IP_PINNED: return "static_ip_pinned";
+    case APP_OPERATION_ERR_LAST_PROFILE: return "last_profile";
+    case APP_OPERATION_ERR_VERIFY_TIMEOUT: return "verify_timeout";
     default:                               return "unknown";
     }
 }
@@ -320,7 +327,7 @@ esp_err_t app_operation_start(app_operation_owner_t owner, const char *idem_key,
     if (app_operation_has_active_locked()) {
         portEXIT_CRITICAL(&s_ops_mux);
         if (defer_started) {
-            app_mqtt_defer_restart_end();
+            app_mqtt_defer_restart_end_at("op_create/busy");
         }
         return ESP_ERR_INVALID_STATE;   /* busy */
     }
@@ -337,7 +344,7 @@ esp_err_t app_operation_start(app_operation_owner_t owner, const char *idem_key,
         if (slot == NULL) {
             portEXIT_CRITICAL(&s_ops_mux);
             if (defer_started) {
-                app_mqtt_defer_restart_end();
+                app_mqtt_defer_restart_end_at("op_create/no_slot");
             }
             return ESP_ERR_NO_MEM;      /* 理论不可达：无活动且无终态却无空槽 */
         }
@@ -385,7 +392,7 @@ esp_err_t app_operation_start(app_operation_owner_t owner, const char *idem_key,
         slot->state = APP_OP_FREE;
         portEXIT_CRITICAL(&s_ops_mux);
         if (defer_started) {
-            app_mqtt_defer_restart_end();
+            app_mqtt_defer_restart_end_at("op_create/error");
         }
         return ESP_ERR_NO_MEM;
     }
@@ -442,7 +449,7 @@ esp_err_t app_operation_set_state(app_operation_t *op, app_op_state_t state,
     }
     portEXIT_CRITICAL(&s_ops_mux);
     if (terminal) {
-        app_mqtt_defer_restart_end();
+        app_mqtt_defer_restart_end_at("op_set_state/terminal");
     }
     return ESP_OK;
 }
@@ -491,7 +498,7 @@ esp_err_t app_operation_cancel(app_operation_t *op)
         }
         portEXIT_CRITICAL(&s_ops_mux);
         if (terminal) {
-            app_mqtt_defer_restart_end();
+            app_mqtt_defer_restart_end_at("op_cancel/cleanup_failed");
         }
         return ESP_FAIL;
     }
@@ -510,7 +517,7 @@ esp_err_t app_operation_cancel(app_operation_t *op)
     op->expiring = false;
     portEXIT_CRITICAL(&s_ops_mux);
     if (terminal) {
-        app_mqtt_defer_restart_end();
+        app_mqtt_defer_restart_end_at("op_cancel/terminal");
     }
     return ESP_OK;
 }
@@ -604,7 +611,7 @@ static void app_operation_run_pending(void)
                      op->id);
         }
         if (failed) {
-            app_mqtt_defer_restart_end();
+            app_mqtt_defer_restart_end_at("worker/run_failed");
         }
     }
 }
@@ -661,11 +668,27 @@ static void app_operation_expire_one(void)
         op->expiring = false;
         portEXIT_CRITICAL(&s_ops_mux);
         if (expired) {
-            app_mqtt_defer_restart_end();
+            app_mqtt_defer_restart_end_at("expire/terminal");
         }
     }
     ESP_LOGW(TAG, "expire %s cleanup=%s", op->id,
              cleanup_ok ? "ok" : "failed");
+}
+
+/* DEF-MQTT-002(2026-11-05):独立过期任务。
+ * 原实现里 expire_one() 与 run_fn() 在同一个 worker 任务内串行:run_fn
+ * 阻塞(试验在飞)时 1s 节拍停摆,accepted TTL 永远不到期,孤儿占槽到
+ * 重启。这里拆出小任务只跑 expire_one();并发安全由既有的 expiring 闸 +
+ * generation 比对保证(R3/R4 评审前提)。
+ * 不用 esp_timer:expire_one 同步调 cleanup_fn,cleanup 可能阻塞。 */
+static void app_operation_expire_task(void *arg)
+{
+    (void)arg;
+
+    for (;;) {
+        (void)ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(1000));
+        app_operation_expire_one();
+    }
 }
 
 static void app_operation_worker(void *arg)
@@ -717,6 +740,19 @@ static esp_err_t app_operation_ensure_worker(void)
     portENTER_CRITICAL(&s_ops_mux);
     s_worker_started = true;
     portEXIT_CRITICAL(&s_ops_mux);
+
+    /* DEF-MQTT-002:过期任务与 run_fn 解耦(小栈,只做 expire_one) */
+    if (!s_expire_started) {
+        BaseType_t et = xTaskCreate(app_operation_expire_task, "op_expire", 3072,
+                                    NULL, 4, NULL);
+
+        if (et != pdPASS) {
+            ESP_LOGE(TAG, "expire task create failed (TTL safety net disabled)");
+        } else {
+            s_expire_started = true;
+            ESP_LOGI(TAG, "expire task started (stack=3072B, 1s tick, decoupled from run_fn)");
+        }
+    }
 #if defined(APP_OPERATION_WORKER_STATIC) && APP_OPERATION_WORKER_STATIC
     ESP_LOGI(TAG, "worker started static (stack=%uB depth=%u elems StackType_t=%uB tcb=%uB)",
              (unsigned)sizeof(s_worker_stack),

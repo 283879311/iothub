@@ -23,6 +23,10 @@
 #include "mqtt_client.h"
 
 #include "cmd.h"
+#include "cmd_error.h"
+#include "cmd_net_adapter.h"
+#include "cmd_policy.h"
+#include "cmd_v1.h"
 #include "common.h"
 #include "config.h"
 #include "config_apply.h"
@@ -662,6 +666,266 @@ static void app_mqtt_publish_state(void)
  * 主题判定、RPC 限频(仅 RPC 主题,属性消息不占槽)、响应发布、先回包后重启。
  * ------------------------------------------------------------------------- */
 static int64_t s_last_cmd_ms = 0;
+/* DEF-MQTT-001(2026-11-05):受理回包 ACK 闸门。
+ * MQTT 源 network.tryconnect 的受理回包若在 defer 未放行前发布,重启一执行
+ * (QoS1 未 ACK)回包就丢,发起端不会发 apply → 孤儿 trial 占槽。
+ * 做法:publish 记下 msg_id;重启任务在执行 rebuild 前等待该 msg_id 的
+ * MQTT_EVENT_PUBLISHED(~1s 定时器兜底),不阻塞 esp-mqtt 事件任务。 */
+static volatile int s_pending_resp_msg_id = 0;
+static EventGroupHandle_t s_ack_gate_events = NULL;
+static StaticEventGroup_t s_ack_gate_events_buf;
+static esp_timer_handle_t s_ack_gate_timer = NULL;
+#define APP_MQTT_ACK_GATE_BIT BIT0
+#define APP_MQTT_RESP_PUBLISHED_BIT BIT1
+#define APP_MQTT_ACK_GATE_TIMEOUT_MS 1000
+#define APP_MQTT_RESP_PUBLISHED_WAIT_MS 300
+
+static void app_mqtt_ack_gate_timeout(void *arg);
+
+/* 兜底:1s 内没等到 PUBACK,照样放行(不阻塞),只记超时。 */
+static void app_mqtt_ack_gate_timeout(void *arg)
+{
+    int pending;
+
+    (void)arg;
+    app_mqtt_lock();
+    pending = s_pending_resp_msg_id;
+    app_mqtt_unlock();
+    ESP_LOGW(TAG, "resp_ack_timeout msg_id=%d", pending);
+    if (s_ack_gate_events != NULL) {
+        xEventGroupSetBits(s_ack_gate_events, APP_MQTT_ACK_GATE_BIT);
+    }
+}
+
+static void app_mqtt_ack_gate_setup(void)
+{
+    if (s_ack_gate_events == NULL) {
+        s_ack_gate_events = xEventGroupCreateStatic(&s_ack_gate_events_buf);
+    }
+    if (s_ack_gate_timer == NULL) {
+        const esp_timer_create_args_t args = {
+            .callback = app_mqtt_ack_gate_timeout,
+            .name = "mqtt_ack_gate",
+        };
+        if (esp_timer_create(&args, &s_ack_gate_timer) != ESP_OK) {
+            s_ack_gate_timer = NULL;
+        }
+    }
+    if (s_ack_gate_events != NULL) {
+        xEventGroupClearBits(s_ack_gate_events, APP_MQTT_ACK_GATE_BIT);
+    }
+}
+
+/* 武装闸门:publish 拿到 msg_id 后调用(仅在 defer 生效时——即网络事务在飞)。 */
+static void app_mqtt_arm_resp_ack_gate(int msg_id)
+{
+    if (msg_id < 0) {
+        return;
+    }
+    app_mqtt_ack_gate_setup();
+    if (s_ack_gate_events == NULL) {
+        return;
+    }
+    app_mqtt_lock();
+    s_pending_resp_msg_id = msg_id;
+    app_mqtt_unlock();
+    if (s_ack_gate_timer != NULL) {
+        (void)esp_timer_stop(s_ack_gate_timer);
+        (void)esp_timer_start_once(s_ack_gate_timer,
+                                   (uint64_t)APP_MQTT_ACK_GATE_TIMEOUT_MS * 1000ULL);
+    }
+    ESP_LOGI(TAG, "resp ack gate armed msg_id=%d", msg_id);
+}
+
+/* PUBACK 到达:msg_id 匹配则提前放行。在 esp-mqtt 事件任务里调用(只置位,不阻塞)。 */
+static void app_mqtt_ack_gate_on_published(int msg_id)
+{
+    int pending;
+
+    app_mqtt_lock();
+    pending = s_pending_resp_msg_id;
+    if (pending != 0 && pending == msg_id) {
+        s_pending_resp_msg_id = 0;
+    }
+    app_mqtt_unlock();
+    if (pending != 0 && pending == msg_id && s_ack_gate_events != NULL) {
+        if (s_ack_gate_timer != NULL) {
+            (void)esp_timer_stop(s_ack_gate_timer);
+        }
+        ESP_LOGW(TAG, "resp acked msg_id=%d", msg_id);
+        xEventGroupSetBits(s_ack_gate_events, APP_MQTT_ACK_GATE_BIT);
+    }
+}
+
+static void app_mqtt_wait_resp_ack_gate(void);
+
+/* 工作线程侧(DEF-MQTT-001 调整):先清位,避免上一笔回包的信号被误用。 */
+void app_mqtt_resp_delivery_begin(void)
+{
+    app_mqtt_ack_gate_setup();
+    if (s_ack_gate_events != NULL) {
+        /* 评审口子 2:begin 时刻本 trial 尚未 publish,任何已置的位都是上一笔
+         * 回包的陈旧信号(例如 defer 期间被武装、PUBACK 到达但无人消费),
+         * 必须一并清掉,否则下一个 tryconnect 的 ② 会瞬间假通过。 */
+        xEventGroupClearBits(s_ack_gate_events,
+                             APP_MQTT_RESP_PUBLISHED_BIT | APP_MQTT_ACK_GATE_BIT);
+    }
+}
+
+/* 工作线程侧两段等待:1) 回包已发布(≤300ms) 2) 已被 broker ACK(≤1.2s)。
+ * 在 tryconnect 的 run_fn 里、第一次动 WiFi 之前调用;不在 esp-mqtt 事件任务,
+ * 可以安全阻塞。两段都超时也放行(不阻塞试验),由 TTL 安全网兜底。 */
+void app_mqtt_wait_resp_delivery(void)
+{
+    if (s_ack_gate_events == NULL) {
+        return;
+    }
+    (void)xEventGroupWaitBits(s_ack_gate_events, APP_MQTT_RESP_PUBLISHED_BIT,
+                              pdTRUE, pdFALSE,
+                              pdMS_TO_TICKS(APP_MQTT_RESP_PUBLISHED_WAIT_MS));
+    app_mqtt_wait_resp_ack_gate();
+}
+
+/* 重启任务侧:有未确认回包时最多等 APP_MQTT_ACK_GATE_TIMEOUT_MS(不阻塞事件任务)。 */
+static void app_mqtt_wait_resp_ack_gate(void)
+{
+    int pending;
+
+    app_mqtt_lock();
+    pending = s_pending_resp_msg_id;
+    app_mqtt_unlock();
+    if (pending == 0 || s_ack_gate_events == NULL) {
+        return;
+    }
+    xEventGroupWaitBits(s_ack_gate_events, APP_MQTT_ACK_GATE_BIT, pdTRUE, pdFALSE,
+                        pdMS_TO_TICKS(APP_MQTT_ACK_GATE_TIMEOUT_MS + 200));
+    app_mqtt_lock();
+    pending = s_pending_resp_msg_id;
+    s_pending_resp_msg_id = 0;
+    app_mqtt_unlock();
+    ESP_LOGW(TAG, "resp ack gate released msg_id=%d (%s)", pending,
+             pending != 0 ? "timeout" : "acked");
+}
+
+static void app_mqtt_publish_command_response(const char *topic, cJSON *resp)
+{
+    esp_mqtt_client_handle_t client;
+    char *body;
+
+    if (topic == NULL || resp == NULL) {
+        return;
+    }
+    client = app_mqtt_client_safe();
+    if (client == NULL) {
+        return;
+    }
+    body = cJSON_PrintUnformatted(resp);
+    if (body == NULL) {
+        return;
+    }
+    ESP_LOGI(TAG, "rpc resp -> %s: %.256s", topic, body);
+    {
+        int msg_id = esp_mqtt_client_publish(client, topic, body, 0, 1, 0);
+
+        /* DEF-MQTT-001:回包已入队 —— 先无条件置 published 位,worker 侧
+         * 靠它判断"发布动作已完成",再等 PUBACK;仅当 defer 生效时武装闸门。 */
+        /* 顺序要求(评审口子 1):先武装闸门、再置 PUBLISHED 位。
+         * worker 见到位后立即进 ②,若此时 pending 还没写入就会直通。 */
+        if (msg_id >= 0 && app_mqtt_restart_is_deferred()) {
+            app_mqtt_arm_resp_ack_gate(msg_id);
+        }
+        app_mqtt_ack_gate_setup();
+        if (s_ack_gate_events != NULL) {
+            xEventGroupSetBits(s_ack_gate_events, APP_MQTT_RESP_PUBLISHED_BIT);
+        }
+    }
+    cJSON_free(body);
+}
+
+static cJSON *app_mqtt_v1_error(const char *id, const char *code, const char *message)
+{
+    cJSON *root = cJSON_CreateObject();
+    cJSON *error;
+
+    if (root == NULL) {
+        return NULL;
+    }
+    cJSON_AddStringToObject(root, "id", id != NULL ? id : "");
+    cJSON_AddBoolToObject(root, "ok", false);
+    error = cJSON_AddObjectToObject(root, "error");
+    if (error != NULL) {
+        cJSON_AddStringToObject(error, "code", code != NULL ? code : "internal_error");
+        cJSON_AddStringToObject(error, "message", message != NULL ? message : "");
+    }
+    return root;
+}
+
+static cJSON *app_mqtt_v1_ok(const char *id, cJSON *result)
+{
+    cJSON *root = cJSON_CreateObject();
+
+    if (root == NULL) {
+        cJSON_Delete(result);
+        return NULL;
+    }
+    cJSON_AddStringToObject(root, "id", id != NULL ? id : "");
+    cJSON_AddBoolToObject(root, "ok", true);
+    if (result != NULL) {
+        cJSON_AddItemToObject(root, "data", result);
+    }
+    return root;
+}
+
+static const char *app_mqtt_v1_id_string(const cJSON *id_item, char *buf, size_t buf_size)
+{
+    if (cJSON_IsString(id_item) && id_item->valuestring != NULL) {
+        snprintf(buf, buf_size, "%s", id_item->valuestring);
+        return buf;
+    }
+    if (cJSON_IsNumber(id_item)) {
+        snprintf(buf, buf_size, "%lld", (long long)id_item->valuedouble);
+        return buf;
+    }
+    buf[0] = '\0';
+    return buf;
+}
+
+/* MQTT v1 adapter: shared registry; transport keeps only framing/auth. */
+static cJSON *app_mqtt_execute_v1(const cJSON *root)
+{
+    const cJSON *id_item = cJSON_GetObjectItemCaseSensitive(root, "id");
+    const cJSON *cmd_item = cJSON_GetObjectItemCaseSensitive(root, "cmd");
+    const cJSON *args_item = cJSON_GetObjectItemCaseSensitive(root, "args");
+    char id_buf[65];
+    const char *id = app_mqtt_v1_id_string(id_item, id_buf, sizeof(id_buf));
+    const char *cmd;
+    app_cmd_context_t ctx = app_cmd_ctx_entry(APP_CMD_SOURCE_MQTT);
+    app_cmd_result_t out = {0};
+    cJSON *result = NULL;
+    const char *err = NULL;
+
+    if (id_item == NULL || (!cJSON_IsString(id_item) && !cJSON_IsNumber(id_item))) {
+        return app_mqtt_v1_error("", "invalid_argument", "id required");
+    }
+    if (!cJSON_IsString(cmd_item) || cmd_item->valuestring == NULL ||
+        !cJSON_IsObject(args_item)) {
+        return app_mqtt_v1_error(id, "invalid_argument", "cmd/args required");
+    }
+    cmd = cmd_item->valuestring;
+    ctx.auth_level = APP_CMD_AUTH_LOCAL_TOKEN;
+
+    if (!app_cmd_v1_allowed(&ctx, cmd)) {
+        return app_mqtt_v1_error(id,
+                                 app_cmd_v1_internal_method(cmd) != NULL ? "forbidden"
+                                                                         : "unknown_command",
+                                 cmd);
+    }
+    if (!app_cmd_v1_execute(&ctx, cmd, args_item, &result, &out, &err)) {
+        cJSON_Delete(result);
+        return app_mqtt_v1_error(id, app_cmd_v1_error_code(err), err);
+    }
+    return app_mqtt_v1_ok(id, result);
+}
 
 static void app_mqtt_apply_command(const char *topic, const char *payload, int data_len)
 {
@@ -672,6 +936,8 @@ static void app_mqtt_apply_command(const char *topic, const char *payload, int d
     bool wants_response = is_rpc || is_custom_rpc;
     char response_topic[128];
     cJSON *root = cJSON_ParseWithLength(payload, data_len < 0 ? (payload ? strlen(payload) : 0) : (size_t)data_len);
+    const cJSON *version_item = NULL;
+    bool v1_envelope = false;
 
     if (root == NULL) {
         int preview_len;
@@ -688,6 +954,35 @@ static void app_mqtt_apply_command(const char *topic, const char *payload, int d
         return;
     }
 
+    version_item = cJSON_GetObjectItemCaseSensitive(root, "version");
+    v1_envelope = cJSON_IsString(version_item) && version_item->valuestring != NULL;
+
+    /* v0 协议入口已彻底删除(2026-11-05):缺 version 一律拒绝。
+     * 保留 v0 形状的拒绝壳,旧客户端能看懂 "不被支持" 而不是解析失败;
+     * 与 BLE 侧一致,回带请求里的数值 id(RPC 主题里的 id 也要能对上)。 */
+    if (!v1_envelope) {
+        cJSON *resp = cJSON_CreateObject();
+        const cJSON *rej_id = cJSON_GetObjectItemCaseSensitive(root, "id");
+
+        if (resp != NULL) {
+            if (cJSON_IsNumber(rej_id)) {
+                cJSON_AddNumberToObject(resp, "id", (double)rej_id->valuedouble);
+            }
+            cJSON_AddBoolToObject(resp, "success", false);
+            cJSON_AddStringToObject(resp, "error", "unsupported_version");
+            if (is_rpc) {
+                snprintf(response_topic, sizeof(response_topic),
+                         "v1/devices/me/rpc/response/%s", topic + strlen(rpc_prefix));
+            } else if (is_custom_rpc) {
+                snprintf(response_topic, sizeof(response_topic), "%s/resp", custom_rpc_topic);
+            }
+            app_mqtt_publish_command_response(response_topic, resp);
+        }
+        cJSON_Delete(resp);
+        cJSON_Delete(root);
+        return;
+    }
+
     if (is_rpc) {
         snprintf(response_topic, sizeof(response_topic),
                  "v1/devices/me/rpc/response/%s", topic + strlen(rpc_prefix));
@@ -701,71 +996,44 @@ static void app_mqtt_apply_command(const char *topic, const char *payload, int d
         int64_t now_ms = esp_timer_get_time() / 1000;
 
         if (now_ms - s_last_cmd_ms < 200) {
-            cJSON *resp = cJSON_CreateObject();
+            cJSON *resp;
 
             ESP_LOGW(TAG, "cloud cmd rate limited (last=%lldms)", (long long)s_last_cmd_ms);
-            if (resp != NULL) {
-                esp_mqtt_client_handle_t client;
+            {
+                char id_buf[65];
+                const cJSON *id_item = cJSON_GetObjectItemCaseSensitive(root, "id");
 
-                cJSON_AddBoolToObject(resp, "success", false);
-                cJSON_AddStringToObject(resp, "error", "rate_limited");
-                client = app_mqtt_client_safe();
-                if (client != NULL) {
-                    char *body = cJSON_PrintUnformatted(resp);
-                    if (body != NULL) {
-                        ESP_LOGI(TAG, "rpc resp -> %s: %.256s", response_topic, body);
-                        esp_mqtt_client_publish(client, response_topic, body, 0, 1, 0);
-                        cJSON_free(body);
-                    }
-                }
-                cJSON_Delete(resp);
+                resp = app_mqtt_v1_error(app_mqtt_v1_id_string(id_item, id_buf, sizeof(id_buf)),
+                                         "rate_limited", "rate_limited");
             }
+            if (wants_response && resp != NULL) {
+                app_mqtt_publish_command_response(response_topic, resp);
+            }
+            cJSON_Delete(resp);
             cJSON_Delete(root);
             return;
         }
         s_last_cmd_ms = now_ms;
     }
 
-    {
-        app_cmd_result_t out = {0};
-        const char *err = NULL;
-        cJSON *resp = NULL;
+    if (v1_envelope) {
+        cJSON *v1resp;
 
-        if (app_cmd_execute_ex(root, APP_CMD_SOURCE_MQTT, &resp, &out, &err) != ESP_OK || resp == NULL) {
-            resp = cJSON_CreateObject();
-            if (resp != NULL) {
-                cJSON_AddBoolToObject(resp, "success", false);
-                cJSON_AddStringToObject(resp, "error", err != NULL ? err : "internal_error");
-            }
+        if (strcmp(version_item->valuestring, "1.0") != 0) {
+            v1resp = app_mqtt_v1_error("", "unsupported_version", version_item->valuestring);
+        } else {
+            v1resp = app_mqtt_execute_v1(root);
         }
-        if (wants_response && resp != NULL) {
-            esp_mqtt_client_handle_t client = app_mqtt_client_safe();
-
-            if (client != NULL) {
-                char *resp_body = cJSON_PrintUnformatted(resp);
-
-                if (resp_body != NULL) {
-                    ESP_LOGI(TAG, "rpc resp -> %s: %.256s", response_topic, resp_body);
-                    esp_mqtt_client_publish(client, response_topic, resp_body, 0, 1, 0);
-                    cJSON_free(resp_body);
-                }
-            }
+        if (wants_response && v1resp != NULL) {
+            app_mqtt_publish_command_response(response_topic, v1resp);
         }
-        if (resp != NULL) {
-            cJSON_Delete(resp);
-        }
-        if (out.reboot_after_response) {
-            app_reboot_schedule("cloud_cmd_reboot");
-            ESP_LOGI(TAG, "cloud cmd effect=reboot: response sent, reboot scheduled (1.5s)");
-        }
+        cJSON_Delete(v1resp);
         cJSON_Delete(root);
-
-        if (out.handled && out.changed_any) {
-            app_mqtt_publish_attributes();
-        }
-        app_mqtt_publish_state();
+        return;
     }
+
 }
+
 
 /* 1.3-57: TB 共享属性统一入口。两路来源:
  *   实时更新  v1/devices/me/attributes            → 扁平 JSON
@@ -908,6 +1176,7 @@ static uint8_t s_restart_defer_depth = 0;
 static bool s_restart_active = false;
 static esp_timer_handle_t s_restart_defer_timer = NULL;
 
+
 static void app_mqtt_defer_timeout(void *arg);
 
 static bool app_mqtt_defer_timer_ensure(void)
@@ -1014,6 +1283,19 @@ esp_err_t app_mqtt_defer_restart_begin(void)
     return ESP_OK;
 }
 
+/* DEF-MQTT-001 诊断:定位"谁在 defer 上限前提前放行重启"。 */
+void app_mqtt_defer_restart_end_at(const char *site)
+{
+    uint8_t depth;
+
+    app_mqtt_lock();
+    depth = s_restart_defer_depth;
+    app_mqtt_unlock();
+    ESP_LOGI(TAG, "defer_end site=%s depth_before=%u", site != NULL ? site : "-",
+             (unsigned)depth);
+    app_mqtt_defer_restart_end();
+}
+
 void app_mqtt_defer_restart_end(void)
 {
     bool last = false;
@@ -1072,6 +1354,10 @@ static void app_mqtt_event_handler(void *handler_args, esp_event_base_t base, in
         app_mqtt_lock();
         s_mqtt.connected = true;
         s_mqtt.fatal_error = false;
+        /* DEF-NET-001 会话归属:CONNACK 属于此刻的链路,打上代次;
+         * 事件在 esp-mqtt 任务上下文,读 gen 只走 wifi 的 runtime 锁,锁序
+         * (mqtt 锁内取 wifi 锁)与既有 s_wifi.sta_has_ip 读点一致。 */
+        s_mqtt.connected_gen = app_wifi_link_generation();
         app_mqtt_unlock();
         app_copy_string(s_mqtt.last_error, sizeof(s_mqtt.last_error), "");
         s_restart_backoff_step = 0;   /* 连上即复位退避(问题与版本优化.md 1.3-10) */
@@ -1112,6 +1398,7 @@ static void app_mqtt_event_handler(void *handler_args, esp_event_base_t base, in
         break;
     }
     case MQTT_EVENT_PUBLISHED:
+        app_mqtt_ack_gate_on_published(event->msg_id);
         app_mqtt_lock();
         s_mqtt.last_msg_id = event->msg_id;
         ESP_LOGI(TAG, "MQTT_EVENT_PUBLISHED: broker ACK msg_id=%d total_published=%u",
@@ -1246,6 +1533,7 @@ static void app_mqtt_stop_clients(void)
     client_to_destroy = s_mqtt.client;
     s_mqtt.client = NULL;
     s_mqtt.connected = false;
+    s_mqtt.connected_gen = 0;   /* 会话消亡即归属作废(DEF-NET-001) */
     s_mqtt_connecting = false;
     app_mqtt_unlock();
 
@@ -1471,8 +1759,24 @@ static void app_mqtt_restart_task_fn(void *arg)
             continue;
         }
         /* 指数退避(问题与版本优化.md 1.3-10):连上后 step 复位为 0 → 配置变更类重启仅等 200ms;
-         * 连续失败则 1s→2→4→8→16→30s,避免"断网/ broker 不可达"时的重连风暴 */
-        vTaskDelay(pdMS_TO_TICKS(app_mqtt_backoff_delay_ms(s_restart_backoff_step)));
+         * 连续失败则 1s→2→4→8→16→30s,避免"断网/ broker 不可达"时的重连风暴。
+         * DEF-NET-001 F1(2026-11-07):整段 vTaskDelay 期间 poke(归零)与 stop 位都
+         * 感知不到 —— churn 后高退避档(20/30s)会吞掉 netcheck 的验证窗口。
+         * 改为 ≤1s 分片:每片检查 poke(step 归零即出)与 stop 位。 */
+        {
+            int remain_ms = app_mqtt_backoff_delay_ms(s_restart_backoff_step);
+
+            while (remain_ms > 0 && s_restart_backoff_step > 0) {
+                int slice = remain_ms > 1000 ? 1000 : remain_ms;
+
+                vTaskDelay(pdMS_TO_TICKS(slice));
+                remain_ms -= slice;
+                stop_bits = xEventGroupGetBits(s_mqtt.stop_events);
+                if ((stop_bits & MQTT_STOP_EVENT_RESTART) != 0) {
+                    break;
+                }
+            }
+        }
         if (s_restart_backoff_step < APP_MQTT_BACKOFF_MAX_STEP) {
             s_restart_backoff_step++;
         }
@@ -1507,6 +1811,8 @@ static void app_mqtt_restart_task_fn(void *arg)
                 ESP_LOGW(TAG, "mqtt restart deferred %dms (heap critical)", guard * 200);
             }
         }
+        /* DEF-MQTT-001:重启会拆掉 TCP,QoS1 受理回包若未 ACK 必丢 —— 执行点前有界等待 */
+        app_mqtt_wait_resp_ack_gate();
         ESP_LOGW(TAG, "mqtt restart attempt (backoff step %u)", (unsigned)s_restart_backoff_step);
         app_mqtt_lock();
         s_restart_active = true;
@@ -1559,6 +1865,16 @@ void app_mqtt_restart_task(void *arg)
 {
     (void)arg;
     app_mqtt_schedule_restart();
+}
+
+void app_mqtt_poke_restart(void)
+{
+    /* DEF-NET-001(netcheck P2-3 修订):高退避档(20/30s)下 pending restart
+     * 会等完整档,netcheck 的验证窗口必超时 —— 归零后再拉起。
+     * 写者纪律:step 归零点 = CONNECTED(明确成功)与本函数(明确要求),
+     * 均在 mqtt.c 内;单写者假设按此口径维持。 */
+    s_restart_backoff_step = 0;
+    (void)app_mqtt_schedule_restart();
 }
 
 void app_mqtt_on_io_change(void)

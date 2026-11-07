@@ -3,9 +3,11 @@ option(APP_OPERATION_SELFTEST "Build G3 operation table/worker selftest (default
 option(APP_OPERATION_LIFECYCLE_TEST "Build G3 worker lifecycle/memory measurement (default OFF)" OFF)
 option(APP_OPERATION_WORKER_STATIC "Use static FreeRTOS stack/TCB for the G3 worker (default OFF)" OFF)
 option(APP_C1_TEST_HOOKS "Experiment-only C1 review hooks (cleanup pause + state-machine probe, default OFF)" OFF)
+option(APP_WIFI_FAULT_INJECT "M1 fault-injection hooks (apply/stop fail, connect hold; default OFF)" OFF)
+option(APP_CMD_MQTT_NET_TXN_TEST_BUILD "Enable MQTT network-transaction test build (default OFF)" OFF)
 
 idf_component_register(
-    SRCS "main.c" "auth.c" "auth_token.c" "ble_cmd.c" "bootstrap.c" "bt.c" "bt_gattc.c" "bt_gattc_nimble.c" "bt_gatts.c" "bt_gatts_nimble.c" "cmd.c" "cmd_context.c" "common.c" "config.c" "config_apply.c" "data_pipe.c" "diag.c" "identity.c" "mem_guard.c" "mqtt.c" "operation.c" "operation_state.c" "ota.c" "prov_pin.c" "state.c" "transport_ble.c" "uart.c" "wifi.c"
+    SRCS "main.c" "auth.c" "auth_token.c" "ble_cmd.c" "bootstrap.c" "bt.c" "bt_gattc.c" "bt_gattc_nimble.c" "bt_gatts.c" "bt_gatts_nimble.c" "cmd.c" "cmd_context.c" "cmd_policy.c" "cmd_cfg_txn.c" "cmd_v1.c" "cmd_error.c" "common.c" "config.c" "config_apply.c" "data_pipe.c" "diag.c" "identity.c" "mem_guard.c" "mqtt.c" "netcheck.c" "netcheck_policy.c" "operation.c" "operation_state.c" "ota.c" "prov_pin.c" "state.c" "transport_ble.c" "uart.c" "wifi.c"
     INCLUDE_DIRS "."
     REQUIRES
         app_update
@@ -19,6 +21,7 @@ idf_component_register(
         esp_partition
         esp_system
         esp_wifi
+        lwip
         mbedtls
         mqtt
         nvs_flash
@@ -32,10 +35,18 @@ endif()
 if(APP_C1_TEST_HOOKS)
     target_compile_definitions(${COMPONENT_LIB} PRIVATE APP_C1_TEST_HOOKS=1)
 endif()
+if(APP_WIFI_FAULT_INJECT)
+    target_compile_definitions(${COMPONENT_LIB} PRIVATE APP_WIFI_FAULT_INJECT=1)
+endif()
 if(APP_OPERATION_LIFECYCLE_TEST)
     target_compile_definitions(${COMPONENT_LIB} PRIVATE APP_OPERATION_LIFECYCLE_TEST=1)
 endif()
 if(APP_OPERATION_WORKER_STATIC)
     target_compile_definitions(${COMPONENT_LIB} PRIVATE APP_OPERATION_WORKER_STATIC=1)
+endif()
+if(APP_CMD_MQTT_NET_TXN_TEST_BUILD)
+    target_compile_definitions(${COMPONENT_LIB} PRIVATE
+        APP_CMD_MQTT_NET_TXN_ENABLE=1
+        APP_CMD_MQTT_NET_TXN_TEST_BUILD=1)
 endif()
 

@@ -5,6 +5,7 @@
 
 #include "esp_err.h"
 #include "constants.h"
+#include "runtime.h"
 
 /* GPIO 输出上电策略(每路独立;固定策略优先级最高,状态记忆才读写上次状态) */
 #define APP_GPIO_POWER_FIXED_OFF 0
@@ -86,7 +87,9 @@ bool app_config_scrub_legacy_ap(app_config_t *config);
 esp_err_t app_config_load_wifi_profiles(app_wifi_profile_t *profiles, size_t max_profiles, size_t *profile_count);
 esp_err_t app_config_save_wifi_profile(const char *ssid, const char *password);
 esp_err_t app_config_delete_wifi_profile(const char *ssid);
-esp_err_t app_config_clear_wifi_profiles(void);
+/* Factory-reset only: explicit full-clear semantics. Ordinary deletion must
+ * use app_config_delete_wifi_profile(), which preserves at least one profile. */
+esp_err_t app_config_factory_clear_wifi_profiles(void);
 
 /* G2：主配置 + Wi-Fi profile 的旧快照。保存/恢复完成后需 discard。 */
 esp_err_t app_config_snapshot_save(void);
@@ -103,5 +106,10 @@ void app_config_lock(void);
 void app_config_unlock(void);
 void app_wifi_runtime_lock(void);
 void app_wifi_runtime_unlock(void);
+
+/* 运行期网络配置状态(static/dhcp/fallback/offline...):持久静态被运行期
+ * 救援降级时,客户端可据此提示"救援网络、配置未生效"。 */
+app_net_cfg_state_t app_wifi_get_cfg_state(void);
+const char *app_wifi_cfg_state_name_public(app_net_cfg_state_t state);
 void app_wifi_profiles_lock(void);
 void app_wifi_profiles_unlock(void);

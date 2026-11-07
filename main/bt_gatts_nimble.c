@@ -16,6 +16,7 @@
 #include <string.h>
 
 #include "esp_log.h"   /* 先包含:sdkconfig.h 经此可见,后续 #if CONFIG_* 才有效 */
+#include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
@@ -65,6 +66,13 @@ static uint16_t s_cmd_tx_val_handle;
 static uint16_t s_conn_handle = BLE_HS_CONN_HANDLE_NONE;
 static uint16_t s_mtu = 23;
 static bool s_connected = false;
+/* DEF-BLE-001:最近一次 GATT 写的毫秒时间戳(0=本次连接从未写入)。
+ * 用于区分"对端僵尸链路"(链路在但长时间无应用层流量)与"正常静默"。 */
+static volatile uint32_t s_last_rx_ms = 0;
+/* DEF-BLE-001:连接建立时刻。rx_age 的 -1("从未写入")会让"连上即被杀"的僵尸
+ * 永远逃过空闲判据,所以空闲起算必须取 max(最后写入, 连接时刻)。 */
+static volatile uint32_t s_conn_since_ms = 0;
+#define APP_BLE_IDLE_TERMINATE_S 90
 static bool s_data_subscribed = false;
 static bool s_cmd_subscribed = false;
 static bool s_cmd_rx_unsub_warned = false;
@@ -101,6 +109,7 @@ static int nus_write_common(struct ble_gatt_access_ctxt *ctxt, bool is_cmd)
         ESP_LOGW(TAG, "mbuf copy failed: %d", rc);
         return BLE_ATT_ERR_UNLIKELY;
     }
+    s_last_rx_ms = (uint32_t)(esp_timer_get_time() / 1000);   /* DEF-BLE-001 */
     if (is_cmd) {
         ESP_LOGI(TAG, "cmd RX write: %u byte(s) last=0x%02X newline=%d",
                  (unsigned)len, (unsigned)buf[len - 1], buf[len - 1] == '\n' ? 1 : 0);
@@ -237,6 +246,8 @@ void app_ble_gatts_nimble_on_connect(uint16_t conn_handle)
 
     s_conn_handle = conn_handle;
     s_connected = true;
+    s_last_rx_ms = 0;   /* DEF-BLE-001:新连接重新计"最近写入" */
+    s_conn_since_ms = (uint32_t)(esp_timer_get_time() / 1000);
     s_data_subscribed = false;
     s_cmd_subscribed = false;
     s_cmd_rx_unsub_warned = false;
@@ -292,6 +303,8 @@ void app_ble_gatts_nimble_on_disconnect(int reason)
 {
     ESP_LOGW(TAG, "central disconnected (reason=0x%x)", (unsigned)reason);
     s_connected = false;
+    s_last_rx_ms = 0;
+    s_conn_since_ms = 0;
     s_data_subscribed = false;
     s_cmd_subscribed = false;
     s_cmd_rx_unsub_warned = false;
@@ -354,6 +367,8 @@ esp_err_t app_ble_gatts_start(void)
 void app_ble_gatts_reset(void)
 {
     s_connected = false;
+    s_last_rx_ms = 0;
+    s_conn_since_ms = 0;
     s_data_subscribed = false;
     s_cmd_subscribed = false;
     s_cmd_rx_unsub_warned = false;
@@ -455,6 +470,73 @@ bool app_ble_gatts_connected(void)
 uint16_t app_ble_gatts_mtu(void)
 {
     return s_mtu;
+}
+
+/* DEF-BLE-001:把"应用层认为连着"与"协议栈是否真持有该连接"分开暴露。
+ * 注意 ble_gap_conn_find 是精确句柄匹配(BLE_HS_CONN_HANDLE_NONE 不是通配),
+ * 所以必须用本模块记录的 conn_handle 查询;0=该链路仍在 host 里。 */
+int app_ble_gatts_conn_find(void)
+{
+    struct ble_gap_conn_desc desc;
+
+    if (s_conn_handle == BLE_HS_CONN_HANDLE_NONE) {
+        return BLE_HS_ENOTCONN;
+    }
+    return ble_gap_conn_find(s_conn_handle, &desc);
+}
+
+/* DEF-BLE-001 A 方案:空闲断链回收僵尸链路。
+ * 触发条件(全部满足):已连接、**无 notify 订阅**、无在途 net op / cfg_txn、
+ * 空闲时长 ≥ APP_BLE_IDLE_TERMINATE_S。空闲起算 = max(最后写入, 连接时刻)。
+ * 动作 ble_gap_terminate(REM_USER_TERM=0x13) 后走既有 DISCONNECT 路径,
+ * 标志复位 + 广播自动恢复;失败无需重试(下一秒 tick 自然重来)。
+ * 已订阅后被杀的僵尸不收 —— 这是"不误杀订阅后静默"的对价(记录在案)。 */
+void app_ble_gatts_idle_reap_poll(void)
+{
+    uint16_t handle;
+    uint32_t now_ms;
+    uint32_t last_activity;
+    uint32_t idle_ms;
+
+    if (!s_connected) {
+        return;
+    }
+    if (s_data_subscribed || s_cmd_subscribed) {
+        return;   /* 硬条件:订阅中的会话一律不动 */
+    }
+    if (app_ble_cmd_net_busy()) {
+        return;   /* 配网在途:断链会触发 cancel→cleanup→restore 链 */
+    }
+    handle = s_conn_handle;
+    if (handle == BLE_HS_CONN_HANDLE_NONE) {
+        return;
+    }
+    last_activity = s_last_rx_ms;
+    if (last_activity == 0 || s_conn_since_ms > last_activity) {
+        last_activity = s_conn_since_ms;
+    }
+    if (last_activity == 0) {
+        return;
+    }
+    now_ms = (uint32_t)(esp_timer_get_time() / 1000);
+    idle_ms = now_ms - last_activity;
+    if (idle_ms < (uint32_t)APP_BLE_IDLE_TERMINATE_S * 1000U) {
+        return;
+    }
+    ESP_LOGW(TAG, "idle terminate conn=%u idle=%us (no subscribe, no app activity)",
+             (unsigned)handle, (unsigned)(idle_ms / 1000U));
+    (void)ble_gap_terminate(handle, BLE_ERR_REM_USER_CONN_TERM);
+}
+
+int32_t app_ble_gatts_rx_age_ms(void)
+{
+    uint32_t last = s_last_rx_ms;
+    uint32_t now_ms = (uint32_t)(esp_timer_get_time() / 1000);
+
+    if (last == 0) {
+        return -1;   /* 本次连接尚未收到过 GATT 写 */
+    }
+    return (int32_t)(now_ms - last);   /* 无符号相减,天然处理回绕 */
 }
 
 #endif /* CONFIG_BT_NIMBLE_ENABLED */

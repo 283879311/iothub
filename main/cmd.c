@@ -15,6 +15,9 @@
 #include "bt_gattc.h"
 #include "bt_gatts.h"
 #include "cmd.h"
+#include "cmd_cfg_txn.h"
+#include "cmd_net_adapter.h"
+#include "cmd_policy.h"
 #include "common.h"
 #include "config.h"
 #include "config_apply.h"
@@ -25,6 +28,7 @@
 #include "esp_timer.h"
 #include "identity.h"
 #include "mqtt.h"
+#include "netcheck.h"
 #include "operation.h"
 #include "prov_pin.h"
 #include "state.h"
@@ -32,6 +36,16 @@
 #include "wifi.h"
 
 static const char *TAG = "cmd";
+
+static app_operation_owner_t app_cmd_operation_owner(app_cmd_source_t source)
+{
+    switch (source) {
+    case APP_CMD_SOURCE_BLE:  return APP_OPERATION_OWNER_BLE;
+    case APP_CMD_SOURCE_HTTP: return APP_OPERATION_OWNER_HTTP;
+    case APP_CMD_SOURCE_MQTT: return APP_OPERATION_OWNER_MQTT;
+    default:                  return APP_OPERATION_OWNER_INTERNAL;
+    }
+}
 
 extern app_config_t s_config;
 
@@ -44,6 +58,8 @@ static const char *const k_config_domains[] = {
 typedef struct {
     bool valid;
     app_cmd_source_t owner;
+    app_cmd_cfg_txn_t cfg_txn;
+    bool cfg_txn_valid;
     char id[20];
     char operation_id[20];
     char ssid[33];
@@ -68,11 +84,44 @@ typedef struct {
     char ssid[33];
     char password[65];
     char operation_id[20];
+    app_cmd_cfg_txn_t cfg_txn;
+    bool cfg_txn_valid;
     app_operation_t *op;
+    /* DEF-NET-001:worker 等待验证前写入的链路代次;cleanup 据此调
+     * app_netcheck_cancel(gen),取消绑定代次,不误杀换代后的新一轮。 */
+    uint32_t netcheck_gen;
+    /* DEF-NET-001 P6:GOT_IP 交付时刻的四项阶段快照(任务书 §7.2"来自当前
+     * operation 而非全局旧状态");operation.get 优先读本快照。 */
+    bool st_wifi_connected;
+    bool st_ip_acquired;
+    bool st_internet_verified;
+    bool st_mqtt_connected;
 } app_cmd_net_async_job_t;
 
 static app_cmd_net_async_job_t s_net_async;
 static bool s_net_async_apply_internal = false;
+#ifdef APP_WIFI_FAULT_INJECT
+/* E1 测试旋钮(仅故障注入构建):一次性覆盖下一次 operation 的 ACCEPTED TTL。
+ * 护栏:clamp [500,60000];只影响 accepted_ttl,绝不触碰 GOT_IP_TTL。 */
+static int s_op_ttl_override_ms = 0;
+#define APP_CMD_OP_TTL_MIN_MS 500
+#define APP_CMD_OP_TTL_MAX_MS 60000
+
+/* 一次性取出并回落:只影响 ACCEPTED TTL,绝不触碰 GOT_IP_TTL。
+ * DEF-NET-001(评审 P1-2):默认 45s = 15s 连接 + 25s 验证 + 余量;
+ * 与非 FI 构建的硬编码值必须一致,否则 FI/非 FI 行为分叉。 */
+static uint32_t app_cmd_take_accepted_ttl(void)
+{
+    uint32_t ttl = 45000;
+
+    if (s_op_ttl_override_ms != 0) {
+        ttl = (uint32_t)s_op_ttl_override_ms;
+        s_op_ttl_override_ms = 0;
+        ESP_LOGW(TAG, "op_ttl applied accepted_ttl=%ums (next op only)", (unsigned)ttl);
+    }
+    return ttl;
+}
+#endif
 
 /* job 生命周期锁(评审 R2-P0):封 "cleanup 在飞 vs dispatcher 已过 COMMITTING"
  * 的 memset/read 竞态窗口。锁序:本锁 → operation.c 的 s_ops_mux —— 反向
@@ -81,6 +130,14 @@ static bool s_net_async_apply_internal = false;
 static SemaphoreHandle_t s_net_job_lock = NULL;
 static StaticSemaphore_t s_net_job_lock_buf;
 static portMUX_TYPE s_net_job_lock_mux = portMUX_INITIALIZER_UNLOCKED;
+
+/* DEF-SCAN-001(2026-11-06):BLE 连接下 WiFi 主动扫描每次占射频 ~5.8s,
+ * 背靠背连续调用会在 6-7 次后把 BLE 链路饿到 LL 响应超时(0x222);
+ * 新旧固件同病。命令层做最小间隔节流(保底),超频返回 busy。
+ * 成败都计入冷却:失败同样占用过射频。 */
+#define APP_CMD_SCAN_MIN_INTERVAL_MS 3000
+static int64_t s_last_scan_end_ms = 0;
+static portMUX_TYPE s_scan_gate_mux = portMUX_INITIALIZER_UNLOCKED;
 
 static void app_cmd_net_job_lock(void)
 {
@@ -99,11 +156,14 @@ static void app_cmd_net_job_unlock(void)
     }
 }
 
-static cJSON *app_cmd_net_operation_status(const char *operation_id, const char **err_out);
+static cJSON *app_cmd_net_operation_status(const app_cmd_context_t *ctx, const char *operation_id, const char **err_out);
 
 /* 直接版:调用方必须已持 s_net_job_lock(受理/apply 尾部在锁内调用)。 */
 static void app_cmd_net_async_clear_job(void)
 {
+    if (s_net_async.cfg_txn_valid) {
+        (void)app_cmd_cfg_txn_end(s_net_async.cfg_txn);
+    }
     memset(&s_net_async, 0, sizeof(s_net_async));
 }
 
@@ -116,8 +176,53 @@ static void app_cmd_net_async_clear_job_sync(void)
     app_cmd_net_job_unlock();
 }
 
+/* v1-only safety: static IP is pinned to the formal SSID. DHCP trials are not
+ * allowed while the formal config is static; use BLE v1 config.set first. */
+static bool app_cmd_static_switch_blocked(const char *ssid, const cJSON *params,
+                                          const char **err_out)
+{
+    const cJSON *mode_item = cJSON_IsObject(params)
+                                 ? cJSON_GetObjectItemCaseSensitive(params, "ip_mode")
+                                 : NULL;
+    const cJSON *leave_item = cJSON_IsObject(params)
+                                  ? cJSON_GetObjectItemCaseSensitive(params, "allow_leave_static")
+                                  : NULL;
+    const char *mode = "keep";
+    bool static_mode;
+    char formal_ssid[33] = {0};
+
+    if (leave_item != NULL) {
+        *err_out = "invalid_argument";
+        return true;
+    }
+    if (mode_item != NULL) {
+        if (!cJSON_IsString(mode_item) || mode_item->valuestring == NULL) {
+            *err_out = "invalid_argument";
+            return true;
+        }
+        mode = mode_item->valuestring;
+        if (strcmp(mode, "keep") != 0 && strcmp(mode, "dhcp") != 0) {
+            *err_out = "invalid_argument";
+            return true;
+        }
+    }
+    app_config_lock();
+    static_mode = (s_config.sta_use_static != 0);
+    snprintf(formal_ssid, sizeof(formal_ssid), "%s", s_config.sta_ssid);
+    app_config_unlock();
+    if (!static_mode) {
+        return false;
+    }
+    if (strcmp(ssid, formal_ssid) != 0 || strcmp(mode, "dhcp") == 0) {
+        *err_out = "static_ip_pinned";
+        return true;
+    }
+    return false;
+}
+
 static bool app_cmd_net_store_trial(const char *ssid, const char *password,
-                                    app_cmd_source_t source, const char *operation_id)
+                                    app_cmd_source_t source, const char *operation_id,
+                                    const app_cmd_cfg_txn_t *cfg_txn)
 {
     /* R8:worker(run 成功)与 dispatcher(同步 tryconnect)都会调用,
      * 与 NimBLE 断连清理/dispatcher 读点构成跨任务并发 —— 整体入 job 锁。 */
@@ -134,6 +239,10 @@ static bool app_cmd_net_store_trial(const char *ssid, const char *password,
         snprintf(s_net_trial.operation_id, sizeof(s_net_trial.operation_id), "%s",
                  operation_id);
     }
+    if (cfg_txn != NULL) {
+        s_net_trial.cfg_txn = *cfg_txn;
+        s_net_trial.cfg_txn_valid = true;
+    }
     s_net_trial.expires_ms = esp_timer_get_time() / 1000 + APP_NET_TRIAL_TTL_MS;
     s_net_trial.owner = source;
     s_net_trial.valid = true;
@@ -146,6 +255,9 @@ static void app_cmd_net_trial_clear(void)
     /* R8:原语内建锁(递归)——调用点有的已持锁(apply 再入/cleanup),
      * 有的未持(断连/TTL 过期),统一在此收口。 */
     app_cmd_net_job_lock();
+    if (s_net_trial.cfg_txn_valid) {
+        (void)app_cmd_cfg_txn_end(s_net_trial.cfg_txn);
+    }
     memset(&s_net_trial, 0, sizeof(s_net_trial));
     app_cmd_net_job_unlock();
 }
@@ -193,6 +305,43 @@ void app_cmd_net_on_ble_disconnect(void)
     app_cmd_net_job_unlock();
 }
 
+/* DEF-SCAN-001 扫描节流闸(2026-11-06 返工):
+ * - check 只读,不改状态;允许与否由"上一次扫描**结束**时刻"决定;
+ * - stamp 在扫描返回后调用(成败都盖)。
+ * 修复点:旧实现"尝试开始即盖戳",而单次扫描本身就要 ~5.8s,串行调用下
+ * 两次开始间隔恒 >3s,闸门永不拒绝、等于 no-op。以结束时刻计冷却,才真正
+ * 保证两次扫描之间射频空闲 ≥3s。 */
+static bool app_cmd_scan_gate_check(void)
+{
+    int64_t now = esp_timer_get_time() / 1000;
+    bool allow;
+
+    portENTER_CRITICAL(&s_scan_gate_mux);
+    allow = (s_last_scan_end_ms == 0) ||
+            (now - s_last_scan_end_ms >= APP_CMD_SCAN_MIN_INTERVAL_MS);
+    portEXIT_CRITICAL(&s_scan_gate_mux);
+    return allow;
+}
+
+static void app_cmd_scan_gate_stamp(void)
+{
+    int64_t now = esp_timer_get_time() / 1000;
+
+    portENTER_CRITICAL(&s_scan_gate_mux);
+    s_last_scan_end_ms = now;
+    portEXIT_CRITICAL(&s_scan_gate_mux);
+}
+
+bool app_cmd_net_op_active(void)
+{
+    bool active;
+
+    app_cmd_net_job_lock();
+    active = s_net_async.active;
+    app_cmd_net_job_unlock();
+    return active;
+}
+
 static bool app_cmd_net_trial_ready(const char *trial_id)
 {
     int64_t now = esp_timer_get_time() / 1000;
@@ -218,18 +367,43 @@ static bool app_cmd_net_async_cleanup(app_operation_t *op, void *ctx)
     if (op == NULL) {
         return false;
     }
-    if (app_operation_state(op) == APP_OP_CONNECTING) {
-        (void)app_wifi_try_cancel();
-    }
+    bool restore_persistent = false;
+    uint32_t nc_gen;
+
     /* trial 清理与 job 清理一并入锁:apply 再入期间 cleanup 在此等待,
-     * 不会把 trial/trial_id 从正在提交的 apply 脚下抽走(R2-P0)。 */
+     * 不会把 trial/trial_id 从正在提交的 apply 脚下抽走(R2-P0)。
+     * 判别点(DEF-MQTT-003,评审选 B):"这次清理没有提交新配置" ⇔ state !=
+     * COMMITTING。EXPIRED/CANCELLED/FAILED 都成立;COMMITTING 表示 apply 已
+     * 接管新配置,不得回退。状态读取与 trial 检查放在同一临界区,单点决策。 */
     app_cmd_net_job_lock();
+    nc_gen = s_net_async.netcheck_gen;   /* memset 前捕获(0=尚未验证,无需取消) */
+    restore_persistent = (app_operation_state(op) != APP_OP_COMMITTING);
     if (s_net_trial.valid &&
         strcmp(s_net_trial.operation_id, app_operation_id(op)) == 0) {
         app_cmd_net_trial_clear();
     }
     app_cmd_net_async_clear_job();
     app_cmd_net_job_unlock();
+
+    /* DEF-NET-001:取消绑定代次(任务书 3.4)—— 只杀本事务验证过的那条链路
+     * 的在飞验证,换代后的新一轮不受影响;0=本事务尚未到验证阶段 */
+    app_netcheck_cancel(nc_gen);
+    if (app_operation_state(op) == APP_OP_CONNECTING) {
+        (void)app_wifi_try_cancel();
+    }
+
+    /* 锁外异步恢复(不持锁调用 schedule) */
+    if (restore_persistent) {
+        /* DEF-MQTT-003:trial 未提交即被清理(cancel/expire),运行态可能停在
+         * 试验网络(DHCP/临时地址);持久配置是唯一合法形态,走既有 restart 链
+         * 恢复。只 schedule 不阻塞(本函数会在 op_expire 任务上下文执行)。
+         * 不走 LKG/DHCP 救援链,不改变 M1 语义。 */
+        ESP_LOGW(TAG, "rescue=restore_persistent op=%s (cleanup without commit)",
+                 app_operation_id(op));
+        if (!app_wifi_schedule_restart()) {
+            ESP_LOGW(TAG, "rescue=restore_persistent schedule failed");
+        }
+    }
     return true;
 }
 
@@ -241,6 +415,8 @@ static app_operation_error_t app_cmd_net_wifi_error(app_wifi_try_result_t result
     case APP_WIFI_TRY_SCAN_FAILED:    return APP_OPERATION_ERR_SCAN_FAILED;
     case APP_WIFI_TRY_TIMEOUT:        return APP_OPERATION_ERR_TIMEOUT;
     case APP_WIFI_TRY_CANCELLED:      return APP_OPERATION_ERR_CANCELLED;
+    /* M1 R9:离线门控拒绝,独立错误,不得混入 connect_failed */
+    case APP_WIFI_TRY_CONFIG_OFFLINE: return APP_OPERATION_ERR_WIFI_CONFIG_OFFLINE;
     case APP_WIFI_TRY_OK:
     case APP_WIFI_TRY_CONNECT_FAILED:
     case APP_WIFI_TRY_BUSY:
@@ -272,6 +448,12 @@ static esp_err_t app_cmd_net_async_run(app_operation_t *op, void *ctx)
     owner = job->owner;
     ESP_LOGI(TAG, "async tryconnect ssid='%s' op=%s", ssid,
              app_operation_id(op));
+    /* DEF-MQTT-001:MQTT 源的受理回包必须先出站再拆 WiFi —— 试验的第一步
+     * 就是断连扫描,一旦早于 PUBACK 就会把回包连同 TCP 一起丢掉。 */
+    if (owner == APP_CMD_SOURCE_MQTT) {
+        app_mqtt_resp_delivery_begin();
+        app_mqtt_wait_resp_delivery();
+    }
     result = app_wifi_try_connect_ip(ssid, password, 15000);
 
     /* R5:operation 框架已用 running 标志禁止槽位在 run_fn 返回前复用;
@@ -289,10 +471,66 @@ static esp_err_t app_cmd_net_async_run(app_operation_t *op, void *ctx)
     }
     if (result == APP_WIFI_TRY_OK) {
         if (!app_cmd_net_store_trial(ssid, password, owner,
-                                     app_operation_id(op))) {
+                                     app_operation_id(op), NULL)) {
             app_cmd_net_async_clear_job_sync();
             return app_operation_set_state(op, APP_OP_CANCELLED,
                                            APP_OPERATION_ERR_CANCELLED);
+        }
+        /* DEF-NET-001:GOT_IP 语义升级为"IP + 联网 + MQTT 就绪"。
+         * 选 B(2026-11-07 裁决):判决在试用路径的推迟窗口内出炉并按代次
+         * 归档(wifi 层已等判决/到期才拆链);worker 只读自己代次的不可变
+         * 快照,不读 live 状态、不再等待。无快照 = 等待上限到期 →
+         * verify_timeout(裁决条件 2)。验证不过不交付 GOT_IP,不落盘。 */
+        {
+            app_netcheck_result_t dres;
+            uint32_t link_gen = app_wifi_trial_verify_gen();
+            bool have = app_netcheck_read_done(link_gen, &dres);
+            bool verified = have && dres.outcome == APP_NETCHECK_OUT_OK;
+
+            app_cmd_net_job_lock();
+            s_net_async.netcheck_gen = link_gen;   /* cleanup 的取消依据 */
+            app_cmd_net_job_unlock();
+            if (verified) {
+                /* P6:交付快照(当前 operation 在当前代次的阶段真值) */
+                bool w, ip_, nv, mc;
+
+                app_wifi_runtime_lock();
+                w = s_wifi.sta_connected;
+                ip_ = s_wifi.sta_has_ip;
+                nv = s_wifi.net_verified;
+                app_wifi_runtime_unlock();
+                app_mqtt_lock();
+                mc = s_mqtt.connected;
+                app_mqtt_unlock();
+                app_cmd_net_job_lock();
+                s_net_async.st_wifi_connected = w;
+                s_net_async.st_ip_acquired = ip_;
+                s_net_async.st_internet_verified = nv;
+                s_net_async.st_mqtt_connected = mc;
+                app_cmd_net_job_unlock();
+            } else {
+                ESP_LOGW(TAG, "async tryconnect op=%s netcheck have=%d outcome=%d gen=%u stage=%s -> rollback",
+                         app_operation_id(op), (int)have, (int)dres.outcome,
+                         dres.gen, dres.stage);
+                /* P2-4:推迟窗口内 op 可能已被 cancel/过期 —— 二次 R5 复核,
+                 * 输者绝不触碰 job(与 connect 后的复核同一纪律)。 */
+                if (!app_operation_get_status(op, &st1) ||
+                    st1.generation != generation ||
+                    st1.state != APP_OP_CONNECTING) {
+                    ESP_LOGW(TAG, "async tryconnect op=%s stale after netcheck, no job touch",
+                             app_operation_id(op));
+                    return ESP_OK;
+                }
+                /* 判别点 B(state != COMMITTING → restore_persistent):清 trial/job
+                 * + schedule_restart 回持久配置,再给 op 终态。 */
+                (void)app_cmd_net_async_cleanup(op, job);
+                return app_operation_set_state(
+                    op, APP_OP_FAILED,
+                    !have ? APP_OPERATION_ERR_VERIFY_TIMEOUT :
+                    dres.outcome == APP_NETCHECK_OUT_FAIL_MQTT
+                        ? APP_OPERATION_ERR_MQTT_UNAVAILABLE
+                        : APP_OPERATION_ERR_INTERNET_UNVERIFIED);
+            }
         }
         return app_operation_set_state(op, APP_OP_GOT_IP,
                                        APP_OPERATION_ERR_NONE);
@@ -327,7 +565,7 @@ static bool app_cmd_net_tryconnect_async(const cJSON *params,
     app_operation_t *op = NULL;
     esp_err_t err;
 
-    if (source == APP_CMD_SOURCE_MQTT) {
+    if (source == APP_CMD_SOURCE_MQTT && !app_cmd_mqtt_net_txn_enabled()) {
         *err_out = "guard_rejected";
         return false;
     }
@@ -336,12 +574,14 @@ static bool app_cmd_net_tryconnect_async(const cJSON *params,
         *err_out = "params_required";
         return false;
     }
+    if (app_cmd_static_switch_blocked(ssid_item->valuestring, params, err_out)) {
+        return false;
+    }
     if (idem_key != NULL) {
-        app_operation_owner_t owner =
-            source == APP_CMD_SOURCE_BLE ? APP_OPERATION_OWNER_BLE : APP_OPERATION_OWNER_HTTP;
+        app_operation_owner_t owner = app_cmd_operation_owner(source);
         app_operation_t *existing = app_operation_find_by_key(owner, idem_key);
         if (existing != NULL) {
-            cJSON *resp = app_cmd_net_operation_status(app_operation_id(existing), err_out);
+            cJSON *resp = app_cmd_net_operation_status(ctx, app_operation_id(existing), err_out);
             if (resp == NULL) {
                 return false;
             }
@@ -385,7 +625,18 @@ static bool app_cmd_net_tryconnect_async(const cJSON *params,
     }
 
     app_cmd_net_job_lock();
-    memset(&s_net_async, 0, sizeof(s_net_async));
+    {
+        app_cmd_cfg_txn_t cfg_txn;
+
+        if (!app_cmd_cfg_txn_begin(&cfg_txn)) {
+            app_cmd_net_job_unlock();
+            *err_out = "busy";
+            return false;
+        }
+        memset(&s_net_async, 0, sizeof(s_net_async));
+        s_net_async.cfg_txn = cfg_txn;
+        s_net_async.cfg_txn_valid = true;
+    }
     s_net_async.active = true;
     s_net_async.owner = source;
     s_net_async.parent_ctx = *ctx;   /* R1-P0:真实父上下文快照(先于 operation_start) */
@@ -398,10 +649,17 @@ static bool app_cmd_net_tryconnect_async(const cJSON *params,
         snprintf(s_net_async.idem_key, sizeof(s_net_async.idem_key), "%s", idem_key);
     }
 
+#ifdef APP_WIFI_FAULT_INJECT
     err = app_operation_start(
-        source == APP_CMD_SOURCE_BLE ? APP_OPERATION_OWNER_BLE : APP_OPERATION_OWNER_HTTP,
-        idem_key, 20000, 300000, app_cmd_net_async_run,
+        app_cmd_operation_owner(source),
+        idem_key, app_cmd_take_accepted_ttl(), 300000, app_cmd_net_async_run,
         app_cmd_net_async_cleanup, &s_net_async, &op);
+#else
+    err = app_operation_start(
+        app_cmd_operation_owner(source),
+        idem_key, 45000, 300000, app_cmd_net_async_run,
+        app_cmd_net_async_cleanup, &s_net_async, &op);
+#endif
     if (err != ESP_OK) {
         app_cmd_net_async_clear_job();
         app_cmd_net_job_unlock();
@@ -426,7 +684,8 @@ static bool app_cmd_net_tryconnect_async(const cJSON *params,
     return true;
 }
 
-static cJSON *app_cmd_net_operation_status(const char *operation_id, const char **err_out)
+static cJSON *app_cmd_net_operation_status(const app_cmd_context_t *ctx,
+                                           const char *operation_id, const char **err_out)
 {
     app_operation_t *op;
     app_operation_status_t status;
@@ -437,6 +696,18 @@ static cJSON *app_cmd_net_operation_status(const char *operation_id, const char 
     app_cmd_net_job_lock();
     op = app_operation_find(operation_id);
     if (op == NULL || !app_operation_get_status(op, &status)) {
+        *err_out = "not_found";
+        app_cmd_net_job_unlock();
+        return NULL;
+    }
+    if (ctx != NULL && ctx->source == APP_CMD_SOURCE_MQTT &&
+        status.owner != APP_OPERATION_OWNER_MQTT) {
+        *err_out = "not_found";
+        app_cmd_net_job_unlock();
+        return NULL;
+    }
+    if (ctx != NULL && ctx->source == APP_CMD_SOURCE_HTTP &&
+        status.owner != APP_OPERATION_OWNER_HTTP) {
         *err_out = "not_found";
         app_cmd_net_job_unlock();
         return NULL;
@@ -454,11 +725,46 @@ static cJSON *app_cmd_net_operation_status(const char *operation_id, const char 
         cJSON_AddStringToObject(resp, "trial_id", s_net_trial.id);
         cJSON_AddStringToObject(resp, "ssid", s_net_trial.ssid);
     }
+    /* DEF-NET-001(评审回复 §5):阶段结果对象,状态/错误语义不变。
+     * P6:operation 仍持有 job 快照时优先读快照(任务书 §7.2"来自当前
+     * operation 和当前 generation");否则回落全局运行态真值。 */
+    {
+        cJSON *stages = cJSON_AddObjectToObject(resp, "stages");
+        bool wifi_connected;
+        bool ip_acquired;
+        bool net_verified;
+        bool mqtt_connected;
+        bool have_snapshot = (s_net_async.active &&
+                              strcmp(s_net_async.operation_id, status.id) == 0);
+
+        if (have_snapshot) {
+            wifi_connected = s_net_async.st_wifi_connected;
+            ip_acquired = s_net_async.st_ip_acquired;
+            net_verified = s_net_async.st_internet_verified;
+            mqtt_connected = s_net_async.st_mqtt_connected;
+        } else {
+            app_wifi_runtime_lock();
+            wifi_connected = s_wifi.sta_connected;
+            ip_acquired = s_wifi.sta_has_ip;
+            net_verified = s_wifi.net_verified;
+            app_wifi_runtime_unlock();
+            app_mqtt_lock();
+            mqtt_connected = s_mqtt.connected;
+            app_mqtt_unlock();
+        }
+        if (stages != NULL) {
+            cJSON_AddBoolToObject(stages, "wifi_connected", wifi_connected);
+            cJSON_AddBoolToObject(stages, "ip_acquired", ip_acquired);
+            cJSON_AddBoolToObject(stages, "internet_verified", net_verified);
+            cJSON_AddBoolToObject(stages, "mqtt_connected", mqtt_connected);
+        }
+    }
     app_cmd_net_job_unlock();
     return resp;
 }
 
-static bool app_cmd_net_apply_async(const cJSON *params, cJSON **resp_out,
+static bool app_cmd_net_apply_async(const app_cmd_context_t *ctx,
+                                    const cJSON *params, cJSON **resp_out,
                                     const char **err_out)
 {
     const cJSON *op_item = cJSON_IsObject(params)
@@ -466,7 +772,6 @@ static bool app_cmd_net_apply_async(const cJSON *params, cJSON **resp_out,
                                : NULL;
     app_operation_t *op;
     app_operation_status_t status;
-    cJSON *frame = NULL;
     cJSON *inner = NULL;
     app_cmd_result_t out = {0};
     const char *inner_err = NULL;
@@ -498,6 +803,27 @@ static bool app_cmd_net_apply_async(const cJSON *params, cJSON **resp_out,
         *err_out = "operation_state";
         return false;
     }
+    if (app_cmd_policy_check_apply_owner(ctx, status.owner) != APP_CMD_POLICY_ALLOW) {
+        *err_out = "forbidden";
+        return false;
+    }
+    /* DEF-NET-001 兜底:GOT_IP 窗口(≤300s)内链路可能已变化(断链/换代)。
+     * 提交前复核"当前链路代次"的验证结论仍成立;不成立按阶段细分拒绝,
+     * 绝不把结论过期的 trial 提交落盘。 */
+    {
+        uint32_t cur_gen = app_wifi_link_generation();
+
+        if (!app_netcheck_ok_for_gen(cur_gen)) {
+            char stage[12];
+
+            app_netcheck_last_stage(stage, sizeof(stage));
+            ESP_LOGW(TAG, "apply rejected: netcheck not ok for gen=%u stage=%s op=%s",
+                     cur_gen, stage, status.id);
+            *err_out = (strcmp(stage, "mqtt") == 0) ? "mqtt_unavailable"
+                                                    : "internet_unverified";
+            return false;
+        }
+    }
     {
         bool trial_ok;
 
@@ -524,33 +850,33 @@ static bool app_cmd_net_apply_async(const cJSON *params, cJSON **resp_out,
      * CANCELLED/EXPIRED)在此直接失败,不会进入本锁区读 parent_ctx。 */
     app_cmd_net_job_lock();
 
-    frame = cJSON_CreateObject();
-    if (frame != NULL) {
+    {
         cJSON *p = cJSON_CreateObject();
         if (p != NULL) {
             cJSON_AddStringToObject(p, "trial_id", s_net_trial.id);
-            cJSON_AddStringToObject(frame, "method", "network.apply");
-            cJSON_AddItemToObject(frame, "params", p);
             s_net_async_apply_internal = true;
             {
                 /* C1 阶段 1(R1-P0):从受理时快照的父上下文派生 child ——
                  * source=INTERNAL、origin/trace/auth 继承 tryconnect 请求的
-                 * 真实值,不由 owner 事后重建。 */
+                 * 真实值,不由 owner 事后重建。
+                 * v0 彻底删除(2026-11-05):直接按 canonical 方法名调用,
+                 * 不再构造 {"method","params"} 帧。 */
                 app_cmd_context_t inner_ctx;
 
                 if (!app_cmd_ctx_internal_child(&s_net_async.parent_ctx,
                                                 &inner_ctx)) {
                     inner_err = "internal_error";
-                } else if (app_cmd_execute_ctx(&inner_ctx, frame, &inner, &out,
-                                               &inner_err) == ESP_OK && inner != NULL) {
+                } else if (app_cmd_execute_method(&inner_ctx, "network.apply", p,
+                                                  &inner, &out, &inner_err) == ESP_OK &&
+                           inner != NULL) {
                     ok = true;
                 }
             }
             s_net_async_apply_internal = false;
+            cJSON_Delete(p);
         }
     }
     cJSON_Delete(inner);
-    cJSON_Delete(frame);
     if (ok) {
         (void)app_operation_set_state(op, APP_OP_SUCCESS, APP_OPERATION_ERR_NONE);
         app_cmd_net_async_clear_job();
@@ -590,7 +916,8 @@ static bool app_cmd_net_apply_async(const cJSON *params, cJSON **resp_out,
     return false;
 }
 
-static bool app_cmd_net_cancel_async(const cJSON *params, cJSON **resp_out,
+static bool app_cmd_net_cancel_async(const app_cmd_context_t *ctx,
+                                     const cJSON *params, cJSON **resp_out,
                                      const char **err_out)
 {
     const cJSON *op_item = cJSON_IsObject(params)
@@ -606,6 +933,11 @@ static bool app_cmd_net_cancel_async(const cJSON *params, cJSON **resp_out,
     op = app_operation_find(op_item->valuestring);
     if (op == NULL || !app_operation_get_status(op, &status)) {
         *err_out = "not_found";
+        return false;
+    }
+    if (!app_cmd_cancel_allowed(ctx, status.owner)) {
+        *err_out = (ctx != NULL && ctx->auth_level == APP_CMD_AUTH_LOCAL_TOKEN)
+                       ? "forbidden" : "unauthorized";
         return false;
     }
     if (status.state == APP_OP_CANCELLED) {
@@ -658,6 +990,11 @@ static cJSON *app_cmd_build_network_status(void)
      * 旧客户端忽略即可，不影响既有字段语义。 */
     cJSON_AddStringToObject(root, "connected_ssid", s_wifi.connected_ssid);
     cJSON_AddNumberToObject(root, "connected_profile", s_wifi.connected_profile);
+    /* DEF-NET-001 加法字段:联网验证结果。internet_verified=false 且
+     * sta_has_ip=true 表示"拿到 IP 但未验证通过";stage 词汇表
+     * none|internet|mqtt|skipped。旧客户端忽略即可。 */
+    cJSON_AddBoolToObject(root, "internet_verified", s_wifi.net_verified);
+    cJSON_AddStringToObject(root, "net_verify_stage", s_wifi.net_verify_stage);
     app_wifi_runtime_unlock();
 
     /* 当前 AP 的 RSSI/信道/BSSID(加法字段)。断连时 rssi=-128,
@@ -691,7 +1028,13 @@ static cJSON *app_cmd_build_network_status(void)
     cJSON_AddStringToObject(root, "sta_ssid", s_config.sta_ssid);
     cJSON_AddBoolToObject(root, "password_set", s_config.sta_password[0] != '\0');
     cJSON_AddStringToObject(root, "mode", app_network_mode_to_string(s_config.net_mode));
+    /* 持久静态规划 + 运行期配置状态:救援降级时客户端可提示
+     * "救援网络、配置未生效"(静态 re-apply 观察项,2026-11-05)。 */
+    cJSON_AddBoolToObject(root, "persistent_use_static", s_config.sta_use_static != 0);
+    cJSON_AddStringToObject(root, "persistent_static_ip", s_config.sta_static_ip);
     app_config_unlock();
+    cJSON_AddStringToObject(root, "cfg_state",
+                            app_wifi_cfg_state_name_public(app_wifi_get_cfg_state()));
 
     app_mqtt_lock();
     cJSON_AddBoolToObject(root, "mqtt_connected", s_mqtt.connected);
@@ -854,6 +1197,19 @@ static cJSON *app_cmd_build_device_status(void)
     }
     cJSON_AddStringToObject(root, "model", desc != NULL ? desc->project_name : "iothub");
     cJSON_AddStringToObject(root, "firmware", desc != NULL ? desc->version : "");
+    /* 2026-11-06:脏树构建时 firmware 串不随代码变化(所有镜像都报同一 "-dirty"),
+     * 现场无法区分版本。build_sha 取 app descriptor 内嵌的 ELF SHA-256 前
+     * CONFIG_APP_RETRIEVE_LEN_ELF_SHA 位(随配置,当前 9),
+     * 与二进制一一对应;旧客户端忽略该加法字段。 */
+    {
+        /* 长度由 CONFIG_APP_RETRIEVE_LEN_ELF_SHA 决定(当前 9 位十六进制),
+         * 不做定长假设;非空即上报。 */
+        const char *elf_sha = esp_app_get_elf_sha256_str();
+
+        if (elf_sha != NULL && elf_sha[0] != '\0') {
+            cJSON_AddStringToObject(root, "build_sha", elf_sha);
+        }
+    }
     cJSON_AddStringToObject(root, "device_id", app_get_hostname());
     cJSON_AddNumberToObject(root, "uptime_ms", (double)(esp_timer_get_time() / 1000));
     cJSON_AddStringToObject(root, "reset_reason",
@@ -881,6 +1237,10 @@ static cJSON *app_cmd_build_device_status(void)
                                 (double)app_bt_adv_retry_count());
         cJSON_AddNumberToObject(ble, "runtime_mode", (double)bt_mode);
         cJSON_AddStringToObject(ble, "last_error", bt_error);
+        /* DEF-BLE-001 诊断:cf=0 表示协议栈仍持有链路(与 connected 对照可判
+         * "应用层连着但控制器已断" 或反之);rx_age_ms=-1 表示本次连接无写入。 */
+        cJSON_AddNumberToObject(ble, "conn_find", (double)app_ble_gatts_conn_find());
+        cJSON_AddNumberToObject(ble, "rx_age_ms", (double)app_ble_gatts_rx_age_ms());
     }
 
     app_mqtt_lock();
@@ -1182,7 +1542,18 @@ static cJSON *app_cmd_build_device_info(void)
     }
     cJSON_AddStringToObject(root, "model", desc != NULL ? desc->project_name : "iothub");
     cJSON_AddStringToObject(root, "firmware", desc != NULL ? desc->version : "");
+    /* 2026-11-06:脏树构建时 firmware 串不随代码变化,现场无法区分版本。
+     * build_sha 取 app descriptor 内嵌 ELF SHA-256 前 CONFIG_APP_RETRIEVE_LEN_ELF_SHA 位(随配置,当前 9),
+     * 与二进制一一对应;纯加法字段,旧客户端忽略。 */
+    {
+        const char *elf_sha = esp_app_get_elf_sha256_str();
+
+        if (elf_sha != NULL && elf_sha[0] != '\0') {
+            cJSON_AddStringToObject(root, "build_sha", elf_sha);
+        }
+    }
     cJSON_AddStringToObject(root, "device_id", app_get_hostname());
+    cJSON_AddStringToObject(root, "build_variant", app_cmd_policy_build_variant());
     versions = cJSON_AddArrayToObject(root, "protocol_versions");
     if (versions != NULL) {
         cJSON_AddItemToArray(versions, cJSON_CreateString("1.0"));
@@ -1316,23 +1687,94 @@ static app_io_source_t app_cmd_io_source(const app_cmd_context_t *ctx)
     }
 }
 
-/* 兼容入口(C1 阶段 1):等价于显式构造入口上下文后执行。
- * 四个现有调用点(ble_cmd/mqtt/state/cmd 内部)零改动即可编译。 */
-esp_err_t app_cmd_execute_ex(const cJSON *frame, app_cmd_source_t source,
-                             cJSON **resp_out, app_cmd_result_t *out,
-                             const char **err_msg)
+bool app_cmd_net_tryconnect_adapter(const app_cmd_context_t *ctx,
+                                    const cJSON *params,
+                                    cJSON **resp_out, const char **err_out)
 {
-    app_cmd_context_t ctx = app_cmd_ctx_entry(source);
-
-    return app_cmd_execute_ctx(&ctx, frame, resp_out, out, err_msg);
+    return app_cmd_net_tryconnect_async(params, ctx, resp_out, err_out);
 }
 
-esp_err_t app_cmd_execute_ctx(const app_cmd_context_t *ctx, const cJSON *frame,
-                              cJSON **resp_out, app_cmd_result_t *out,
-                              const char **err_msg)
+bool app_cmd_net_apply_adapter(const app_cmd_context_t *ctx,
+                               const cJSON *params,
+                               cJSON **resp_out, const char **err_out)
 {
-    cJSON *method = NULL;
-    cJSON *params = NULL;
+    return app_cmd_net_apply_async(ctx, params, resp_out, err_out);
+}
+
+bool app_cmd_net_cancel_adapter(const app_cmd_context_t *ctx,
+                                const cJSON *params,
+                                cJSON **resp_out, const char **err_out)
+{
+    return app_cmd_net_cancel_async(ctx, params, resp_out, err_out);
+}
+
+#ifdef APP_WIFI_FAULT_INJECT
+/* M1 测试构建专用入口(默认 OFF;与 APP_C1_TEST_HOOKS 完全独立)。
+ * 只注入故障/记录时序,不改变正常路径行为。 */
+static void app_cmd_m1hook(const cJSON *params, app_cmd_source_t source,
+                           cJSON **resp_out, const char **err_out)
+{
+    const cJSON *action = cJSON_IsObject(params)
+                              ? cJSON_GetObjectItemCaseSensitive(params, "action") : NULL;
+    const cJSON *stage = cJSON_GetObjectItemCaseSensitive(params, "stage");
+    const cJSON *count_item = cJSON_GetObjectItemCaseSensitive(params, "count");
+    const cJSON *timeout_item = cJSON_GetObjectItemCaseSensitive(params, "timeout_ms");
+    const char *stage_str = cJSON_IsString(stage) ? stage->valuestring : NULL;
+    int count = cJSON_IsNumber(count_item) ? count_item->valueint : 1;
+    int timeout_ms = cJSON_IsNumber(timeout_item) ? timeout_item->valueint : 0;
+    esp_err_t hook_err;
+
+    if (source != APP_CMD_SOURCE_BLE) {
+        *err_out = "guard_rejected";
+        return;
+    }
+    if (!cJSON_IsString(action) || action->valuestring == NULL) {
+        *err_out = "params_required";
+        return;
+    }
+#ifdef APP_WIFI_FAULT_INJECT
+    if (strcmp(action->valuestring, "op_ttl") == 0) {
+        if (timeout_ms < APP_CMD_OP_TTL_MIN_MS || timeout_ms > APP_CMD_OP_TTL_MAX_MS) {
+            *err_out = "invalid_param";
+            return;
+        }
+        s_op_ttl_override_ms = timeout_ms;
+        ESP_LOGW(TAG, "op_ttl override value_ms=%d (one-shot)", timeout_ms);
+        *resp_out = cJSON_CreateObject();
+        if (*resp_out == NULL) {
+            *err_out = "out_of_memory";
+            return;
+        }
+        cJSON_AddBoolToObject(*resp_out, "ok", true);
+        cJSON_AddStringToObject(*resp_out, "action", "op_ttl");
+        cJSON_AddNumberToObject(*resp_out, "value_ms", timeout_ms);
+        return;
+    }
+#endif
+
+    hook_err = app_wifi_test_hook(action->valuestring, stage_str, count, timeout_ms);
+    if (hook_err == ESP_ERR_INVALID_STATE) {
+        *err_out = "busy";
+        return;
+    }
+    if (hook_err != ESP_OK) {
+        *err_out = "invalid_param";
+        return;
+    }
+    *resp_out = cJSON_CreateObject();
+    if (*resp_out == NULL) {
+        *err_out = "out_of_memory";
+        return;
+    }
+    cJSON_AddBoolToObject(*resp_out, "ok", true);
+    cJSON_AddStringToObject(*resp_out, "action", action->valuestring);
+}
+#endif
+
+esp_err_t app_cmd_execute_method(const app_cmd_context_t *ctx, const char *method,
+                                 const cJSON *params, cJSON **resp_out,
+                                 app_cmd_result_t *out, const char **err_msg)
+{
     const char *err = NULL;
     cJSON *resp = NULL;
     bool reboot_after_response = false;
@@ -1359,36 +1801,58 @@ esp_err_t app_cmd_execute_ctx(const app_cmd_context_t *ctx, const cJSON *frame,
      * 仅执行的 network.apply 走 trial 校验路径,与改造前硬编码入口等价)。 */
     const app_cmd_source_t source = ctx->source;
     app_io_source_t io_source = app_cmd_io_source(ctx);
-    if (!cJSON_IsObject(frame)) {
-        err = "invalid_json";
+    if (method == NULL || method[0] == '\0') {
+        err = "unknown_method";
         goto done;
     }
 
-    method = cJSON_GetObjectItemCaseSensitive(frame, "method");
-    params = cJSON_GetObjectItemCaseSensitive(frame, "params");
+    {
+        const char *m = method;
+        app_cmd_policy_result_t policy = app_cmd_policy_check_network(ctx, m);
 
-    if (cJSON_IsString(method)) {
-        const char *m = method->valuestring;
+        if (policy != APP_CMD_POLICY_ALLOW) {
+            switch (policy) {
+            case APP_CMD_POLICY_BUSY:            err = "busy"; break;
+            case APP_CMD_POLICY_INVALID_ARGUMENT: err = "invalid_argument"; break;
+            case APP_CMD_POLICY_FORBIDDEN:
+            case APP_CMD_POLICY_NOT_ENABLED:
+            default:                             err = "guard_rejected"; break;
+            }
+            goto done;
+        }
+
+#ifdef APP_WIFI_FAULT_INJECT
+        if (strcmp(m, "diag.m1hook") == 0) {
+            app_cmd_m1hook(params, source, &resp, &err);
+            handled = true;
+            goto done;
+        }
+#endif
 
         handled = true;
-        if (strcmp(m, "setConfig") == 0 || strcmp(m, "config.set") == 0) {
+        if (strcmp(m, "config.set") == 0) {
             if (!cJSON_IsObject(params)) {
                 err = "params_required";
             } else if (!app_cmd_patch_allowed(source, params)) {
                 err = "guard_rejected";
-            } else if (app_cmd_run_patch(params, &changed_list, &effect, &err)) {
-                changed_any = (changed_list != NULL && cJSON_GetArraySize(changed_list) > 0);
-                app_cmd_save_profile_from_params(params);
-                if (changed_any && effect == CFG_EFFECT_REBOOT) {
-                    reboot_after_response = true;
+            } else if (!app_cmd_cfg_txn_guard_enter()) {
+                err = "busy";
+            } else {
+                if (app_cmd_run_patch(params, &changed_list, &effect, &err)) {
+                    changed_any = (changed_list != NULL && cJSON_GetArraySize(changed_list) > 0);
+                    app_cmd_save_profile_from_params(params);
+                    if (changed_any && effect == CFG_EFFECT_REBOOT) {
+                        reboot_after_response = true;
+                    }
+                    resp = app_cmd_build_success(changed_list, effect);
+                    changed_list = NULL;   /* 所有权移交 resp */
+                    if (resp == NULL) {
+                        err = "out_of_memory";
+                    } else {
+                        app_cmd_add_txn_fields(resp, effect);
+                    }
                 }
-                resp = app_cmd_build_success(changed_list, effect);
-                changed_list = NULL;   /* 所有权移交 resp */
-                if (resp == NULL) {
-                    err = "out_of_memory";
-                } else {
-                    app_cmd_add_txn_fields(resp, effect);
-                }
+                app_cmd_cfg_txn_guard_exit();
             }
         } else if (strcmp(m, "device.info") == 0) {
             resp = app_cmd_build_device_info();
@@ -1400,7 +1864,7 @@ esp_err_t app_cmd_execute_ctx(const app_cmd_context_t *ctx, const cJSON *frame,
             if (resp == NULL) {
                 err = "out_of_memory";
             }
-        } else if (strcmp(m, "getConfig") == 0 || strcmp(m, "config.get") == 0) {
+        } else if (strcmp(m, "config.get") == 0) {
             const cJSON *domains = cJSON_IsObject(params)
                                        ? cJSON_GetObjectItemCaseSensitive(params, "domains")
                                        : NULL;
@@ -1429,7 +1893,7 @@ esp_err_t app_cmd_execute_ctx(const app_cmd_context_t *ctx, const cJSON *frame,
                     err = "out_of_memory";
                 }
             }
-        } else if (strcmp(m, "getStatus") == 0 || strcmp(m, "io.get") == 0) {
+        } else if (strcmp(m, "io.get") == 0) {
             uint8_t net_mode;
             app_io_state_t io;
 
@@ -1460,9 +1924,8 @@ esp_err_t app_cmd_execute_ctx(const app_cmd_context_t *ctx, const cJSON *frame,
             if (resp == NULL) {
                 err = "out_of_memory";
             }
-        } else if (strcmp(m, "led.toggle") == 0 || strcmp(m, "toggleLed") == 0 ||
-                   strcmp(m, "relay.toggle") == 0 || strcmp(m, "toggleRelay") == 0) {
-            bool is_relay = (strcmp(m, "relay.toggle") == 0 || strcmp(m, "toggleRelay") == 0);
+        } else if (strcmp(m, "led.toggle") == 0 || strcmp(m, "relay.toggle") == 0) {
+            bool is_relay = (strcmp(m, "relay.toggle") == 0);
             app_io_state_t before;
             app_io_state_t after;
             bool want;
@@ -1492,9 +1955,8 @@ esp_err_t app_cmd_execute_ctx(const app_cmd_context_t *ctx, const cJSON *frame,
             if (changed != NULL) {
                 cJSON_Delete(changed);
             }
-        } else if (strcmp(m, "setRelay") == 0 || strcmp(m, "relay.set") == 0 ||
-                   strcmp(m, "setLed") == 0 || strcmp(m, "led.set") == 0) {
-            bool is_relay = (strcmp(m, "setRelay") == 0 || strcmp(m, "relay.set") == 0);
+        } else if (strcmp(m, "relay.set") == 0 || strcmp(m, "led.set") == 0) {
+            bool is_relay = (strcmp(m, "relay.set") == 0);
             app_io_state_t before;
             app_io_state_t after;
             bool want;
@@ -1524,7 +1986,7 @@ esp_err_t app_cmd_execute_ctx(const app_cmd_context_t *ctx, const cJSON *frame,
             if (changed != NULL) {
                 cJSON_Delete(changed);
             }
-        } else if (strcmp(m, "setState") == 0 || strcmp(m, "io.set") == 0) {
+        } else if (strcmp(m, "io.set") == 0) {
             cJSON *rel = cJSON_IsObject(params) ? cJSON_GetObjectItemCaseSensitive(params, "relay_on") : NULL;
             cJSON *led = cJSON_IsObject(params) ? cJSON_GetObjectItemCaseSensitive(params, "led_on") : NULL;
             bool set_relay = cJSON_IsBool(rel) || cJSON_IsNumber(rel);
@@ -1567,7 +2029,7 @@ esp_err_t app_cmd_execute_ctx(const app_cmd_context_t *ctx, const cJSON *frame,
                     cJSON_Delete(changed);
                 }
             }
-        } else if (strcmp(m, "web.auth.set") == 0) {
+        } else if (strcmp(m, "auth.admin.set") == 0) {
             const cJSON *old_item = cJSON_IsObject(params)
                                         ? cJSON_GetObjectItemCaseSensitive(params, "old_password")
                                         : NULL;
@@ -1592,6 +2054,8 @@ esp_err_t app_cmd_execute_ctx(const app_cmd_context_t *ctx, const cJSON *frame,
             } else if (new_user != NULL && new_user[0] != '\0' &&
                        strchr(new_user, ':') != NULL) {
                 err = "invalid_username";
+            } else if (!app_cmd_cfg_txn_guard_enter()) {
+                err = "busy";
             } else {
                 esp_err_t save_err;
 
@@ -1605,6 +2069,7 @@ esp_err_t app_cmd_execute_ctx(const app_cmd_context_t *ctx, const cJSON *frame,
                                       s_config.web_pass_hash);
                 save_err = app_config_save(&s_config);
                 app_config_unlock();
+                app_cmd_cfg_txn_guard_exit();
                 if (save_err != ESP_OK) {
                     err = "save_failed";
                 } else {
@@ -1718,18 +2183,6 @@ esp_err_t app_cmd_execute_ctx(const app_cmd_context_t *ctx, const cJSON *frame,
             if (resp == NULL) {
                 err = "out_of_memory";
             }
-        } else if (strcmp(m, "network.tryconnect.async") == 0) {
-            if (!app_cmd_net_tryconnect_async(params, ctx, &resp, &err)) {
-                /* resp/err 已由 helper 设置 */
-            }
-        } else if (strcmp(m, "network.apply.async") == 0) {
-            if (!app_cmd_net_apply_async(params, &resp, &err)) {
-                /* resp/err 已由 helper 设置 */
-            }
-        } else if (strcmp(m, "network.cancel.async") == 0) {
-            if (!app_cmd_net_cancel_async(params, &resp, &err)) {
-                /* resp/err 已由 helper 设置 */
-            }
 #ifdef APP_C1_TEST_HOOKS
         } else if (strcmp(m, "diag.testhook") == 0) {
             /* 实验构建专用:仅 BLE 来源。arm 携带可选 probe_to("got_ip" 等);
@@ -1762,6 +2215,37 @@ esp_err_t app_cmd_execute_ctx(const app_cmd_context_t *ctx, const cJSON *frame,
                     if (resp != NULL) {
                         cJSON_AddBoolToObject(resp, "armed", true);
                         cJSON_AddNumberToObject(resp, "hold_ms", (double)hold_ms);
+                    }
+                }
+            } else if (strcmp(action->valuestring, "wifi_event") == 0) {
+                /* 实验构建专用：直接注入 Wi-Fi 事件，确定性验证
+                 * tryconnect 的旧 STA_CONNECTED/GOT_IP 归属边界。 */
+                const cJSON *kind_item = cJSON_GetObjectItemCaseSensitive(params, "event");
+                const cJSON *ssid_item = cJSON_GetObjectItemCaseSensitive(params, "ssid");
+                const cJSON *bssid_item = cJSON_GetObjectItemCaseSensitive(params, "bssid");
+                const cJSON *reason_item = cJSON_GetObjectItemCaseSensitive(params, "reason");
+                esp_err_t hook_err;
+
+                if (source != APP_CMD_SOURCE_BLE) {
+                    err = "guard_rejected";
+                } else if (!cJSON_IsString(kind_item) || kind_item->valuestring == NULL) {
+                    err = "params_required";
+                } else {
+                    hook_err = app_wifi_test_inject_event(
+                        kind_item->valuestring,
+                        cJSON_IsString(ssid_item) ? ssid_item->valuestring : NULL,
+                        cJSON_IsString(bssid_item) ? bssid_item->valuestring : NULL,
+                        cJSON_IsNumber(reason_item) ? reason_item->valueint : 0);
+                    if (hook_err == ESP_ERR_INVALID_STATE) {
+                        err = "not_active";
+                    } else if (hook_err != ESP_OK) {
+                        err = "invalid_param";
+                    } else {
+                        resp = cJSON_CreateObject();
+                        if (resp != NULL) {
+                            cJSON_AddBoolToObject(resp, "injected", true);
+                            cJSON_AddStringToObject(resp, "event", kind_item->valuestring);
+                        }
                     }
                 }
             } else if (strcmp(action->valuestring, "clear") == 0) {
@@ -1807,7 +2291,7 @@ esp_err_t app_cmd_execute_ctx(const app_cmd_context_t *ctx, const cJSON *frame,
             if (!cJSON_IsString(op_item) || op_item->valuestring == NULL) {
                 err = "params_required";
             } else {
-                resp = app_cmd_net_operation_status(op_item->valuestring, &err);
+                resp = app_cmd_net_operation_status(ctx, op_item->valuestring, &err);
             }
         } else if (strcmp(m, "network.tryconnect") == 0) {
             const cJSON *ssid_item = cJSON_IsObject(params)
@@ -1819,12 +2303,17 @@ esp_err_t app_cmd_execute_ctx(const app_cmd_context_t *ctx, const cJSON *frame,
             app_wifi_try_result_t result;
             const char *ssid;
             const char *password;
+            app_cmd_cfg_txn_t cfg_txn = {0};
+            bool cfg_txn_valid = false;
+            bool cfg_txn_transferred = false;
 
             if (source == APP_CMD_SOURCE_MQTT) {
                 err = "guard_rejected";
             } else if (!cJSON_IsString(ssid_item) || ssid_item->valuestring == NULL ||
                        ssid_item->valuestring[0] == '\0') {
                 err = "params_required";
+            } else if (app_cmd_static_switch_blocked(ssid_item->valuestring, params, &err)) {
+                /* err set by helper */
             } else if (s_net_async.active) {
                 err = "busy";
             } else {
@@ -1837,6 +2326,10 @@ esp_err_t app_cmd_execute_ctx(const app_cmd_context_t *ctx, const cJSON *frame,
                 } else {
                     app_cmd_net_trial_clear();
                     app_cmd_net_job_unlock();
+                    if (!app_cmd_cfg_txn_begin(&cfg_txn)) {
+                        err = "busy";
+                    } else {
+                        cfg_txn_valid = true;
                     ssid = ssid_item->valuestring;
                 password = cJSON_IsString(pass_item) && pass_item->valuestring != NULL
                                ? pass_item->valuestring : "";
@@ -1847,11 +2340,12 @@ esp_err_t app_cmd_execute_ctx(const app_cmd_context_t *ctx, const cJSON *frame,
                     /* tryconnect 是同步阻塞的:等待期间 BLE 可能已断开。
                      * 此时若仍把候选留在 RAM,会形成"无会话但可 apply"的遗留事务;
                      * 直接丢弃候选,连接已恢复的正式配置不受影响。 */
-                    if (!app_cmd_net_store_trial(ssid, password, source, NULL)) {
+                    if (!app_cmd_net_store_trial(ssid, password, source, NULL, &cfg_txn)) {
                         ESP_LOGW(TAG, "network.tryconnect: BLE disconnected, discard candidate");
                         err = "cancelled";
                         break;
                     }
+                    cfg_txn_transferred = true;
                     resp = cJSON_CreateObject();
                     if (resp == NULL) {
                         app_cmd_net_trial_clear();
@@ -1883,10 +2377,18 @@ esp_err_t app_cmd_execute_ctx(const app_cmd_context_t *ctx, const cJSON *frame,
                 case APP_WIFI_TRY_INVALID_ARG:
                     err = "invalid_param";
                     break;
+                case APP_WIFI_TRY_CONFIG_OFFLINE:
+                    /* M1 R9:离线门控拒绝(v0 字符串) */
+                    err = "wifi_config_offline";
+                    break;
                 default:
                     err = "connect_failed";
                     break;
                 }
+                if (cfg_txn_valid && !cfg_txn_transferred) {
+                    (void)app_cmd_cfg_txn_end(cfg_txn);
+                }
+                    }
                 }
             }
         } else if (strcmp(m, "network.apply") == 0) {
@@ -1920,8 +2422,9 @@ esp_err_t app_cmd_execute_ctx(const app_cmd_context_t *ctx, const cJSON *frame,
                     /* BLE-only 配网：提交必须是 STA，不能把 AP-only 旧配置推断成 APSTA。
                      * AP/Web 正在退出，apply 后不应继续保留 AP 的常驻内存开销。 */
                     cJSON_AddStringToObject(patch, "net_mode", "sta");
-                    /* 试连候选走 DHCP；提交必须与已验证 plan 一致，不能沿用旧静态 IP。 */
-                    cJSON_AddBoolToObject(patch, "sta_use_static", false);
+                    /* Static mode is pinned to the formal SSID; keep it when the
+                     * trial target matches. DHCP candidates already have
+                     * sta_use_static=false, so no forced rewrite is needed. */
                     apply_err = config_apply_patch(patch, &changed, &effect);
                     cJSON_Delete(patch);
                     cJSON_Delete(changed);
@@ -1993,7 +2496,7 @@ esp_err_t app_cmd_execute_ctx(const app_cmd_context_t *ctx, const cJSON *frame,
                     cJSON_AddStringToObject(resp, "state", "cancelled");
                 }
             }
-        } else if (strcmp(m, "network.profiles") == 0) {
+        } else if (strcmp(m, "network.profile.list") == 0) {
             app_wifi_profile_t profiles[APP_WIFI_PROFILE_MAX] = {0};
             size_t profile_count = 0;
             cJSON *arr;
@@ -2030,9 +2533,14 @@ esp_err_t app_cmd_execute_ctx(const app_cmd_context_t *ctx, const cJSON *frame,
 
             if (source == APP_CMD_SOURCE_MQTT) {
                 err = "guard_rejected";
+            } else if (!app_cmd_scan_gate_check()) {
+                /* DEF-SCAN-001:距上次扫描结束不足 3s,直接拒绝(射频需空闲) */
+                err = "busy";
             } else if (app_wifi_perform_scan_command() != ESP_OK) {
+                app_cmd_scan_gate_stamp();   /* 失败同样占用过射频 */
                 err = "wifi_scan_failed";
             } else {
+                app_cmd_scan_gate_stamp();
                 app_wifi_runtime_lock();
                 scan_count = s_wifi.scan_count;
                 app_wifi_runtime_unlock();
@@ -2079,11 +2587,16 @@ esp_err_t app_cmd_execute_ctx(const app_cmd_context_t *ctx, const cJSON *frame,
             } else if (!cJSON_IsString(ssid_item) || ssid_item->valuestring == NULL ||
                        ssid_item->valuestring[0] == '\0') {
                 err = "params_required";
+            } else if (!app_cmd_cfg_txn_guard_enter()) {
+                err = "busy";
             } else {
                 esp_err_t del_err = app_config_delete_wifi_profile(ssid_item->valuestring);
+                app_cmd_cfg_txn_guard_exit();
 
                 if (del_err == ESP_ERR_NOT_FOUND) {
                     err = "not_found";
+                } else if (del_err == ESP_ERR_INVALID_STATE) {
+                    err = "last_profile";
                 } else if (del_err != ESP_OK) {
                     err = "delete_failed";
                 } else {
@@ -2095,7 +2608,7 @@ esp_err_t app_cmd_execute_ctx(const app_cmd_context_t *ctx, const cJSON *frame,
                     }
                 }
             }
-        } else if (strcmp(m, "network.restart") == 0) {
+        } else if (strcmp(m, "network.reconnect") == 0) {
             if (source == APP_CMD_SOURCE_MQTT) {
                 err = "guard_rejected";
             } else if (!app_wifi_schedule_restart()) {

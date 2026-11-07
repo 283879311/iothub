@@ -75,7 +75,7 @@ static bool app_factory_reset_to_defaults(void)
     app_bootstrap_set_defaults();
     app_config_clear_output_last();
 
-    esp_err_t profile_err = app_config_clear_wifi_profiles();
+    esp_err_t profile_err = app_config_factory_clear_wifi_profiles();
     if (profile_err != ESP_OK) {
         ESP_LOGE(TAG, "Failed to clear saved Wi-Fi profiles: %s",
                  esp_err_to_name(profile_err));

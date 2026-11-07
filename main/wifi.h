@@ -31,6 +31,11 @@ bool app_wifi_scan_record_bssid(uint16_t index, char *out, size_t out_size);
 void app_wifi_mark_profiles_dirty(void);
 void app_wifi_sta_config_updated(void);
 
+/* DEF-NET-001:当前链路代次(GOT_IP/断链各 +1;netcheck 结论按代次绑定) */
+uint32_t app_wifi_link_generation(void);
+/* DEF-NET-001 选 B:试用路径启动的验证代次(0=无);worker 读快照的代次依据 */
+uint32_t app_wifi_trial_verify_gen(void);
+
 /* 试连验证(1.3-37):临时换候选 SSID/口令真连一次,出结果后无条件恢复旧配置 */
 typedef enum {
     APP_WIFI_TRY_OK = 0,          /* STA_CONNECTED:口令正确 */
@@ -42,6 +47,7 @@ typedef enum {
     APP_WIFI_TRY_CANCELLED,       /* 操作取消 */
     APP_WIFI_TRY_INVALID_ARG,
     APP_WIFI_TRY_SCAN_FAILED,     /* P1-10:预扫描两次失败,未进入连接(勿伪装成 connect_failed) */
+    APP_WIFI_TRY_CONFIG_OFFLINE,  /* M1 R9:离线门控,入口拒绝,未进入候选生命周期 */
 } app_wifi_try_result_t;
 
 app_wifi_try_result_t app_wifi_try_connect(const char *ssid, const char *password,
@@ -51,3 +57,20 @@ app_wifi_try_result_t app_wifi_try_connect_ip(const char *ssid, const char *pass
                                               uint32_t timeout_ms);
 /* 请求取消正在进行的 tryconnect；true 表示当时有活动试连。 */
 bool app_wifi_try_cancel(void);
+
+#ifdef APP_WIFI_FAULT_INJECT
+/* M1 测试构建专用(默认 OFF,与 APP_C1_TEST_HOOKS 独立):
+ * action: "apply_fail"(stage,count,err) / "stop_fail"(count) /
+ *         "connect_hold"(timeout_ms) / "connect_release" /
+ *         "force_offline" / "status" / "clear"。
+ * 仅注入故障,不改变正常路径行为;正式构建不编译。 */
+esp_err_t app_wifi_test_hook(const char *action, const char *stage,
+                             int count, int timeout_ms);
+#endif
+
+#ifdef APP_C1_TEST_HOOKS
+/* 实验构建专用：注入 Wi-Fi 事件，验证 tryconnect 事件归属边界。
+ * kind: "connected" / "disconnected" / "got_ip"; 正式构建不编译。 */
+esp_err_t app_wifi_test_inject_event(const char *kind, const char *ssid,
+                                     const char *bssid, int reason);
+#endif

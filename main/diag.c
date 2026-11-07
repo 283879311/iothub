@@ -63,7 +63,7 @@ static void app_diag_dump(void)
         app_bt_get_status(&bt_mode, NULL, 0);
         ble_conn = app_ble_gatts_connected() || app_ble_gattc_connected();
         ESP_LOGI(TAG, "heap free=%u min=%u largest=%u level=%s | wifi mode=%d ch=%u/%d"
-                 " adv=%d conn=%d role=%s"
+                 " adv=%d conn=%d cf=%d rx_age=%d role=%s"
                  " mqtt_outbox=%d mqtt_shed=%u pipe_yield=%u",
                  (unsigned)heap_free,
                  (unsigned)heap_min,
@@ -73,6 +73,7 @@ static void app_diag_dump(void)
                  channel_valid ? (unsigned)primary : APP_DIAG_UNKNOWN_CH,
                  channel_valid ? (int)second : -1,
                  (int)app_bt_advertising(), (int)ble_conn,
+                 app_ble_gatts_conn_find(), (int)app_ble_gatts_rx_age_ms(),
                  app_bt_mode_to_string(bt_mode),
                  app_mqtt_outbox_size(),
                  (unsigned)app_mqtt_tele_shed_count(),

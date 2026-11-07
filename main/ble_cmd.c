@@ -12,6 +12,10 @@
 #include "ble_cmd.h"
 #include "bt_gatts.h"
 #include "cmd.h"
+#include "cmd_cfg_txn.h"
+#include "cmd_error.h"
+#include "cmd_net_adapter.h"
+#include "cmd_v1.h"
 #include "config_apply.h"
 #include "auth.h"
 #include "ota.h"
@@ -294,36 +298,11 @@ static bool app_ble_cmd_authed(const cJSON *frame)
            app_token_store_validate(TOKEN_SRC_BLE, tok->valuestring);
 }
 
-/* v1.0 适配层：只暴露已有 handler，未实现的网络事务/operation 不伪造。 */
+/* v1.0 adapter: one registry shared with MQTT. */
 static bool app_ble_cmd_v1_allowed(const char *cmd)
 {
-    static const char *const allowed[] = {
-        "device.info",
-        "device.status",
-        "gpio.status",
-        "uart.runtime",
-        "auth.login",
-        "config.get",
-        "config.set",
-        "network.status",
-        "network.scan",
-        "network.tryconnect",
-        "network.apply",
-        "network.cancel",
-        "operation.get",
-        "network.profile.list",
-        "network.profile.delete",
-        "led.set",
-        "led.toggle",
-        "relay.set",
-        "relay.toggle",
-        "io.set",
-        "uart.send",
-        "data.loopback",
-        "auth.admin.set",
-        "provisioning.pin.set",
-    };
-    size_t i;
+    app_cmd_context_t ctx = app_cmd_ctx_entry(APP_CMD_SOURCE_BLE);
+    bool allowed;
 
     if (cmd == NULL) {
         return false;
@@ -333,110 +312,8 @@ static bool app_ble_cmd_v1_allowed(const char *cmd)
         return true;   /* 实验构建专用钩子命令(仍需 token) */
     }
 #endif
-    for (i = 0; i < sizeof(allowed) / sizeof(allowed[0]); i++) {
-        if (strcmp(cmd, allowed[i]) == 0) {
-            return true;
-        }
-    }
-    return false;
-}
-
-static const char *app_ble_cmd_v1_map(const char *cmd)
-{
-    if (strcmp(cmd, "network.tryconnect") == 0) {
-        return "network.tryconnect.async";
-    }
-    if (strcmp(cmd, "network.apply") == 0) {
-        return "network.apply.async";
-    }
-    if (strcmp(cmd, "network.cancel") == 0) {
-        return "network.cancel.async";
-    }
-    if (strcmp(cmd, "auth.login") == 0) {
-        return "login";
-    }
-    if (strcmp(cmd, "network.profile.list") == 0) {
-        return "network.profiles";
-    }
-    if (strcmp(cmd, "auth.admin.set") == 0) {
-        return "web.auth.set";
-    }
-    return cmd;
-}
-
-static const char *app_ble_cmd_v1_error_code(const char *v0)
-{
-    if (v0 == NULL) {
-        return "internal_error";
-    }
-    if (strcmp(v0, "unknown_command") == 0 ||
-        strcmp(v0, "unknown_method") == 0) {
-        return "unknown_command";
-    }
-    if (strcmp(v0, "line_too_long") == 0) {
-        return "line_too_long";
-    }
-    if (strcmp(v0, "invalid_json") == 0) {
-        return "invalid_json";
-    }
-    if (strcmp(v0, "unsupported_version") == 0) {
-        return "unsupported_version";
-    }
-    if (strcmp(v0, "params_required") == 0 ||
-        strcmp(v0, "invalid_config") == 0 ||
-        strcmp(v0, "invalid_param") == 0 ||
-        strcmp(v0, "invalid_argument") == 0 ||
-        strcmp(v0, "invalid_old_password") == 0 ||
-        strcmp(v0, "domain_not_supported") == 0 ||
-        strcmp(v0, "password_too_short") == 0) {
-        return "invalid_argument";
-    }
-    if (strcmp(v0, "auth_required") == 0 ||
-        strcmp(v0, "invalid_credentials") == 0 ||
-        strcmp(v0, "unauthorized") == 0) {
-        return "unauthorized";
-    }
-    if (strcmp(v0, "guard_rejected") == 0 ||
-        strcmp(v0, "forbidden") == 0) {
-        return "forbidden";
-    }
-    if (strcmp(v0, "busy") == 0) {
-        return "busy";
-    }
-    if (strcmp(v0, "conflict") == 0) {
-        return "conflict";
-    }
-    if (strcmp(v0, "rate_limited") == 0) {
-        return "rate_limited";
-    }
-    if (strcmp(v0, "internal_error") == 0) {
-        return "internal_error";
-    }
-    if (strcmp(v0, "not_found") == 0 ||
-        strcmp(v0, "operation_state") == 0 ||
-        strcmp(v0, "trial_invalid") == 0 ||
-        strcmp(v0, "wrong_password") == 0 ||
-        strcmp(v0, "ap_not_found") == 0 ||
-        strcmp(v0, "connect_failed") == 0 ||
-        strcmp(v0, "wifi_scan_failed") == 0 ||   /* P1-10:保持可分辨,不折叠进 network_failed */
-        strcmp(v0, "no_slot") == 0 ||
-        strcmp(v0, "expired") == 0 ||
-        strcmp(v0, "rollback_failed") == 0) {
-        return v0;
-    }
-    if (strcmp(v0, "save_failed") == 0 ||
-        strcmp(v0, "storage_failed") == 0) {
-        return "storage_failed";
-    }
-    if (strcmp(v0, "wifi_scan_failed") == 0 ||
-        strcmp(v0, "network_failed") == 0) {
-        return "network_failed";
-    }
-    if (strcmp(v0, "restart_failed") == 0 ||
-        strcmp(v0, "apply_failed") == 0) {
-        return "apply_failed";
-    }
-    return "internal_error";
+    allowed = app_cmd_v1_allowed(&ctx, cmd);
+    return allowed;
 }
 
 static void app_ble_cmd_wrap_v1(cJSON **resp, const char *id, bool has_id)
@@ -474,7 +351,7 @@ static void app_ble_cmd_wrap_v1(cJSON **resp, const char *id, bool has_id)
             cJSON_AddStringToObject(err_obj, "id", id != NULL ? id : "");
         }
         cJSON_AddBoolToObject(err_obj, "ok", false);
-        cJSON_AddStringToObject(error, "code", app_ble_cmd_v1_error_code(v0));
+        cJSON_AddStringToObject(error, "code", app_cmd_v1_error_code(v0));
         cJSON_AddStringToObject(error, "message", v0);
         cJSON_AddItemToObject(err_obj, "error", error);
         cJSON_Delete(r);
@@ -499,15 +376,11 @@ static void app_ble_cmd_wrap_v1(cJSON **resp, const char *id, bool has_id)
 static void app_ble_cmd_handle_line(const char *line, size_t len)
 {
     cJSON *frame = NULL;
-    cJSON *method = NULL;
-    cJSON *params = NULL;
     cJSON *resp = NULL;
     cJSON *id_item = NULL;
     const cJSON *version_item = NULL;
     const cJSON *cmd_item = NULL;
     const cJSON *args_item = NULL;
-    int64_t id = -1;
-    bool has_id = false;
     bool v1_envelope = false;
     bool v1 = false;
     bool v1_has_id = false;
@@ -543,9 +416,21 @@ static void app_ble_cmd_handle_line(const char *line, size_t len)
             v1_has_id = true;
         }
     }
-    if (!v1_envelope && cJSON_IsNumber(id_item)) {
-        id = (int64_t)id_item->valuedouble;
-        has_id = true;
+    /* v0 协议入口已彻底删除(2026-11-05):缺 version 一律拒绝。
+     * 拒绝壳保留 v0 形状并回带数值 id(旧客户端可定位是哪个请求被拒);
+     * 这条路径不进 v1 包装,直接发送。 */
+    if (!v1_envelope) {
+        cJSON *rej = cJSON_CreateObject();
+
+        if (rej != NULL) {
+            if (cJSON_IsNumber(id_item)) {
+                cJSON_AddNumberToObject(rej, "id", (double)id_item->valuedouble);
+            }
+            cJSON_AddBoolToObject(rej, "ok", false);
+            cJSON_AddStringToObject(rej, "error", "unsupported_version");
+            app_ble_cmd_send(rej);
+        }
+        goto done;
     }
 
     if (v1_envelope) {
@@ -581,72 +466,7 @@ static void app_ble_cmd_handle_line(const char *line, size_t len)
             goto wrap;
         }
 
-        {
-            const char *mapped = app_ble_cmd_v1_map(cmd_item->valuestring);
-            cJSON *normalized = NULL;
-
-            if (strcmp(cmd_item->valuestring, "config.set") == 0) {
-                const cJSON *patch = cJSON_GetObjectItemCaseSensitive(args_item, "patch");
-
-                if (!cJSON_IsObject(patch)) {
-                    resp = cJSON_CreateObject();
-                    if (resp != NULL) {
-                        cJSON_AddBoolToObject(resp, "ok", false);
-                        cJSON_AddStringToObject(resp, "error", "invalid_argument");
-                    }
-                    goto wrap;
-                }
-                if (cJSON_GetObjectItemCaseSensitive(args_item, "idempotency_key") != NULL) {
-                    resp = cJSON_CreateObject();
-                    if (resp != NULL) {
-                        cJSON_AddBoolToObject(resp, "ok", false);
-                        cJSON_AddStringToObject(resp, "error", "invalid_argument");
-                    }
-                    goto wrap;
-                }
-                {
-                    const cJSON *item = NULL;
-
-                    cJSON_ArrayForEach(item, patch) {
-                        const cfg_field_t *f = config_apply_field(
-                            item->string != NULL ? item->string : "");
-
-                        if (f != NULL && f->domain == CFG_DOMAIN_NET) {
-                            resp = cJSON_CreateObject();
-                            if (resp != NULL) {
-                                cJSON_AddBoolToObject(resp, "ok", false);
-                                cJSON_AddStringToObject(resp, "error", "invalid_argument");
-                            }
-                            goto wrap;
-                        }
-                    }
-                }
-                normalized = cJSON_Duplicate(patch, 1);
-            } else {
-                normalized = cJSON_Duplicate(args_item, 1);
-            }
-            if (normalized == NULL) {
-                resp = cJSON_CreateObject();
-                if (resp != NULL) {
-                    cJSON_AddBoolToObject(resp, "ok", false);
-                    cJSON_AddStringToObject(resp, "error", "internal_error");
-                }
-                goto wrap;
-            }
-            cJSON_DeleteItemFromObjectCaseSensitive(frame, "method");
-            cJSON_DeleteItemFromObjectCaseSensitive(frame, "params");
-            cJSON_AddStringToObject(frame, "method", mapped);
-            cJSON_AddItemToObject(frame, "params", normalized);
-            method = cJSON_GetObjectItemCaseSensitive(frame, "method");
-            params = cJSON_GetObjectItemCaseSensitive(frame, "params");
-            ESP_LOGI(TAG, "rx v1 cmd=%s id=%s", cmd_item->valuestring, v1_id);
-        }
-    } else {
-        method = cJSON_GetObjectItemCaseSensitive(frame, "method");
-        params = cJSON_GetObjectItemCaseSensitive(frame, "params");
-        if (cJSON_IsString(method) && method->valuestring != NULL) {
-            ESP_LOGI(TAG, "rx method=%s id=%lld", method->valuestring, (long long)id);
-        }
+        ESP_LOGI(TAG, "rx v1 cmd=%s id=%s", cmd_item->valuestring, v1_id);
     }
 
     /* 限频:5 次/秒(与 MQTT RPC 同决策,2026-10-15)。
@@ -667,10 +487,12 @@ static void app_ble_cmd_handle_line(const char *line, size_t len)
     }
 
     /* login:web 同源口令换短时 token(免 token) */
-    if (cJSON_IsString(method) && method->valuestring != NULL &&
-        strcmp(method->valuestring, "login") == 0) {
-        const cJSON *u = cJSON_IsObject(params) ? cJSON_GetObjectItemCaseSensitive(params, "username") : NULL;
-        const cJSON *p = cJSON_IsObject(params) ? cJSON_GetObjectItemCaseSensitive(params, "password") : NULL;
+    if (cmd_item != NULL && cJSON_IsString(cmd_item) &&
+        strcmp(cmd_item->valuestring, "auth.login") == 0) {
+        const cJSON *u = cJSON_IsObject(args_item)
+                             ? cJSON_GetObjectItemCaseSensitive(args_item, "username") : NULL;
+        const cJSON *p = cJSON_IsObject(args_item)
+                             ? cJSON_GetObjectItemCaseSensitive(args_item, "password") : NULL;
         bool ok = cJSON_IsString(u) && cJSON_IsString(p) &&
                   app_auth_check_credentials(u->valuestring, p->valuestring);
 
@@ -722,40 +544,32 @@ static void app_ble_cmd_handle_line(const char *line, size_t len)
         goto wrap;
     }
 
-    /* 命令内核(与 MQTT RPC 同一分发器) */
-    if (app_cmd_execute_ex(frame, APP_CMD_SOURCE_BLE, &resp, &out, &err) != ESP_OK || resp == NULL) {
-        cJSON *err_resp = cJSON_CreateObject();
+    /* All v1 commands use the unified registry. */
+    if (v1_envelope && cmd_item != NULL && cJSON_IsString(cmd_item) &&
+        cmd_item->valuestring != NULL) {
+        app_cmd_context_t cmd_ctx = app_cmd_ctx_entry(APP_CMD_SOURCE_BLE);
 
-        if (err_resp != NULL) {
-            cJSON_AddBoolToObject(err_resp, "ok", false);
-            cJSON_AddStringToObject(err_resp, "error", err != NULL ? err : "internal_error");
+        cmd_ctx.auth_level = APP_CMD_AUTH_LOCAL_TOKEN;
+        if (!app_cmd_v1_execute(&cmd_ctx, cmd_item->valuestring, args_item,
+                                &resp, &out, &err)) {
+            cJSON *err_resp = cJSON_CreateObject();
+
+            if (err_resp != NULL) {
+                cJSON_AddBoolToObject(err_resp, "ok", false);
+                cJSON_AddStringToObject(err_resp, "error",
+                                        err != NULL ? err : "internal_error");
+            }
+            if (resp != NULL) {
+                cJSON_Delete(resp);
+            }
+            resp = err_resp;
         }
-        if (resp != NULL) {
-            cJSON_Delete(resp);
-        }
-        resp = err_resp;
-        goto wrap;
     }
+
     reboot_after_response = out.reboot_after_response;
 
 wrap:
-    if (v1_envelope) {
-        app_ble_cmd_wrap_v1(&resp, v1_id, v1_has_id);
-    } else if (has_id && resp != NULL && cJSON_HasObjectItem(resp, "ok")) {
-        /* v0:已含 ok 外壳(错误路径):补 id */
-        if (cJSON_GetObjectItemCaseSensitive(resp, "id") == NULL) {
-            cJSON_AddNumberToObject(resp, "id", (double)id);
-        }
-    } else if (resp != NULL) {
-        cJSON *outer = cJSON_CreateObject();
-
-        if (outer != NULL) {
-            cJSON_AddNumberToObject(outer, "id", (double)id);
-            cJSON_AddBoolToObject(outer, "ok", true);
-            cJSON_AddItemToObject(outer, "result", resp);   /* 移交所有权 */
-            resp = outer;
-        }
-    }
+    app_ble_cmd_wrap_v1(&resp, v1_id, v1_has_id);
     app_ble_cmd_send(resp);
 
     if (reboot_after_response) {
@@ -770,6 +584,11 @@ done:
     if (frame != NULL) {
         cJSON_Delete(frame);
     }
+}
+
+bool app_ble_cmd_net_busy(void)
+{
+    return app_cmd_net_op_active() || app_cmd_cfg_txn_active();
 }
 
 static void app_ble_cmd_task(void *arg)
@@ -820,7 +639,7 @@ esp_err_t app_ble_cmd_start(void)
     /* 评审 R10:4096B 在 network.apply 的嵌套路径上实测栈溢出 ——
      * 2026-10-29 App 手工 #13 对 CMCC-502 执行 apply 时,
      * "A stack overflow in task ble_cmd has been detected",随后 core dump/
-     * 重启(配置已落盘)。该路径在本任务内嵌套 execute_ctx + config_apply_patch
+     * 重启(配置已落盘)。该路径在本任务内嵌套 app_cmd_execute_method + config_apply_patch
      * + profile 保存 + Wi-Fi restart;4096 的余量不足。加到 8192 并保留
      * 证据;这是独立于 C1 的既有余量缺陷,单独提交。 */
     if (xTaskCreate(app_ble_cmd_task, "ble_cmd", 8192, NULL, 4, NULL) != pdPASS) {

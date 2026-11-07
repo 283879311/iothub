@@ -384,4 +384,21 @@ uint16_t app_ble_gatts_mtu(void)
 {
     return s_mtu;
 }
+
+/* DEF-BLE-001 诊断:Bluedroid 构建不提供协议栈链路查询(返回"无链路")。 */
+int app_ble_gatts_conn_find(void)
+{
+    return 1;
+}
+
+int32_t app_ble_gatts_rx_age_ms(void)
+{
+    return -1;
+}
+
+/* DEF-BLE-001:Bluedroid 构建不启用空闲回收(无 conn_find 诊断支撑)。 */
+void app_ble_gatts_idle_reap_poll(void)
+{
+}
+
 #endif /* !CONFIG_BT_NIMBLE_ENABLED */

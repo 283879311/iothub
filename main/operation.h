@@ -16,6 +16,7 @@ typedef enum {
     APP_OPERATION_OWNER_INTERNAL = 0,
     APP_OPERATION_OWNER_BLE,
     APP_OPERATION_OWNER_HTTP,
+    APP_OPERATION_OWNER_MQTT,
 } app_operation_owner_t;
 
 typedef enum {
@@ -35,6 +36,14 @@ typedef enum {
     APP_OPERATION_ERR_STORAGE_FAILED,
     APP_OPERATION_ERR_ROLLBACK_FAILED,
     APP_OPERATION_ERR_SCAN_FAILED,   /* P1-10:候选预扫描两次失败,未进入连接 */
+    APP_OPERATION_ERR_WIFI_CONFIG_OFFLINE, /* M1 R9:离线门控拒绝 tryconnect */
+    APP_OPERATION_ERR_MQTT_UNAVAILABLE,
+    APP_OPERATION_ERR_INTERNET_UNVERIFIED,
+    APP_OPERATION_ERR_STATIC_IP_PINNED,
+    APP_OPERATION_ERR_LAST_PROFILE,
+    /* DEF-NET-001 选 B 条件 2:tryconnect 验证等待上限到期(25s 具名常量),
+     * 判决未出炉即拆链收尾——不是成功、不是无限等 */
+    APP_OPERATION_ERR_VERIFY_TIMEOUT,
 } app_operation_error_t;
 
 typedef struct app_operation app_operation_t;

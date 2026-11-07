@@ -437,6 +437,9 @@ static esp_err_t app_bt_start_ble(void)
     return ESP_OK;
 }
 
+/* 产品基线固定 Peripheral(app_bt_apply_config 强制收敛);central 仅作代码兼容
+ * 保留、当前无调用方。这里显式标注 unused,避免重编 bt.c 时的告警噪音。 */
+static esp_err_t app_bt_start_central(void) __attribute__((unused));
 static esp_err_t app_bt_start_central(void)
 {
     esp_err_t err;
@@ -507,6 +510,8 @@ esp_err_t app_bt_restart_advertising(void)
 void app_bt_adv_watchdog_poll(void)
 {
     app_bt_adv_watchdog_tick();
+    /* DEF-BLE-001 A 方案:同一 diag 节拍里回收空闲(僵尸)连接。 */
+    app_ble_gatts_idle_reap_poll();
 }
 
 /* NimBLE 的权威广播态:协议栈实时值,非手工标志 */
@@ -912,6 +917,7 @@ static esp_err_t app_bt_start_ble(void)
     return ESP_OK;
 }
 
+static esp_err_t app_bt_start_central(void) __attribute__((unused));
 static esp_err_t app_bt_start_central(void)
 {
     esp_err_t err;
