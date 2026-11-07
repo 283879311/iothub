@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """AP schema cleanup check: old NVS layout, config.get, old AP patches.
 
-Read-only except two deliberately ignored/rejected config.set attempts:
-  - v0 config.set with ap_ssid/ap_password: old clients sent this; AP runtime is
-    gone, so the fields must have no effect and config.get must not expose them.
-  - v0 config.set with net_mode=ap: must be rejected.
+Read-only except two deliberately ignored/rejected v1 config.set attempts:
+  - v1 config.set patch with ap_ssid/ap_password: old fields must have no effect
+    and config.get must not expose them.
+  - v1 config.set patch with net_mode=ap: must be rejected.
 
 Run after flashing the AP-schema firmware without erasing NVS:
     .venv-bleak/bin/python -u tools/ble_p0/config_schema_check.py \
@@ -85,14 +85,14 @@ async def run(args: argparse.Namespace) -> int:
         }
         result["ap_fields_present_before"] = [k for k in AP_KEYS if k in before_net]
 
-        old_patch = await sess.v0(
+        old_patch = await sess.v1(
             "config.set",
-            {
+            {"patch": {
                 "ap_ssid": "legacy-ap-should-not-apply",
                 "ap_password": "legacy-dummy-password",
-            },
-            req_id=901,
+            }},
             timeout=20,
+            id_prefix="ap-schema-old",
         )
         result["old_ap_patch"] = {
             "ok": old_patch.obj.get("ok") is True,
@@ -110,8 +110,9 @@ async def run(args: argparse.Namespace) -> int:
         result["ap_fields_present_after"] = [k for k in AP_KEYS if k in after_net]
         result["formal_unchanged_by_old_ap_patch"] = formal_view(before_net) == formal_view(after_net)
 
-        ap_mode = await sess.v0(
-            "config.set", {"net_mode": "ap"}, req_id=902, timeout=20
+        ap_mode = await sess.v1(
+            "config.set", {"patch": {"net_mode": "ap"}},
+            timeout=20, id_prefix="ap-schema-mode"
         )
         result["ap_mode_patch"] = {
             "ok": ap_mode.obj.get("ok") is True,

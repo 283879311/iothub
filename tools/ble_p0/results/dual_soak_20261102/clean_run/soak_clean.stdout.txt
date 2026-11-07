@@ -1,0 +1,88 @@
+START 2026-11-02T08:20:38+08:00 A=/dev/ttyUSB1 B=/dev/ttyUSB0
+CAPTURE_PIDS A=2295499 B=2295500
+/home/tc/esp/workspace/iothub/.venv-bleak/lib/python3.12/site-packages/bleak/backends/bluezdbus/client.py:646: UserWarning: Using default MTU value. Call _acquire_mtu() or set _mtu_size first to avoid this warning.
+  warnings.warn(
+A PASS B0:A7:32:28:C8:E6
+B PASS 10:97:BD:D3:65:DA
+PREFLIGHT_PASS
+RUNNER_START 2026-11-02T08:21:02+08:00
+RUNNER_PID=2295590
+RUNNER_END 2026-11-02T14:21:04+08:00 rc=0
+dual cycle=1 ok=True err=None cross={'A_C8E4->B_65D8': 'unauthorized', 'B_65D8->A_C8E4': 'unauthorized'}
+cycle=10 elapsed=293s totals={'cycles': 10, 'dual_ok': 1, 'dual_fail': 0, 'seq_ok': 18, 'seq_fail': 0, 'resets': 0}
+cycle=20 elapsed=605s totals={'cycles': 20, 'dual_ok': 1, 'dual_fail': 0, 'seq_ok': 38, 'seq_fail': 0, 'resets': 0}
+cycle=30 elapsed=921s totals={'cycles': 30, 'dual_ok': 1, 'dual_fail': 0, 'seq_ok': 58, 'seq_fail': 0, 'resets': 0}
+cycle=40 elapsed=1221s totals={'cycles': 40, 'dual_ok': 1, 'dual_fail': 0, 'seq_ok': 78, 'seq_fail': 0, 'resets': 0}
+cycle=50 elapsed=1525s totals={'cycles': 50, 'dual_ok': 1, 'dual_fail': 0, 'seq_ok': 98, 'seq_fail': 0, 'resets': 0}
+cycle=60 elapsed=1827s totals={'cycles': 60, 'dual_ok': 1, 'dual_fail': 0, 'seq_ok': 118, 'seq_fail': 0, 'resets': 0}
+cycle=70 elapsed=2127s totals={'cycles': 70, 'dual_ok': 1, 'dual_fail': 0, 'seq_ok': 138, 'seq_fail': 0, 'resets': 0}
+cycle=80 elapsed=2427s totals={'cycles': 80, 'dual_ok': 1, 'dual_fail': 0, 'seq_ok': 158, 'seq_fail': 0, 'resets': 0}
+cycle=90 elapsed=2728s totals={'cycles': 90, 'dual_ok': 1, 'dual_fail': 0, 'seq_ok': 178, 'seq_fail': 0, 'resets': 0}
+cycle=100 elapsed=3030s totals={'cycles': 100, 'dual_ok': 1, 'dual_fail': 0, 'seq_ok': 198, 'seq_fail': 0, 'resets': 0}
+cycle=110 elapsed=3332s totals={'cycles': 110, 'dual_ok': 1, 'dual_fail': 0, 'seq_ok': 218, 'seq_fail': 0, 'resets': 0}
+dual cycle=119 ok=True err=None cross={'A_C8E4->B_65D8': 'unauthorized', 'B_65D8->A_C8E4': 'unauthorized'}
+cycle=120 elapsed=3639s totals={'cycles': 120, 'dual_ok': 2, 'dual_fail': 0, 'seq_ok': 236, 'seq_fail': 0, 'resets': 0}
+cycle=130 elapsed=3942s totals={'cycles': 130, 'dual_ok': 2, 'dual_fail': 0, 'seq_ok': 256, 'seq_fail': 0, 'resets': 0}
+cycle=140 elapsed=4243s totals={'cycles': 140, 'dual_ok': 2, 'dual_fail': 0, 'seq_ok': 276, 'seq_fail': 0, 'resets': 0}
+cycle=150 elapsed=4544s totals={'cycles': 150, 'dual_ok': 2, 'dual_fail': 0, 'seq_ok': 296, 'seq_fail': 0, 'resets': 0}
+cycle=160 elapsed=4847s totals={'cycles': 160, 'dual_ok': 2, 'dual_fail': 0, 'seq_ok': 316, 'seq_fail': 0, 'resets': 0}
+cycle=170 elapsed=5147s totals={'cycles': 170, 'dual_ok': 2, 'dual_fail': 0, 'seq_ok': 336, 'seq_fail': 0, 'resets': 0}
+cycle=180 elapsed=5447s totals={'cycles': 180, 'dual_ok': 2, 'dual_fail': 0, 'seq_ok': 356, 'seq_fail': 0, 'resets': 0}
+cycle=190 elapsed=5747s totals={'cycles': 190, 'dual_ok': 2, 'dual_fail': 0, 'seq_ok': 376, 'seq_fail': 0, 'resets': 0}
+cycle=200 elapsed=6052s totals={'cycles': 200, 'dual_ok': 2, 'dual_fail': 0, 'seq_ok': 396, 'seq_fail': 0, 'resets': 0}
+cycle=210 elapsed=6352s totals={'cycles': 210, 'dual_ok': 2, 'dual_fail': 0, 'seq_ok': 416, 'seq_fail': 0, 'resets': 0}
+cycle=220 elapsed=6652s totals={'cycles': 220, 'dual_ok': 2, 'dual_fail': 0, 'seq_ok': 436, 'seq_fail': 0, 'resets': 0}
+cycle=230 elapsed=6952s totals={'cycles': 230, 'dual_ok': 2, 'dual_fail': 0, 'seq_ok': 456, 'seq_fail': 0, 'resets': 0}
+dual cycle=239 ok=True err=None cross={'A_C8E4->B_65D8': 'unauthorized', 'B_65D8->A_C8E4': 'unauthorized'}
+cycle=240 elapsed=7262s totals={'cycles': 240, 'dual_ok': 3, 'dual_fail': 0, 'seq_ok': 474, 'seq_fail': 0, 'resets': 0}
+cycle=250 elapsed=7563s totals={'cycles': 250, 'dual_ok': 3, 'dual_fail': 0, 'seq_ok': 494, 'seq_fail': 0, 'resets': 0}
+cycle=260 elapsed=7864s totals={'cycles': 260, 'dual_ok': 3, 'dual_fail': 0, 'seq_ok': 514, 'seq_fail': 0, 'resets': 0}
+cycle=270 elapsed=8164s totals={'cycles': 270, 'dual_ok': 3, 'dual_fail': 0, 'seq_ok': 534, 'seq_fail': 0, 'resets': 0}
+cycle=280 elapsed=8464s totals={'cycles': 280, 'dual_ok': 3, 'dual_fail': 0, 'seq_ok': 554, 'seq_fail': 0, 'resets': 0}
+cycle=290 elapsed=8764s totals={'cycles': 290, 'dual_ok': 3, 'dual_fail': 0, 'seq_ok': 574, 'seq_fail': 0, 'resets': 0}
+cycle=300 elapsed=9064s totals={'cycles': 300, 'dual_ok': 3, 'dual_fail': 0, 'seq_ok': 594, 'seq_fail': 0, 'resets': 0}
+cycle=310 elapsed=9364s totals={'cycles': 310, 'dual_ok': 3, 'dual_fail': 0, 'seq_ok': 614, 'seq_fail': 0, 'resets': 0}
+cycle=320 elapsed=9664s totals={'cycles': 320, 'dual_ok': 3, 'dual_fail': 0, 'seq_ok': 634, 'seq_fail': 0, 'resets': 0}
+cycle=330 elapsed=9964s totals={'cycles': 330, 'dual_ok': 3, 'dual_fail': 0, 'seq_ok': 654, 'seq_fail': 0, 'resets': 0}
+cycle=340 elapsed=10264s totals={'cycles': 340, 'dual_ok': 3, 'dual_fail': 0, 'seq_ok': 674, 'seq_fail': 0, 'resets': 0}
+cycle=350 elapsed=10564s totals={'cycles': 350, 'dual_ok': 3, 'dual_fail': 0, 'seq_ok': 694, 'seq_fail': 0, 'resets': 0}
+dual cycle=359 ok=True err=None cross={'A_C8E4->B_65D8': 'unauthorized', 'B_65D8->A_C8E4': 'unauthorized'}
+cycle=360 elapsed=10870s totals={'cycles': 360, 'dual_ok': 4, 'dual_fail': 0, 'seq_ok': 712, 'seq_fail': 0, 'resets': 0}
+cycle=370 elapsed=11170s totals={'cycles': 370, 'dual_ok': 4, 'dual_fail': 0, 'seq_ok': 732, 'seq_fail': 0, 'resets': 0}
+cycle=380 elapsed=11470s totals={'cycles': 380, 'dual_ok': 4, 'dual_fail': 0, 'seq_ok': 752, 'seq_fail': 0, 'resets': 0}
+cycle=390 elapsed=11771s totals={'cycles': 390, 'dual_ok': 4, 'dual_fail': 0, 'seq_ok': 772, 'seq_fail': 0, 'resets': 0}
+cycle=400 elapsed=12071s totals={'cycles': 400, 'dual_ok': 4, 'dual_fail': 0, 'seq_ok': 792, 'seq_fail': 0, 'resets': 0}
+cycle=410 elapsed=12371s totals={'cycles': 410, 'dual_ok': 4, 'dual_fail': 0, 'seq_ok': 812, 'seq_fail': 0, 'resets': 0}
+cycle=420 elapsed=12671s totals={'cycles': 420, 'dual_ok': 4, 'dual_fail': 0, 'seq_ok': 832, 'seq_fail': 0, 'resets': 0}
+cycle=430 elapsed=12973s totals={'cycles': 430, 'dual_ok': 4, 'dual_fail': 0, 'seq_ok': 852, 'seq_fail': 0, 'resets': 0}
+cycle=440 elapsed=13273s totals={'cycles': 440, 'dual_ok': 4, 'dual_fail': 0, 'seq_ok': 872, 'seq_fail': 0, 'resets': 0}
+cycle=450 elapsed=13573s totals={'cycles': 450, 'dual_ok': 4, 'dual_fail': 0, 'seq_ok': 892, 'seq_fail': 0, 'resets': 0}
+cycle=460 elapsed=13873s totals={'cycles': 460, 'dual_ok': 4, 'dual_fail': 0, 'seq_ok': 912, 'seq_fail': 0, 'resets': 0}
+cycle=470 elapsed=14173s totals={'cycles': 470, 'dual_ok': 4, 'dual_fail': 0, 'seq_ok': 932, 'seq_fail': 0, 'resets': 0}
+dual cycle=479 ok=True err=None cross={'A_C8E4->B_65D8': 'unauthorized', 'B_65D8->A_C8E4': 'unauthorized'}
+cycle=480 elapsed=14479s totals={'cycles': 480, 'dual_ok': 5, 'dual_fail': 0, 'seq_ok': 950, 'seq_fail': 0, 'resets': 0}
+cycle=490 elapsed=14780s totals={'cycles': 490, 'dual_ok': 5, 'dual_fail': 0, 'seq_ok': 970, 'seq_fail': 0, 'resets': 0}
+cycle=500 elapsed=15081s totals={'cycles': 500, 'dual_ok': 5, 'dual_fail': 0, 'seq_ok': 990, 'seq_fail': 0, 'resets': 0}
+cycle=510 elapsed=15381s totals={'cycles': 510, 'dual_ok': 5, 'dual_fail': 0, 'seq_ok': 1010, 'seq_fail': 0, 'resets': 0}
+cycle=520 elapsed=15682s totals={'cycles': 520, 'dual_ok': 5, 'dual_fail': 0, 'seq_ok': 1030, 'seq_fail': 0, 'resets': 0}
+cycle=530 elapsed=15982s totals={'cycles': 530, 'dual_ok': 5, 'dual_fail': 0, 'seq_ok': 1050, 'seq_fail': 0, 'resets': 0}
+cycle=540 elapsed=16282s totals={'cycles': 540, 'dual_ok': 5, 'dual_fail': 0, 'seq_ok': 1070, 'seq_fail': 0, 'resets': 0}
+cycle=550 elapsed=16582s totals={'cycles': 550, 'dual_ok': 5, 'dual_fail': 0, 'seq_ok': 1090, 'seq_fail': 0, 'resets': 0}
+cycle=560 elapsed=16882s totals={'cycles': 560, 'dual_ok': 5, 'dual_fail': 0, 'seq_ok': 1110, 'seq_fail': 0, 'resets': 0}
+cycle=570 elapsed=17182s totals={'cycles': 570, 'dual_ok': 5, 'dual_fail': 0, 'seq_ok': 1130, 'seq_fail': 0, 'resets': 0}
+cycle=580 elapsed=17483s totals={'cycles': 580, 'dual_ok': 5, 'dual_fail': 0, 'seq_ok': 1150, 'seq_fail': 0, 'resets': 0}
+cycle=590 elapsed=17783s totals={'cycles': 590, 'dual_ok': 5, 'dual_fail': 0, 'seq_ok': 1170, 'seq_fail': 0, 'resets': 0}
+dual cycle=599 ok=True err=None cross={'A_C8E4->B_65D8': 'unauthorized', 'B_65D8->A_C8E4': 'unauthorized'}
+cycle=600 elapsed=18089s totals={'cycles': 600, 'dual_ok': 6, 'dual_fail': 0, 'seq_ok': 1188, 'seq_fail': 0, 'resets': 0}
+cycle=610 elapsed=18389s totals={'cycles': 610, 'dual_ok': 6, 'dual_fail': 0, 'seq_ok': 1208, 'seq_fail': 0, 'resets': 0}
+cycle=620 elapsed=18689s totals={'cycles': 620, 'dual_ok': 6, 'dual_fail': 0, 'seq_ok': 1228, 'seq_fail': 0, 'resets': 0}
+cycle=630 elapsed=18989s totals={'cycles': 630, 'dual_ok': 6, 'dual_fail': 0, 'seq_ok': 1248, 'seq_fail': 0, 'resets': 0}
+cycle=640 elapsed=19289s totals={'cycles': 640, 'dual_ok': 6, 'dual_fail': 0, 'seq_ok': 1268, 'seq_fail': 0, 'resets': 0}
+cycle=650 elapsed=19589s totals={'cycles': 650, 'dual_ok': 6, 'dual_fail': 0, 'seq_ok': 1288, 'seq_fail': 0, 'resets': 0}
+cycle=660 elapsed=19890s totals={'cycles': 660, 'dual_ok': 6, 'dual_fail': 0, 'seq_ok': 1308, 'seq_fail': 0, 'resets': 0}
+cycle=670 elapsed=20190s totals={'cycles': 670, 'dual_ok': 6, 'dual_fail': 0, 'seq_ok': 1328, 'seq_fail': 0, 'resets': 0}
+cycle=680 elapsed=20490s totals={'cycles': 680, 'dual_ok': 6, 'dual_fail': 0, 'seq_ok': 1348, 'seq_fail': 0, 'resets': 0}
+cycle=690 elapsed=20790s totals={'cycles': 690, 'dual_ok': 6, 'dual_fail': 0, 'seq_ok': 1368, 'seq_fail': 0, 'resets': 0}
+cycle=700 elapsed=21091s totals={'cycles': 700, 'dual_ok': 6, 'dual_fail': 0, 'seq_ok': 1388, 'seq_fail': 0, 'resets': 0}
+cycle=710 elapsed=21391s totals={'cycles': 710, 'dual_ok': 6, 'dual_fail': 0, 'seq_ok': 1408, 'seq_fail': 0, 'resets': 0}
+{"phase": "summary", "elapsed_s": 21601, "totals": {"cycles": 716, "dual_ok": 6, "dual_fail": 0, "seq_ok": 1420, "seq_fail": 0, "resets": 0}, "ts": "2026-11-02T14:21:04"}

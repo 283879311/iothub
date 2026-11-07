@@ -1,0 +1,52 @@
+patched
+dual cycle=1 ok=False err=BleakDeviceNotFoundError:Device with address B0:A7:32:28:C8:E6 was not found. cross={}
+cycle=10 elapsed=291s totals={'cycles': 10, 'dual_ok': 0, 'dual_fail': 1, 'seq_ok': 17, 'seq_fail': 1, 'resets': 0}
+cycle=20 elapsed=603s totals={'cycles': 20, 'dual_ok': 0, 'dual_fail': 1, 'seq_ok': 37, 'seq_fail': 1, 'resets': 0}
+cycle=30 elapsed=911s totals={'cycles': 30, 'dual_ok': 0, 'dual_fail': 1, 'seq_ok': 57, 'seq_fail': 1, 'resets': 0}
+cycle=40 elapsed=1215s totals={'cycles': 40, 'dual_ok': 0, 'dual_fail': 1, 'seq_ok': 77, 'seq_fail': 1, 'resets': 0}
+cycle=50 elapsed=1518s totals={'cycles': 50, 'dual_ok': 0, 'dual_fail': 1, 'seq_ok': 97, 'seq_fail': 1, 'resets': 0}
+cycle=60 elapsed=1820s totals={'cycles': 60, 'dual_ok': 0, 'dual_fail': 1, 'seq_ok': 117, 'seq_fail': 1, 'resets': 0}
+cycle=70 elapsed=2122s totals={'cycles': 70, 'dual_ok': 0, 'dual_fail': 1, 'seq_ok': 137, 'seq_fail': 1, 'resets': 0}
+cycle=80 elapsed=2425s totals={'cycles': 80, 'dual_ok': 0, 'dual_fail': 1, 'seq_ok': 157, 'seq_fail': 1, 'resets': 0}
+cycle=90 elapsed=2727s totals={'cycles': 90, 'dual_ok': 0, 'dual_fail': 1, 'seq_ok': 177, 'seq_fail': 1, 'resets': 0}
+cycle=100 elapsed=3030s totals={'cycles': 100, 'dual_ok': 0, 'dual_fail': 1, 'seq_ok': 197, 'seq_fail': 1, 'resets': 0}
+cycle=110 elapsed=3490s totals={'cycles': 110, 'dual_ok': 0, 'dual_fail': 1, 'seq_ok': 217, 'seq_fail': 1, 'resets': 0}
+dual cycle=113 ok=True err=None cross={'A_C8E4->B_65D8': 'unauthorized', 'B_65D8->A_C8E4': 'unauthorized'}
+cycle=120 elapsed=4022s totals={'cycles': 120, 'dual_ok': 1, 'dual_fail': 1, 'seq_ok': 235, 'seq_fail': 1, 'resets': 0}
+cycle=130 elapsed=4538s totals={'cycles': 130, 'dual_ok': 1, 'dual_fail': 1, 'seq_ok': 255, 'seq_fail': 1, 'resets': 0}
+cycle=140 elapsed=5060s totals={'cycles': 140, 'dual_ok': 1, 'dual_fail': 1, 'seq_ok': 275, 'seq_fail': 1, 'resets': 0}
+cycle=150 elapsed=5591s totals={'cycles': 150, 'dual_ok': 1, 'dual_fail': 1, 'seq_ok': 295, 'seq_fail': 1, 'resets': 0}
+cycle=160 elapsed=6113s totals={'cycles': 160, 'dual_ok': 1, 'dual_fail': 1, 'seq_ok': 315, 'seq_fail': 1, 'resets': 0}
+cycle=170 elapsed=6628s totals={'cycles': 170, 'dual_ok': 1, 'dual_fail': 1, 'seq_ok': 335, 'seq_fail': 1, 'resets': 0}
+cycle=180 elapsed=7147s totals={'cycles': 180, 'dual_ok': 1, 'dual_fail': 1, 'seq_ok': 355, 'seq_fail': 1, 'resets': 0}
+dual cycle=183 ok=True err=None cross={'A_C8E4->B_65D8': 'unauthorized', 'B_65D8->A_C8E4': 'unauthorized'}
+cycle=190 elapsed=7626s totals={'cycles': 190, 'dual_ok': 2, 'dual_fail': 1, 'seq_ok': 373, 'seq_fail': 1, 'resets': 0}
+cycle=200 elapsed=8117s totals={'cycles': 200, 'dual_ok': 2, 'dual_fail': 1, 'seq_ok': 393, 'seq_fail': 1, 'resets': 0}
+cycle=210 elapsed=8634s totals={'cycles': 210, 'dual_ok': 2, 'dual_fail': 1, 'seq_ok': 413, 'seq_fail': 1, 'resets': 0}
+cycle=220 elapsed=9157s totals={'cycles': 220, 'dual_ok': 2, 'dual_fail': 1, 'seq_ok': 433, 'seq_fail': 1, 'resets': 0}
+cycle=230 elapsed=9680s totals={'cycles': 230, 'dual_ok': 2, 'dual_fail': 1, 'seq_ok': 452, 'seq_fail': 2, 'resets': 0}
+cycle=240 elapsed=10201s totals={'cycles': 240, 'dual_ok': 2, 'dual_fail': 1, 'seq_ok': 472, 'seq_fail': 2, 'resets': 0}
+cycle=250 elapsed=10730s totals={'cycles': 250, 'dual_ok': 2, 'dual_fail': 1, 'seq_ok': 492, 'seq_fail': 2, 'resets': 0}
+dual cycle=253 ok=True err=None cross={'A_C8E4->B_65D8': 'unauthorized', 'B_65D8->A_C8E4': 'unauthorized'}
+cycle=260 elapsed=11257s totals={'cycles': 260, 'dual_ok': 3, 'dual_fail': 1, 'seq_ok': 510, 'seq_fail': 2, 'resets': 0}
+cycle=270 elapsed=11789s totals={'cycles': 270, 'dual_ok': 3, 'dual_fail': 1, 'seq_ok': 530, 'seq_fail': 2, 'resets': 0}
+cycle=280 elapsed=12309s totals={'cycles': 280, 'dual_ok': 3, 'dual_fail': 1, 'seq_ok': 550, 'seq_fail': 2, 'resets': 0}
+cycle=290 elapsed=12829s totals={'cycles': 290, 'dual_ok': 3, 'dual_fail': 1, 'seq_ok': 570, 'seq_fail': 2, 'resets': 0}
+cycle=300 elapsed=13349s totals={'cycles': 300, 'dual_ok': 3, 'dual_fail': 1, 'seq_ok': 590, 'seq_fail': 2, 'resets': 0}
+cycle=310 elapsed=13873s totals={'cycles': 310, 'dual_ok': 3, 'dual_fail': 1, 'seq_ok': 610, 'seq_fail': 2, 'resets': 0}
+cycle=320 elapsed=14384s totals={'cycles': 320, 'dual_ok': 3, 'dual_fail': 1, 'seq_ok': 630, 'seq_fail': 2, 'resets': 0}
+dual cycle=322 ok=True err=None cross={'A_C8E4->B_65D8': 'unauthorized', 'B_65D8->A_C8E4': 'unauthorized'}
+cycle=330 elapsed=14908s totals={'cycles': 330, 'dual_ok': 4, 'dual_fail': 1, 'seq_ok': 648, 'seq_fail': 2, 'resets': 0}
+cycle=340 elapsed=15412s totals={'cycles': 340, 'dual_ok': 4, 'dual_fail': 1, 'seq_ok': 668, 'seq_fail': 2, 'resets': 0}
+cycle=350 elapsed=15940s totals={'cycles': 350, 'dual_ok': 4, 'dual_fail': 1, 'seq_ok': 687, 'seq_fail': 3, 'resets': 0}
+cycle=360 elapsed=16447s totals={'cycles': 360, 'dual_ok': 4, 'dual_fail': 1, 'seq_ok': 706, 'seq_fail': 4, 'resets': 0}
+cycle=370 elapsed=16937s totals={'cycles': 370, 'dual_ok': 4, 'dual_fail': 1, 'seq_ok': 726, 'seq_fail': 4, 'resets': 0}
+cycle=380 elapsed=17439s totals={'cycles': 380, 'dual_ok': 4, 'dual_fail': 1, 'seq_ok': 746, 'seq_fail': 4, 'resets': 0}
+cycle=390 elapsed=17964s totals={'cycles': 390, 'dual_ok': 4, 'dual_fail': 1, 'seq_ok': 766, 'seq_fail': 4, 'resets': 0}
+dual cycle=393 ok=True err=None cross={'A_C8E4->B_65D8': 'unauthorized', 'B_65D8->A_C8E4': 'unauthorized'}
+cycle=400 elapsed=18539s totals={'cycles': 400, 'dual_ok': 5, 'dual_fail': 1, 'seq_ok': 784, 'seq_fail': 4, 'resets': 0}
+cycle=410 elapsed=19100s totals={'cycles': 410, 'dual_ok': 5, 'dual_fail': 1, 'seq_ok': 803, 'seq_fail': 5, 'resets': 0}
+cycle=420 elapsed=19623s totals={'cycles': 420, 'dual_ok': 5, 'dual_fail': 1, 'seq_ok': 823, 'seq_fail': 5, 'resets': 0}
+cycle=430 elapsed=20131s totals={'cycles': 430, 'dual_ok': 5, 'dual_fail': 1, 'seq_ok': 842, 'seq_fail': 6, 'resets': 0}
+cycle=440 elapsed=20615s totals={'cycles': 440, 'dual_ok': 5, 'dual_fail': 1, 'seq_ok': 862, 'seq_fail': 6, 'resets': 0}
+cycle=450 elapsed=21133s totals={'cycles': 450, 'dual_ok': 5, 'dual_fail': 1, 'seq_ok': 882, 'seq_fail': 6, 'resets': 0}

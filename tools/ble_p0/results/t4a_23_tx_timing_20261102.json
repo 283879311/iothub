@@ -1,0 +1,22 @@
+{
+  "address": "B0:A7:32:28:C8:E6",
+  "response_bytes": 1130,
+  "notify_count": 5,
+  "notify_sizes": [
+    253,
+    253,
+    253,
+    253,
+    118
+  ],
+  "interval_ms": [
+    177.53,
+    44.02,
+    88.7,
+    46.81
+  ],
+  "interval_ms_nonfirst_min": 44.02,
+  "interval_ms_nonfirst_median": 46.81,
+  "interval_ms_nonfirst_max": 88.7,
+  "notify_count_15_60ms": 2
+}

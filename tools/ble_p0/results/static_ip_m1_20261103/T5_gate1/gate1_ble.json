@@ -1,0 +1,17 @@
+{
+  "hook_status": {
+    "ok": true,
+    "action": "status",
+    "id": 2
+  },
+  "config": {
+    "sta_use_static": true,
+    "sta_static_ip": "192.168.1.50",
+    "sta_ip": "192.168.1.50"
+  },
+  "status": {
+    "sta_ip": "192.168.1.50",
+    "sta_connected": true,
+    "mqtt_connected": true
+  }
+}

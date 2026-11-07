@@ -1,0 +1,5 @@
+/home/tc/esp/workspace/iothub/.venv-bleak/lib/python3.12/site-packages/bleak/backends/bluezdbus/client.py:646: UserWarning: Using default MTU value. Call _acquire_mtu() or set _mtu_size first to avoid this warning.
+  warnings.warn(
+accept True op op-2AC18FAC4C6998CC err None
+inject True None
+terminal failed timeout 11.30s

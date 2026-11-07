@@ -1,0 +1,14 @@
+/home/tc/esp/workspace/iothub/.venv-bleak/lib/python3.12/site-packages/bleak/backends/bluezdbus/client.py:646: UserWarning: Using default MTU value. Call _acquire_mtu() or set _mtu_size first to avoid this warning.
+  warnings.warn(
+old-connected accept ok=True op=op-7B6231C5B5378FBC state=accepted err=None
+old-connected inject connected ok=True err=None
+old-connected terminal state=failed error=wrong_password elapsed=6.20s
+old-gotip accept ok=True op=op-31C7EACDAC50018D state=accepted err=None
+old-gotip inject got_ip ok=True err=None
+old-gotip terminal state=failed error=wrong_password elapsed=7.75s
+bssid-conflict accept ok=True op=op-348C895FD0F07591 state=accepted err=None
+bssid-conflict inject got_ip ok=True err=None
+bssid-conflict terminal state=failed error=wrong_password elapsed=7.90s
+candidate-gotip-control accept ok=True op=op-73C437764B0F492D state=accepted err=None
+candidate-gotip-control inject got_ip ok=True err=None
+candidate-gotip-control terminal state=got_ip error=none elapsed=30.15s

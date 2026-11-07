@@ -1,0 +1,18 @@
+/home/tc/esp/workspace/iothub/.venv-bleak/lib/python3.12/site-packages/bleak/backends/bluezdbus/client.py:646: UserWarning: Using default MTU value. Call _acquire_mtu() or set _mtu_size first to avoid this warning.
+  warnings.warn(
+initial A {'sta_connected': True, 'sta_has_ip': True, 'sta_ip': '192.168.1.28', 'connected_ssid': 'CMCC-502', 'mqtt_connected': True, 'last_disconnect': 'none', 'rssi_valid': True}
+initial B {'sta_connected': True, 'sta_has_ip': True, 'sta_ip': '192.168.1.45', 'connected_ssid': 'CMCC-502', 'mqtt_connected': True, 'last_disconnect': 'none', 'rssi_valid': True}
+A tryconnect accept True op op-F4440EDE5CE8A479 err None
+B during A tryconnect #1 {'sta_connected': True, 'sta_has_ip': True, 'sta_ip': '192.168.1.45', 'connected_ssid': 'CMCC-502', 'mqtt_connected': True, 'last_disconnect': 'none', 'rssi_valid': True}
+B during A tryconnect #2 {'sta_connected': True, 'sta_has_ip': True, 'sta_ip': '192.168.1.45', 'connected_ssid': 'CMCC-502', 'mqtt_connected': True, 'last_disconnect': 'none', 'rssi_valid': True}
+B during A tryconnect #3 {'sta_connected': True, 'sta_has_ip': True, 'sta_ip': '192.168.1.45', 'connected_ssid': 'CMCC-502', 'mqtt_connected': True, 'last_disconnect': 'none', 'rssi_valid': True}
+A tryconnect terminal failed wrong_password 9.40s
+A after recovery {'sta_connected': True, 'sta_has_ip': True, 'sta_ip': '192.168.1.28', 'connected_ssid': 'CMCC-502', 'mqtt_connected': False, 'last_disconnect': 'none', 'rssi_valid': True}
+B after A recovery {'sta_connected': True, 'sta_has_ip': True, 'sta_ip': '192.168.1.45', 'connected_ssid': 'CMCC-502', 'mqtt_connected': True, 'last_disconnect': 'none', 'rssi_valid': True}
+B tryconnect accept True op op-73350D527F6C351E err None
+A during B tryconnect #1 {'sta_connected': True, 'sta_has_ip': True, 'sta_ip': '192.168.1.28', 'connected_ssid': 'CMCC-502', 'mqtt_connected': True, 'last_disconnect': 'none', 'rssi_valid': True}
+A during B tryconnect #2 {'sta_connected': True, 'sta_has_ip': True, 'sta_ip': '192.168.1.28', 'connected_ssid': 'CMCC-502', 'mqtt_connected': True, 'last_disconnect': 'none', 'rssi_valid': True}
+A during B tryconnect #3 {'sta_connected': True, 'sta_has_ip': True, 'sta_ip': '192.168.1.28', 'connected_ssid': 'CMCC-502', 'mqtt_connected': True, 'last_disconnect': 'none', 'rssi_valid': True}
+B tryconnect terminal failed wrong_password 9.36s
+A final {'sta_connected': True, 'sta_has_ip': True, 'sta_ip': '192.168.1.28', 'connected_ssid': 'CMCC-502', 'mqtt_connected': True, 'last_disconnect': 'none', 'rssi_valid': True}
+B final {'sta_connected': True, 'sta_has_ip': True, 'sta_ip': '192.168.1.45', 'connected_ssid': 'CMCC-502', 'mqtt_connected': False, 'last_disconnect': 'none', 'rssi_valid': True}

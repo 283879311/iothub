@@ -1,0 +1,118 @@
+{
+  "before": {
+    "id": "d1-tc-st-2",
+    "ok": true,
+    "data": {
+      "sta_connected": true,
+      "sta_has_ip": true,
+      "sta_ip": "192.168.1.50",
+      "last_disconnect": "none",
+      "connected_ssid": "CMCC-502",
+      "connected_profile": 0,
+      "rssi": -65,
+      "channel": 3,
+      "bssid": "5c:c0:a0:bd:f6:28",
+      "rssi_valid": true,
+      "sta_ssid": "CMCC-502",
+      "password_set": true,
+      "mode": "sta",
+      "mqtt_connected": true,
+      "mqtt_last_error": "",
+      "trial": {
+        "state": "idle"
+      }
+    }
+  },
+  "tryconnect": {
+    "id": "d1-tc-3",
+    "ok": true,
+    "data": {
+      "operation_id": "op-0A7E16749D7F046D",
+      "state": "accepted"
+    }
+  },
+  "operation_states": [
+    {
+      "t": 0.0,
+      "state": "connecting",
+      "error": "none"
+    },
+    {
+      "t": 0.5,
+      "state": "connecting",
+      "error": "none"
+    },
+    {
+      "t": 1.0,
+      "state": "connecting",
+      "error": "none"
+    },
+    {
+      "t": 1.5,
+      "state": "connecting",
+      "error": "none"
+    },
+    {
+      "t": 2.0,
+      "state": "connecting",
+      "error": "none"
+    },
+    {
+      "t": 2.5,
+      "state": "connecting",
+      "error": "none"
+    },
+    {
+      "t": 3.0,
+      "state": "connecting",
+      "error": "none"
+    },
+    {
+      "t": 3.5,
+      "state": "connecting",
+      "error": "none"
+    },
+    {
+      "t": 4.0,
+      "state": "connecting",
+      "error": "none"
+    },
+    {
+      "t": 4.5,
+      "state": "failed",
+      "error": "wrong_password"
+    }
+  ],
+  "cancel": {
+    "id": "d1-tc-cancel-14",
+    "ok": false,
+    "error": {
+      "code": "operation_state",
+      "message": "operation_state"
+    }
+  },
+  "after": {
+    "id": "d1-tc-after-15",
+    "ok": true,
+    "data": {
+      "sta_connected": true,
+      "sta_has_ip": true,
+      "sta_ip": "192.168.1.50",
+      "last_disconnect": "none",
+      "connected_ssid": "CMCC-502",
+      "connected_profile": 0,
+      "rssi": -65,
+      "channel": 3,
+      "bssid": "5c:c0:a0:bd:f6:28",
+      "rssi_valid": true,
+      "sta_ssid": "CMCC-502",
+      "password_set": true,
+      "mode": "sta",
+      "mqtt_connected": false,
+      "mqtt_last_error": "waiting_sta_ip",
+      "trial": {
+        "state": "idle"
+      }
+    }
+  }
+}

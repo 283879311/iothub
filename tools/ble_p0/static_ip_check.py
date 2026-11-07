@@ -110,7 +110,7 @@ async def run(args: argparse.Namespace) -> int:
         print(f"[static] before IP={current_ip}; plan={plan}")
 
         params = {"sta_use_static": True, **plan}
-        set_res = await sess.v0("config.set", params, req_id=76, timeout=20)
+        set_res = await sess.v1("config.set", {"patch": params}, timeout=20, id_prefix="static-set")
         result["config_set"] = {
             "ok": set_res.obj.get("ok") is True,
             "response": sanitize(set_res.obj),
@@ -164,8 +164,9 @@ async def run(args: argparse.Namespace) -> int:
             except Exception as exc:  # noqa: BLE001
                 result["revert"] = {"ok": False, "error": str(exc)}
                 return _finish(result)
-            revert_res = await sess.v0(
-                "config.set", {"sta_use_static": False}, req_id=77, timeout=20
+            revert_res = await sess.v1(
+                "config.set", {"patch": {"sta_use_static": False}},
+                timeout=20, id_prefix="static-revert"
             )
             result["revert"] = {
                 "ok": revert_res.obj.get("ok") is True,

@@ -1,0 +1,155 @@
+{
+  "before": {
+    "config_network": {
+      "net_mode": "sta",
+      "sta_ssid": "CMCC-502",
+      "sta_password_set": true,
+      "sta_use_static": true,
+      "sta_static_ip": "192.168.1.50",
+      "sta_static_gateway": "192.168.1.1",
+      "sta_static_netmask": "255.255.255.0",
+      "sta_static_dns1": "223.5.5.5",
+      "sta_static_dns2": "8.8.8.8",
+      "sta_connected": true,
+      "sta_has_ip": true,
+      "sta_ip": "192.168.1.50",
+      "last_disconnect": "none"
+    },
+    "status": {
+      "sta_connected": true,
+      "sta_has_ip": true,
+      "sta_ip": "192.168.1.50",
+      "last_disconnect": "none",
+      "connected_ssid": "CMCC-502",
+      "connected_profile": 0,
+      "rssi": -68,
+      "channel": 3,
+      "bssid": "5c:c0:a0:bd:f6:28",
+      "rssi_valid": true,
+      "sta_ssid": "CMCC-502",
+      "password_set": true,
+      "mode": "sta",
+      "mqtt_connected": true,
+      "mqtt_last_error": "",
+      "trial": {
+        "state": "idle"
+      }
+    }
+  },
+  "set": {
+    "id": "staticw-set-4",
+    "ok": true,
+    "data": {
+      "success": true,
+      "changed": [
+        "sta_static_ip"
+      ],
+      "effect": "reboot",
+      "relay_on": false,
+      "led_on": true,
+      "input_active": false,
+      "io_seq": 30,
+      "io_source": "input",
+      "saved": true,
+      "applied": false,
+      "restart_required": true,
+      "rollback": "none",
+      "operation_type": "reboot"
+    }
+  },
+  "after_set": {
+    "config_network": {
+      "net_mode": "sta",
+      "sta_ssid": "CMCC-502",
+      "sta_password_set": true,
+      "sta_use_static": true,
+      "sta_static_ip": "192.168.1.51",
+      "sta_static_gateway": "192.168.1.1",
+      "sta_static_netmask": "255.255.255.0",
+      "sta_static_dns1": "223.5.5.5",
+      "sta_static_dns2": "8.8.8.8",
+      "sta_connected": true,
+      "sta_has_ip": true,
+      "sta_ip": "192.168.1.51",
+      "last_disconnect": "none"
+    },
+    "status": {
+      "sta_connected": true,
+      "sta_has_ip": true,
+      "sta_ip": "192.168.1.51",
+      "last_disconnect": "none",
+      "connected_ssid": "CMCC-502",
+      "connected_profile": 0,
+      "rssi": -67,
+      "channel": 3,
+      "bssid": "5c:c0:a0:bd:f6:28",
+      "rssi_valid": true,
+      "sta_ssid": "CMCC-502",
+      "password_set": true,
+      "mode": "sta",
+      "mqtt_connected": true,
+      "mqtt_last_error": "",
+      "trial": {
+        "state": "idle"
+      }
+    }
+  },
+  "restore_cmd": {
+    "id": "staticw-restore-4",
+    "ok": true,
+    "data": {
+      "success": true,
+      "changed": [
+        "sta_static_ip"
+      ],
+      "effect": "reboot",
+      "relay_on": false,
+      "led_on": true,
+      "input_active": false,
+      "io_seq": 6,
+      "io_source": "input",
+      "saved": true,
+      "applied": false,
+      "restart_required": true,
+      "rollback": "none",
+      "operation_type": "reboot"
+    }
+  },
+  "after_restore": {
+    "config_network": {
+      "net_mode": "sta",
+      "sta_ssid": "CMCC-502",
+      "sta_password_set": true,
+      "sta_use_static": true,
+      "sta_static_ip": "192.168.1.50",
+      "sta_static_gateway": "192.168.1.1",
+      "sta_static_netmask": "255.255.255.0",
+      "sta_static_dns1": "223.5.5.5",
+      "sta_static_dns2": "8.8.8.8",
+      "sta_connected": true,
+      "sta_has_ip": true,
+      "sta_ip": "192.168.1.50",
+      "last_disconnect": "none"
+    },
+    "status": {
+      "sta_connected": true,
+      "sta_has_ip": true,
+      "sta_ip": "192.168.1.50",
+      "last_disconnect": "none",
+      "connected_ssid": "CMCC-502",
+      "connected_profile": 0,
+      "rssi": -64,
+      "channel": 3,
+      "bssid": "5c:c0:a0:bd:f6:28",
+      "rssi_valid": true,
+      "sta_ssid": "CMCC-502",
+      "password_set": true,
+      "mode": "sta",
+      "mqtt_connected": true,
+      "mqtt_last_error": "",
+      "trial": {
+        "state": "idle"
+      }
+    }
+  }
+}

@@ -1,0 +1,35 @@
+# 单容器 EMQX 测试 broker（备选/推荐用于调试期）
+# 用法：docker compose up -d && docker compose logs -f
+# 端口：21884 -> 容器 1883（与同机 ThingsBoard 的 21883 错开）
+#      18083 仅绑 127.0.0.1，用 SSH 隧道访问 Dashboard（不要直接暴露公网）
+
+services:
+  emqx:
+    image: emqx/emqx:5.8
+    container_name: iothub-emqx
+    restart: unless-stopped
+    ports:
+      - "21884:1883"              # MQTT TCP，设备连这个
+      - "127.0.0.1:18083:18083"   # Dashboard，仅本机（ssh -L 18083:127.0.0.1:18083）
+    environment:
+      # 固定节点名：配合持久化卷，避免重启后 mnesia 节点名不一致
+      EMQX_NODE__NAME: "emqx@127.0.0.1"
+      # 关键：关闭该 listener 的认证。
+      # 设备固件只发 username（= mqtt_token）、不发密码（main/mqtt.c:1683-1684），
+      # 一旦启用任何认证器，设备必然被拒且报错只有 not authorized。
+      EMQX_LISTENERS__TCP__DEFAULT__ENABLE_AUTHN: "false"
+      EMQX_LISTENERS__TCP__DEFAULT__MAX_CONNECTIONS: "128"
+      EMQX_LOG__CONSOLE__LEVEL: "info"
+    volumes:
+      - emqx-data:/opt/emqx/data
+      - emqx-log:/opt/emqx/log
+    healthcheck:
+      test: ["CMD", "/opt/emqx/bin/emqx", "ctl", "status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+volumes:
+  emqx-data:
+  emqx-log:

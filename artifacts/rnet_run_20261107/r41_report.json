@@ -1,0 +1,259 @@
+{
+ "target": "127.0.0.1:21883",
+ "time": "2026-11-07 11:19:20",
+ "cases": [
+  {
+   "id": "T01",
+   "name": "v0帧(无version)→unsupported_version",
+   "status": "PASS",
+   "detail": "PASS"
+  },
+  {
+   "id": "T01b",
+   "name": "v0帧数值id→拒绝壳回带id",
+   "status": "PASS",
+   "detail": "PASS"
+  },
+  {
+   "id": "T02",
+   "name": "version=2.0→unsupported_version",
+   "status": "PASS",
+   "detail": "PASS"
+  },
+  {
+   "id": "T03",
+   "name": "缺id→invalid_argument",
+   "status": "PASS",
+   "detail": "PASS"
+  },
+  {
+   "id": "T04",
+   "name": "缺cmd→invalid_argument",
+   "status": "PASS",
+   "detail": "PASS"
+  },
+  {
+   "id": "T05",
+   "name": "args非对象→invalid_argument",
+   "status": "PASS",
+   "detail": "PASS"
+  },
+  {
+   "id": "T06",
+   "name": "未知命令→unknown_command",
+   "status": "PASS",
+   "detail": "PASS"
+  },
+  {
+   "id": "T07",
+   "name": "非JSON静默丢弃(无响应)",
+   "status": "PASS",
+   "detail": "PASS"
+  },
+  {
+   "id": "T08",
+   "name": "200ms内连发第二发→rate_limited",
+   "status": "PASS",
+   "detail": "PASS"
+  },
+  {
+   "id": "P01",
+   "name": "device.info→ok+data",
+   "status": "PASS",
+   "detail": "PASS"
+  },
+  {
+   "id": "P02",
+   "name": "device.status→ok+data",
+   "status": "PASS",
+   "detail": "PASS"
+  },
+  {
+   "id": "P03",
+   "name": "gpio.status→ok+data",
+   "status": "PASS",
+   "detail": "PASS"
+  },
+  {
+   "id": "P04",
+   "name": "uart.runtime→ok+data",
+   "status": "PASS",
+   "detail": "PASS"
+  },
+  {
+   "id": "P05",
+   "name": "config.get→ok+data",
+   "status": "PASS",
+   "detail": "PASS"
+  },
+  {
+   "id": "P07",
+   "name": "io.get→ok+data",
+   "status": "PASS",
+   "detail": "PASS"
+  },
+  {
+   "id": "P08",
+   "name": "led.toggle→ok",
+   "status": "PASS",
+   "detail": "PASS"
+  },
+  {
+   "id": "P09",
+   "name": "network.status→ok+data",
+   "status": "PASS",
+   "detail": "PASS"
+  },
+  {
+   "id": "P05b",
+   "name": "config.get未知域→invalid_argument",
+   "status": "PASS",
+   "detail": "PASS"
+  },
+  {
+   "id": "P06",
+   "name": "config.set(gpio/data_route域)→ok",
+   "status": "PASS",
+   "detail": "PASS"
+  },
+  {
+   "id": "P12",
+   "name": "数字id回包为字符串'777'",
+   "status": "PASS",
+   "detail": "PASS"
+  },
+  {
+   "id": "P11",
+   "name": "自定义主题 iothub/rpc(TB backend 预期无响应)",
+   "status": "PASS",
+   "detail": "PASS"
+  },
+  {
+   "id": "P10",
+   "name": "operation.get未知id→not_found",
+   "status": "PASS",
+   "detail": "PASS"
+  },
+  {
+   "id": "F01",
+   "name": "network.scan(BLE-only)→forbidden",
+   "status": "PASS",
+   "detail": "PASS"
+  },
+  {
+   "id": "F02",
+   "name": "network.profile.list(BLE-only)→forbidden",
+   "status": "PASS",
+   "detail": "PASS"
+  },
+  {
+   "id": "F03",
+   "name": "network.profile.delete(BLE-only)→forbidden",
+   "status": "PASS",
+   "detail": "PASS"
+  },
+  {
+   "id": "F04",
+   "name": "network.reconnect(BLE-only)→forbidden",
+   "status": "PASS",
+   "detail": "PASS"
+  },
+  {
+   "id": "F05",
+   "name": "auth.login(BLE-only)→forbidden",
+   "status": "PASS",
+   "detail": "PASS"
+  },
+  {
+   "id": "F06",
+   "name": "auth.admin.set(BLE-only)→forbidden",
+   "status": "PASS",
+   "detail": "PASS"
+  },
+  {
+   "id": "F07",
+   "name": "provisioning.pin.set(BLE-only)→forbidden",
+   "status": "PASS",
+   "detail": "PASS"
+  },
+  {
+   "id": "F08",
+   "name": "uart.send(BLE-only)→forbidden",
+   "status": "PASS",
+   "detail": "PASS"
+  },
+  {
+   "id": "F09",
+   "name": "data.loopback(BLE-only)→forbidden",
+   "status": "PASS",
+   "detail": "PASS"
+  },
+  {
+   "id": "F10",
+   "name": "config.set改网络域→forbidden(guard_rejected映射)",
+   "status": "PASS",
+   "detail": "PASS"
+  },
+  {
+   "id": "N01",
+   "name": "tryconnect缺ssid→invalid_argument(params_required)",
+   "status": "PASS",
+   "detail": "PASS"
+  },
+  {
+   "id": "N02",
+   "name": "tryconnect假SSID→受理 或 静态锁(static_ip_pinned)",
+   "status": "PASS",
+   "detail": "PASS"
+  },
+  {
+   "id": "N03",
+   "name": "假SSID操作终态=failed",
+   "status": "SKIP",
+   "detail": "需失败时序注入,默认 SKIP(与首跑一致)"
+  },
+  {
+   "id": "N07",
+   "name": "cancel受理中的操作",
+   "status": "SKIP",
+   "detail": "需在飞时序,默认 SKIP(与首跑一致)"
+  },
+  {
+   "id": "N04",
+   "name": "apply缺operation_id→invalid_argument(params_required)",
+   "status": "PASS",
+   "detail": "PASS"
+  },
+  {
+   "id": "N05",
+   "name": "apply未知id→not_found",
+   "status": "PASS",
+   "detail": "PASS"
+  },
+  {
+   "id": "N06a",
+   "name": "tryconnect真AP受理",
+   "status": "SKIP",
+   "detail": "未给 --ssid/--password,静态锁定或无真实 AP:SKIP(写明原因)"
+  },
+  {
+   "id": "N06b",
+   "name": "真AP到达got_ip",
+   "status": "SKIP",
+   "detail": "N06a 未受理"
+  },
+  {
+   "id": "N06c",
+   "name": "apply提交→success",
+   "status": "SKIP",
+   "detail": "N06b 未到 got_ip"
+  }
+ ],
+ "summary": {
+  "total": 41,
+  "passed": 36,
+  "failed": 0,
+  "skipped": 5
+ },
+ "verdict": "PASS"
+}

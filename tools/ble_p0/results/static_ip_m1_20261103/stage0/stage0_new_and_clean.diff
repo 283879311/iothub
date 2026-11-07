@@ -1,0 +1,1311 @@
+diff --git a/main/ble_cmd.c b/main/ble_cmd.c
+index 4d03658..5557a50 100644
+--- a/main/ble_cmd.c
++++ b/main/ble_cmd.c
+@@ -12,6 +12,8 @@
+ #include "ble_cmd.h"
+ #include "bt_gatts.h"
+ #include "cmd.h"
++#include "cmd_error.h"
++#include "cmd_net_adapter.h"
+ #include "config_apply.h"
+ #include "auth.h"
+ #include "ota.h"
+@@ -364,81 +366,6 @@ static const char *app_ble_cmd_v1_map(const char *cmd)
+     return cmd;
+ }
+ 
+-static const char *app_ble_cmd_v1_error_code(const char *v0)
+-{
+-    if (v0 == NULL) {
+-        return "internal_error";
+-    }
+-    if (strcmp(v0, "unknown_command") == 0 ||
+-        strcmp(v0, "unknown_method") == 0) {
+-        return "unknown_command";
+-    }
+-    if (strcmp(v0, "line_too_long") == 0) {
+-        return "line_too_long";
+-    }
+-    if (strcmp(v0, "invalid_json") == 0) {
+-        return "invalid_json";
+-    }
+-    if (strcmp(v0, "unsupported_version") == 0) {
+-        return "unsupported_version";
+-    }
+-    if (strcmp(v0, "params_required") == 0 ||
+-        strcmp(v0, "invalid_config") == 0 ||
+-        strcmp(v0, "invalid_param") == 0 ||
+-        strcmp(v0, "invalid_argument") == 0 ||
+-        strcmp(v0, "invalid_old_password") == 0 ||
+-        strcmp(v0, "domain_not_supported") == 0 ||
+-        strcmp(v0, "password_too_short") == 0) {
+-        return "invalid_argument";
+-    }
+-    if (strcmp(v0, "auth_required") == 0 ||
+-        strcmp(v0, "invalid_credentials") == 0 ||
+-        strcmp(v0, "unauthorized") == 0) {
+-        return "unauthorized";
+-    }
+-    if (strcmp(v0, "guard_rejected") == 0 ||
+-        strcmp(v0, "forbidden") == 0) {
+-        return "forbidden";
+-    }
+-    if (strcmp(v0, "busy") == 0) {
+-        return "busy";
+-    }
+-    if (strcmp(v0, "conflict") == 0) {
+-        return "conflict";
+-    }
+-    if (strcmp(v0, "rate_limited") == 0) {
+-        return "rate_limited";
+-    }
+-    if (strcmp(v0, "internal_error") == 0) {
+-        return "internal_error";
+-    }
+-    if (strcmp(v0, "not_found") == 0 ||
+-        strcmp(v0, "operation_state") == 0 ||
+-        strcmp(v0, "trial_invalid") == 0 ||
+-        strcmp(v0, "wrong_password") == 0 ||
+-        strcmp(v0, "ap_not_found") == 0 ||
+-        strcmp(v0, "connect_failed") == 0 ||
+-        strcmp(v0, "wifi_scan_failed") == 0 ||   /* P1-10:保持可分辨,不折叠进 network_failed */
+-        strcmp(v0, "no_slot") == 0 ||
+-        strcmp(v0, "expired") == 0 ||
+-        strcmp(v0, "rollback_failed") == 0) {
+-        return v0;
+-    }
+-    if (strcmp(v0, "save_failed") == 0 ||
+-        strcmp(v0, "storage_failed") == 0) {
+-        return "storage_failed";
+-    }
+-    if (strcmp(v0, "wifi_scan_failed") == 0 ||
+-        strcmp(v0, "network_failed") == 0) {
+-        return "network_failed";
+-    }
+-    if (strcmp(v0, "restart_failed") == 0 ||
+-        strcmp(v0, "apply_failed") == 0) {
+-        return "apply_failed";
+-    }
+-    return "internal_error";
+-}
+-
+ static void app_ble_cmd_wrap_v1(cJSON **resp, const char *id, bool has_id)
+ {
+     cJSON *r = resp != NULL ? *resp : NULL;
+@@ -474,7 +401,7 @@ static void app_ble_cmd_wrap_v1(cJSON **resp, const char *id, bool has_id)
+             cJSON_AddStringToObject(err_obj, "id", id != NULL ? id : "");
+         }
+         cJSON_AddBoolToObject(err_obj, "ok", false);
+-        cJSON_AddStringToObject(error, "code", app_ble_cmd_v1_error_code(v0));
++        cJSON_AddStringToObject(error, "code", app_cmd_v1_error_code(v0));
+         cJSON_AddStringToObject(error, "message", v0);
+         cJSON_AddItemToObject(err_obj, "error", error);
+         cJSON_Delete(r);
+@@ -722,8 +649,48 @@ static void app_ble_cmd_handle_line(const char *line, size_t len)
+         goto wrap;
+     }
+ 
++    /* v1 network transactions use the trusted adapter API, not `.async`. */
++    if (v1_envelope && cmd_item != NULL && cJSON_IsString(cmd_item) &&
++        cmd_item->valuestring != NULL) {
++        const char *v1_cmd = cmd_item->valuestring;
++        bool is_try = strcmp(v1_cmd, "network.tryconnect") == 0;
++        bool is_apply = strcmp(v1_cmd, "network.apply") == 0;
++        bool is_cancel = strcmp(v1_cmd, "network.cancel") == 0;
++
++        if (is_try || is_apply || is_cancel) {
++            app_cmd_context_t net_ctx = app_cmd_ctx_entry(APP_CMD_SOURCE_BLE);
++            bool ok;
++
++            net_ctx.auth_level = APP_CMD_AUTH_LOCAL_TOKEN;
++            if (is_try) {
++                ok = app_cmd_net_tryconnect_adapter(&net_ctx, params, &resp, &err);
++            } else if (is_apply) {
++                ok = app_cmd_net_apply_adapter(&net_ctx, params, &resp, &err);
++            } else {
++                ok = app_cmd_net_cancel_adapter(&net_ctx, params, &resp, &err);
++            }
++            if (!ok) {
++                cJSON *err_resp = cJSON_CreateObject();
++
++                if (err_resp != NULL) {
++                    cJSON_AddBoolToObject(err_resp, "ok", false);
++                    cJSON_AddStringToObject(err_resp, "error",
++                                            err != NULL ? err : "internal_error");
++                }
++                if (resp != NULL) {
++                    cJSON_Delete(resp);
++                }
++                resp = err_resp;
++            }
++            goto wrap;
++        }
++    }
++
+     /* 命令内核(与 MQTT RPC 同一分发器) */
+-    if (app_cmd_execute_ex(frame, APP_CMD_SOURCE_BLE, &resp, &out, &err) != ESP_OK || resp == NULL) {
++    {
++        app_cmd_context_t cmd_ctx = app_cmd_ctx_entry(APP_CMD_SOURCE_BLE);
++        cmd_ctx.auth_level = APP_CMD_AUTH_LOCAL_TOKEN;
++        if (app_cmd_execute_ctx(&cmd_ctx, frame, &resp, &out, &err) != ESP_OK || resp == NULL) {
+         cJSON *err_resp = cJSON_CreateObject();
+ 
+         if (err_resp != NULL) {
+@@ -735,6 +702,7 @@ static void app_ble_cmd_handle_line(const char *line, size_t len)
+         }
+         resp = err_resp;
+         goto wrap;
++        }
+     }
+     reboot_after_response = out.reboot_after_response;
+ 
+diff --git a/main/config.c b/main/config.c
+index 57f0c99..0f2594c 100644
+--- a/main/config.c
++++ b/main/config.c
+@@ -877,6 +877,13 @@ esp_err_t app_config_delete_wifi_profile(const char *ssid)
+         return ESP_ERR_NOT_FOUND;
+     }
+     app_config_normalize_wifi_profiles(&s_blob);
++    if (s_blob.count == 0) {
++        /* Ordinary delete must not remove the last usable profile. The
++         * factory-reset path uses app_config_factory_clear_wifi_profiles() instead. */
++        nvs_close(nvs_handle);
++        app_wifi_profiles_unlock();
++        return ESP_ERR_INVALID_STATE;
++    }
+     {
+         esp_err_t err = app_config_store_wifi_profiles_blob(nvs_handle, &s_blob);
+         nvs_close(nvs_handle);
+@@ -888,7 +895,9 @@ esp_err_t app_config_delete_wifi_profile(const char *ssid)
+     }
+ }
+ 
+-esp_err_t app_config_clear_wifi_profiles(void)
++/* Factory-reset only. This is the single explicit full-clear path; ordinary
++ * callers must use app_config_delete_wifi_profile() instead. */
++esp_err_t app_config_factory_clear_wifi_profiles(void)
+ {
+     nvs_handle_t nvs_handle;
+     esp_err_t err;
+diff --git a/main/mqtt.c b/main/mqtt.c
+index 83d2d69..318e186 100644
+--- a/main/mqtt.c
++++ b/main/mqtt.c
+@@ -23,6 +23,9 @@
+ #include "mqtt_client.h"
+ 
+ #include "cmd.h"
++#include "cmd_error.h"
++#include "cmd_net_adapter.h"
++#include "cmd_policy.h"
+ #include "common.h"
+ #include "config.h"
+ #include "config_apply.h"
+@@ -663,6 +666,156 @@ static void app_mqtt_publish_state(void)
+  * ------------------------------------------------------------------------- */
+ static int64_t s_last_cmd_ms = 0;
+ 
++static void app_mqtt_publish_command_response(const char *topic, cJSON *resp)
++{
++    esp_mqtt_client_handle_t client;
++    char *body;
++
++    if (topic == NULL || resp == NULL) {
++        return;
++    }
++    client = app_mqtt_client_safe();
++    if (client == NULL) {
++        return;
++    }
++    body = cJSON_PrintUnformatted(resp);
++    if (body == NULL) {
++        return;
++    }
++    ESP_LOGI(TAG, "rpc resp -> %s: %.256s", topic, body);
++    esp_mqtt_client_publish(client, topic, body, 0, 1, 0);
++    cJSON_free(body);
++}
++
++static cJSON *app_mqtt_v1_error(const char *id, const char *code, const char *message)
++{
++    cJSON *root = cJSON_CreateObject();
++    cJSON *error;
++
++    if (root == NULL) {
++        return NULL;
++    }
++    cJSON_AddStringToObject(root, "id", id != NULL ? id : "");
++    cJSON_AddBoolToObject(root, "ok", false);
++    error = cJSON_AddObjectToObject(root, "error");
++    if (error != NULL) {
++        cJSON_AddStringToObject(error, "code", code != NULL ? code : "internal_error");
++        cJSON_AddStringToObject(error, "message", message != NULL ? message : "");
++    }
++    return root;
++}
++
++static cJSON *app_mqtt_v1_ok(const char *id, cJSON *result)
++{
++    cJSON *root = cJSON_CreateObject();
++
++    if (root == NULL) {
++        cJSON_Delete(result);
++        return NULL;
++    }
++    cJSON_AddStringToObject(root, "id", id != NULL ? id : "");
++    cJSON_AddBoolToObject(root, "ok", true);
++    if (result != NULL) {
++        cJSON_AddItemToObject(root, "result", result);
++    }
++    return root;
++}
++
++static const char *app_mqtt_v1_id_string(const cJSON *id_item, char *buf, size_t buf_size)
++{
++    if (cJSON_IsString(id_item) && id_item->valuestring != NULL) {
++        snprintf(buf, buf_size, "%s", id_item->valuestring);
++        return buf;
++    }
++    if (cJSON_IsNumber(id_item)) {
++        snprintf(buf, buf_size, "%lld", (long long)id_item->valuedouble);
++        return buf;
++    }
++    buf[0] = '\0';
++    return buf;
++}
++
++/* Stage 0 MQTT v1 adapter: only the network methods are mapped. */
++static cJSON *app_mqtt_execute_v1(const cJSON *root)
++{
++    const cJSON *id_item = cJSON_GetObjectItemCaseSensitive(root, "id");
++    const cJSON *cmd_item = cJSON_GetObjectItemCaseSensitive(root, "cmd");
++    const cJSON *args_item = cJSON_GetObjectItemCaseSensitive(root, "args");
++    char id_buf[65];
++    const char *id = app_mqtt_v1_id_string(id_item, id_buf, sizeof(id_buf));
++    const char *cmd;
++    app_cmd_context_t ctx = app_cmd_ctx_entry(APP_CMD_SOURCE_MQTT);
++    app_cmd_policy_result_t policy;
++
++    if (id_item == NULL || (!cJSON_IsString(id_item) && !cJSON_IsNumber(id_item))) {
++        return app_mqtt_v1_error("", "invalid_argument", "id required");
++    }
++    if (!cJSON_IsString(cmd_item) || cmd_item->valuestring == NULL ||
++        !cJSON_IsObject(args_item)) {
++        return app_mqtt_v1_error(id, "invalid_argument", "cmd/args required");
++    }
++    cmd = cmd_item->valuestring;
++    ctx.auth_level = APP_CMD_AUTH_LOCAL_TOKEN;
++    policy = app_cmd_policy_check_network(&ctx, cmd);
++    if (policy != APP_CMD_POLICY_ALLOW) {
++        const char *code = policy == APP_CMD_POLICY_BUSY ? "busy"
++                         : policy == APP_CMD_POLICY_NOT_ENABLED ? "forbidden"
++                         : policy == APP_CMD_POLICY_INVALID_ARGUMENT ? "invalid_argument"
++                         : "forbidden";
++        return app_mqtt_v1_error(id, code,
++                                 policy == APP_CMD_POLICY_NOT_ENABLED
++                                     ? "mqtt network transaction is disabled"
++                                     : cmd);
++    }
++
++    if (strcmp(cmd, "network.tryconnect") == 0 ||
++        strcmp(cmd, "network.apply") == 0 ||
++        strcmp(cmd, "network.cancel") == 0) {
++        bool ok;
++        const char *err = NULL;
++        cJSON *result = NULL;
++
++        if (strcmp(cmd, "network.tryconnect") == 0) {
++            ok = app_cmd_net_tryconnect_adapter(&ctx, args_item, &result, &err);
++        } else if (strcmp(cmd, "network.apply") == 0) {
++            ok = app_cmd_net_apply_adapter(&ctx, args_item, &result, &err);
++        } else {
++            ok = app_cmd_net_cancel_adapter(&ctx, args_item, &result, &err);
++        }
++        if (!ok) {
++            cJSON_Delete(result);
++            return app_mqtt_v1_error(id, app_cmd_v1_error_code(err), err);
++        }
++        return app_mqtt_v1_ok(id, result);
++    }
++
++    if (strcmp(cmd, "network.status") == 0 || strcmp(cmd, "operation.get") == 0) {
++        cJSON *frame = cJSON_CreateObject();
++        cJSON *params = cJSON_Duplicate(args_item, 1);
++        cJSON *result = NULL;
++        app_cmd_result_t out = {0};
++        const char *err = NULL;
++
++        if (frame == NULL || params == NULL) {
++            cJSON_Delete(frame);
++            cJSON_Delete(params);
++            return app_mqtt_v1_error(id, "internal_error", "out_of_memory");
++        }
++        cJSON_AddStringToObject(frame, "method", cmd);
++        cJSON_AddItemToObject(frame, "params", params);
++        if (app_cmd_execute_ctx(&ctx, frame, &result, &out, &err) != ESP_OK ||
++            result == NULL) {
++            cJSON_Delete(frame);
++            cJSON_Delete(result);
++            return app_mqtt_v1_error(id, app_cmd_v1_error_code(err), err);
++        }
++        cJSON_Delete(frame);
++        return app_mqtt_v1_ok(id, result);
++    }
++
++    return app_mqtt_v1_error(id, "unknown_command", cmd);
++}
++
+ static void app_mqtt_apply_command(const char *topic, const char *payload, int data_len)
+ {
+     const char *rpc_prefix = "v1/devices/me/rpc/request/";
+@@ -672,6 +825,8 @@ static void app_mqtt_apply_command(const char *topic, const char *payload, int d
+     bool wants_response = is_rpc || is_custom_rpc;
+     char response_topic[128];
+     cJSON *root = cJSON_ParseWithLength(payload, data_len < 0 ? (payload ? strlen(payload) : 0) : (size_t)data_len);
++    const cJSON *version_item = NULL;
++    bool v1_envelope = false;
+ 
+     if (root == NULL) {
+         int preview_len;
+@@ -688,6 +843,9 @@ static void app_mqtt_apply_command(const char *topic, const char *payload, int d
+         return;
+     }
+ 
++    version_item = cJSON_GetObjectItemCaseSensitive(root, "version");
++    v1_envelope = cJSON_IsString(version_item) && version_item->valuestring != NULL;
++
+     if (is_rpc) {
+         snprintf(response_topic, sizeof(response_topic),
+                  "v1/devices/me/rpc/response/%s", topic + strlen(rpc_prefix));
+@@ -701,31 +859,48 @@ static void app_mqtt_apply_command(const char *topic, const char *payload, int d
+         int64_t now_ms = esp_timer_get_time() / 1000;
+ 
+         if (now_ms - s_last_cmd_ms < 200) {
+-            cJSON *resp = cJSON_CreateObject();
++            cJSON *resp;
+ 
+             ESP_LOGW(TAG, "cloud cmd rate limited (last=%lldms)", (long long)s_last_cmd_ms);
+-            if (resp != NULL) {
+-                esp_mqtt_client_handle_t client;
+-
+-                cJSON_AddBoolToObject(resp, "success", false);
+-                cJSON_AddStringToObject(resp, "error", "rate_limited");
+-                client = app_mqtt_client_safe();
+-                if (client != NULL) {
+-                    char *body = cJSON_PrintUnformatted(resp);
+-                    if (body != NULL) {
+-                        ESP_LOGI(TAG, "rpc resp -> %s: %.256s", response_topic, body);
+-                        esp_mqtt_client_publish(client, response_topic, body, 0, 1, 0);
+-                        cJSON_free(body);
+-                    }
++            if (v1_envelope) {
++                char id_buf[65];
++                const cJSON *id_item = cJSON_GetObjectItemCaseSensitive(root, "id");
++
++                resp = app_mqtt_v1_error(app_mqtt_v1_id_string(id_item, id_buf, sizeof(id_buf)),
++                                         "rate_limited", "rate_limited");
++            } else {
++                resp = cJSON_CreateObject();
++                if (resp != NULL) {
++                    cJSON_AddBoolToObject(resp, "success", false);
++                    cJSON_AddStringToObject(resp, "error", "rate_limited");
+                 }
+-                cJSON_Delete(resp);
+             }
++            if (wants_response && resp != NULL) {
++                app_mqtt_publish_command_response(response_topic, resp);
++            }
++            cJSON_Delete(resp);
+             cJSON_Delete(root);
+             return;
+         }
+         s_last_cmd_ms = now_ms;
+     }
+ 
++    if (v1_envelope) {
++        cJSON *v1resp;
++
++        if (strcmp(version_item->valuestring, "1.0") != 0) {
++            v1resp = app_mqtt_v1_error("", "unsupported_version", version_item->valuestring);
++        } else {
++            v1resp = app_mqtt_execute_v1(root);
++        }
++        if (wants_response && v1resp != NULL) {
++            app_mqtt_publish_command_response(response_topic, v1resp);
++        }
++        cJSON_Delete(v1resp);
++        cJSON_Delete(root);
++        return;
++    }
++
+     {
+         app_cmd_result_t out = {0};
+         const char *err = NULL;
+diff --git a/tests/README.md b/tests/README.md
+index e0dace9..a231648 100644
+--- a/tests/README.md
++++ b/tests/README.md
+@@ -6,6 +6,11 @@
+ make -C tests/token_store run
+ python3 tests/token_store/audit_critical_sections.py
+ python3 tests/syntax_check.py --strict main/auth_token.c main/ble_cmd.c main/cmd.c
++
++# Stage 0 接口治理（纯策略/门控/错误码）
++make -C tests/cmd_policy run
++make -C tests/cmd_cfg_txn run
++make -C tests/cmd_error run
+ ```
+ 
+ `syntax_check.py` 复用 `build/compile_commands.json`，需先在完整 IDF 环境构建过一次。
+diff --git a/main/cmd_policy.h b/main/cmd_policy.h
+new file mode 100644
+index 0000000..45a2a2e
+--- /dev/null
++++ b/main/cmd_policy.h
+@@ -0,0 +1,62 @@
++#pragma once
++
++#include <stdbool.h>
++
++#include "cmd_context.h"
++#include "operation.h"
++
++/* Stage 0 command policy: pure source/method/owner decisions.
++ * No Wi-Fi/MQTT/cJSON dependencies; host-testable. */
++
++#ifndef APP_CMD_MQTT_NET_TXN_ENABLE
++#define APP_CMD_MQTT_NET_TXN_ENABLE 0
++#endif
++
++/* A test build must opt in explicitly; a production build must never set the
++ * transaction switch without the test marker. */
++#if APP_CMD_MQTT_NET_TXN_ENABLE && !defined(APP_CMD_MQTT_NET_TXN_TEST_BUILD)
++#error "APP_CMD_MQTT_NET_TXN_ENABLE requires APP_CMD_MQTT_NET_TXN_TEST_BUILD"
++#endif
++
++typedef enum {
++    APP_CMD_POLICY_ALLOW = 0,
++    APP_CMD_POLICY_FORBIDDEN,
++    APP_CMD_POLICY_BUSY,
++    APP_CMD_POLICY_INVALID_ARGUMENT,
++    APP_CMD_POLICY_NOT_ENABLED,
++} app_cmd_policy_result_t;
++
++typedef enum {
++    APP_CMD_KIND_OTHER = 0,
++    APP_CMD_KIND_NET_STATUS,
++    APP_CMD_KIND_NET_TRY,
++    APP_CMD_KIND_NET_APPLY,
++    APP_CMD_KIND_NET_CANCEL,
++    APP_CMD_KIND_OPERATION_GET,
++    APP_CMD_KIND_NET_PROFILE_DELETE,
++    APP_CMD_KIND_NET_SCAN,
++    APP_CMD_KIND_NET_RESTART,
++    APP_CMD_KIND_CONFIG_SET,
++} app_cmd_kind_t;
++
++app_cmd_kind_t app_cmd_kind(const char *method);
++bool app_cmd_is_async_method(const char *method);
++bool app_cmd_is_network_method(const char *method);
++
++/* External command-plane decision. `.async` is never an entry method; internal
++ * apply children use `network.apply`, not `.async`. */
++app_cmd_policy_result_t app_cmd_policy_check_network(const app_cmd_context_t *ctx,
++                                                     const char *method);
++
++/* Apply must be performed by the same owner that created the transaction.
++ * INTERNAL children inherit the origin owner. */
++app_cmd_policy_result_t app_cmd_policy_check_apply_owner(const app_cmd_context_t *ctx,
++                                                         app_operation_owner_t owner);
++
++/* Cancel requires an authenticated caller and a matching operation owner.
++ * BLE is the field-rescue channel and may cancel any network owner. */
++bool app_cmd_cancel_allowed(const app_cmd_context_t *ctx,
++                            app_operation_owner_t owner);
++
++bool app_cmd_mqtt_net_txn_enabled(void);
++const char *app_cmd_policy_build_variant(void);
+diff --git a/main/cmd_policy.c b/main/cmd_policy.c
+new file mode 100644
+index 0000000..f9e169a
+--- /dev/null
++++ b/main/cmd_policy.c
+@@ -0,0 +1,186 @@
++#include <string.h>
++
++#include "cmd_policy.h"
++
++static bool app_cmd_source_is_entry(app_cmd_source_t source)
++{
++    return source == APP_CMD_SOURCE_MQTT || source == APP_CMD_SOURCE_BLE ||
++           source == APP_CMD_SOURCE_HTTP || source == APP_CMD_SOURCE_TOUCH ||
++           source == APP_CMD_SOURCE_SERIAL;
++}
++
++static app_operation_owner_t app_cmd_ctx_owner(const app_cmd_context_t *ctx)
++{
++    app_cmd_source_t source;
++
++    if (ctx == NULL) {
++        return APP_OPERATION_OWNER_INTERNAL;
++    }
++    source = (ctx->exec_env == APP_CMD_EXEC_INTERNAL) ? ctx->origin : ctx->source;
++    switch (source) {
++    case APP_CMD_SOURCE_BLE:  return APP_OPERATION_OWNER_BLE;
++    case APP_CMD_SOURCE_HTTP: return APP_OPERATION_OWNER_HTTP;
++    case APP_CMD_SOURCE_MQTT: return APP_OPERATION_OWNER_MQTT;
++    default:                  return APP_OPERATION_OWNER_INTERNAL;
++    }
++}
++
++app_cmd_kind_t app_cmd_kind(const char *method)
++{
++    if (method == NULL) {
++        return APP_CMD_KIND_OTHER;
++    }
++    if (strcmp(method, "network.status") == 0) return APP_CMD_KIND_NET_STATUS;
++    if (strcmp(method, "network.tryconnect") == 0) return APP_CMD_KIND_NET_TRY;
++    if (strcmp(method, "network.apply") == 0) return APP_CMD_KIND_NET_APPLY;
++    if (strcmp(method, "network.cancel") == 0) return APP_CMD_KIND_NET_CANCEL;
++    if (strcmp(method, "operation.get") == 0) return APP_CMD_KIND_OPERATION_GET;
++    if (strcmp(method, "network.profile.delete") == 0) return APP_CMD_KIND_NET_PROFILE_DELETE;
++    if (strcmp(method, "network.scan") == 0) return APP_CMD_KIND_NET_SCAN;
++    if (strcmp(method, "network.restart") == 0) return APP_CMD_KIND_NET_RESTART;
++    if (strcmp(method, "config.set") == 0 || strcmp(method, "setConfig") == 0) {
++        return APP_CMD_KIND_CONFIG_SET;
++    }
++    return APP_CMD_KIND_OTHER;
++}
++
++bool app_cmd_is_async_method(const char *method)
++{
++    size_t len;
++
++    if (method == NULL) {
++        return false;
++    }
++    len = strlen(method);
++    return len >= 6 && strcmp(method + len - 6, ".async") == 0;
++}
++
++bool app_cmd_is_network_method(const char *method)
++{
++    app_cmd_kind_t kind = app_cmd_kind(method);
++
++    return kind >= APP_CMD_KIND_NET_STATUS && kind <= APP_CMD_KIND_NET_RESTART;
++}
++
++app_cmd_policy_result_t app_cmd_policy_check_network(const app_cmd_context_t *ctx,
++                                                     const char *method)
++{
++    app_cmd_kind_t kind;
++    bool internal;
++    app_cmd_source_t entry_source;
++
++    if (ctx == NULL || !app_cmd_ctx_valid(ctx)) {
++        return APP_CMD_POLICY_FORBIDDEN;
++    }
++    if (method == NULL) {
++        return APP_CMD_POLICY_ALLOW;
++    }
++    if (app_cmd_is_async_method(method)) {
++        /* No external or internal caller uses `.async` as a method now. The
++         * legal adapters call the internal API directly. */
++        return APP_CMD_POLICY_FORBIDDEN;
++    }
++    if (!app_cmd_is_network_method(method)) {
++        return APP_CMD_POLICY_ALLOW;
++    }
++
++    internal = (ctx->exec_env == APP_CMD_EXEC_INTERNAL);
++    entry_source = internal ? ctx->origin : ctx->source;
++    if (!app_cmd_source_is_entry(entry_source)) {
++        return APP_CMD_POLICY_FORBIDDEN;
++    }
++
++    kind = app_cmd_kind(method);
++
++    /* Internal apply child: only the commit of an existing operation. */
++    if (internal) {
++        return kind == APP_CMD_KIND_NET_APPLY ? APP_CMD_POLICY_ALLOW
++                                              : APP_CMD_POLICY_FORBIDDEN;
++    }
++
++    switch (entry_source) {
++    case APP_CMD_SOURCE_MQTT:
++        if (kind == APP_CMD_KIND_NET_PROFILE_DELETE || kind == APP_CMD_KIND_NET_SCAN ||
++            kind == APP_CMD_KIND_NET_RESTART) {
++            return APP_CMD_POLICY_FORBIDDEN;
++        }
++        if (kind == APP_CMD_KIND_NET_TRY || kind == APP_CMD_KIND_NET_APPLY ||
++            kind == APP_CMD_KIND_NET_CANCEL) {
++            return app_cmd_mqtt_net_txn_enabled() ? APP_CMD_POLICY_ALLOW
++                                                  : APP_CMD_POLICY_NOT_ENABLED;
++        }
++        return APP_CMD_POLICY_ALLOW; /* status / operation.get (owner checked later) */
++
++    case APP_CMD_SOURCE_BLE:
++    case APP_CMD_SOURCE_HTTP:
++        return (kind == APP_CMD_KIND_NET_PROFILE_DELETE || kind == APP_CMD_KIND_NET_SCAN ||
++                kind == APP_CMD_KIND_NET_RESTART || kind == APP_CMD_KIND_NET_STATUS ||
++                kind == APP_CMD_KIND_NET_TRY || kind == APP_CMD_KIND_NET_APPLY ||
++                kind == APP_CMD_KIND_NET_CANCEL || kind == APP_CMD_KIND_OPERATION_GET)
++                   ? APP_CMD_POLICY_ALLOW
++                   : APP_CMD_POLICY_FORBIDDEN;
++
++    default:
++        return APP_CMD_POLICY_FORBIDDEN;
++    }
++}
++
++app_cmd_policy_result_t app_cmd_policy_check_apply_owner(const app_cmd_context_t *ctx,
++                                                         app_operation_owner_t owner)
++{
++    app_operation_owner_t caller;
++
++    if (ctx == NULL || !app_cmd_ctx_valid(ctx)) {
++        return APP_CMD_POLICY_FORBIDDEN;
++    }
++    caller = app_cmd_ctx_owner(ctx);
++    if (caller == APP_OPERATION_OWNER_INTERNAL) {
++        return APP_CMD_POLICY_FORBIDDEN;
++    }
++    return caller == owner ? APP_CMD_POLICY_ALLOW : APP_CMD_POLICY_FORBIDDEN;
++}
++
++bool app_cmd_cancel_allowed(const app_cmd_context_t *ctx,
++                            app_operation_owner_t owner)
++{
++    app_cmd_source_t source;
++
++    if (ctx == NULL || !app_cmd_ctx_valid(ctx) ||
++        ctx->auth_level != APP_CMD_AUTH_LOCAL_TOKEN) {
++        return false;
++    }
++    if (ctx->exec_env != APP_CMD_EXEC_ENTRY) {
++        return false;
++    }
++    source = ctx->source;
++
++    switch (source) {
++    case APP_CMD_SOURCE_BLE:
++        return owner == APP_OPERATION_OWNER_BLE || owner == APP_OPERATION_OWNER_MQTT ||
++               owner == APP_OPERATION_OWNER_HTTP;
++    case APP_CMD_SOURCE_MQTT:
++        return owner == APP_OPERATION_OWNER_MQTT;
++    case APP_CMD_SOURCE_HTTP:
++        return owner == APP_OPERATION_OWNER_HTTP;
++    default:
++        return false;
++    }
++}
++
++bool app_cmd_mqtt_net_txn_enabled(void)
++{
++#if APP_CMD_MQTT_NET_TXN_ENABLE
++    return true;
++#else
++    return false;
++#endif
++}
++
++const char *app_cmd_policy_build_variant(void)
++{
++#if APP_CMD_MQTT_NET_TXN_ENABLE
++    return "mqtt_net_txn=test";
++#else
++    return "mqtt_net_txn=off";
++#endif
++}
+diff --git a/main/cmd_cfg_txn.h b/main/cmd_cfg_txn.h
+new file mode 100644
+index 0000000..4fb63dd
+--- /dev/null
++++ b/main/cmd_cfg_txn.h
+@@ -0,0 +1,29 @@
++#pragma once
++
++#include <stdbool.h>
++#include <stdint.h>
++
++/* Stage 0 config-transaction gate. State is protected by app_config_lock
++ * (recursive); no separate long-held lock is introduced. */
++
++typedef struct {
++    uint32_t token;
++} app_cmd_cfg_txn_t;
++
++/* Claim a network transaction. Returns false if one is already active. */
++bool app_cmd_cfg_txn_begin(app_cmd_cfg_txn_t *out);
++
++/* Release only if the active token matches. Idempotent for stale tokens. */
++bool app_cmd_cfg_txn_end(app_cmd_cfg_txn_t txn);
++
++/* Enter the config-write gate. On true the caller holds app_config_lock and
++ * must call guard_exit() after the write. On false the lock is already
++ * released and the caller must return busy.
++ *
++ * Long-term constraint: while the gate is held, do not call Wi-Fi/MQTT APIs,
++ * wait on the network, or invoke callbacks that may re-enter config. NVS stays
++ * on the existing app_config_lock path; no new long-held lock is introduced. */
++bool app_cmd_cfg_txn_guard_enter(void);
++void app_cmd_cfg_txn_guard_exit(void);
++
++bool app_cmd_cfg_txn_active(void);
+diff --git a/main/cmd_cfg_txn.c b/main/cmd_cfg_txn.c
+new file mode 100644
+index 0000000..4982873
+--- /dev/null
++++ b/main/cmd_cfg_txn.c
+@@ -0,0 +1,74 @@
++#include <stddef.h>
++
++#include "cmd_cfg_txn.h"
++
++/* Implemented by config.c. Kept as externs so this module stays host-testable. */
++void app_config_lock(void);
++void app_config_unlock(void);
++
++static bool s_active;
++static uint32_t s_token;
++static uint32_t s_next_token;
++
++bool app_cmd_cfg_txn_begin(app_cmd_cfg_txn_t *out)
++{
++    bool ok = false;
++
++    if (out == NULL) {
++        return false;
++    }
++    app_config_lock();
++    if (!s_active) {
++        uint32_t next = s_next_token + 1;
++
++        if (next == 0) {
++            next = 1;
++        }
++        s_next_token = next;
++        s_token = next;
++        s_active = true;
++        out->token = next;
++        ok = true;
++    }
++    app_config_unlock();
++    return ok;
++}
++
++bool app_cmd_cfg_txn_end(app_cmd_cfg_txn_t txn)
++{
++    bool released = false;
++
++    app_config_lock();
++    if (s_active && txn.token != 0 && txn.token == s_token) {
++        s_active = false;
++        s_token = 0;
++        released = true;
++    }
++    app_config_unlock();
++    return released;
++}
++
++bool app_cmd_cfg_txn_guard_enter(void)
++{
++    app_config_lock();
++    if (s_active) {
++        app_config_unlock();
++        return false;
++    }
++    return true;
++}
++
++void app_cmd_cfg_txn_guard_exit(void)
++{
++    app_config_unlock();
++}
++
++bool app_cmd_cfg_txn_active(void)
++{
++    bool active;
++
++    app_config_lock();
++    active = s_active;
++    app_config_unlock();
++    return active;
++}
+diff --git a/main/cmd_error.h b/main/cmd_error.h
+new file mode 100644
+index 0000000..e6c5854
+--- /dev/null
++++ b/main/cmd_error.h
+@@ -0,0 +1,4 @@
++#pragma once
++
++/* Shared v0-error -> v1 protocol-code mapping. */
++const char *app_cmd_v1_error_code(const char *v0);
+diff --git a/main/cmd_error.c b/main/cmd_error.c
+new file mode 100644
+index 0000000..69b4378
+--- /dev/null
++++ b/main/cmd_error.c
+@@ -0,0 +1,86 @@
++#include "cmd_error.h"
++
++#include <stddef.h>
++#include <string.h>
++
++const char *app_cmd_v1_error_code(const char *v0)
++{
++    if (v0 == NULL) {
++        return "internal_error";
++    }
++    if (strcmp(v0, "unknown_command") == 0 ||
++        strcmp(v0, "unknown_method") == 0) {
++        return "unknown_command";
++    }
++    if (strcmp(v0, "line_too_long") == 0) {
++        return "line_too_long";
++    }
++    if (strcmp(v0, "invalid_json") == 0) {
++        return "invalid_json";
++    }
++    if (strcmp(v0, "unsupported_version") == 0) {
++        return "unsupported_version";
++    }
++    if (strcmp(v0, "params_required") == 0 ||
++        strcmp(v0, "invalid_config") == 0 ||
++        strcmp(v0, "invalid_param") == 0 ||
++        strcmp(v0, "invalid_argument") == 0 ||
++        strcmp(v0, "invalid_old_password") == 0 ||
++        strcmp(v0, "domain_not_supported") == 0 ||
++        strcmp(v0, "password_too_short") == 0) {
++        return "invalid_argument";
++    }
++    if (strcmp(v0, "auth_required") == 0 ||
++        strcmp(v0, "invalid_credentials") == 0 ||
++        strcmp(v0, "unauthorized") == 0) {
++        return "unauthorized";
++    }
++    if (strcmp(v0, "guard_rejected") == 0 ||
++        strcmp(v0, "forbidden") == 0) {
++        return "forbidden";
++    }
++    if (strcmp(v0, "busy") == 0) {
++        return "busy";
++    }
++    if (strcmp(v0, "conflict") == 0) {
++        return "conflict";
++    }
++    if (strcmp(v0, "rate_limited") == 0) {
++        return "rate_limited";
++    }
++    if (strcmp(v0, "internal_error") == 0) {
++        return "internal_error";
++    }
++    if (strcmp(v0, "mqtt_unavailable") == 0 ||
++        strcmp(v0, "internet_unverified") == 0 ||
++        strcmp(v0, "static_ip_pinned") == 0 ||
++        strcmp(v0, "last_profile") == 0) {
++        return v0;
++    }
++    if (strcmp(v0, "not_found") == 0 ||
++        strcmp(v0, "operation_state") == 0 ||
++        strcmp(v0, "trial_invalid") == 0 ||
++        strcmp(v0, "wrong_password") == 0 ||
++        strcmp(v0, "ap_not_found") == 0 ||
++        strcmp(v0, "connect_failed") == 0 ||
++        strcmp(v0, "wifi_scan_failed") == 0 ||   /* P1-10:保持可分辨,不折叠进 network_failed */
++        strcmp(v0, "no_slot") == 0 ||
++        strcmp(v0, "expired") == 0 ||
++        strcmp(v0, "rollback_failed") == 0) {
++        return v0;
++    }
++    if (strcmp(v0, "save_failed") == 0 ||
++        strcmp(v0, "storage_failed") == 0) {
++        return "storage_failed";
++    }
++    if (strcmp(v0, "wifi_scan_failed") == 0 ||
++        strcmp(v0, "network_failed") == 0) {
++        return "network_failed";
++    }
++    if (strcmp(v0, "restart_failed") == 0 ||
++        strcmp(v0, "apply_failed") == 0) {
++        return "apply_failed";
++    }
++    return "internal_error";
++}
++
+diff --git a/main/cmd_net_adapter.h b/main/cmd_net_adapter.h
+new file mode 100644
+index 0000000..a55ea34
+--- /dev/null
++++ b/main/cmd_net_adapter.h
+@@ -0,0 +1,20 @@
++#pragma once
++
++#include <stdbool.h>
++
++#include "cJSON.h"
++#include "cmd_context.h"
++
++/* Trusted protocol-adapter entry points for network transactions.
++ * These are process-internal APIs: callers must pass a context they built
++ * themselves, never one derived from client JSON. */
++
++bool app_cmd_net_tryconnect_adapter(const app_cmd_context_t *ctx,
++                                    const cJSON *params,
++                                    cJSON **resp_out, const char **err_out);
++bool app_cmd_net_apply_adapter(const app_cmd_context_t *ctx,
++                               const cJSON *params,
++                               cJSON **resp_out, const char **err_out);
++bool app_cmd_net_cancel_adapter(const app_cmd_context_t *ctx,
++                                const cJSON *params,
++                                cJSON **resp_out, const char **err_out);
+diff --git a/tests/cmd_policy/test_cmd_policy.c b/tests/cmd_policy/test_cmd_policy.c
+new file mode 100644
+index 0000000..ed01445
+--- /dev/null
++++ b/tests/cmd_policy/test_cmd_policy.c
+@@ -0,0 +1,126 @@
++#include <stdio.h>
++#include <string.h>
++
++#include "cmd_policy.h"
++
++static int g_pass;
++static int g_fail;
++
++#define CHECK(cond)                                                          \
++    do {                                                                     \
++        if (cond) {                                                          \
++            g_pass++;                                                        \
++        } else {                                                             \
++            g_fail++;                                                        \
++            printf("  FAIL  %s:%d  %s\n", __FILE__, __LINE__, #cond);        \
++        }                                                                    \
++    } while (0)
++
++static app_cmd_context_t entry(app_cmd_source_t source, app_cmd_auth_level_t auth)
++{
++    app_cmd_context_t ctx = app_cmd_ctx_entry(source);
++
++    ctx.auth_level = auth;
++    return ctx;
++}
++
++static void test_classify(void)
++{
++    CHECK(app_cmd_kind("network.status") == APP_CMD_KIND_NET_STATUS);
++    CHECK(app_cmd_kind("network.tryconnect") == APP_CMD_KIND_NET_TRY);
++    CHECK(app_cmd_kind("network.apply") == APP_CMD_KIND_NET_APPLY);
++    CHECK(app_cmd_kind("network.cancel") == APP_CMD_KIND_NET_CANCEL);
++    CHECK(app_cmd_kind("operation.get") == APP_CMD_KIND_OPERATION_GET);
++    CHECK(app_cmd_kind("network.profile.delete") == APP_CMD_KIND_NET_PROFILE_DELETE);
++    CHECK(app_cmd_kind("config.set") == APP_CMD_KIND_CONFIG_SET);
++    CHECK(app_cmd_kind("device.info") == APP_CMD_KIND_OTHER);
++    CHECK(app_cmd_is_async_method("network.apply.async"));
++    CHECK(!app_cmd_is_async_method("network.apply"));
++    CHECK(app_cmd_is_network_method("network.apply"));
++    CHECK(!app_cmd_is_network_method("device.info"));
++}
++
++static void test_policy_sources(void)
++{
++    app_cmd_context_t ble = entry(APP_CMD_SOURCE_BLE, APP_CMD_AUTH_LOCAL_TOKEN);
++    app_cmd_context_t mqtt = entry(APP_CMD_SOURCE_MQTT, APP_CMD_AUTH_LOCAL_TOKEN);
++    app_cmd_context_t http = entry(APP_CMD_SOURCE_HTTP, APP_CMD_AUTH_LOCAL_TOKEN);
++    app_cmd_context_t touch = entry(APP_CMD_SOURCE_TOUCH, APP_CMD_AUTH_LOCAL_TOKEN);
++    app_cmd_context_t internal = {0};
++
++    CHECK(app_cmd_policy_check_network(&ble, "network.apply") == APP_CMD_POLICY_ALLOW);
++    CHECK(app_cmd_policy_check_network(&ble, "network.apply.async") == APP_CMD_POLICY_FORBIDDEN);
++    CHECK(app_cmd_policy_check_network(&ble, "network.status") == APP_CMD_POLICY_ALLOW);
++    CHECK(app_cmd_policy_check_network(&ble, "network.profile.delete") == APP_CMD_POLICY_ALLOW);
++    CHECK(app_cmd_policy_check_network(&ble, "network.scan") == APP_CMD_POLICY_ALLOW);
++    CHECK(app_cmd_policy_check_network(&ble, "device.info") == APP_CMD_POLICY_ALLOW);
++
++    CHECK(app_cmd_policy_check_network(&mqtt, "network.status") == APP_CMD_POLICY_ALLOW);
++    CHECK(app_cmd_policy_check_network(&mqtt, "operation.get") == APP_CMD_POLICY_ALLOW);
++    CHECK(app_cmd_policy_check_network(&mqtt, "network.tryconnect") == APP_CMD_POLICY_NOT_ENABLED);
++    CHECK(app_cmd_policy_check_network(&mqtt, "network.apply") == APP_CMD_POLICY_NOT_ENABLED);
++    CHECK(app_cmd_policy_check_network(&mqtt, "network.cancel") == APP_CMD_POLICY_NOT_ENABLED);
++    CHECK(app_cmd_policy_check_network(&mqtt, "network.profile.delete") == APP_CMD_POLICY_FORBIDDEN);
++    CHECK(app_cmd_policy_check_network(&mqtt, "network.scan") == APP_CMD_POLICY_FORBIDDEN);
++    CHECK(app_cmd_policy_check_network(&mqtt, "network.restart") == APP_CMD_POLICY_FORBIDDEN);
++
++    CHECK(app_cmd_policy_check_network(&http, "network.apply") == APP_CMD_POLICY_ALLOW);
++    CHECK(app_cmd_policy_check_network(&touch, "network.apply") == APP_CMD_POLICY_FORBIDDEN);
++
++    CHECK(app_cmd_ctx_internal_child(&ble, &internal));
++    CHECK(app_cmd_policy_check_network(&internal, "network.apply") == APP_CMD_POLICY_ALLOW);
++    CHECK(app_cmd_policy_check_network(&internal, "network.tryconnect") == APP_CMD_POLICY_FORBIDDEN);
++    CHECK(app_cmd_policy_check_network(&internal, "network.apply.async") == APP_CMD_POLICY_FORBIDDEN);
++}
++
++static void test_apply_owner(void)
++{
++    app_cmd_context_t ble = entry(APP_CMD_SOURCE_BLE, APP_CMD_AUTH_LOCAL_TOKEN);
++    app_cmd_context_t mqtt = entry(APP_CMD_SOURCE_MQTT, APP_CMD_AUTH_LOCAL_TOKEN);
++    app_cmd_context_t child = {0};
++
++    CHECK(app_cmd_policy_check_apply_owner(&ble, APP_OPERATION_OWNER_BLE) == APP_CMD_POLICY_ALLOW);
++    CHECK(app_cmd_policy_check_apply_owner(&ble, APP_OPERATION_OWNER_MQTT) == APP_CMD_POLICY_FORBIDDEN);
++    CHECK(app_cmd_policy_check_apply_owner(&mqtt, APP_OPERATION_OWNER_MQTT) == APP_CMD_POLICY_ALLOW);
++    CHECK(app_cmd_ctx_internal_child(&mqtt, &child));
++    CHECK(app_cmd_policy_check_apply_owner(&child, APP_OPERATION_OWNER_MQTT) == APP_CMD_POLICY_ALLOW);
++    CHECK(app_cmd_policy_check_apply_owner(&child, APP_OPERATION_OWNER_BLE) == APP_CMD_POLICY_FORBIDDEN);
++}
++
++static void test_cancel_matrix(void)
++{
++    app_cmd_context_t ble = entry(APP_CMD_SOURCE_BLE, APP_CMD_AUTH_LOCAL_TOKEN);
++    app_cmd_context_t mqtt = entry(APP_CMD_SOURCE_MQTT, APP_CMD_AUTH_LOCAL_TOKEN);
++    app_cmd_context_t http = entry(APP_CMD_SOURCE_HTTP, APP_CMD_AUTH_LOCAL_TOKEN);
++    app_cmd_context_t touch = entry(APP_CMD_SOURCE_TOUCH, APP_CMD_AUTH_LOCAL_TOKEN);
++    app_cmd_context_t ble_unauth = entry(APP_CMD_SOURCE_BLE, APP_CMD_AUTH_NONE);
++
++    CHECK(app_cmd_cancel_allowed(&ble, APP_OPERATION_OWNER_BLE));
++    CHECK(app_cmd_cancel_allowed(&ble, APP_OPERATION_OWNER_MQTT));
++    CHECK(app_cmd_cancel_allowed(&ble, APP_OPERATION_OWNER_HTTP));
++    CHECK(app_cmd_cancel_allowed(&mqtt, APP_OPERATION_OWNER_MQTT));
++    CHECK(!app_cmd_cancel_allowed(&mqtt, APP_OPERATION_OWNER_BLE));
++    CHECK(!app_cmd_cancel_allowed(&mqtt, APP_OPERATION_OWNER_HTTP));
++    CHECK(app_cmd_cancel_allowed(&http, APP_OPERATION_OWNER_HTTP));
++    CHECK(!app_cmd_cancel_allowed(&http, APP_OPERATION_OWNER_MQTT));
++    CHECK(!app_cmd_cancel_allowed(&http, APP_OPERATION_OWNER_BLE));
++    CHECK(!app_cmd_cancel_allowed(&touch, APP_OPERATION_OWNER_BLE));
++    CHECK(!app_cmd_cancel_allowed(&ble_unauth, APP_OPERATION_OWNER_BLE));
++}
++
++static void test_build_variant(void)
++{
++    CHECK(strcmp(app_cmd_policy_build_variant(), "mqtt_net_txn=off") == 0);
++    CHECK(!app_cmd_mqtt_net_txn_enabled());
++}
++
++int main(void)
++{
++    test_classify();
++    test_policy_sources();
++    test_apply_owner();
++    test_cancel_matrix();
++    test_build_variant();
++    printf("cmd_policy: %d passed, %d failed\n", g_pass, g_fail);
++    return g_fail == 0 ? 0 : 1;
++}
+diff --git a/tests/cmd_policy/test_cmd_policy_flags.c b/tests/cmd_policy/test_cmd_policy_flags.c
+new file mode 100644
+index 0000000..6a26610
+--- /dev/null
++++ b/tests/cmd_policy/test_cmd_policy_flags.c
+@@ -0,0 +1,30 @@
++#include <stdio.h>
++#include <string.h>
++
++#include "cmd_policy.h"
++
++static int g_fail;
++
++#define CHECK(cond)                                                          \
++    do {                                                                     \
++        if (!(cond)) {                                                       \
++            g_fail++;                                                        \
++            printf("  FAIL  %s:%d  %s\n", __FILE__, __LINE__, #cond);        \
++        }                                                                    \
++    } while (0)
++
++int main(void)
++{
++    app_cmd_context_t mqtt = app_cmd_ctx_entry(APP_CMD_SOURCE_MQTT);
++
++    mqtt.auth_level = APP_CMD_AUTH_LOCAL_TOKEN;
++    CHECK(app_cmd_mqtt_net_txn_enabled());
++    CHECK(strcmp(app_cmd_policy_build_variant(), "mqtt_net_txn=test") == 0);
++    CHECK(app_cmd_policy_check_network(&mqtt, "network.tryconnect") == APP_CMD_POLICY_ALLOW);
++    CHECK(app_cmd_policy_check_network(&mqtt, "network.apply") == APP_CMD_POLICY_ALLOW);
++    CHECK(app_cmd_policy_check_network(&mqtt, "network.cancel") == APP_CMD_POLICY_ALLOW);
++    CHECK(app_cmd_cancel_allowed(&mqtt, APP_OPERATION_OWNER_MQTT));
++    CHECK(!app_cmd_cancel_allowed(&mqtt, APP_OPERATION_OWNER_BLE));
++    printf("cmd_policy(test-build): %s\n", g_fail == 0 ? "PASS" : "FAIL");
++    return g_fail == 0 ? 0 : 1;
++}
+diff --git a/tests/cmd_policy/Makefile b/tests/cmd_policy/Makefile
+new file mode 100644
+index 0000000..014cced
+--- /dev/null
++++ b/tests/cmd_policy/Makefile
+@@ -0,0 +1,23 @@
++CC      ?= cc
++CFLAGS  ?= -std=c11 -O2 -g -Wall -Wextra -Werror
++CPPFLAGS ?= -I. -Istub -I../../main
++
++BIN  := cmd_policy_test
++FLAGS_BIN := cmd_policy_test_build
++SRCS := test_cmd_policy.c ../../main/cmd_policy.c ../../main/cmd_context.c
++
++.PHONY: all run clean
++all: $(BIN) $(FLAGS_BIN)
++
++$(BIN): $(SRCS) ../../main/cmd_policy.h ../../main/cmd_context.h
++	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ $(SRCS)
++
++$(FLAGS_BIN): test_cmd_policy_flags.c ../../main/cmd_policy.c ../../main/cmd_context.c ../../main/cmd_policy.h
++	$(CC) $(CPPFLAGS) $(CFLAGS) -DAPP_CMD_MQTT_NET_TXN_ENABLE=1 -DAPP_CMD_MQTT_NET_TXN_TEST_BUILD=1 -o $@ test_cmd_policy_flags.c ../../main/cmd_policy.c ../../main/cmd_context.c
++
++run: all
++	./$(BIN)
++	./$(FLAGS_BIN)
++
++clean:
++	rm -f $(BIN) $(FLAGS_BIN)
+diff --git a/tests/cmd_cfg_txn/test_cmd_cfg_txn.c b/tests/cmd_cfg_txn/test_cmd_cfg_txn.c
+new file mode 100644
+index 0000000..f5f783c
+--- /dev/null
++++ b/tests/cmd_cfg_txn/test_cmd_cfg_txn.c
+@@ -0,0 +1,75 @@
++#define _GNU_SOURCE
++#include <pthread.h>
++#include <stdio.h>
++
++#include "cmd_cfg_txn.h"
++
++static pthread_mutex_t g_lock;
++static int g_pass;
++static int g_fail;
++
++#define CHECK(cond)                                                          \
++    do {                                                                     \
++        if (cond) {                                                          \
++            g_pass++;                                                        \
++        } else {                                                             \
++            g_fail++;                                                        \
++            printf("  FAIL  %s:%d  %s\n", __FILE__, __LINE__, #cond);        \
++        }                                                                    \
++    } while (0)
++
++void app_config_lock(void)
++{
++    pthread_mutex_lock(&g_lock);
++}
++
++void app_config_unlock(void)
++{
++    pthread_mutex_unlock(&g_lock);
++}
++
++int main(void)
++{
++    app_cmd_cfg_txn_t a = {0};
++    app_cmd_cfg_txn_t b = {0};
++    pthread_mutexattr_t attr;
++
++    pthread_mutexattr_init(&attr);
++    pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE);
++    pthread_mutex_init(&g_lock, &attr);
++    pthread_mutexattr_destroy(&attr);
++
++    CHECK(!app_cmd_cfg_txn_active());
++    CHECK(app_cmd_cfg_txn_begin(&a));
++    CHECK(a.token != 0);
++    CHECK(app_cmd_cfg_txn_active());
++    CHECK(!app_cmd_cfg_txn_begin(&b));      /* one transaction only */
++    CHECK(!app_cmd_cfg_txn_guard_enter());  /* config.set must be busy */
++
++    CHECK(!app_cmd_cfg_txn_end((app_cmd_cfg_txn_t){0}));
++    CHECK(!app_cmd_cfg_txn_end((app_cmd_cfg_txn_t){a.token + 1}));
++    CHECK(app_cmd_cfg_txn_active());        /* stale token must not release */
++
++    CHECK(app_cmd_cfg_txn_end(a));
++    CHECK(!app_cmd_cfg_txn_active());
++    CHECK(app_cmd_cfg_txn_guard_enter());   /* free gate can be held */
++    app_cmd_cfg_txn_guard_exit();
++
++    CHECK(app_cmd_cfg_txn_begin(&b));
++    CHECK(b.token != a.token);
++    CHECK(!app_cmd_cfg_txn_end(a));         /* old token after re-claim */
++    CHECK(app_cmd_cfg_txn_active());
++    CHECK(app_cmd_cfg_txn_end(b));
++    CHECK(!app_cmd_cfg_txn_active());
++
++    /* auth.admin.set uses the same guard: a transaction must make it busy. */
++    CHECK(app_cmd_cfg_txn_begin(&a));
++    CHECK(!app_cmd_cfg_txn_guard_enter());
++    CHECK(app_cmd_cfg_txn_end(a));
++    CHECK(app_cmd_cfg_txn_guard_enter());
++    app_cmd_cfg_txn_guard_exit();
++
++    printf("cmd_cfg_txn: %d passed, %d failed\n", g_pass, g_fail);
++    pthread_mutex_destroy(&g_lock);
++    return g_fail == 0 ? 0 : 1;
++}
+diff --git a/tests/cmd_cfg_txn/Makefile b/tests/cmd_cfg_txn/Makefile
+new file mode 100644
+index 0000000..68e817a
+--- /dev/null
++++ b/tests/cmd_cfg_txn/Makefile
+@@ -0,0 +1,18 @@
++CC      ?= cc
++CFLAGS  ?= -std=c11 -O2 -g -Wall -Wextra -Werror -pthread
++CPPFLAGS ?= -I../../main
++
++BIN  := cmd_cfg_txn_test
++SRCS := test_cmd_cfg_txn.c ../../main/cmd_cfg_txn.c
++
++.PHONY: all run clean
++all: $(BIN)
++
++$(BIN): $(SRCS) ../../main/cmd_cfg_txn.h
++	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ $(SRCS)
++
++run: $(BIN)
++	./$(BIN)
++
++clean:
++	rm -f $(BIN)
+diff --git a/tests/cmd_error/test_cmd_error.c b/tests/cmd_error/test_cmd_error.c
+new file mode 100644
+index 0000000..0b32407
+--- /dev/null
++++ b/tests/cmd_error/test_cmd_error.c
+@@ -0,0 +1,19 @@
++#include <stdio.h>
++#include <string.h>
++
++#include "cmd_error.h"
++
++static int g_fail;
++#define CHECK(cond) do { if (!(cond)) { g_fail++; printf("FAIL %s:%d %s\n", __FILE__, __LINE__, #cond); } } while (0)
++
++int main(void)
++{
++    CHECK(strcmp(app_cmd_v1_error_code("mqtt_unavailable"), "mqtt_unavailable") == 0);
++    CHECK(strcmp(app_cmd_v1_error_code("internet_unverified"), "internet_unverified") == 0);
++    CHECK(strcmp(app_cmd_v1_error_code("static_ip_pinned"), "static_ip_pinned") == 0);
++    CHECK(strcmp(app_cmd_v1_error_code("last_profile"), "last_profile") == 0);
++    CHECK(strcmp(app_cmd_v1_error_code("forbidden"), "forbidden") == 0);
++    CHECK(strcmp(app_cmd_v1_error_code("unknown_thing"), "internal_error") == 0);
++    printf("cmd_error: %s\n", g_fail == 0 ? "PASS" : "FAIL");
++    return g_fail == 0 ? 0 : 1;
++}
+diff --git a/tests/cmd_error/Makefile b/tests/cmd_error/Makefile
+new file mode 100644
+index 0000000..44a2817
+--- /dev/null
++++ b/tests/cmd_error/Makefile
+@@ -0,0 +1,14 @@
++CC ?= cc
++CFLAGS ?= -std=c11 -O2 -g -Wall -Wextra -Werror
++CPPFLAGS ?= -I../../main
++BIN := cmd_error_test
++SRCS := test_cmd_error.c ../../main/cmd_error.c
++
++.PHONY: all run clean
++all: $(BIN)
++$(BIN): $(SRCS) ../../main/cmd_error.h
++	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ $(SRCS)
++run: $(BIN)
++	./$(BIN)
++clean:
++	rm -f $(BIN)

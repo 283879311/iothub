@@ -386,19 +386,20 @@ async def test_data_unsubscribed(
 async def test_long_command(
     sess: Session, args: argparse.Namespace
 ) -> dict[str, Any]:
-    # A synthetic v0 command of >=275B with an unknown method: exercises CMD RX
+    # A synthetic v1 command of >=275B with an unknown cmd: exercises CMD RX
     # line reassembly and 20B host chunking without changing any configuration.
     target_len = max(275, args.long_command_size)
     req: dict[str, Any] = {
-        "id": 9001,
-        "method": "__t3_unknown__",
-        "params": {"padding": ""},
+        "id": "t3-unknown-9001",
+        "version": "1.0",
+        "cmd": "__t3_unknown__",
+        "args": {"padding": ""},
     }
     if sess.token:
         req["token"] = sess.token
     payload = json.dumps(req, ensure_ascii=False, separators=(",", ":")).encode()
     pad = max(0, target_len - len(payload))
-    req["params"] = {"padding": "A" * pad}
+    req["args"] = {"padding": "A" * pad}
     payload = json.dumps(req, ensure_ascii=False, separators=(",", ":")).encode()
     t0 = now()
     res = await sess.send_request(req, timeout=15)
@@ -409,7 +410,7 @@ async def test_long_command(
         "latency_s": round(now() - t0, 4),
         "ok": res.obj.get("ok") is True,
         "error_code": response_error_code(res.obj),
-        "note": "unknown method; no config mutation; verifies 20B line reassembly",
+        "note": "unknown v1 command; no config mutation; verifies 20B line reassembly",
     }
 
 

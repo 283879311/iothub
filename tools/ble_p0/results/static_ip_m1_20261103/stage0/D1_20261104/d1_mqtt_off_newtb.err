@@ -1,0 +1,2 @@
+/home/tc/esp/workspace/iothub/tools/ble_p0/results/static_ip_m1_20261103/stage0/D1_20261104/d1_mqtt_off.py:32: DeprecationWarning: Callback API version 1 is deprecated, update to latest version
+  c=mqtt.Client(client_id='d1-mqtt-'+secrets.token_hex(4), protocol=mqtt.MQTTv311)

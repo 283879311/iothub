@@ -1,0 +1,11 @@
+dual cycle=1 ok=True err=None cross={'A_C8E4->B_65D8': 'unauthorized', 'B_65D8->A_C8E4': 'unauthorized'}
+cycle=10 elapsed=285s totals={'cycles': 10, 'dual_ok': 1, 'dual_fail': 0, 'seq_ok': 18, 'seq_fail': 0, 'resets': 0}
+cycle=20 elapsed=592s totals={'cycles': 20, 'dual_ok': 1, 'dual_fail': 0, 'seq_ok': 38, 'seq_fail': 0, 'resets': 0}
+cycle=30 elapsed=900s totals={'cycles': 30, 'dual_ok': 1, 'dual_fail': 0, 'seq_ok': 58, 'seq_fail': 0, 'resets': 0}
+cycle=40 elapsed=1205s totals={'cycles': 40, 'dual_ok': 1, 'dual_fail': 0, 'seq_ok': 78, 'seq_fail': 0, 'resets': 0}
+cycle=50 elapsed=1506s totals={'cycles': 50, 'dual_ok': 1, 'dual_fail': 0, 'seq_ok': 98, 'seq_fail': 0, 'resets': 0}
+cycle=60 elapsed=1806s totals={'cycles': 60, 'dual_ok': 1, 'dual_fail': 0, 'seq_ok': 118, 'seq_fail': 0, 'resets': 0}
+cycle=70 elapsed=2106s totals={'cycles': 70, 'dual_ok': 1, 'dual_fail': 0, 'seq_ok': 138, 'seq_fail': 0, 'resets': 0}
+cycle=80 elapsed=2407s totals={'cycles': 80, 'dual_ok': 1, 'dual_fail': 0, 'seq_ok': 158, 'seq_fail': 0, 'resets': 0}
+cycle=90 elapsed=2710s totals={'cycles': 90, 'dual_ok': 1, 'dual_fail': 0, 'seq_ok': 178, 'seq_fail': 0, 'resets': 0}
+已终止

@@ -1,0 +1,221 @@
+[scan] remove cached 10:97:BD:D3:65:DA IotHubBLE-65D8 -> rc=0 [DEL] Characteristic (Handle 0x0000)
+	/org/bluez/hci0/dev_10_97_BD_D3_65_DA/service0001/char0002
+	6e400002-b5a3-f393-e0a9-e50e24dcca9e
+	Nordic UART TX
+[DEL] Descriptor (Handle 0x0000)
+	/org/bluez/hci0/dev_10_97_BD_D3_65_DA/service0001/char0004/desc0006
+	00002902-0000-1000-8000-00805f9b34fb
+	Client Characteristic Configuration
+[DEL] Characteristic (Handle 0x0000)
+	/org/bluez/hci0/dev_10_97_BD_D3_65_DA/service0001/char0004
+	6e400003-b5a3-f393-e0a9-e50e24dcca9e
+	Nordic UART RX
+[DEL] Characteristic (Handle 0x0000)
+	/org/bluez/hci0/dev_10_97_BD_D3_65_DA/service0001/char0007
+	6e400004-b5a3-f393-e0a9-e50e24dcca9e
+	Vendor specific
+[DEL] Descriptor (Handle 0x0000)
+	/org/bluez/hci0/dev_10_97_BD_D3_65_DA/service0001/char0009/desc000b
+	00002902-0000-1000-8000-00805f9b34fb
+	Client Characteristic Configuration
+[DEL] Characteristic (Handle 0x0000)
+	/org/bluez/hci0/dev_10_97_BD_D3_65_DA/service0001/char0009
+	6e400005-b5a3-f393-e0a9-e50e24dcca9e
+	Vendor specific
+[DEL] Primary Service (Handle 0x0000)
+	/org/bluez/hci0/dev_10_97_BD_D3_65_DA/service0001
+	6e400001-b5a3-f393-e0a9-e50e24dcca9e
+	Nordic UART Service
+[DEL] Device 10:97:BD:D3:65:DA IotHubBLE-65D8
+Device has been removed
+[scan-filtered] 2 hit(s) in 10s
+  HIT 10:97:BD:D3:65:DA name='IotHubBLE-65D8' local_name='IotHubBLE-65D8' rssi=-39 uuids=['6e400001-b5a3-f393-e0a9-e50e24dcca9e']
+  HIT B0:A7:32:28:C8:E6 name='IotHubBLE-C8E4' local_name='IotHubBLE-C8E4' rssi=-38 uuids=['6e400001-b5a3-f393-e0a9-e50e24dcca9e']
+>11.758s TX id=login-1 100B {"id": "login-1", "version": "1.0", "cmd": "auth.login", "args": {"username": "admin", "password": "<redacted>"}}
+[tx] chunked 100B into 5 GATT writes (<= 20B each)
+<12.457s> RX id=login-1 95B frags=1 sizes=[95] {"id": "login-1", "ok": true, "data": {"token": "<redacted>", "expires_in": 600}}
+[auth] login ok (token redacted)
+>12.463s TX id=d1-device_info-2 115B {"id": "d1-device_info-2", "version": "1.0", "cmd": "device.info", "args": {}, "token": "<redacted>"}
+[tx] chunked 115B into 6 GATT writes (<= 20B each)
+<13.406s> RX id=d1-device_info-2 282B frags=2 sizes=[253, 29] {"id": "d1-device_info-2", "ok": true, "data": {"model": "iothub", "firmware": "1.2-a35eef9-dirty", "device_id": "IotHub-C8E4", "build_variant": "mqtt_net_txn=off", "protocol_versions": ["1.0"], "security": {"link_encrypted": false, "bonded": false, "l2_ready": false, "sensitive_writes_allowed": false}}}
+>13.412s TX id=d1-device_status-3 119B {"id": "d1-device_status-3", "version": "1.0", "cmd": "device.status", "args": {}, "token": "<redacted>"}
+[tx] chunked 119B into 6 GATT writes (<= 20B each)
+<14.658s> RX id=d1-device_status-3 866B frags=4 sizes=[253, 253, 253, 107] {"id": "d1-device_status-3", "ok": true, "data": {"model": "iothub", "firmware": "1.2-a35eef9-dirty", "device_id": "IotHub-C8E4", "uptime_ms": 151912, "reset_reason": "poweron", "heap": {"free": 43016, "min_free": 36360, "largest": 34816, "internal_largest": 34816}, "ble": {"advertising": false, "connected": true, "mtu": 256, "adv_retry_count": 0, "runtime_mode": 1, "last_error": ""}, "mqtt": {"connected": true, "connecting": false, "last_error": "", "outbox": 0, "telemetry_shed": 0}, "partition": {"label": "ota_0", "address": 65536, "size": 1966080, "ota_state": "valid"}, "network": {"sta_connected": true, "sta_has_ip": true, "sta_ip": "192.168.1.50", "last_disconnect": "none", "connected_ssid": "CMCC-502", "connected_profile": 0, "rssi": -67, "channel": 3, "bssid": "5c:c0:a0:bd:f6:28", "rssi_valid": true, "sta_ssid": "CMCC-502", "password_set": true, "mode": "sta", "mqtt_connected": true, "mqtt_last_error": "", "trial": {"state": "idle"}}}}
+>14.659s TX id=d1-config_get-4 113B {"id": "d1-config_get-4", "version": "1.0", "cmd": "config.get", "args": {}, "token": "<redacted>"}
+[tx] chunked 113B into 6 GATT writes (<= 20B each)
+<15.559s> RX id=d1-config_get-4 1128B frags=5 sizes=[253, 253, 253, 253, 116] {"id": "d1-config_get-4", "ok": true, "data": {"network": {"net_mode": "sta", "sta_ssid": "CMCC-502", "sta_password_set": true, "sta_use_static": true, "sta_static_ip": "192.168.1.50", "sta_static_gateway": "192.168.1.1", "sta_static_netmask": "255.255.255.0", "sta_static_dns1": "223.5.5.5", "sta_static_dns2": "8.8.8.8", "sta_connected": true, "sta_has_ip": true, "sta_ip": "192.168.1.50", "last_disconnect": "none"}, "mqtt": {"mqtt_backend": "tb_selfhost", "mqtt_host": "117.131.99.2", "mqtt_port": 21883, "mqtt_use_tls": false, "mqtt_token_set": true, "connected": true, "publish_count": 16, "outbox": 0, "last_error": ""}, "bluetooth": {"bt_role": "ble", "bt_device_name": "IotHubBLE-C8E4", "runtime_mode": "ble", "adv_active": false, "connected": true, "adv_retry_count": 0, "last_error": ""}, "uart": {"uart_baudrate": 115200, "uart_data_bits": 8, "uart_stop_bits": 1, "uart_parity_mode": "none", "uart_rx_gpio": 18, "uart_tx_gpio": 17}, "gpio": {"relay_on": false, "led_on": true, "relay_power_policy": 0, "led_power_policy": 1, "relay_active_high": true, "led_active_high": false, "input_active_low": true, "input_active": false, "io_seq": 0, "relay_gpio": 16, "led_gpio": 4, "input_gpio": 2
+>15.559s TX id=d1-network_status-5 121B {"id": "d1-network_status-5", "version": "1.0", "cmd": "network.status", "args": {}, "token": "<redacted>"}
+[tx] chunked 121B into 7 GATT writes (<= 20B each)
+<16.707s> RX id=d1-network_status-5 377B frags=2 sizes=[253, 124] {"id": "d1-network_status-5", "ok": true, "data": {"sta_connected": true, "sta_has_ip": true, "sta_ip": "192.168.1.50", "last_disconnect": "none", "connected_ssid": "CMCC-502", "connected_profile": 0, "rssi": -67, "channel": 3, "bssid": "5c:c0:a0:bd:f6:28", "rssi_valid": true, "sta_ssid": "CMCC-502", "password_set": true, "mode": "sta", "mqtt_connected": true, "mqtt_last_error": "", "trial": {"state": "idle"}}}
+{
+  "address": "B0:A7:32:28:C8:E6",
+  "name": "IotHubBLE-C8E4",
+  "login_ok": true,
+  "device_info": {
+    "id": "d1-device_info-2",
+    "ok": true,
+    "data": {
+      "model": "iothub",
+      "firmware": "1.2-a35eef9-dirty",
+      "device_id": "IotHub-C8E4",
+      "build_variant": "mqtt_net_txn=off",
+      "protocol_versions": [
+        "1.0"
+      ],
+      "security": {
+        "link_encrypted": false,
+        "bonded": false,
+        "l2_ready": false,
+        "sensitive_writes_allowed": false
+      }
+    }
+  },
+  "device_status": {
+    "id": "d1-device_status-3",
+    "ok": true,
+    "data": {
+      "model": "iothub",
+      "firmware": "1.2-a35eef9-dirty",
+      "device_id": "IotHub-C8E4",
+      "uptime_ms": 151912,
+      "reset_reason": "poweron",
+      "heap": {
+        "free": 43016,
+        "min_free": 36360,
+        "largest": 34816,
+        "internal_largest": 34816
+      },
+      "ble": {
+        "advertising": false,
+        "connected": true,
+        "mtu": 256,
+        "adv_retry_count": 0,
+        "runtime_mode": 1,
+        "last_error": ""
+      },
+      "mqtt": {
+        "connected": true,
+        "connecting": false,
+        "last_error": "",
+        "outbox": 0,
+        "telemetry_shed": 0
+      },
+      "partition": {
+        "label": "ota_0",
+        "address": 65536,
+        "size": 1966080,
+        "ota_state": "valid"
+      },
+      "network": {
+        "sta_connected": true,
+        "sta_has_ip": true,
+        "sta_ip": "192.168.1.50",
+        "last_disconnect": "none",
+        "connected_ssid": "CMCC-502",
+        "connected_profile": 0,
+        "rssi": -67,
+        "channel": 3,
+        "bssid": "5c:c0:a0:bd:f6:28",
+        "rssi_valid": true,
+        "sta_ssid": "CMCC-502",
+        "password_set": true,
+        "mode": "sta",
+        "mqtt_connected": true,
+        "mqtt_last_error": "",
+        "trial": {
+          "state": "idle"
+        }
+      }
+    }
+  },
+  "config_get": {
+    "id": "d1-config_get-4",
+    "ok": true,
+    "data": {
+      "network": {
+        "net_mode": "sta",
+        "sta_ssid": "CMCC-502",
+        "sta_password_set": true,
+        "sta_use_static": true,
+        "sta_static_ip": "192.168.1.50",
+        "sta_static_gateway": "192.168.1.1",
+        "sta_static_netmask": "255.255.255.0",
+        "sta_static_dns1": "223.5.5.5",
+        "sta_static_dns2": "8.8.8.8",
+        "sta_connected": true,
+        "sta_has_ip": true,
+        "sta_ip": "192.168.1.50",
+        "last_disconnect": "none"
+      },
+      "mqtt": {
+        "mqtt_backend": "tb_selfhost",
+        "mqtt_host": "117.131.99.2",
+        "mqtt_port": 21883,
+        "mqtt_use_tls": false,
+        "mqtt_token_set": true,
+        "connected": true,
+        "publish_count": 16,
+        "outbox": 0,
+        "last_error": ""
+      },
+      "bluetooth": {
+        "bt_role": "ble",
+        "bt_device_name": "IotHubBLE-C8E4",
+        "runtime_mode": "ble",
+        "adv_active": false,
+        "connected": true,
+        "adv_retry_count": 0,
+        "last_error": ""
+      },
+      "uart": {
+        "uart_baudrate": 115200,
+        "uart_data_bits": 8,
+        "uart_stop_bits": 1,
+        "uart_parity_mode": "none",
+        "uart_rx_gpio": 18,
+        "uart_tx_gpio": 17
+      },
+      "gpio": {
+        "relay_on": false,
+        "led_on": true,
+        "relay_power_policy": 0,
+        "led_power_policy": 1,
+        "relay_active_high": true,
+        "led_active_high": false,
+        "input_active_low": true,
+        "input_active": false,
+        "io_seq": 0,
+        "relay_gpio": 16,
+        "led_gpio": 4,
+        "input_gpio": 27
+      },
+      "web": {
+        "username": "admin"
+      }
+    }
+  },
+  "network_status": {
+    "id": "d1-network_status-5",
+    "ok": true,
+    "data": {
+      "sta_connected": true,
+      "sta_has_ip": true,
+      "sta_ip": "192.168.1.50",
+      "last_disconnect": "none",
+      "connected_ssid": "CMCC-502",
+      "connected_profile": 0,
+      "rssi": -67,
+      "channel": 3,
+      "bssid": "5c:c0:a0:bd:f6:28",
+      "rssi_valid": true,
+      "sta_ssid": "CMCC-502",
+      "password_set": true,
+      "mode": "sta",
+      "mqtt_connected": true,
+      "mqtt_last_error": "",
+      "trial": {
+        "state": "idle"
+      }
+    }
+  }
+}

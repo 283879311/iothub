@@ -1,0 +1,10 @@
+Cross-device token isolation (PC BLE, 2026-11-02)
+A: IotHubBLE-C8E4 / IotHub-C8E4, firmware 1.2-a35eef9
+B: IotHubBLE-65D8 / IotHub-65D8, firmware 1.2-a35eef9
+A login: token length 32
+B login: token length 32
+A token presented to B: unauthorized
+B token presented to A: unauthorized
+B own token: network.status ok, sta_connected=true
+A relogin after B test: ok, mqtt_connected=true, rssi_valid=true
+No token values recorded.

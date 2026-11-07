@@ -1,0 +1,17 @@
+{
+  "config": {
+    "sta_use_static": true,
+    "sta_static_ip": "",
+    "sta_static_gateway": "192.168.1.1",
+    "sta_static_netmask": "255.255.255.0",
+    "sta_static_dns1": "223.5.5.5",
+    "sta_static_dns2": "8.8.8.8"
+  },
+  "status": {
+    "sta_ip": "192.168.1.28",
+    "sta_connected": true,
+    "sta_has_ip": true,
+    "mqtt_connected": true,
+    "rssi_valid": true
+  }
+}

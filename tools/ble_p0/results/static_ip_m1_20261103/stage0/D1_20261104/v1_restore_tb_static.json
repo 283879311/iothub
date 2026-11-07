@@ -1,0 +1,115 @@
+{
+  "set": {
+    "id": "restore-set-2",
+    "ok": true,
+    "data": {
+      "success": true,
+      "changed": [
+        "mqtt_host",
+        "mqtt_port",
+        "sta_use_static"
+      ],
+      "effect": "reboot",
+      "relay_on": false,
+      "led_on": false,
+      "input_active": false,
+      "io_seq": 3,
+      "io_source": "input",
+      "saved": true,
+      "applied": false,
+      "restart_required": true,
+      "rollback": "none",
+      "operation_type": "reboot"
+    }
+  },
+  "status": {
+    "id": "restore-st-2",
+    "ok": true,
+    "data": {
+      "sta_connected": true,
+      "sta_has_ip": true,
+      "sta_ip": "192.168.1.50",
+      "last_disconnect": "none",
+      "connected_ssid": "CMCC-502",
+      "connected_profile": 0,
+      "rssi": -65,
+      "channel": 3,
+      "bssid": "5c:c0:a0:bd:f6:28",
+      "rssi_valid": true,
+      "sta_ssid": "CMCC-502",
+      "password_set": true,
+      "mode": "sta",
+      "mqtt_connected": true,
+      "mqtt_last_error": "",
+      "trial": {
+        "state": "idle"
+      }
+    }
+  },
+  "config": {
+    "id": "restore-cfg-3",
+    "ok": true,
+    "data": {
+      "network": {
+        "net_mode": "sta",
+        "sta_ssid": "CMCC-502",
+        "sta_password_set": true,
+        "sta_use_static": true,
+        "sta_static_ip": "192.168.1.50",
+        "sta_static_gateway": "192.168.1.1",
+        "sta_static_netmask": "255.255.255.0",
+        "sta_static_dns1": "223.5.5.5",
+        "sta_static_dns2": "8.8.8.8",
+        "sta_connected": true,
+        "sta_has_ip": true,
+        "sta_ip": "192.168.1.50",
+        "last_disconnect": "none"
+      },
+      "mqtt": {
+        "mqtt_backend": "tb_selfhost",
+        "mqtt_host": "139.9.93.245",
+        "mqtt_port": 21883,
+        "mqtt_use_tls": false,
+        "mqtt_token_set": true,
+        "connected": true,
+        "publish_count": 4,
+        "outbox": 0,
+        "last_error": ""
+      },
+      "bluetooth": {
+        "bt_role": "ble",
+        "bt_device_name": "IotHubBLE-C8E4",
+        "runtime_mode": "ble",
+        "adv_active": false,
+        "connected": true,
+        "adv_retry_count": 0,
+        "last_error": ""
+      },
+      "uart": {
+        "uart_baudrate": 115200,
+        "uart_data_bits": 8,
+        "uart_stop_bits": 1,
+        "uart_parity_mode": "none",
+        "uart_rx_gpio": 18,
+        "uart_tx_gpio": 17
+      },
+      "gpio": {
+        "relay_on": false,
+        "led_on": true,
+        "relay_power_policy": 0,
+        "led_power_policy": 1,
+        "relay_active_high": true,
+        "led_active_high": false,
+        "input_active_low": true,
+        "input_active": false,
+        "io_seq": 0,
+        "relay_gpio": 16,
+        "led_gpio": 4,
+        "input_gpio": 27
+      },
+      "web": {
+        "username": "admin"
+      }
+    }
+  }
+}

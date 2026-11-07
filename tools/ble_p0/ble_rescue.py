@@ -91,16 +91,16 @@ async def run(args: argparse.Namespace) -> int:
         cli, sess, target = await connect_once(args)
         before = await snapshot(sess)
         result["before"] = before
-        set_res = await sess.v0(
+        set_res = await sess.v1(
             "config.set",
-            {
+            {"patch": {
                 "sta_ssid": bad_ssid,
                 "sta_password": bad_password,
                 "sta_use_static": False,
                 "net_mode": "sta",
-            },
-            req_id=78,
+            }},
             timeout=20,
+            id_prefix="rescue-bad-config",
         )
         result["bad_config_set"] = {
             "ok": set_res.obj.get("ok") is True,

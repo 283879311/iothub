@@ -1,0 +1,391 @@
+{
+  "tests": {
+    "device_info": {
+      "id": "v1self-device_info-2",
+      "ok": true,
+      "data": {
+        "model": "iothub",
+        "firmware": "1.2-a35eef9-dirty",
+        "device_id": "IotHub-C8E4",
+        "build_variant": "mqtt_net_txn=on",
+        "protocol_versions": [
+          "1.0"
+        ],
+        "security": {
+          "link_encrypted": false,
+          "bonded": false,
+          "l2_ready": false,
+          "sensitive_writes_allowed": false
+        }
+      }
+    },
+    "device_status": {
+      "id": "v1self-device_status-3",
+      "ok": true,
+      "data": {
+        "model": "iothub",
+        "firmware": "1.2-a35eef9-dirty",
+        "device_id": "IotHub-C8E4",
+        "uptime_ms": 115252,
+        "reset_reason": "poweron",
+        "heap": {
+          "free": 38428,
+          "min_free": 32744,
+          "largest": 34816,
+          "internal_largest": 34816
+        },
+        "ble": {
+          "advertising": false,
+          "connected": true,
+          "mtu": 256,
+          "adv_retry_count": 0,
+          "runtime_mode": 1,
+          "last_error": ""
+        },
+        "mqtt": {
+          "connected": true,
+          "connecting": false,
+          "last_error": "",
+          "outbox": 0,
+          "telemetry_shed": 0
+        },
+        "partition": {
+          "label": "ota_0",
+          "address": 65536,
+          "size": 1966080,
+          "ota_state": "valid"
+        },
+        "network": {
+          "sta_connected": true,
+          "sta_has_ip": true,
+          "sta_ip": "192.168.1.50",
+          "last_disconnect": "none",
+          "connected_ssid": "CMCC-502",
+          "connected_profile": 0,
+          "rssi": -64,
+          "channel": 3,
+          "bssid": "5c:c0:a0:bd:f6:28",
+          "rssi_valid": true,
+          "sta_ssid": "CMCC-502",
+          "password_set": true,
+          "mode": "sta",
+          "mqtt_connected": true,
+          "mqtt_last_error": "",
+          "trial": {
+            "state": "idle"
+          }
+        }
+      }
+    },
+    "gpio_status": {
+      "id": "v1self-gpio_status-4",
+      "ok": true,
+      "data": {
+        "relay_on": false,
+        "led_on": true,
+        "input_active": false,
+        "io_seq": 0,
+        "io_last_change_ms": 0,
+        "io_source": "boot",
+        "relay_active_high": true,
+        "led_active_high": false,
+        "input_active_low": true,
+        "relay_power_policy": 0,
+        "led_power_policy": 1,
+        "pins": {
+          "relay": 16,
+          "led": 4,
+          "input": 27
+        }
+      }
+    },
+    "uart_runtime": {
+      "id": "v1self-uart_runtime-5",
+      "ok": true,
+      "data": {
+        "runtime_available": true,
+        "baudrate": 115200,
+        "data_bits": 8,
+        "stop_bits": 1,
+        "parity": 0,
+        "frame": "8N1",
+        "rx_pin": 18,
+        "tx_pin": 17,
+        "driver_installed": true,
+        "rx_sequence": 0,
+        "tx_sequence": 0,
+        "last_bytes_sent": 0,
+        "last_send_at_ms": 0,
+        "last_apply_error": "",
+        "last_tx_encoding": "",
+        "last_tx_preview": ""
+      }
+    },
+    "config_get": {
+      "id": "v1self-config_get-6",
+      "ok": true,
+      "data": {
+        "network": {
+          "net_mode": "sta",
+          "sta_ssid": "CMCC-502",
+          "sta_password_set": true,
+          "sta_use_static": true,
+          "sta_static_ip": "192.168.1.50",
+          "sta_static_gateway": "192.168.1.1",
+          "sta_static_netmask": "255.255.255.0",
+          "sta_static_dns1": "223.5.5.5",
+          "sta_static_dns2": "8.8.8.8",
+          "sta_connected": true,
+          "sta_has_ip": true,
+          "sta_ip": "192.168.1.50",
+          "last_disconnect": "none"
+        },
+        "mqtt": {
+          "mqtt_backend": "tb_selfhost",
+          "mqtt_host": "139.9.93.245",
+          "mqtt_port": 21883,
+          "mqtt_use_tls": false,
+          "mqtt_token_set": true,
+          "connected": true,
+          "publish_count": 14,
+          "outbox": 0,
+          "last_error": ""
+        },
+        "bluetooth": {
+          "bt_role": "ble",
+          "bt_device_name": "IotHubBLE-C8E4",
+          "runtime_mode": "ble",
+          "adv_active": false,
+          "connected": true,
+          "adv_retry_count": 0,
+          "last_error": ""
+        },
+        "uart": {
+          "uart_baudrate": 115200,
+          "uart_data_bits": 8,
+          "uart_stop_bits": 1,
+          "uart_parity_mode": "none",
+          "uart_rx_gpio": 18,
+          "uart_tx_gpio": 17
+        },
+        "gpio": {
+          "relay_on": false,
+          "led_on": true,
+          "relay_power_policy": 0,
+          "led_power_policy": 1,
+          "relay_active_high": true,
+          "led_active_high": false,
+          "input_active_low": true,
+          "input_active": false,
+          "io_seq": 0,
+          "relay_gpio": 16,
+          "led_gpio": 4,
+          "input_gpio": 27
+        },
+        "web": {
+          "username": "admin"
+        }
+      }
+    },
+    "io_get": {
+      "id": "v1self-io_get-7",
+      "ok": true,
+      "data": {
+        "relay_on": false,
+        "led_on": true,
+        "input_active": false,
+        "io_seq": 0,
+        "io_source": "boot",
+        "net_mode": "sta",
+        "sta_has_ip": true,
+        "sta_ip": "192.168.1.50"
+      }
+    },
+    "network_status": {
+      "id": "v1self-network_status-8",
+      "ok": true,
+      "data": {
+        "sta_connected": true,
+        "sta_has_ip": true,
+        "sta_ip": "192.168.1.50",
+        "last_disconnect": "none",
+        "connected_ssid": "CMCC-502",
+        "connected_profile": 0,
+        "rssi": -61,
+        "channel": 3,
+        "bssid": "5c:c0:a0:bd:f6:28",
+        "rssi_valid": true,
+        "sta_ssid": "CMCC-502",
+        "password_set": true,
+        "mode": "sta",
+        "mqtt_connected": true,
+        "mqtt_last_error": "",
+        "trial": {
+          "state": "idle"
+        }
+      }
+    },
+    "profiles": {
+      "id": "v1self-profiles-9",
+      "ok": true,
+      "data": {
+        "profiles": [
+          {
+            "ssid": "CMCC-502",
+            "password_set": true
+          },
+          {
+            "ssid": "TQ2018",
+            "password_set": true
+          }
+        ]
+      }
+    },
+    "config_set_probe": {
+      "id": "v1self-config_set_probe-10",
+      "ok": true,
+      "data": {
+        "success": true,
+        "changed": [],
+        "effect": "none",
+        "relay_on": false,
+        "led_on": true,
+        "input_active": false,
+        "io_seq": 0,
+        "io_source": "boot",
+        "saved": true,
+        "applied": true,
+        "restart_required": false,
+        "rollback": "none"
+      }
+    },
+    "config_set_net_noop": {
+      "id": "v1self-config_set_net_noop-11",
+      "ok": true,
+      "data": {
+        "success": true,
+        "changed": [],
+        "effect": "none",
+        "relay_on": false,
+        "led_on": true,
+        "input_active": false,
+        "io_seq": 0,
+        "io_source": "boot",
+        "saved": true,
+        "applied": true,
+        "restart_required": false,
+        "rollback": "none"
+      }
+    },
+    "fake_apply": {
+      "id": "v1self-fake_apply-12",
+      "ok": false,
+      "error": {
+        "code": "not_found",
+        "message": "not_found"
+      }
+    },
+    "fake_cancel": {
+      "id": "v1self-fake_cancel-13",
+      "ok": false,
+      "error": {
+        "code": "not_found",
+        "message": "not_found"
+      }
+    },
+    "bad_ip_mode": {
+      "id": "v1self-bad_ip_mode-14",
+      "ok": false,
+      "error": {
+        "code": "invalid_argument",
+        "message": "invalid_argument"
+      }
+    },
+    "bad_leave_static": {
+      "id": "v1self-bad_leave_static-15",
+      "ok": false,
+      "error": {
+        "code": "invalid_argument",
+        "message": "invalid_argument"
+      }
+    },
+    "static_pin": {
+      "id": "v1self-staticpin-16",
+      "ok": false,
+      "error": {
+        "code": "static_ip_pinned",
+        "message": "static_ip_pinned"
+      }
+    },
+    "tryconnect_active": {
+      "id": "v1self-try-18",
+      "ok": true,
+      "data": {
+        "operation_id": "op-44E6B5C604F225B4",
+        "state": "accepted"
+      }
+    },
+    "operation": {
+      "id": "v1self-op-19",
+      "ok": true,
+      "data": {
+        "operation_id": "op-44E6B5C604F225B4",
+        "state": "connecting",
+        "error": "none"
+      }
+    },
+    "cancel": {
+      "id": "v1self-cancel-20",
+      "ok": true,
+      "data": {
+        "operation_id": "op-44E6B5C604F225B4",
+        "state": "cancelled"
+      }
+    },
+    "scan": {
+      "id": "v1self-scan-21",
+      "ok": true,
+      "data": {
+        "status": "ok",
+        "count": 4,
+        "aps": [
+          {
+            "ssid": "CMCC-502",
+            "rssi": -64,
+            "auth": 4,
+            "bssid": "5c:c0:a0:bd:f6:28"
+          },
+          {
+            "ssid": "CMCC-GhyE",
+            "rssi": -67,
+            "auth": 7,
+            "bssid": "38:16:5a:4e:71:11"
+          },
+          {
+            "ssid": "TP-LINK_BFBD",
+            "rssi": -85,
+            "auth": 4,
+            "bssid": "0c:4b:54:0e:bf:bd"
+          },
+          {
+            "ssid": "CU_2MWf",
+            "rssi": -87,
+            "auth": 3,
+            "bssid": "68:df:ce:15:74:50"
+          }
+        ]
+      }
+    },
+    "v0_status": {
+      "ok": false,
+      "error": "unsupported_version",
+      "id": 701
+    },
+    "v0_config": {
+      "ok": false,
+      "error": "unsupported_version",
+      "id": 701
+    }
+  },
+  "name": "IotHubBLE-C8E4"
+}

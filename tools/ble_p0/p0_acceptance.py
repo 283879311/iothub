@@ -587,18 +587,6 @@ class Session:
             req["token"] = self.token
         return await self.send_request(req, timeout=timeout)
 
-    async def v0(
-        self,
-        method: str,
-        params: dict[str, Any],
-        req_id: int | str = 75,
-        timeout: float = 20,
-    ) -> Response:
-        req: dict[str, Any] = {"id": req_id, "method": method, "params": params}
-        if self.token:
-            req["token"] = self.token
-        return await self.send_request(req, timeout=timeout)
-
     async def login(
         self, username: str | None = None, password: str | None = None
     ) -> Response:
@@ -1262,7 +1250,7 @@ async def test_final_config_set(sess: Session, args: argparse.Namespace) -> dict
     result: dict[str, Any] = {"name": "6_FINAL_CONFIG_SET_NET_MODE_STA", "pass": False}
     if now() - sess.token_time > 500:
         await sess.login(args.user, args.password)
-    res = await sess.v0("config.set", {"net_mode": "sta"}, req_id=75, timeout=20)
+    res = await sess.v1("config.set", {"patch": {"net_mode": "sta"}}, timeout=20, id_prefix="final-config")
     result["response"] = sanitize(res.obj)
     result["ok"] = res.obj.get("ok") is True
     result["latency_ms"] = round((res.latency or 0) * 1000, 1)

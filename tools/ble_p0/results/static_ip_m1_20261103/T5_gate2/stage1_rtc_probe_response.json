@@ -1,0 +1,6 @@
+{
+  "ok": true,
+  "action": "rtc_probe",
+  "reboot_required": true,
+  "id": 2
+}

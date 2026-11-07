@@ -1,0 +1,6 @@
+{
+  "ok": true,
+  "action": "reboot",
+  "reboot_scheduled": true,
+  "id": 2
+}

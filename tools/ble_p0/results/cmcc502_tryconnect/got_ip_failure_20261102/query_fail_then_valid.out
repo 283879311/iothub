@@ -1,0 +1,10 @@
+/home/tc/esp/workspace/iothub/.venv-bleak/lib/python3.12/site-packages/bleak/backends/bluezdbus/client.py:646: UserWarning: Using default MTU value. Call _acquire_mtu() or set _mtu_size first to avoid this warning.
+  warnings.warn(
+then-valid accept ok=True op=op-A431E4B10EB1795F err=None
+inject got_ip_query_fail ok=True err=None
+after query-fail state=connecting error=none elapsed=3.20s
+inject got_ip ok=True err=None
+then-valid terminal state=got_ip error=none elapsed=25.70s
+real-fail accept ok=False op=None err={'code': 'busy', 'message': 'busy'}
+inject got_ip_query_fail ok=False err=not_active
+real-fail terminal state=None error=None elapsed=30.10s

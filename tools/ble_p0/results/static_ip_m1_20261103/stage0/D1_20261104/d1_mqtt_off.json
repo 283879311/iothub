@@ -1,0 +1,19 @@
+{
+  "host": "117.131.99.2",
+  "port": 21883,
+  "responses": {
+    "status": {
+      "timeout": true
+    },
+    "tryconnect": {
+      "timeout": true
+    },
+    "apply": {
+      "timeout": true
+    },
+    "cancel": {
+      "timeout": true
+    }
+  },
+  "connack": 0
+}

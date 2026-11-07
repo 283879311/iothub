@@ -1,0 +1,7 @@
+/home/tc/esp/workspace/iothub/.venv-bleak/lib/python3.12/site-packages/bleak/backends/bluezdbus/client.py:646: UserWarning: Using default MTU value. Call _acquire_mtu() or set _mtu_size first to avoid this warning.
+  warnings.warn(
+extra-cancel accept True state accepted op op-4C2567F920A94A9B err None
+cancel True None
+cancel terminal cancelled cancelled 1.20s
+extra-notfound accept True state accepted op op-F04C1C089A0255E2 err None
+notfound terminal failed ap_not_found 6.50s

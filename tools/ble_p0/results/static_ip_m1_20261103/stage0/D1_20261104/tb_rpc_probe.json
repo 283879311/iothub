@@ -1,0 +1,50 @@
+{
+  "login_status": 200,
+  "device": "Test Device B1",
+  "v0": {
+    "http": 200,
+    "response": {
+      "sta_connected": true,
+      "sta_has_ip": true,
+      "sta_ip": "192.168.1.50",
+      "last_disconnect": "none",
+      "connected_ssid": "CMCC-502",
+      "connected_profile": 0,
+      "rssi": -63,
+      "channel": 3,
+      "bssid": "5c:c0:a0:bd:f6:28",
+      "rssi_valid": true,
+      "sta_ssid": "CMCC-502",
+      "password_set": true,
+      "mode": "sta",
+      "mqtt_connected": true,
+      "mqtt_last_error": "",
+      "trial": {
+        "state": "idle"
+      }
+    }
+  },
+  "v1_body": {
+    "http": 200,
+    "response": {
+      "sta_connected": true,
+      "sta_has_ip": true,
+      "sta_ip": "192.168.1.50",
+      "last_disconnect": "none",
+      "connected_ssid": "CMCC-502",
+      "connected_profile": 0,
+      "rssi": -63,
+      "channel": 3,
+      "bssid": "5c:c0:a0:bd:f6:28",
+      "rssi_valid": true,
+      "sta_ssid": "CMCC-502",
+      "password_set": true,
+      "mode": "sta",
+      "mqtt_connected": true,
+      "mqtt_last_error": "",
+      "trial": {
+        "state": "idle"
+      }
+    }
+  }
+}

@@ -6,7 +6,7 @@ PC 侧 BlueZ + bleak 充当 BLE central，模拟微信小程序的 NUS 命令面
 2. ADV / Scan Response 名称观察；
 3. 10 次长响应（`network.scan`）按 id 重组，确认 JSON 不被截断；
 4. v1 `network.tryconnect` 期间的 `operation.get` 非阻塞响应；
-5. 错误口令、重复请求、cancel 竞态、not_found，以及最终 v0 `config.set {"net_mode":"sta"}`；
+5. 错误口令、重复请求、cancel 竞态、not_found，以及最终 v1 `config.set {"patch":{"net_mode":"sta"}}`；
 6. T1 成功网络事务：`tryconnect → got_ip → apply → 重启持久化`（独立脚本）；
 7. T2 操作槽生命周期：4 槽 `no_slot`、active `busy`、600s 终态回收、旧 ID `not_found`（独立脚本）；
 8. T3 BLE 命令/数据通道：GATT 审计、CMD 20B 长命令/长响应、DATA 回环/长帧/连续流、双通道并发、断连恢复（独立脚本）；
@@ -55,7 +55,7 @@ IOTHUB_WIFI_PASSWORD='<WIFI_PASSWORD>' \
 - `--wrong-password`：错误口令（默认随机生成）；
 - `--n-long`：长响应次数（默认 10）；
 - `--scan-timeout`：过滤扫描秒数（默认 12）；
-- `--no-final-config-set`：跳过最终 v0 config.set；
+- `--no-final-config-set`：跳过最终 v1 config.set；
 - `--max-write`：CMD/DATA 单次 GATT 写入上限，默认 **20B**（MTU23 的 ATT payload）；MTU256 可显式调大，但小程序应按实际 MTU-3 计算。
 
 ## 行为说明
@@ -63,7 +63,7 @@ IOTHUB_WIFI_PASSWORD='<WIFI_PASSWORD>' \
 - 扫描前会 `bluetoothctl remove` 清掉缓存的 IotHub 设备，确保过滤扫描是新鲜命中。
 - 命令按 `id` 配对；CMD TX 通知按 `{}` 边界重组，支持字符串内 `}`/转义。
 - 每次命令间隔 ≥250ms，避开固件 5 次/秒限频；收到 `rate_limited` 会自动重试。
-- 默认单次 GATT 写 **20B**，按实际协商 MTU-3 调整；275B 的静态 IP `config.set` 会拆成 14 片。固件 CMD RX 按 512B 行重组。小程序也应按 MTU-3 分片，不能一次写整包。
+- 默认单次 GATT 写 **20B**，按实际协商 MTU-3 调整；275B 的 v1 静态 IP `config.set` 会拆成 14 片。固件 CMD RX 按 512B 行重组。小程序也应按 MTU-3 分片，不能一次写整包。
 - DATA TX 是原始字节 Notify，不是 JSON；`data.loopback` 只用于测试 BLE→BLE 回环，测试后关闭。DATA 没有应用层 ACK/序号/重传/帧重组，GATT 写成功不等于送达。
 - 主机侧 BLE 断链会自动重连并重登，长响应测试会重试同一条并记录 `reconnects_total`。
 - 错误口令测试的 PASS 要求终态 `failed` 且错误为 `wrong_password`/`connect_failed`/`timeout`；`ap_not_found` 不算错误口令通过。
@@ -74,7 +74,7 @@ IOTHUB_WIFI_PASSWORD='<WIFI_PASSWORD>' \
 
 `success_path.py` 只做 T1，适合不想重跑扫描/长响应全套时使用：
 
-- 连接、login、记录 `network.status`、扫描确认目标 SSID 可见；
+- 连接、`auth.login`、记录 `network.status`、扫描确认目标 SSID 可见；
 - `network.tryconnect` → 轮询 `operation.get` 到 `got_ip`；
 - `network.apply`、重复 apply、成功后 cancel；
 - 等待 `config.get` 确认 `sta_use_static=false` 和 IP；
@@ -83,7 +83,7 @@ IOTHUB_WIFI_PASSWORD='<WIFI_PASSWORD>' \
 
 注意事项：
 
-- apply 按固件逻辑会把 `sta_use_static` 置为 false，设备 IP 可能从静态地址变为 DHCP 地址；
+- apply 不再无条件清除静态模式：静态 SSID 相同时保留静态；静态模式跨 SSID 会被 `static_ip_pinned` 拒绝，离开静态需先 v1 `config.set` 切 DHCP；
 - `operation.get` 返回 `got_ip` 时，`network.status` 可能仍显示 `sta_connected=true / sta_has_ip=false / 0.0.0.0`；最终以 `config.get`/重启后的 `sta_has_ip` 为准，客户端必须等 `sta_has_ip=true`；
 - apply success 不等于 MQTT 已连，脚本会再等 5s 查询一次；
 - 同 SSID（CMCC-502）和跨 SSID（CMCC-502→TQ2018）都已通过；
@@ -91,7 +91,7 @@ IOTHUB_WIFI_PASSWORD='<WIFI_PASSWORD>' \
 
 ## 静态 IP 脚本
 
-`static_ip_check.py` 验证 v0 `config.set` 的静态 IP 字段（v1 `config.set` 会拒绝 network 域）：
+`static_ip_check.py` 验证 BLE v1 `config.set`（`args.patch`）的静态 IP 字段：
 
 ```bash
 .venv-bleak/bin/python -u tools/ble_p0/static_ip_check.py --ssid TQ2018
@@ -99,7 +99,7 @@ IOTHUB_WIFI_PASSWORD='<WIFI_PASSWORD>' \
 
 - 默认从当前 DHCP IP 推导同 /24 的 `.213`、网关 `.1`、掩码 `/24`、DNS 网关/8.8.8.8；
 - 静态字段 effect 是 reboot；脚本等待重启、重连，验证 `config.get` 持久化和 `network.status` 的真实静态 IP；
-- v0 命令含 token 后约 **275B**，超过 MTU-3（253B）；harness 默认按 **20B 分片**（MTU23 安全值），MTU256 可用 `--max-write` 调大。客户端/小程序应按实际协商 MTU-3 计算，不要固定某个值；
+- v1 命令含 token 后约 **275B**，超过 MTU-3（253B）；harness 默认按 **20B 分片**（MTU23 安全值），MTU256 可用 `--max-write` 调大。客户端/小程序应按实际协商 MTU-3 计算，不要固定某个值；
 - 若运行时静态 IP 失败，默认回退 DHCP 并复验；
 - 结果写入 `tools/ble_p0/results/static_ip_<timestamp>.json`。
 

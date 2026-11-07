@@ -1,0 +1,17 @@
+{
+  "tryconnect": {
+    "ok": false,
+    "error": "guard_rejected",
+    "id": 201
+  },
+  "apply": {
+    "ok": false,
+    "error": "guard_rejected",
+    "id": 202
+  },
+  "cancel": {
+    "ok": false,
+    "error": "guard_rejected",
+    "id": 203
+  }
+}

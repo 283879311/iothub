@@ -1,0 +1,32 @@
+From dada302dc0bda126242c28cbd7bb74e48fc68ce0 Mon Sep 17 00:00:00 2001
+From: 283879311 <283879311@local>
+Date: Tue, 3 Nov 2026 20:42:18 +0800
+Subject: [PATCH] test(wifi): report invalid tickets including reserved and crc
+
+The invalid-ticket diagnostic only checked magic/version/stage/count, so
+a corrupt reserved field or CRC with zeroed fields was cleared silently.
+
+Include reserved[3] and crc in the non-zero test. Diagnostic only: no
+change to ticket format, CRC algorithm, locking or recovery flow.
+---
+ main/wifi.c | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/main/wifi.c b/main/wifi.c
+index 4753080..788dc65 100644
+--- a/main/wifi.c
++++ b/main/wifi.c
+@@ -223,7 +223,9 @@ static void app_wifi_boot_ticket_consume(void)
+     if (t.magic != APP_WIFI_BOOT_TICKET_MAGIC ||
+         t.version != APP_WIFI_BOOT_TICKET_VERSION ||
+         t.crc != app_wifi_boot_ticket_crc(&t)) {
+-        if (t.magic != 0 || t.version != 0 || t.stage != 0 || t.count != 0) {
++        if (t.magic != 0 || t.version != 0 || t.stage != 0 || t.count != 0 ||
++            t.reserved[0] != 0 || t.reserved[1] != 0 || t.reserved[2] != 0 ||
++            t.crc != 0) {
+             ESP_LOGW(TAG, "ticket_seen=1 invalid=1");
+         }
+         return;
+-- 
+2.43.0
+

@@ -289,7 +289,7 @@ async def run(args: argparse.Namespace) -> int:
             raise RuntimeError("login after restore failed")
         sess.token = token5
 
-        # 6. token case sensitivity and v0/v1 unauthorized codes
+        # 6. token case sensitivity; v0 is intentionally disabled
         res = await raw_v1(sess, token5, "network.status", {}, id_prefix="upper")
         step("6a. 大写 token 有效", is_ok(res), code=error_code(res))
         lower = token5.lower()
@@ -297,10 +297,11 @@ async def run(args: argparse.Namespace) -> int:
         step("6b. 小写 token v1 拒绝", error_code(res) == "unauthorized",
              code=error_code(res))
         res = await raw_v0(sess, lower, "network.status", {})
-        step("6c. 小写 token v0 拒绝", error_code(res) == "auth_required",
+        step("6c. 小写 token v0 已禁用", error_code(res) == "unsupported_version",
              code=error_code(res))
         res = await raw_v0(sess, token5, "network.status", {})
-        step("6d. 大写 token v0 有效", is_ok(res), code=error_code(res))
+        step("6d. 大写 token v0 已禁用", error_code(res) == "unsupported_version",
+             code=error_code(res))
 
         result["token_hex_len"] = len(token5)
         result["token_upper_hex"] = all(c in "0123456789ABCDEF" for c in token5)

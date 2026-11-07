@@ -1,0 +1,110 @@
+From 56119bad080683a04803f9eb8f6efc5710edad07 Mon Sep 17 00:00:00 2001
+From: 283879311 <283879311@local>
+Date: Tue, 3 Nov 2026 21:04:19 +0800
+Subject: [PATCH] test(wifi): report reboot scheduling result accurately
+
+- app_reboot_schedule() now returns SCHEDULED / ALREADY_PENDING /
+  SCHEDULE_FAILED; the pending flag is only kept when
+  xTaskCreateStatic() actually returned a handle.
+- Check-and-set of the pending flag is under a short portMUX; task
+  creation stays outside the critical section.
+- m1hook reboot allocates its response first, then reports
+  reboot_scheduled / already_pending / reboot_failed accurately.
+---
+ main/cmd.c | 24 ++++++++++++++++++------
+ main/ota.c | 23 +++++++++++++++++++----
+ main/ota.h |  8 +++++++-
+ 3 files changed, 44 insertions(+), 11 deletions(-)
+
+diff --git a/main/cmd.c b/main/cmd.c
+index f6aef7c..426eb43 100644
+--- a/main/cmd.c
++++ b/main/cmd.c
+@@ -1350,12 +1350,24 @@ static void app_cmd_m1hook(const cJSON *params, app_cmd_source_t source,
+     }
+     if (strcmp(action->valuestring, "reboot") == 0) {
+         /* V1 RTC probe:软件复位(esp_restart 延迟 1.5s,先回包) */
+-        app_reboot_schedule("m1_probe_reboot");
+-        *resp_out = cJSON_CreateObject();
+-        if (*resp_out == NULL) { *err_out = "out_of_memory"; return; }
+-        cJSON_AddBoolToObject(*resp_out, "ok", true);
+-        cJSON_AddStringToObject(*resp_out, "action", "reboot");
+-        cJSON_AddBoolToObject(*resp_out, "reboot_scheduled", true);
++        app_reboot_result_t rr;
++        cJSON *r = cJSON_CreateObject();
++
++        if (r == NULL) { *err_out = "out_of_memory"; return; }
++        rr = app_reboot_schedule("m1_probe_reboot");
++        if (rr == APP_REBOOT_SCHEDULE_FAILED) {
++            cJSON_Delete(r);
++            *err_out = "reboot_failed";
++            return;
++        }
++        cJSON_AddBoolToObject(r, "ok", true);
++        cJSON_AddStringToObject(r, "action", "reboot");
++        if (rr == APP_REBOOT_SCHEDULED) {
++            cJSON_AddBoolToObject(r, "reboot_scheduled", true);
++        } else {
++            cJSON_AddBoolToObject(r, "already_pending", true);
++        }
++        *resp_out = r;
+         return;
+     }
+     hook_err = app_wifi_test_hook(action->valuestring, stage_str, count, timeout_ms);
+diff --git a/main/ota.c b/main/ota.c
+index 04f57eb..74f0e6d 100644
+--- a/main/ota.c
++++ b/main/ota.c
+@@ -186,14 +186,29 @@ void app_reboot_task(void *arg)
+ static StaticTask_t s_reboot_task_buf;
+ static StackType_t s_reboot_stack[APP_OTA_REBOOT_STACK_BYTES];
+ static bool s_reboot_pending = false;
++static portMUX_TYPE s_reboot_mux = portMUX_INITIALIZER_UNLOCKED;
+ 
+-void app_reboot_schedule(const char *task_name)
++app_reboot_result_t app_reboot_schedule(const char *task_name)
+ {
++    TaskHandle_t created;
++
++    /* 先占位防并发重复调度;任务创建失败时必须回滚占位。 */
++    portENTER_CRITICAL(&s_reboot_mux);
+     if (s_reboot_pending) {
+-        return;   /* 已有重启在途,esp_restart 不会回来 */
++        portEXIT_CRITICAL(&s_reboot_mux);
++        return APP_REBOOT_ALREADY_PENDING;
+     }
+     s_reboot_pending = true;
+-    (void)xTaskCreateStatic(app_reboot_task, task_name, APP_OTA_REBOOT_STACK_BYTES,
+-                            NULL, 5, s_reboot_stack, &s_reboot_task_buf);
++    portEXIT_CRITICAL(&s_reboot_mux);
++
++    created = xTaskCreateStatic(app_reboot_task, task_name, APP_OTA_REBOOT_STACK_BYTES,
++                                NULL, 5, s_reboot_stack, &s_reboot_task_buf);
++    if (created == NULL) {
++        portENTER_CRITICAL(&s_reboot_mux);
++        s_reboot_pending = false;
++        portEXIT_CRITICAL(&s_reboot_mux);
++        return APP_REBOOT_SCHEDULE_FAILED;
++    }
++    return APP_REBOOT_SCHEDULED;
+ }
+ 
+diff --git a/main/ota.h b/main/ota.h
+index 67dabc4..a46d320 100644
+--- a/main/ota.h
++++ b/main/ota.h
+@@ -10,4 +10,10 @@ void app_ota_get_running_partition_stats(const esp_partition_t **running_partiti
+                                          size_t *total_bytes,
+                                          size_t *used_bytes);
+ void app_reboot_task(void *arg);
+-void app_reboot_schedule(const char *task_name);
++typedef enum {
++    APP_REBOOT_SCHEDULED = 0,       /* 本次成功创建复位任务 */
++    APP_REBOOT_ALREADY_PENDING,     /* 已有复位任务在途 */
++    APP_REBOOT_SCHEDULE_FAILED,     /* 任务创建失败,未调度 */
++} app_reboot_result_t;
++
++app_reboot_result_t app_reboot_schedule(const char *task_name);
+-- 
+2.43.0
+

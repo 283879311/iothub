@@ -1,0 +1,24 @@
+{
+  "id": 2,
+  "ok": true,
+  "result": {
+    "success": true,
+    "changed": [
+      "sta_use_static",
+      "sta_static_ip",
+      "sta_static_gateway",
+      "sta_static_dns1"
+    ],
+    "effect": "reboot",
+    "relay_on": false,
+    "led_on": true,
+    "input_active": false,
+    "io_seq": 0,
+    "io_source": "boot",
+    "saved": true,
+    "applied": false,
+    "restart_required": true,
+    "rollback": "none",
+    "operation_type": "reboot"
+  }
+}

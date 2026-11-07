@@ -1,0 +1,44 @@
+scan_all
+[
+  {
+    "address": "B0:A7:32:28:C8:E6",
+    "name": "IotHubBLE-C8E4",
+    "service_uuids": [
+      "6e400001-b5a3-f393-e0a9-e50e24dcca9e"
+    ],
+    "tx_power": 0,
+    "rssi": -42,
+    "manufacturer_data_keys": [],
+    "service_data_keys": []
+  },
+  {
+    "address": "10:97:BD:D3:65:DA",
+    "name": "IotHubBLE-65D8",
+    "service_uuids": [
+      "6e400001-b5a3-f393-e0a9-e50e24dcca9e"
+    ],
+    "tx_power": 0,
+    "rssi": -46,
+    "manufacturer_data_keys": [],
+    "service_data_keys": []
+  }
+]
+scan_filtered_nus
+[
+  {
+    "address": "10:97:BD:D3:65:DA",
+    "name": "IotHubBLE-65D8",
+    "service_uuids": [
+      "6e400001-b5a3-f393-e0a9-e50e24dcca9e"
+    ],
+    "rssi": -48
+  },
+  {
+    "address": "B0:A7:32:28:C8:E6",
+    "name": "IotHubBLE-C8E4",
+    "service_uuids": [
+      "6e400001-b5a3-f393-e0a9-e50e24dcca9e"
+    ],
+    "rssi": -44
+  }
+]

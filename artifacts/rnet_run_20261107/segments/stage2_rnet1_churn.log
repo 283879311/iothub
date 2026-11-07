@@ -1,0 +1,1101 @@
+ets Jul 29 2019 12:21:46
+
+rst:0x1 (POWERON_RESET),boot:0x13 (SPI_FAST_FLASH_BOOT)
+configsip: 0, SPIWP:0xee
+clk_drv:0x00,q_drv:0x00,d_drv:0x00,cs0_drv:0x00,hd_drv:0x00,wp_drv:0x00
+mode:DIO, clock div:2
+load:0x3fff0040,len:6172
+ho 0 tail 12 room 4
+load:0x40078000,len:15908
+load:0x40080400,len:3876
+entry 0x4008063c
+I (29) boot: ESP-IDF v6.0.3-707-gdac489c6718 2nd stage bootloader
+I (29) boot: compile time Nov  1 2026 23:34:54
+I (30) boot: chip revision: v3.1
+I (32) boot.esp32: SPI Speed      : 40MHz
+I (36) boot.esp32: SPI Mode       : DIO
+I (39) boot.esp32: SPI Flash Size : 4MB
+I (43) boot: Partition Table:
+I (45) boot: ## Label            Usage          Type ST Offset   Length
+I (52) boot:  0 nvs              WiFi data        01 02 00009000 00004000
+I (58) boot:  1 otadata          OTA data         01 00 0000d000 00002000
+I (65) boot:  2 phy_init         RF data          01 01 0000f000 00001000
+I (71) boot:  3 ota_0            OTA app          00 10 00010000 001e0000
+I (78) boot:  4 ota_1            OTA app          00 11 001f0000 001e0000
+I (84) boot:  5 storage          Unknown data     01 83 003d0000 00010000
+I (91) boot:  6 coredump         Unknown data     01 03 003e0000 00008000
+I (98) esp_image: segment 0: paddr=00010020 vaddr=3f400020 size=33d8ch (212364) map
+I (181) esp_image: segment 1: paddr=00043db4 vaddr=3ffbdb60 size=06328h ( 25384) load
+I (191) esp_image: segment 2: paddr=0004a0e4 vaddr=40080000 size=05f34h ( 24372) load
+I (202) esp_image: segment 3: paddr=00050020 vaddr=400d0020 size=c5a08h (809480) map
+I (493) esp_image: segment 4: paddr=00115a30 vaddr=40085f34 size=1716ch ( 94572) load
+I (533) esp_image: segment 5: paddr=0012cba4 vaddr=50000000 size=00028h (    40) load
+I (548) boot: Loaded app from partition at offset 0x10000
+I (554) cpu_start: Multicore app
+I (562) cpu_start: GPIO 3 and 1 are used as console UART I/O pins
+I (562) cpu_start: Pro cpu start user code
+I (562) cpu_start: cpu freq: 160000000 Hz
+I (564) app_init: Application information:
+I (568) app_init: Project name:     iothub
+I (572) app_init: App version:      1.3-a35eef9-dirty
+I (577) app_init: Compile time:     Nov  7 2026 00:43:21
+I (582) app_init: ELF file SHA256:  c05640a71...
+I (586) app_init: ESP-IDF:          v6.0.3-707-gdac489c6718
+I (591) efuse_init: Min chip rev:     v0.0
+I (595) efuse_init: Max chip rev:     v3.99 
+I (599) efuse_init: Chip rev:         v3.1
+I (603) heap_init: Initializing. RAM available for dynamic allocation:
+I (609) heap_init: At 3FFAFF10 len 000000F0 (0 KiB): DRAM
+I (614) heap_init: At 3FFB6388 len 00001C78 (7 KiB): DRAM
+I (619) heap_init: At 3FFB9A20 len 00004108 (16 KiB): DRAM
+I (625) heap_init: At 3FFD35C8 len 0000CA38 (50 KiB): DRAM
+I (630) heap_init: At 3FFE0440 len 00003AE0 (14 KiB): D/IRAM
+I (635) heap_init: At 3FFE4350 len 0001BCB0 (111 KiB): D/IRAM
+I (641) heap_init: At 4009D0A0 len 00002F60 (11 KiB): IRAM
+I (647) spi_flash: detected chip: generic
+I (650) spi_flash: flash io: dio
+I (654) esp_core_dump_flash: Init core dump to flash
+I (658) esp_core_dump_flash: Found partition 'coredump' @ 3e0000 32768 bytes
+E (722) esp_core_dump_flash: Core dump data check failed:
+Calculated checksum='85b9f743ff56d94ade0f88fce1451216bfafb821ca6a4e3d15d95979d226a4d2'
+Image checksum='0000000000000000000000000000000000000000000000000000000000000000'
+I (731) coexist: coex firmware version: eec362d
+I (737) main_task: Started on CPU0
+I (737) main_task: Calling app_main()
+I (737) iothub: [boot-1] app_uart_init
+I (737) iothub: [boot-3] nvs_flash_init
+I (757) iothub: [boot-4] app_bootstrap_load_config
+I (757) iothub: [boot-4a] config_apply_init
+I (757) cfg_apply: config_apply ready: 32 fields, 0 problem(s); wired domains: gpio/mqtt/net/bt/web_auth/datapipe
+I (767) iothub: [boot-4a2] app_operation_init
+I (767) operation: operation table ready: slots=4
+I (767) iothub: [boot-4b] app_config_force_ble_peripheral
+I (777) iothub: [boot-4c] app_bt_release_unused_memory
+I (777) app_bt: BT memory release skipped (mode=ble role=1, BLE always-on)
+I (787) iothub: [boot-4d] app_bt_apply_config (always-on peripheral)
+I (797) BTDM_INIT: BT controller compile version [919c7f4]
+I (797) BTDM_INIT: Using main XTAL as clock source
+I (807) BTDM_INIT: Bluetooth MAC: b0:a7:32:28:c8:e6
+I (807) phy_init: phy_version 4863,a3a4459,Oct 28 2025,14:30:06
+I (1137) data_pipe: port 1 registered
+I (1137) ble_cmd: ble cmd shell ready (line=512, queue=8)
+I (1137) ble_data: BLE data plane started (peripheral: notify)
+I (1137) iothub: mem after_ble          total_free=130444 internal_free=130444 internal_largest=110592 total_largest=110592
+I (1147) iothub: [boot-5] app_configure_gpio
+I (1157) state: boot policy: relay=0(off) led=1(on), outputs relay=0 led=1
+I (1167) state: touch channel 7 -> GPIO27 (expected GPIO27)
+I (1177) bt_gatts: on_sync from task nimble_host
+I (1177) bt_gatts: svc defs staged (rx_h=0 tx_h=0 cmd_rx_h=0 cmd_tx_h=0)
+I (1177) bt_gatts: NUS data service started (nimble, rx_h=3 tx_h=5 cmd_rx_h=8 cmd_tx_h=10)
+I (1197) NimBLE: GAP procedure initiated: advertise; 
+I (1197) NimBLE: disc_mode=2
+I (1197) NimBLE:  adv_channel_map=0 own_addr_type=0 adv_filter_policy=0 adv_itvl_min=32 adv_itvl_max=64
+I (1207) NimBLE: 
+
+I (1207) app_bt: BLE advertising started
+I (1227) state: touch ready: channel=7 baseline=2047 threshold=2006 (2%)
+I (1227) state: input initial state: inactive
+I (1227) iothub: [boot-7] app_start_wifi
+I (1237) wifi:wifi driver task: 3ffe3470, prio:23, stack:6656, core=1
+I (1237) wifi:wifi firmware version: 003ef6c
+I (1237) wifi:wifi certification version: v7.0
+I (1237) wifi:config NVS flash: enabled
+I (1247) wifi:config nano formatting: disabled
+I (1247) wifi:Init data frame dynamic rx buffer num: 10
+I (1257) wifi:Init static rx mgmt buffer num: 5
+I (1257) wifi:Init management short buffer num: 32
+I (1257) wifi:Init dynamic tx buffer num: 4
+I (1267) wifi:Init static rx buffer size: 1600
+I (1267) wifi:Init static rx buffer num: 6
+I (1277) wifi:Init dynamic rx buffer num: 10
+I (1277) wifi_init: rx ba win: 4
+I (1277) wifi_init: accept mbox: 6
+I (1287) wifi_init: tcpip mbox: 32
+I (1287) wifi_init: udp mbox: 6
+I (1287) wifi_init: tcp mbox: 6
+I (1297) wifi_init: tcp tx win: 2880
+I (1297) wifi_init: tcp rx win: 2880
+I (1297) wifi_init: tcp mss: 1440
+I (1297) wifi_init: WiFi IRAM OP enabled
+I (1307) wifi_init: WiFi RX IRAM OP enabled
+I (1307) wifi: apply_begin mode=static source=boot
+I (1317) wifi: apply_cfg: ssid='CMCC-502' pwd_len=10 threshold=2(WPA) pmf(capable=1,required=0) scan=0
+I (1327) wifi: apply_cfg: STA-only sta_pwd_len=10 static=1
+I (1327) wifi: static ip configured: ip=192.168.1.50 gw=192.168.1.1 mask=255.255.255.0 dns1=223.5.5.5 dns2=8.8.8.8
+I (1337) wifi: apply_await_start gen=1
+I (1347) wifi:mode : sta (b0:a7:32:28:c8:e4)
+I (1347) wifi:enable tsf
+I (1347) wifi: sta_start_evt gen=1 await=1 consumed=0 completed=0 probed=0
+I (1357) wifi: apply_start_released gen=1
+I (1357) wifi: apply_cfg: started (gen=1)
+I (1357) wifi: fast_path: ssid='CMCC-502' pwd_len=10 threshold=2(WPA) pmf(capable=1,required=0) scan=0
+I (1367) wifi: net_config_state=static
+I (1377) iothub: mem after_wifi         total_free=78084 internal_free=78084 internal_largest=77824 total_largest=77824
+I (1377) wifi: auto_connect: fast_path ssid=CMCC-502
+I (1387) iothub: [boot-9] app_uart_apply_config
+I (1397) uart: ALREADY NULL
+I (1417) uart: uart1 rx reader started (inbound -> data_pipe, chunk=256)
+I (1417) iothub: [boot-9b] data_pipe (uart1 / ble / mqtt)
+I (1417) data_pipe: data pipe ready (chunk=256, depth=16)
+I (1427) data_pipe: port 0 registered
+I (1427) data_pipe: data pipe enabled
+I (1427) data_pipe: routes applied: uart1=0x2 ble=0x5 mqtt=0x2 (loopback=0)
+I (1437) iothub: [boot-10] app_mqtt_start
+I (1437) iothub: [boot-11] app_factory_reset_start_task
+I (1447) iothub: [boot-13] app_ota_confirm_running_image
+I (1447) ota: Running OTA image: label=ota_0 offset=0x00010000 state=2
+I (1457) iothub: [boot-13b] app_diag_start
+I (1457) diag: core_affinity: wifi=1 tcpip=1
+I (1467) diag: heap free=60808 min=60804 largest=59392 level=normal | wifi mode=1 ch=1/0 adv=1 conn=0 cf=7 rx_age=-1 role=ble mqtt_outbox=0 mqtt_shed=0 pipe_yield=0
+I (1467) iothub: mem after_diag         total_free=60680 internal_free=60680 internal_largest=59392 total_largest=59392
+I (1487) iothub: iothub phase-4 ready: mode=sta, STA SSID='CMCC-502' (BLE-only management)
+I (1497) main_task: Returned from app_main()
+I (2207) wifi:new:<3,0>, old:<1,0>, ap:<255,255>, sta:<3,0>, prof:1, snd_ch_cfg:0x0
+I (2207) wifi:state: init -> auth (0xb0)
+I (2227) wifi:state: auth -> assoc (0x0)
+I (2227) wifi:state: assoc -> run (0x10)
+I (2267) wifi:connected with CMCC-502, aid = 87, channel 3, BW20, bssid = 5c:c0:a0:bd:f6:28
+I (2267) wifi:security: WPA2-PSK, phy: bgn, rssi: -63, cipher(pairwise:0x3, group:0x1), pmf:0
+I (2267) wifi:pm start, type: 1
+
+I (2277) wifi:dp: 1, bi: 102400, li: 3, scale listen interval from 307200 us to 307200 us
+I (2287) wifi: STA_CONNECTED: static ip mode (connected at t=1643ms)
+I (2287) esp_netif_handlers: sta ip: 192.168.1.50, mask: 255.255.255.0, gw: 192.168.1.1
+I (2297) wifi: IP_EVENT_STA_GOT_IP: 192.168.1.50 (t=1653ms from boot, 10ms from connected)
+I (2307) netcheck: dns host='139.9.93.245' err=0 ok_pending=0
+I (2347) wifi:AP's beacon interval = 102400 us, DTIM period = 1
+W (4307) mqtt: mqtt restart attempt (backoff step 1)
+I (4307) data_pipe: port 2 registered
+I (4307) mqtt: Starting MQTT: uri=mqtt://139.9.93.245:21883, client_id=iothub-B0A73228C8E4, token_len=13, tls=no, will=v1/devices/me/attributes
+I (4717) wifi:<ba-add>idx:0 (ifx:0, 5c:c0:a0:bd:f6:28), tid:6, ssn:1497, winSize:64
+I (4767) netcheck: mqtt wait out: verdict=1 polls=0 conn=1 fatal=0
+I (4767) netcheck: ok gen=1 stage=mqtt
+I (4767) netcheck: stack high watermark=2912 bytes
+I (4767) wifi: netcheck ok: gen=1 stage=mqtt (mask/backoff reset)
+I (4907) wifi: static ip 192.168.1.50: no ARP answer, no conflict
+I (5377) mqtt: Requested initial attributes: v1/devices/me/attributes/request/442
+I (5377) mqtt: MQTT connected: subscribed RPC + shared attrs, requested initial attrs
+I (5387) mqtt: MQTT_EVENT_SUBSCRIBED: msg_id=53124
+I (5387) mqtt: MQTT_EVENT_SUBSCRIBED: msg_id=32082
+I (5387) mqtt: MQTT_EVENT_SUBSCRIBED: msg_id=25204
+I (5397) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=57701 total_published=1
+I (5397) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=19811 total_published=1
+I (5537) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=37740 total_published=1
+I (5547) mqtt: MQTT RX topic='v1/devices/me/attributes/response/442' len=2 data_preview='{}'
+I (8377) mqtt: 3s boost: re-publish attributes + state to ensure liveness
+I (9837) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=20149 total_published=2
+I (10047) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=47224 total_published=2
+I (12027) bt_gatts: central connected (conn=0) peer_ota=F8:A2:D6:CD:BD:94 type=0 peer_id=F8:A2:D6:CD:BD:94 type=0
+I (12027) bt_gatts: conn params policy: itvl=50ms lat=0 sup=6000ms -> satisfied, skip update request
+I (12277) bt_gatts: mtu negotiated: 256 (payload 253)
+I (12307) wifi: ble fast retry: link up, timer reset
+I (13227) bt_gatts: cmd TX subscribe on (handle=10)
+I (13527) bt_gatts: cmd RX write: 20 byte(s) last=0x72 newline=0
+I (13627) bt_gatts: cmd RX write: 20 byte(s) last=0x61 newline=0
+I (13727) bt_gatts: cmd RX write: 20 byte(s) last=0x22 newline=0
+I (13827) bt_gatts: cmd RX write: 20 byte(s) last=0x70 newline=0
+I (13927) bt_gatts: cmd RX write: 20 byte(s) last=0x0A newline=1
+I (13927) ble_cmd: cmd line queued (99 bytes)
+I (13927) ble_cmd: rx v1 cmd=auth.login id=login-1
+I (13927) ble_cmd: ble cmd login ok, token issued (ttl=600s)
+I (13937) NimBLE: GATT procedure initiated: notify; 
+I (13937) NimBLE: att_handle=10
+
+I (14327) bt_gatts: cmd RX write: 20 byte(s) last=0x73 newline=0
+I (14447) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=50642 total_published=3
+I (14477) bt_gatts: cmd RX write: 20 byte(s) last=0x6F newline=0
+I (14627) bt_gatts: cmd RX write: 20 byte(s) last=0x2C newline=0
+I (14727) bt_gatts: cmd RX write: 20 byte(s) last=0x32 newline=0
+I (14877) bt_gatts: cmd RX write: 20 byte(s) last=0x35 newline=0
+I (15027) bt_gatts: cmd RX write: 4 byte(s) last=0x0A newline=1
+I (15027) ble_cmd: cmd line queued (103 bytes)
+I (15027) ble_cmd: rx v1 cmd=config.get id=snap-2
+I (15037) NimBLE: GATT procedure initiated: notify; 
+I (15037) NimBLE: att_handle=10
+
+I (15067) NimBLE: GATT procedure initiated: notify; 
+I (15067) NimBLE: att_handle=10
+
+I (15087) NimBLE: GATT procedure initiated: notify; 
+I (15087) NimBLE: att_handle=10
+
+I (15107) NimBLE: GATT procedure initiated: notify; 
+I (15107) NimBLE: att_handle=10
+
+I (15127) NimBLE: GATT procedure initiated: notify; 
+I (15127) NimBLE: att_handle=10
+
+I (17777) bt_gatts: cmd TX subscribe off (handle=10)
+W (17777) bt_gatts: central disconnected (reason=0x213)
+I (17777) ble_cmd: cmd session token invalidated (disconnect)
+I (17787) NimBLE: GAP procedure initiated: advertise; 
+I (17787) NimBLE: disc_mode=2
+I (17787) NimBLE:  adv_channel_map=0 own_addr_type=0 adv_filter_policy=0 adv_itvl_min=32 adv_itvl_max=64
+I (17797) NimBLE: 
+
+I (17817) app_bt: advertising restart requested (after disconnect)
+I (18307) wifi: ble fast retry: link down, timer reset
+I (24577) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=39998 total_published=4
+I (31477) diag: heap free=43816 min=31028 largest=38912 level=normal | wifi mode=1 ch=3/0 adv=1 conn=0 cf=7 rx_age=-1 role=ble mqtt_outbox=0 mqtt_shed=0 pipe_yield=0
+I (34397) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=29046 total_published=5
+I (44437) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=33648 total_published=6
+I (51407) wifi:<ba-add>idx:1 (ifx:0, 5c:c0:a0:bd:f6:28), tid:0, ssn:907, winSize:64
+I (54477) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=6729 total_published=7
+I (54777) bt_gatts: central connected (conn=0) peer_ota=F8:A2:D6:CD:BD:94 type=0 peer_id=F8:A2:D6:CD:BD:94 type=0
+I (54777) bt_gatts: conn params policy: itvl=50ms lat=0 sup=6000ms -> satisfied, skip update request
+I (54927) bt_gatts: mtu negotiated: 256 (payload 253)
+I (55307) wifi: ble fast retry: link up, timer reset
+I (55877) bt_gatts: cmd TX subscribe on (handle=10)
+I (56227) bt_gatts: cmd RX write: 20 byte(s) last=0x72 newline=0
+I (56327) bt_gatts: cmd RX write: 20 byte(s) last=0x61 newline=0
+I (56427) bt_gatts: cmd RX write: 20 byte(s) last=0x22 newline=0
+I (56527) bt_gatts: cmd RX write: 20 byte(s) last=0x70 newline=0
+I (56627) bt_gatts: cmd RX write: 20 byte(s) last=0x0A newline=1
+I (56627) ble_cmd: cmd line queued (99 bytes)
+I (56627) ble_cmd: rx v1 cmd=auth.login id=login-1
+I (56627) ble_cmd: ble cmd login ok, token issued (ttl=600s)
+I (56637) NimBLE: GATT procedure initiated: notify; 
+I (56637) NimBLE: att_handle=10
+
+I (57027) bt_gatts: cmd RX write: 20 byte(s) last=0x65 newline=0
+I (57127) bt_gatts: cmd RX write: 20 byte(s) last=0x22 newline=0
+I (57227) bt_gatts: cmd RX write: 20 byte(s) last=0x7B newline=0
+I (57327) bt_gatts: cmd RX write: 20 byte(s) last=0x22 newline=0
+I (57427) bt_gatts: cmd RX write: 20 byte(s) last=0x74 newline=0
+I (57577) bt_gatts: cmd RX write: 20 byte(s) last=0x6B newline=0
+I (57677) bt_gatts: cmd RX write: 20 byte(s) last=0x32 newline=0
+I (57777) bt_gatts: cmd RX write: 20 byte(s) last=0x0A newline=1
+I (57777) ble_cmd: cmd line queued (159 bytes)
+I (57777) ble_cmd: rx v1 cmd=config.set id=s1-set-2
+I (57827) NimBLE: GATT procedure initiated: notify; 
+I (57827) NimBLE: att_handle=10
+
+I (57847) NimBLE: GATT procedure initiated: notify; 
+I (57847) NimBLE: att_handle=10
+
+I (59777) bt_gatts: cmd TX subscribe off (handle=10)
+W (59777) bt_gatts: central disconnected (reason=0x213)
+I (59777) ble_cmd: cmd session token invalidated (disconnect)
+I (59777) NimBLE: GAP procedure initiated: advertise; 
+I (59787) NimBLE: disc_mode=2
+I (59787) NimBLE:  adv_channel_map=0 own_addr_type=0 adv_filter_policy=0 adv_itvl_min=32 adv_itvl_max=64
+I (59797) NimBLE: 
+
+I (59807) app_bt: advertising restart requested (after disconnect)
+W (59827) mqtt: mqtt restart attempt (backoff step 1)
+I (59827) mqtt: Telemetry task exiting on stop request
+I (59827) mqtt: Boost task exiting on stop event
+I (59937) data_pipe: port 2 registered
+I (59937) mqtt: Starting MQTT: uri=mqtt://192.168.1.19:18899, client_id=iothub-B0A73228C8E4, token_len=13, tls=no, will=v1/devices/me/attributes
+I (60307) wifi: ble fast retry: link down, timer reset
+I (61477) diag: core idle: core0=73% core1=95%
+E (65137) mqtt_client: esp_mqtt_connect: mqtt_message_receive() returned 0
+E (65137) mqtt_client: MQTT connect failed
+W (65137) mqtt: MQTT_EVENT_DISCONNECTED
+I (61477) diag: heap free=46684 min=31028 largest=38912 level=normal | wifi mode=1 ch=3/0 adv=1 conn=0 cf=7 rx_age=-1 role=ble mqtt_outbox=0 mqtt_shed=0 pipe_yield=0
+I (65157) diag: stack water: min=IDLE1:976B low:tcpip=1900B mqtt_restart=1592B app_diag=1732B Tmr Svc=1660B IDLE0=980B IDLE1=976B
+W (70137) mqtt: mqtt restart attempt (backoff step 2)
+I (70137) mqtt: Telemetry task exiting on stop request
+I (72637) data_pipe: port 2 registered
+I (72637) mqtt: Starting MQTT: uri=mqtt://192.168.1.19:18899, client_id=iothub-B0A73228C8E4, token_len=13, tls=no, will=v1/devices/me/attributes
+E (77717) mqtt_client: esp_mqtt_connect: mqtt_message_receive() returned 0
+E (77717) mqtt_client: MQTT connect failed
+W (77717) mqtt: MQTT_EVENT_DISCONNECTED
+W (87717) mqtt: mqtt restart attempt (backoff step 3)
+I (87717) mqtt: Telemetry task exiting on stop request
+I (89477) bt_gatts: central connected (conn=0) peer_ota=F8:A2:D6:CD:BD:94 type=0 peer_id=F8:A2:D6:CD:BD:94 type=0
+I (89477) bt_gatts: conn params policy: itvl=50ms lat=0 sup=6000ms -> satisfied, skip update request
+I (89627) bt_gatts: mtu negotiated: 256 (payload 253)
+I (90217) data_pipe: port 2 registered
+I (90217) mqtt: Starting MQTT: uri=mqtt://192.168.1.19:18899, client_id=iothub-B0A73228C8E4, token_len=13, tls=no, will=v1/devices/me/attributes
+I (90307) wifi: ble fast retry: link up, timer reset
+I (90627) bt_gatts: cmd TX subscribe on (handle=10)
+I (90977) bt_gatts: cmd RX write: 20 byte(s) last=0x72 newline=0
+I (91127) bt_gatts: cmd RX write: 20 byte(s) last=0x61 newline=0
+I (91277) bt_gatts: cmd RX write: 20 byte(s) last=0x22 newline=0
+I (91427) bt_gatts: cmd RX write: 20 byte(s) last=0x70 newline=0
+I (91527) bt_gatts: cmd RX write: 20 byte(s) last=0x0A newline=1
+I (91527) ble_cmd: cmd line queued (99 bytes)
+I (91527) ble_cmd: rx v1 cmd=auth.login id=login-1
+I (91537) ble_cmd: ble cmd login ok, token issued (ttl=600s)
+I (91537) NimBLE: GATT procedure initiated: notify; 
+I (91537) NimBLE: att_handle=10
+
+I (91927) bt_gatts: cmd RX write: 20 byte(s) last=0x72 newline=0
+I (92027) bt_gatts: cmd RX write: 20 byte(s) last=0x6E newline=0
+I (92127) bt_gatts: cmd RX write: 20 byte(s) last=0x61 newline=0
+I (92227) bt_gatts: cmd RX write: 20 byte(s) last=0x38 newline=0
+I (92327) bt_gatts: cmd RX write: 20 byte(s) last=0x38 newline=0
+I (92427) bt_gatts: cmd RX write: 12 byte(s) last=0x0A newline=1
+I (92427) ble_cmd: cmd line queued (111 bytes)
+I (92427) ble_cmd: rx v1 cmd=network.reconnect id=s1-rc-2
+I (92427) NimBLE: GATT procedure initiated: notify; 
+I (92437) NimBLE: att_handle=10
+
+I (92677) wifi: apply_begin mode=static source=runtime_restart
+I (92677) wifi: apply_cfg: ssid='CMCC-502' pwd_len=10 threshold=2(WPA) pmf(capable=1,required=0) scan=0
+I (92677) wifi: apply_cfg: STA-only sta_pwd_len=10 static=1
+I (92687) wifi:state: run -> init (0x0)
+I (92687) wifi:pm stop, total sleep time: 77649685 us / 90413896 us
+
+I (92697) wifi:<ba-del>idx:1, tid:0
+I (92697) wifi:<ba-del>idx:0, tid:6
+E (92707) transport_base: tcp_read error, errno=Software caused connection abort
+W (92707) wifi: STA disconnected: reason=8(ASSOC_LEAVE) retries=0 has_sta=1 profile=0
+E (92707) mqtt_client: esp_mqtt_handle_transport_read_error: transport_read() error: errno=113
+I (92717) wifi: STA down with BLE connected: event-chain retry suppressed; 120s formal-only monitor owns recovery
+I (92727) mqtt: STA disconnected, stopping MQTT client
+E (92717) mqtt: MQTT_EVENT_ERROR: type=1 connect_rc=0
+I (92737) mqtt: Restart task exiting on stop event
+E (92737) mqtt_client: esp_mqtt_connect: mqtt_message_receive() returned -2
+E (92747) mqtt_client: MQTT connect failed
+W (92757) mqtt: MQTT_EVENT_DISCONNECTED
+I (92777) mqtt: Telemetry task exiting on stop request
+I (92787) wifi:flush txq
+I (92787) wifi:stop sw txq
+I (92787) wifi:lmac stop hw txq
+I (92787) wifi: static ip configured: ip=192.168.1.50 gw=192.168.1.1 mask=255.255.255.0 dns1=223.5.5.5 dns2=8.8.8.8
+I (92787) wifi: apply_await_start gen=2
+I (92797) wifi:mode : sta (b0:a7:32:28:c8:e4)
+I (92797) wifi:enable tsf
+W (92947) wifi:Haven't to connect to a suitable AP now!
+W (92947) wifi: apply_start_probe gen=2 t=142ms driver_started=1
+I (92947) wifi: fast_path: ssid='CMCC-502' pwd_len=10 threshold=2(WPA) pmf(capable=1,required=0) scan=0
+I (92957) wifi: apply_cfg: started (gen=2)
+I (92957) wifi: net_config_state=static
+I (92957) wifi: auto_connect: fast_path ssid=CMCC-502
+I (92977) wifi:new:<3,0>, old:<1,0>, ap:<255,255>, sta:<3,0>, prof:1, snd_ch_cfg:0x0
+I (92977) wifi:state: init -> auth (0xb0)
+I (92987) wifi:state: auth -> assoc (0x0)
+I (92997) wifi:state: assoc -> run (0x10)
+I (93017) wifi:connected with CMCC-502, aid = 54, channel 3, BW20, bssid = 5c:c0:a0:bd:f6:28
+I (93027) wifi:security: WPA2-PSK, phy: bgn, rssi: -66, cipher(pairwise:0x3, group:0x1), pmf:0
+I (93027) wifi:pm start, type: 1
+
+I (93077) wifi:AP's beacon interval = 102400 us, DTIM period = 1
+I (94777) bt_gatts: cmd TX subscribe off (handle=10)
+W (94777) bt_gatts: central disconnected (reason=0x213)
+I (94777) ble_cmd: cmd session token invalidated (disconnect)
+I (94777) NimBLE: GAP procedure initiated: advertise; 
+I (94787) NimBLE: disc_mode=2
+I (94787) NimBLE:  adv_channel_map=0 own_addr_type=0 adv_filter_policy=0 adv_itvl_min=32 adv_itvl_max=64
+I (94797) NimBLE: 
+
+I (94807) app_bt: advertising restart requested (after disconnect)
+I (95157) diag: core idle: core0=73% core1=95%
+I (95157) diag: heap free=49000 min=31028 largest=40960 level=normal | wifi mode=1 ch=3/0 adv=1 conn=0 cf=7 rx_age=-1 role=ble mqtt_outbox=0 mqtt_shed=0 pipe_yield=0
+I (95257) wifi: sta_start_evt gen=2 await=0 consumed=2 completed=2 probed=1
+W (95257) wifi: sta_start_evt gen=2 ignored (probe completed this gen)
+I (95267) wifi: STA_CONNECTED: static ip mode (connected at t=94627ms)
+I (95267) esp_netif_handlers: sta ip: 192.168.1.50, mask: 255.255.255.0, gw: 192.168.1.1
+I (95277) wifi: IP_EVENT_STA_GOT_IP: 192.168.1.50 (t=94635ms from boot, 8ms from connected)
+I (95287) netcheck: dns host='192.168.1.19' err=0 ok_pending=0
+I (95307) wifi: ble fast retry: link down, timer reset
+I (97887) wifi: static ip 192.168.1.50: no ARP answer, no conflict
+I (99447) netcheck: mqtt not up after grace -> poke restart
+I (99447) netcheck: poll n=1 conn=0 fatal=0
+I (101447) netcheck: poll n=21 conn=0 fatal=0
+I (103447) netcheck: poll n=41 conn=0 fatal=0
+I (105447) netcheck: poll n=61 conn=0 fatal=0
+I (107447) netcheck: poll n=81 conn=0 fatal=0
+I (108857) wifi:<ba-add>idx:0 (ifx:0, 5c:c0:a0:bd:f6:28), tid:0, ssn:4, winSize:64
+I (109447) netcheck: poll n=101 conn=0 fatal=0
+I (111447) netcheck: poll n=121 conn=0 fatal=0
+I (113447) netcheck: poll n=141 conn=0 fatal=0
+W (115287) mqtt: mqtt restart attempt (backoff step 1)
+I (115287) data_pipe: port 2 registered
+I (115287) mqtt: Starting MQTT: uri=mqtt://192.168.1.19:18899, client_id=iothub-B0A73228C8E4, token_len=13, tls=no, will=v1/devices/me/attributes
+I (115447) netcheck: poll n=161 conn=0 fatal=0
+I (117447) netcheck: poll n=181 conn=0 fatal=0
+I (119447) netcheck: poll n=201 conn=0 fatal=0
+W (120297) mqtt: mqtt restart attempt (backoff step 2)
+I (120297) mqtt: Telemetry task exiting on stop request
+E (120337) mqtt_client: esp_mqtt_connect: mqtt_message_receive() returned 0
+E (120337) mqtt_client: MQTT connect failed
+W (120337) mqtt: MQTT_EVENT_DISCONNECTED (stale client, ignored)
+I (120347) netcheck: mqtt wait out: verdict=0 polls=209 conn=0 fatal=0
+I (120347) netcheck: fail_mqtt gen=3 stage=mqtt
+I (120347) netcheck: stack high watermark=2848 bytes
+W (120357) wifi: netcheck fail: gen=3 stage=mqtt (link kept; mqtt backoff owns retry)
+I (122837) data_pipe: port 2 registered
+I (122837) mqtt: Starting MQTT: uri=mqtt://192.168.1.19:18899, client_id=iothub-B0A73228C8E4, token_len=13, tls=no, will=v1/devices/me/attributes
+I (125157) diag: core idle: core0=74% core1=95%
+E (127907) mqtt_client: esp_mqtt_connect: mqtt_message_receive() returned 0
+E (127907) mqtt_client: MQTT connect failed
+W (127907) mqtt: MQTT_EVENT_DISCONNECTED
+I (125157) diag: heap free=41936 min=31028 largest=40960 level=normal | wifi mode=1 ch=3/0 adv=1 conn=0 cf=7 rx_age=-1 role=ble mqtt_outbox=0 mqtt_shed=0 pipe_yield=0
+I (131667) state: input active (seq=1)
+I (131667) state: outputs relay=0 led=0 seq=2 source=input
+I (131727) state: input inactive (seq=3)
+W (137907) mqtt: mqtt restart attempt (backoff step 3)
+I (137907) mqtt: Telemetry task exiting on stop request
+I (140407) data_pipe: port 2 registered
+I (140407) mqtt: Starting MQTT: uri=mqtt://192.168.1.19:18899, client_id=iothub-B0A73228C8E4, token_len=13, tls=no, will=v1/devices/me/attributes
+E (145437) mqtt_client: esp_mqtt_connect: mqtt_message_receive() returned 0
+E (145437) mqtt_client: MQTT connect failed
+W (145437) mqtt: MQTT_EVENT_DISCONNECTED
+I (151077) bt_gatts: central connected (conn=0) peer_ota=F8:A2:D6:CD:BD:94 type=0 peer_id=F8:A2:D6:CD:BD:94 type=0
+I (151077) bt_gatts: conn params policy: itvl=50ms lat=0 sup=6000ms -> satisfied, skip update request
+I (151227) bt_gatts: mtu negotiated: 256 (payload 253)
+I (151307) wifi: ble fast retry: link up, timer reset
+I (152127) bt_gatts: cmd TX subscribe on (handle=10)
+I (152527) bt_gatts: cmd RX write: 20 byte(s) last=0x72 newline=0
+I (152627) bt_gatts: cmd RX write: 20 byte(s) last=0x61 newline=0
+I (152827) bt_gatts: cmd RX write: 20 byte(s) last=0x22 newline=0
+I (152977) bt_gatts: cmd RX write: 20 byte(s) last=0x70 newline=0
+I (153077) bt_gatts: cmd RX write: 20 byte(s) last=0x0A newline=1
+I (153077) ble_cmd: cmd line queued (99 bytes)
+I (153077) ble_cmd: rx v1 cmd=auth.login id=login-1
+I (153087) ble_cmd: ble cmd login ok, token issued (ttl=600s)
+I (153087) NimBLE: GATT procedure initiated: notify; 
+I (153087) NimBLE: att_handle=10
+
+I (153427) bt_gatts: cmd RX write: 20 byte(s) last=0x72 newline=0
+I (153527) bt_gatts: cmd RX write: 20 byte(s) last=0x6E newline=0
+I (153627) bt_gatts: cmd RX write: 20 byte(s) last=0x73 newline=0
+I (153727) bt_gatts: cmd RX write: 20 byte(s) last=0x32 newline=0
+I (153877) bt_gatts: cmd RX write: 20 byte(s) last=0x34 newline=0
+I (153977) bt_gatts: cmd RX write: 9 byte(s) last=0x0A newline=1
+I (153977) ble_cmd: cmd line queued (108 bytes)
+I (153977) ble_cmd: rx v1 cmd=network.status id=s1-st-2
+I (153987) NimBLE: GATT procedure initiated: notify; 
+I (153987) NimBLE: att_handle=10
+
+I (154007) NimBLE: GATT procedure initiated: notify; 
+I (154007) NimBLE: att_handle=10
+
+I (154027) NimBLE: GATT procedure initiated: notify; 
+I (154027) NimBLE: att_handle=10
+
+I (156777) bt_gatts: cmd TX subscribe off (handle=10)
+W (156777) bt_gatts: central disconnected (reason=0x213)
+I (156777) ble_cmd: cmd session token invalidated (disconnect)
+I (156777) NimBLE: GAP procedure initiated: advertise; 
+I (156787) NimBLE: disc_mode=2
+I (156787) NimBLE:  adv_channel_map=0 own_addr_type=0 adv_filter_policy=0 adv_itvl_min=32 adv_itvl_max=64
+I (156797) NimBLE: 
+
+I (156807) app_bt: advertising restart requested (after disconnect)
+I (157307) wifi: ble fast retry: link down, timer reset
+I (157917) diag: core idle: core0=73% core1=96%
+I (157917) diag: heap free=41936 min=31028 largest=38912 level=normal | wifi mode=1 ch=3/0 adv=1 conn=0 cf=7 rx_age=-1 role=ble mqtt_outbox=0 mqtt_shed=0 pipe_yield=0
+W (165437) mqtt: mqtt restart attempt (backoff step 4)
+I (165437) mqtt: Telemetry task exiting on stop request
+I (166407) wifi:<ba-add>idx:1 (ifx:0, 5c:c0:a0:bd:f6:28), tid:6, ssn:5, winSize:64
+I (167937) data_pipe: port 2 registered
+I (167937) mqtt: Starting MQTT: uri=mqtt://192.168.1.19:18899, client_id=iothub-B0A73228C8E4, token_len=13, tls=no, will=v1/devices/me/attributes
+E (173057) mqtt_client: esp_mqtt_connect: mqtt_message_receive() returned 0
+E (173057) mqtt_client: MQTT connect failed
+W (173057) mqtt: MQTT_EVENT_DISCONNECTED
+I (186677) bt_gatts: central connected (conn=0) peer_ota=F8:A2:D6:CD:BD:94 type=0 peer_id=F8:A2:D6:CD:BD:94 type=0
+I (186677) bt_gatts: conn params policy: itvl=50ms lat=0 sup=6000ms -> satisfied, skip update request
+I (186927) bt_gatts: mtu negotiated: 256 (payload 253)
+I (187307) wifi: ble fast retry: link up, timer reset
+I (187917) diag: core idle: core0=74% core1=96%
+I (187917) diag: heap free=42044 min=31028 largest=38912 level=normal | wifi mode=1 ch=3/0 adv=0 conn=1 cf=0 rx_age=-1 role=ble mqtt_outbox=0 mqtt_shed=0 pipe_yield=0
+I (187977) bt_gatts: cmd TX subscribe on (handle=10)
+I (188267) bt_gatts: cmd RX write: 20 byte(s) last=0x72 newline=0
+I (188377) bt_gatts: cmd RX write: 20 byte(s) last=0x61 newline=0
+I (188467) bt_gatts: cmd RX write: 20 byte(s) last=0x22 newline=0
+I (188617) bt_gatts: cmd RX write: 20 byte(s) last=0x70 newline=0
+I (188717) bt_gatts: cmd RX write: 20 byte(s) last=0x0A newline=1
+I (188727) ble_cmd: cmd line queued (99 bytes)
+I (188727) ble_cmd: rx v1 cmd=auth.login id=login-1
+I (188727) ble_cmd: ble cmd login ok, token issued (ttl=600s)
+I (188737) NimBLE: GATT procedure initiated: notify; 
+I (188737) NimBLE: att_handle=10
+
+I (189117) bt_gatts: cmd RX write: 20 byte(s) last=0x65 newline=0
+I (189267) bt_gatts: cmd RX write: 20 byte(s) last=0x22 newline=0
+I (189367) bt_gatts: cmd RX write: 20 byte(s) last=0x7B newline=0
+I (189517) bt_gatts: cmd RX write: 20 byte(s) last=0x22 newline=0
+I (189617) bt_gatts: cmd RX write: 20 byte(s) last=0x74 newline=0
+I (189717) bt_gatts: cmd RX write: 20 byte(s) last=0x6B newline=0
+I (189817) bt_gatts: cmd RX write: 20 byte(s) last=0x35 newline=0
+I (189927) bt_gatts: cmd RX write: 20 byte(s) last=0x0A newline=1
+I (189927) ble_cmd: cmd line queued (159 bytes)
+I (189927) ble_cmd: rx v1 cmd=config.set id=s2-set-2
+I (189957) NimBLE: GATT procedure initiated: notify; 
+I (189957) NimBLE: att_handle=10
+
+I (190277) bt_gatts: cmd RX write: 20 byte(s) last=0x72 newline=0
+I (190417) bt_gatts: cmd RX write: 20 byte(s) last=0x6E newline=0
+I (190517) bt_gatts: cmd RX write: 20 byte(s) last=0x61 newline=0
+I (190617) bt_gatts: cmd RX write: 20 byte(s) last=0x42 newline=0
+I (190717) bt_gatts: cmd RX write: 20 byte(s) last=0x31 newline=0
+I (190817) bt_gatts: cmd RX write: 12 byte(s) last=0x0A newline=1
+I (190827) ble_cmd: cmd line queued (111 bytes)
+I (190827) ble_cmd: rx v1 cmd=network.reconnect id=s2-rc-3
+I (190827) NimBLE: GATT procedure initiated: notify; 
+I (190837) NimBLE: att_handle=10
+
+I (191077) wifi: apply_begin mode=static source=runtime_restart
+I (191077) wifi: apply_cfg: ssid='CMCC-502' pwd_len=10 threshold=2(WPA) pmf(capable=1,required=0) scan=0
+I (191077) wifi: apply_cfg: STA-only sta_pwd_len=10 static=1
+I (191087) wifi:state: run -> init (0x0)
+I (191087) wifi:pm stop, total sleep time: 85587326 us / 98057128 us
+
+I (191097) wifi:<ba-del>idx:0, tid:0
+I (191097) wifi:<ba-del>idx:1, tid:6
+W (191107) wifi: STA disconnected: reason=8(ASSOC_LEAVE) retries=0 has_sta=1 profile=0
+I (191107) wifi: STA down with BLE connected: event-chain retry suppressed; 120s formal-only monitor owns recovery
+I (191117) mqtt: STA disconnected, stopping MQTT client
+I (191177) wifi:flush txq
+I (191177) wifi:stop sw txq
+I (191177) wifi:lmac stop hw txq
+I (191177) wifi: static ip configured: ip=192.168.1.50 gw=192.168.1.1 mask=255.255.255.0 dns1=223.5.5.5 dns2=8.8.8.8
+I (191177) wifi: apply_await_start gen=3
+I (191187) wifi:mode : sta (b0:a7:32:28:c8:e4)
+I (191187) wifi:enable tsf
+I (191307) wifi: ble fast retry: first attempt in 120000ms (formal SSID only, no scan)
+W (191337) wifi:Haven't to connect to a suitable AP now!
+W (191337) wifi: apply_start_probe gen=3 t=141ms driver_started=1
+I (191337) wifi: apply_cfg: started (gen=3)
+I (191337) wifi: fast_path: ssid='CMCC-502' pwd_len=10 threshold=2(WPA) pmf(capable=1,required=0) scan=0
+I (191337) wifi: net_config_state=static
+I (191357) wifi: auto_connect: fast_path ssid=CMCC-502
+I (191367) wifi:new:<3,0>, old:<1,0>, ap:<255,255>, sta:<3,0>, prof:1, snd_ch_cfg:0x0
+I (191367) wifi:state: init -> auth (0xb0)
+I (191367) wifi:state: auth -> assoc (0x0)
+I (191377) wifi:state: assoc -> run (0x10)
+I (191407) wifi:connected with CMCC-502, aid = 56, channel 3, BW20, bssid = 5c:c0:a0:bd:f6:28
+I (191407) wifi:security: WPA2-PSK, phy: bgn, rssi: -67, cipher(pairwise:0x3, group:0x1), pmf:0
+I (191417) wifi:pm start, type: 1
+
+I (191477) wifi:AP's beacon interval = 102400 us, DTIM period = 1
+I (192817) bt_gatts: cmd TX subscribe off (handle=10)
+W (192827) bt_gatts: central disconnected (reason=0x213)
+I (192827) ble_cmd: cmd session token invalidated (disconnect)
+I (192827) NimBLE: GAP procedure initiated: advertise; 
+I (192827) NimBLE: disc_mode=2
+I (192837) NimBLE:  adv_channel_map=0 own_addr_type=0 adv_filter_policy=0 adv_itvl_min=32 adv_itvl_max=64
+I (192847) NimBLE: 
+
+I (192847) app_bt: advertising restart requested (after disconnect)
+I (193307) wifi: ble fast retry: link down, timer reset
+I (195127) mqtt: Telemetry task exiting on stop request
+I (195557) wifi: sta_start_evt gen=3 await=0 consumed=3 completed=3 probed=1
+W (195557) wifi: sta_start_evt gen=3 ignored (probe completed this gen)
+I (195557) wifi: STA_CONNECTED: static ip mode (connected at t=194919ms)
+I (195567) esp_netif_handlers: sta ip: 192.168.1.50, mask: 255.255.255.0, gw: 192.168.1.1
+I (195577) wifi: IP_EVENT_STA_GOT_IP: 192.168.1.50 (t=194932ms from boot, 13ms from connected)
+I (195577) netcheck: dns host='192.168.1.19' err=0 ok_pending=0
+I (195697) netcheck: tcp soerr=104
+I (195807) netcheck: tcp soerr=104
+I (195807) netcheck: fail_internet gen=5 stage=internet
+I (195807) netcheck: stack high watermark=2912 bytes
+W (195807) wifi: netcheck fail: gen=5 stage=internet active_profile=0 -> mark+disconnect
+I (195817) wifi:state: run -> init (0x0)
+I (195827) wifi:pm stop, total sleep time: 3607718 us / 4409153 us
+
+W (195827) wifi: STA disconnected: reason=8(ASSOC_LEAVE) retries=3 has_sta=1 profile=0
+I (195837) mqtt: STA disconnected, stopping MQTT client
+I (196087) wifi: fast_path: ssid='CMCC-502' pwd_len=10 threshold=2(WPA) pmf(capable=1,required=0) scan=0
+I (196087) wifi: auto_connect: fast_path ssid=CMCC-502
+I (196097) wifi:state: init -> auth (0xb0)
+I (196107) wifi:state: auth -> assoc (0x0)
+I (196117) wifi:state: assoc -> run (0x10)
+I (196137) wifi:connected with CMCC-502, aid = 57, channel 3, BW20, bssid = 5c:c0:a0:bd:f6:28
+I (196137) wifi:security: WPA2-PSK, phy: bgn, rssi: -66, cipher(pairwise:0x3, group:0x1), pmf:0
+I (196147) wifi:pm start, type: 1
+
+I (196187) wifi:AP's beacon interval = 102400 us, DTIM period = 1
+I (198177) wifi: static ip 192.168.1.50: no ARP answer, no conflict
+I (199837) wifi: STA_CONNECTED: static ip mode (connected at t=199197ms)
+I (199837) esp_netif_handlers: sta ip: 192.168.1.50, mask: 255.255.255.0, gw: 192.168.1.1
+I (199847) wifi: IP_EVENT_STA_GOT_IP: 192.168.1.50 (t=199205ms from boot, 8ms from connected)
+I (199847) netcheck: dns host='192.168.1.19' err=0 ok_pending=0
+I (199997) netcheck: tcp soerr=104
+I (200117) netcheck: tcp soerr=104
+I (200117) netcheck: fail_internet gen=7 stage=internet
+I (200117) netcheck: stack high watermark=2912 bytes
+W (200117) wifi: netcheck fail: gen=7 stage=internet active_profile=0 -> mark+disconnect
+I (200127) wifi:state: run -> init (0x0)
+I (200127) wifi:pm stop, total sleep time: 3231855 us / 3981240 us
+
+W (200137) wifi: STA disconnected: reason=8(ASSOC_LEAVE) retries=3 has_sta=1 profile=0
+I (200147) mqtt: STA disconnected, stopping MQTT client
+I (200397) wifi: fast_path: ssid='CMCC-502' pwd_len=10 threshold=2(WPA) pmf(capable=1,required=0) scan=0
+I (200397) wifi: auto_connect: fast_path ssid=CMCC-502
+I (200407) wifi:state: init -> auth (0xb0)
+I (200417) wifi:state: auth -> assoc (0x0)
+I (200417) wifi:state: assoc -> run (0x10)
+I (200447) wifi:connected with CMCC-502, aid = 95, channel 3, BW20, bssid = 5c:c0:a0:bd:f6:28
+I (200447) wifi:security: WPA2-PSK, phy: bgn, rssi: -66, cipher(pairwise:0x3, group:0x1), pmf:0
+I (200447) wifi:pm start, type: 1
+
+I (200487) wifi:AP's beacon interval = 102400 us, DTIM period = 1
+I (202447) wifi: static ip 192.168.1.50: no ARP answer, no conflict
+I (203057) mqtt: Restart task exiting on stop event
+I (203067) wifi: STA_CONNECTED: static ip mode (connected at t=202426ms)
+I (203067) esp_netif_handlers: sta ip: 192.168.1.50, mask: 255.255.255.0, gw: 192.168.1.1
+I (203067) wifi: IP_EVENT_STA_GOT_IP: 192.168.1.50 (t=202430ms from boot, 4ms from connected)
+I (203077) netcheck: dns host='192.168.1.19' err=0 ok_pending=0
+I (203177) netcheck: tcp soerr=104
+I (203367) netcheck: tcp soerr=104
+I (203367) netcheck: fail_internet gen=9 stage=internet
+I (203367) netcheck: stack high watermark=2912 bytes
+W (203367) wifi: netcheck fail: gen=9 stage=internet active_profile=0 -> mark+disconnect
+I (203377) wifi:state: run -> init (0x0)
+I (203377) wifi:pm stop, total sleep time: 2256333 us / 2927056 us
+
+W (203387) wifi: STA disconnected: reason=8(ASSOC_LEAVE) retries=3 has_sta=1 profile=0
+I (203397) mqtt: STA disconnected, stopping MQTT client
+I (203647) wifi: fast_path: ssid='CMCC-502' pwd_len=10 threshold=2(WPA) pmf(capable=1,required=0) scan=0
+I (203647) wifi: auto_connect: fast_path ssid=CMCC-502
+I (203657) wifi:state: init -> auth (0xb0)
+I (203657) wifi:state: auth -> assoc (0x0)
+I (203667) wifi:state: assoc -> run (0x10)
+I (203697) wifi:connected with CMCC-502, aid = 82, channel 3, BW20, bssid = 5c:c0:a0:bd:f6:28
+I (203697) wifi:security: WPA2-PSK, phy: bgn, rssi: -66, cipher(pairwise:0x3, group:0x1), pmf:0
+I (203707) wifi:pm start, type: 1
+
+I (203767) wifi:AP's beacon interval = 102400 us, DTIM period = 1
+I (205677) wifi: static ip 192.168.1.50: no ARP answer, no conflict
+I (207397) wifi: STA_CONNECTED: static ip mode (connected at t=206754ms)
+I (207397) esp_netif_handlers: sta ip: 192.168.1.50, mask: 255.255.255.0, gw: 192.168.1.1
+I (207397) wifi: IP_EVENT_STA_GOT_IP: 192.168.1.50 (t=206758ms from boot, 4ms from connected)
+I (207407) netcheck: dns host='192.168.1.19' err=0 ok_pending=0
+I (207477) netcheck: tcp soerr=104
+I (207587) netcheck: tcp soerr=104
+I (207587) netcheck: fail_internet gen=11 stage=internet
+I (207587) netcheck: stack high watermark=2880 bytes
+W (207587) wifi: netcheck fail: gen=11 stage=internet active_profile=0 -> mark+disconnect
+I (207597) wifi:state: run -> init (0x0)
+I (207607) wifi:pm stop, total sleep time: 2997546 us / 3897033 us
+
+W (207617) wifi: STA disconnected: reason=8(ASSOC_LEAVE) retries=3 has_sta=1 profile=0
+I (207617) mqtt: STA disconnected, stopping MQTT client
+I (207867) wifi: fast_path: ssid='CMCC-502' pwd_len=10 threshold=2(WPA) pmf(capable=1,required=0) scan=0
+I (207867) wifi: auto_connect: fast_path ssid=CMCC-502
+I (207967) wifi:state: init -> auth (0xb0)
+I (207977) wifi:state: auth -> assoc (0x0)
+I (207987) wifi:state: assoc -> run (0x10)
+I (208007) wifi:connected with CMCC-502, aid = 128, channel 3, BW20, bssid = 5c:c0:a0:bd:f6:28
+I (208007) wifi:security: WPA2-PSK, phy: bgn, rssi: -63, cipher(pairwise:0x3, group:0x1), pmf:0
+I (208017) wifi:pm start, type: 1
+
+I (208067) wifi:AP's beacon interval = 102400 us, DTIM period = 1
+I (210007) wifi: static ip 192.168.1.50: no ARP answer, no conflict
+I (211617) wifi: STA_CONNECTED: static ip mode (connected at t=210974ms)
+I (211617) esp_netif_handlers: sta ip: 192.168.1.50, mask: 255.255.255.0, gw: 192.168.1.1
+I (211617) wifi: IP_EVENT_STA_GOT_IP: 192.168.1.50 (t=210978ms from boot, 4ms from connected)
+I (211627) netcheck: dns host='192.168.1.19' err=0 ok_pending=0
+I (211757) netcheck: tcp soerr=104
+I (211887) netcheck: tcp soerr=104
+I (211887) netcheck: fail_internet gen=13 stage=internet
+I (211887) netcheck: stack high watermark=2912 bytes
+W (211887) wifi: netcheck fail: gen=13 stage=internet active_profile=0 -> mark+disconnect
+I (211897) wifi:state: run -> init (0x0)
+I (211897) wifi:pm stop, total sleep time: 3117453 us / 3878499 us
+
+W (211907) wifi: STA disconnected: reason=8(ASSOC_LEAVE) retries=3 has_sta=1 profile=0
+I (211907) mqtt: STA disconnected, stopping MQTT client
+I (212157) wifi: fast_path: ssid='CMCC-502' pwd_len=10 threshold=2(WPA) pmf(capable=1,required=0) scan=0
+I (212157) wifi: auto_connect: fast_path ssid=CMCC-502
+I (212167) wifi:state: init -> auth (0xb0)
+I (212177) wifi:state: auth -> assoc (0x0)
+I (212187) wifi:state: assoc -> run (0x10)
+I (212207) wifi:connected with CMCC-502, aid = 58, channel 3, BW20, bssid = 5c:c0:a0:bd:f6:28
+I (212207) wifi:security: WPA2-PSK, phy: bgn, rssi: -65, cipher(pairwise:0x3, group:0x1), pmf:0
+I (212217) wifi:pm start, type: 1
+
+I (212267) wifi:AP's beacon interval = 102400 us, DTIM period = 1
+I (214227) wifi: static ip 192.168.1.50: no ARP answer, no conflict
+I (215917) wifi: STA_CONNECTED: static ip mode (connected at t=215274ms)
+I (215917) esp_netif_handlers: sta ip: 192.168.1.50, mask: 255.255.255.0, gw: 192.168.1.1
+I (215917) wifi: IP_EVENT_STA_GOT_IP: 192.168.1.50 (t=215278ms from boot, 4ms from connected)
+I (215927) netcheck: dns host='192.168.1.19' err=0 ok_pending=0
+I (216057) netcheck: tcp soerr=104
+I (216187) netcheck: tcp soerr=104
+I (216187) netcheck: fail_internet gen=15 stage=internet
+I (216187) netcheck: stack high watermark=2912 bytes
+W (216187) wifi: netcheck fail: gen=15 stage=internet active_profile=0 -> mark+disconnect
+I (216197) wifi:state: run -> init (0x0)
+I (216197) wifi:pm stop, total sleep time: 3186333 us / 3981394 us
+
+W (216207) wifi: STA disconnected: reason=8(ASSOC_LEAVE) retries=3 has_sta=1 profile=0
+I (216217) mqtt: STA disconnected, stopping MQTT client
+I (216467) wifi: fast_path: ssid='CMCC-502' pwd_len=10 threshold=2(WPA) pmf(capable=1,required=0) scan=0
+I (216467) wifi: auto_connect: fast_path ssid=CMCC-502
+I (216477) wifi:state: init -> auth (0xb0)
+I (216487) wifi:state: auth -> assoc (0x0)
+I (216487) wifi:state: assoc -> run (0x10)
+I (216517) wifi:connected with CMCC-502, aid = 85, channel 3, BW20, bssid = 5c:c0:a0:bd:f6:28
+I (216517) wifi:security: WPA2-PSK, phy: bgn, rssi: -66, cipher(pairwise:0x3, group:0x1), pmf:0
+I (216527) wifi:pm start, type: 1
+
+I (216567) wifi:AP's beacon interval = 102400 us, DTIM period = 1
+I (217917) diag: core idle: core0=72% core1=93%
+I (217917) diag: heap free=49980 min=31028 largest=38912 level=normal | wifi mode=1 ch=3/0 adv=1 conn=0 cf=7 rx_age=-1 role=ble mqtt_outbox=0 mqtt_shed=0 pipe_yield=0
+I (218527) wifi: static ip 192.168.1.50: no ARP answer, no conflict
+I (220217) wifi: STA_CONNECTED: static ip mode (connected at t=219574ms)
+I (220217) esp_netif_handlers: sta ip: 192.168.1.50, mask: 255.255.255.0, gw: 192.168.1.1
+I (220217) wifi: IP_EVENT_STA_GOT_IP: 192.168.1.50 (t=219578ms from boot, 4ms from connected)
+I (220227) netcheck: dns host='192.168.1.19' err=0 ok_pending=0
+I (220277) netcheck: tcp soerr=104
+I (220477) netcheck: tcp soerr=104
+I (220477) netcheck: fail_internet gen=17 stage=internet
+I (220477) netcheck: stack high watermark=2912 bytes
+W (220477) wifi: netcheck fail: gen=17 stage=internet active_profile=0 -> mark+disconnect
+I (220487) wifi:state: run -> init (0x0)
+I (220487) wifi:pm stop, total sleep time: 2974688 us / 3961724 us
+
+W (220497) wifi: STA disconnected: reason=8(ASSOC_LEAVE) retries=3 has_sta=1 profile=0
+I (220497) mqtt: STA disconnected, stopping MQTT client
+I (220747) wifi: fast_path: ssid='CMCC-502' pwd_len=10 threshold=2(WPA) pmf(capable=1,required=0) scan=0
+I (220747) wifi: auto_connect: fast_path ssid=CMCC-502
+I (220757) wifi:state: init -> auth (0xb0)
+I (220767) wifi:state: auth -> assoc (0x0)
+I (220767) wifi:state: assoc -> run (0x10)
+I (220797) wifi:connected with CMCC-502, aid = 83, channel 3, BW20, bssid = 5c:c0:a0:bd:f6:28
+I (220797) wifi:security: WPA2-PSK, phy: bgn, rssi: -66, cipher(pairwise:0x3, group:0x1), pmf:0
+I (220807) wifi:pm start, type: 1
+
+I (220867) wifi:AP's beacon interval = 102400 us, DTIM period = 1
+I (222827) wifi: static ip 192.168.1.50: no ARP answer, no conflict
+I (224507) wifi: STA_CONNECTED: static ip mode (connected at t=223868ms)
+I (224507) esp_netif_handlers: sta ip: 192.168.1.50, mask: 255.255.255.0, gw: 192.168.1.1
+I (224517) wifi: IP_EVENT_STA_GOT_IP: 192.168.1.50 (t=223875ms from boot, 7ms from connected)
+I (224527) netcheck: dns host='192.168.1.19' err=0 ok_pending=0
+I (224577) netcheck: tcp soerr=104
+I (224687) netcheck: tcp soerr=104
+I (224687) netcheck: fail_internet gen=19 stage=internet
+I (224687) netcheck: stack high watermark=2976 bytes
+W (224687) wifi: netcheck fail: gen=19 stage=internet active_profile=0 -> mark+disconnect
+I (224697) wifi:state: run -> init (0x0)
+I (224707) wifi:pm stop, total sleep time: 3227437 us / 3897742 us
+
+W (224717) wifi: STA disconnected: reason=8(ASSOC_LEAVE) retries=3 has_sta=1 profile=0
+I (224717) mqtt: STA disconnected, stopping MQTT client
+I (224967) wifi: fast_path: ssid='CMCC-502' pwd_len=10 threshold=2(WPA) pmf(capable=1,required=0) scan=0
+I (224967) wifi: auto_connect: fast_path ssid=CMCC-502
+I (225077) wifi:state: init -> auth (0xb0)
+I (225077) wifi:state: auth -> assoc (0x0)
+I (225087) wifi:state: assoc -> run (0x10)
+I (225117) wifi:connected with CMCC-502, aid = 93, channel 3, BW20, bssid = 5c:c0:a0:bd:f6:28
+I (225117) wifi:security: WPA2-PSK, phy: bgn, rssi: -66, cipher(pairwise:0x3, group:0x1), pmf:0
+I (225127) wifi:pm start, type: 1
+
+I (225167) wifi:AP's beacon interval = 102400 us, DTIM period = 1
+I (227127) wifi: static ip 192.168.1.50: no ARP answer, no conflict
+I (228717) wifi: STA_CONNECTED: static ip mode (connected at t=228076ms)
+I (228717) esp_netif_handlers: sta ip: 192.168.1.50, mask: 255.255.255.0, gw: 192.168.1.1
+I (228717) wifi: IP_EVENT_STA_GOT_IP: 192.168.1.50 (t=228080ms from boot, 4ms from connected)
+I (228727) netcheck: dns host='192.168.1.19' err=0 ok_pending=0
+I (228887) netcheck: tcp soerr=104
+I (228997) netcheck: tcp soerr=104
+I (228997) netcheck: fail_internet gen=21 stage=internet
+I (228997) netcheck: stack high watermark=2736 bytes
+W (228997) wifi: netcheck fail: gen=21 stage=internet active_profile=0 -> mark+disconnect
+I (229007) wifi:state: run -> init (0x0)
+I (229007) wifi:pm stop, total sleep time: 2693591 us / 3880352 us
+
+W (229017) wifi: STA disconnected: reason=8(ASSOC_LEAVE) retries=3 has_sta=1 profile=0
+I (229027) mqtt: STA disconnected, stopping MQTT client
+I (229277) wifi: fast_path: ssid='CMCC-502' pwd_len=10 threshold=2(WPA) pmf(capable=1,required=0) scan=0
+I (229277) wifi: auto_connect: fast_path ssid=CMCC-502
+I (229287) wifi:state: init -> auth (0xb0)
+I (229297) wifi:state: auth -> assoc (0x0)
+I (229297) wifi:state: assoc -> run (0x10)
+I (229327) wifi:connected with CMCC-502, aid = 97, channel 3, BW20, bssid = 5c:c0:a0:bd:f6:28
+I (229327) wifi:security: WPA2-PSK, phy: bgn, rssi: -64, cipher(pairwise:0x3, group:0x1), pmf:0
+I (229337) wifi:pm start, type: 1
+
+I (229367) wifi:AP's beacon interval = 102400 us, DTIM period = 1
+I (231327) wifi: static ip 192.168.1.50: no ARP answer, no conflict
+I (233027) wifi: STA_CONNECTED: static ip mode (connected at t=232386ms)
+I (233027) esp_netif_handlers: sta ip: 192.168.1.50, mask: 255.255.255.0, gw: 192.168.1.1
+I (233027) wifi: IP_EVENT_STA_GOT_IP: 192.168.1.50 (t=232390ms from boot, 4ms from connected)
+I (233037) netcheck: dns host='192.168.1.19' err=0 ok_pending=0
+I (233077) mqtt: Restart task exiting on stop event
+I (233157) netcheck: tcp soerr=104
+I (233287) netcheck: tcp soerr=104
+I (233287) netcheck: fail_internet gen=23 stage=internet
+I (233287) netcheck: stack high watermark=2912 bytes
+W (233287) wifi: netcheck fail: gen=23 stage=internet active_profile=0 -> mark+disconnect
+I (233297) wifi:state: run -> init (0x0)
+I (233297) wifi:pm stop, total sleep time: 3308030 us / 3962070 us
+
+W (233317) wifi: STA disconnected: reason=8(ASSOC_LEAVE) retries=3 has_sta=1 profile=0
+I (233317) mqtt: STA disconnected, stopping MQTT client
+I (233567) wifi: fast_path: ssid='CMCC-502' pwd_len=10 threshold=2(WPA) pmf(capable=1,required=0) scan=0
+I (233567) wifi: auto_connect: fast_path ssid=CMCC-502
+I (233577) wifi:state: init -> auth (0xb0)
+I (233577) wifi:state: auth -> assoc (0x0)
+I (233587) wifi:state: assoc -> run (0x10)
+I (233617) wifi:connected with CMCC-502, aid = 108, channel 3, BW20, bssid = 5c:c0:a0:bd:f6:28
+I (233617) wifi:security: WPA2-PSK, phy: bgn, rssi: -64, cipher(pairwise:0x3, group:0x1), pmf:0
+I (233617) wifi:pm start, type: 1
+
+I (233627) wifi: STA_CONNECTED: static ip mode (connected at t=232985ms)
+I (233627) esp_netif_handlers: sta ip: 192.168.1.50, mask: 255.255.255.0, gw: 192.168.1.1
+I (233637) wifi: IP_EVENT_STA_GOT_IP: 192.168.1.50 (t=232997ms from boot, 12ms from connected)
+I (233647) netcheck: dns host='192.168.1.19' err=0 ok_pending=0
+I (233667) wifi:AP's beacon interval = 102400 us, DTIM period = 1
+I (233877) netcheck: tcp soerr=104
+I (234007) netcheck: tcp soerr=104
+I (234007) netcheck: fail_internet gen=25 stage=internet
+I (234007) netcheck: stack high watermark=2784 bytes
+W (234007) wifi: netcheck fail: gen=25 stage=internet active_profile=0 -> mark+disconnect
+I (234017) wifi:state: run -> init (0x0)
+I (234017) wifi:pm stop, total sleep time: 136966 us / 395304 us
+
+W (234027) wifi: STA disconnected: reason=8(ASSOC_LEAVE) retries=3 has_sta=1 profile=0
+I (234027) mqtt: STA disconnected, stopping MQTT client
+I (234277) wifi: fast_path: ssid='CMCC-502' pwd_len=10 threshold=2(WPA) pmf(capable=1,required=0) scan=0
+I (234277) wifi: auto_connect: fast_path ssid=CMCC-502
+I (234287) wifi:state: init -> auth (0xb0)
+I (234297) wifi:state: auth -> assoc (0x0)
+I (234307) wifi:state: assoc -> run (0x10)
+I (234327) wifi:connected with CMCC-502, aid = 101, channel 3, BW20, bssid = 5c:c0:a0:bd:f6:28
+I (234327) wifi:security: WPA2-PSK, phy: bgn, rssi: -64, cipher(pairwise:0x3, group:0x1), pmf:0
+I (234337) wifi:pm start, type: 1
+
+I (234387) wifi:AP's beacon interval = 102400 us, DTIM period = 1
+I (235637) wifi: static ip 192.168.1.50: no ARP answer, no conflict
+I (238047) wifi: STA_CONNECTED: static ip mode (connected at t=237404ms)
+I (238047) esp_netif_handlers: sta ip: 192.168.1.50, mask: 255.255.255.0, gw: 192.168.1.1
+I (238047) wifi: IP_EVENT_STA_GOT_IP: 192.168.1.50 (t=237408ms from boot, 4ms from connected)
+I (238057) netcheck: dns host='192.168.1.19' err=0 ok_pending=0
+I (238197) netcheck: tcp soerr=104
+I (238397) netcheck: tcp soerr=104
+I (238397) netcheck: fail_internet gen=27 stage=internet
+I (238397) netcheck: stack high watermark=2880 bytes
+W (238397) wifi: netcheck fail: gen=27 stage=internet active_profile=0 -> mark+disconnect
+I (238407) wifi:state: run -> init (0x0)
+I (238407) wifi:pm stop, total sleep time: 3228011 us / 4069134 us
+
+W (238417) wifi: STA disconnected: reason=8(ASSOC_LEAVE) retries=3 has_sta=1 profile=0
+I (238417) mqtt: STA disconnected, stopping MQTT client
+I (238667) wifi: fast_path: ssid='CMCC-502' pwd_len=10 threshold=2(WPA) pmf(capable=1,required=0) scan=0
+I (238667) wifi: auto_connect: fast_path ssid=CMCC-502
+I (238677) wifi:state: init -> auth (0xb0)
+I (238687) wifi:state: auth -> assoc (0x0)
+I (238697) wifi:state: assoc -> run (0x10)
+I (238717) wifi:connected with CMCC-502, aid = 96, channel 3, BW20, bssid = 5c:c0:a0:bd:f6:28
+I (238727) wifi:security: WPA2-PSK, phy: bgn, rssi: -63, cipher(pairwise:0x3, group:0x1), pmf:0
+I (238727) wifi:pm start, type: 1
+
+I (238787) wifi:AP's beacon interval = 102400 us, DTIM period = 1
+I (240657) wifi: static ip 192.168.1.50: no ARP answer, no conflict
+I (242427) wifi: STA_CONNECTED: static ip mode (connected at t=241788ms)
+I (242427) esp_netif_handlers: sta ip: 192.168.1.50, mask: 255.255.255.0, gw: 192.168.1.1
+I (242437) wifi: IP_EVENT_STA_GOT_IP: 192.168.1.50 (t=241795ms from boot, 7ms from connected)
+I (242447) netcheck: dns host='192.168.1.19' err=0 ok_pending=0
+I (242497) netcheck: tcp soerr=104
+I (242687) netcheck: tcp soerr=104
+I (242687) netcheck: fail_internet gen=29 stage=internet
+I (242687) netcheck: stack high watermark=2784 bytes
+W (242687) wifi: netcheck fail: gen=29 stage=internet active_profile=0 -> mark+disconnect
+I (242697) wifi:state: run -> init (0x0)
+I (242697) wifi:pm stop, total sleep time: 3317201 us / 3969907 us
+
+W (242707) wifi: STA disconnected: reason=8(ASSOC_LEAVE) retries=3 has_sta=1 profile=0
+I (242717) mqtt: STA disconnected, stopping MQTT client
+I (242967) wifi: fast_path: ssid='CMCC-502' pwd_len=10 threshold=2(WPA) pmf(capable=1,required=0) scan=0
+I (242967) wifi: auto_connect: fast_path ssid=CMCC-502
+I (242977) wifi:state: init -> auth (0xb0)
+I (242987) wifi:state: auth -> assoc (0x0)
+I (242987) wifi:state: assoc -> run (0x10)
+I (243027) wifi:connected with CMCC-502, aid = 111, channel 3, BW20, bssid = 5c:c0:a0:bd:f6:28
+I (243027) wifi:security: WPA2-PSK, phy: bgn, rssi: -63, cipher(pairwise:0x3, group:0x1), pmf:0
+I (243027) wifi:pm start, type: 1
+
+I (243087) wifi:AP's beacon interval = 102400 us, DTIM period = 1
+I (245047) wifi: static ip 192.168.1.50: no ARP answer, no conflict
+I (246717) wifi: STA_CONNECTED: static ip mode (connected at t=246077ms)
+I (246717) esp_netif_handlers: sta ip: 192.168.1.50, mask: 255.255.255.0, gw: 192.168.1.1
+I (246727) wifi: IP_EVENT_STA_GOT_IP: 192.168.1.50 (t=246085ms from boot, 8ms from connected)
+I (246737) netcheck: dns host='192.168.1.19' err=0 ok_pending=0
+I (247397) netcheck: tcp soerr=104
+I (247517) netcheck: tcp soerr=104
+I (247517) netcheck: fail_internet gen=31 stage=internet
+I (247517) netcheck: stack high watermark=2736 bytes
+W (247517) wifi: netcheck fail: gen=31 stage=internet active_profile=0 -> mark+disconnect
+I (247527) wifi:state: run -> init (0x0)
+I (247537) wifi:pm stop, total sleep time: 3076559 us / 4500946 us
+
+W (247547) wifi: STA disconnected: reason=8(ASSOC_LEAVE) retries=3 has_sta=1 profile=0
+I (247547) mqtt: STA disconnected, stopping MQTT client
+I (247797) wifi: fast_path: ssid='CMCC-502' pwd_len=10 threshold=2(WPA) pmf(capable=1,required=0) scan=0
+I (247797) wifi: auto_connect: fast_path ssid=CMCC-502
+I (247807) wifi:state: init -> auth (0xb0)
+I (247807) wifi:state: auth -> assoc (0x0)
+I (247817) wifi:state: assoc -> run (0x10)
+I (247867) wifi:connected with CMCC-502, aid = 110, channel 3, BW20, bssid = 5c:c0:a0:bd:f6:28
+I (247867) wifi:security: WPA2-PSK, phy: bgn, rssi: -64, cipher(pairwise:0x3, group:0x1), pmf:0
+I (247877) wifi:pm start, type: 1
+
+I (247907) wifi:AP's beacon interval = 102400 us, DTIM period = 1
+I (247917) diag: core idle: core0=73% core1=93%
+I (247917) diag: heap free=50368 min=31028 largest=38912 level=normal | wifi mode=1 ch=3/0 adv=1 conn=0 cf=7 rx_age=-1 role=ble mqtt_outbox=0 mqtt_shed=0 pipe_yield=0
+I (249337) wifi: static ip 192.168.1.50: no ARP answer, no conflict
+I (251547) wifi: STA_CONNECTED: static ip mode (connected at t=250905ms)
+I (251547) esp_netif_handlers: sta ip: 192.168.1.50, mask: 255.255.255.0, gw: 192.168.1.1
+I (251547) wifi: IP_EVENT_STA_GOT_IP: 192.168.1.50 (t=250908ms from boot, 3ms from connected)
+I (251557) netcheck: dns host='192.168.1.19' err=0 ok_pending=0
+I (251737) netcheck: tcp soerr=104
+I (251917) netcheck: tcp soerr=104
+I (251917) netcheck: fail_internet gen=33 stage=internet
+I (251917) netcheck: stack high watermark=2912 bytes
+W (251917) wifi: netcheck fail: gen=33 stage=internet active_profile=0 -> mark+disconnect
+I (251927) wifi:state: run -> init (0x0)
+I (251927) wifi:pm stop, total sleep time: 3321020 us / 4052470 us
+
+W (251937) wifi: STA disconnected: reason=8(ASSOC_LEAVE) retries=3 has_sta=1 profile=0
+I (251947) mqtt: STA disconnected, stopping MQTT client
+I (252197) wifi: fast_path: ssid='CMCC-502' pwd_len=10 threshold=2(WPA) pmf(capable=1,required=0) scan=0
+I (252197) wifi: auto_connect: fast_path ssid=CMCC-502
+I (252207) wifi:state: init -> auth (0xb0)
+I (252217) wifi:state: auth -> assoc (0x0)
+I (252227) wifi:state: assoc -> run (0x10)
+I (252267) wifi:connected with CMCC-502, aid = 103, channel 3, BW20, bssid = 5c:c0:a0:bd:f6:28
+I (252267) wifi:security: WPA2-PSK, phy: bgn, rssi: -65, cipher(pairwise:0x3, group:0x1), pmf:0
+I (252267) wifi:pm start, type: 1
+
+I (252307) wifi:AP's beacon interval = 102400 us, DTIM period = 1
+I (254157) wifi: static ip 192.168.1.50: no ARP answer, no conflict
+I (255947) wifi: STA_CONNECTED: static ip mode (connected at t=255305ms)
+I (255947) esp_netif_handlers: sta ip: 192.168.1.50, mask: 255.255.255.0, gw: 192.168.1.1
+I (255947) wifi: IP_EVENT_STA_GOT_IP: 192.168.1.50 (t=255309ms from boot, 4ms from connected)
+I (255957) netcheck: dns host='192.168.1.19' err=0 ok_pending=0
+I (256097) netcheck: tcp soerr=104
+I (256227) netcheck: tcp soerr=104
+I (256227) netcheck: fail_internet gen=35 stage=internet
+I (256227) netcheck: stack high watermark=2912 bytes
+W (256227) wifi: netcheck fail: gen=35 stage=internet active_profile=0 -> mark+disconnect
+I (256237) wifi:state: run -> init (0x0)
+I (256237) wifi:pm stop, total sleep time: 3080801 us / 3967962 us
+
+W (256247) wifi: STA disconnected: reason=8(ASSOC_LEAVE) retries=3 has_sta=1 profile=0
+I (256257) mqtt: STA disconnected, stopping MQTT client
+I (256507) wifi: fast_path: ssid='CMCC-502' pwd_len=10 threshold=2(WPA) pmf(capable=1,required=0) scan=0
+I (256507) wifi: auto_connect: fast_path ssid=CMCC-502
+I (256607) wifi:state: init -> auth (0xb0)
+I (256617) wifi:state: auth -> assoc (0x0)
+I (256627) wifi:state: assoc -> run (0x10)
+I (256657) wifi:connected with CMCC-502, aid = 114, channel 3, BW20, bssid = 5c:c0:a0:bd:f6:28
+I (256657) wifi:security: WPA2-PSK, phy: bgn, rssi: -64, cipher(pairwise:0x3, group:0x1), pmf:0
+I (256667) wifi:pm start, type: 1
+
+I (256717) wifi:AP's beacon interval = 102400 us, DTIM period = 1
+I (258557) wifi: static ip 192.168.1.50: no ARP answer, no conflict
+I (260257) wifi: STA_CONNECTED: static ip mode (connected at t=259615ms)
+I (260257) esp_netif_handlers: sta ip: 192.168.1.50, mask: 255.255.255.0, gw: 192.168.1.1
+I (260257) wifi: IP_EVENT_STA_GOT_IP: 192.168.1.50 (t=259619ms from boot, 4ms from connected)
+I (260267) netcheck: dns host='192.168.1.19' err=0 ok_pending=0
+I (260317) netcheck: tcp soerr=104
+I (260497) netcheck: tcp soerr=104
+I (260497) netcheck: fail_internet gen=37 stage=internet
+I (260497) netcheck: stack high watermark=2912 bytes
+W (260497) wifi: netcheck fail: gen=37 stage=internet active_profile=0 -> mark+disconnect
+I (260507) wifi:state: run -> init (0x0)
+I (260517) wifi:pm stop, total sleep time: 3233980 us / 3843201 us
+
+W (260517) wifi: STA disconnected: reason=8(ASSOC_LEAVE) retries=3 has_sta=1 profile=0
+I (260527) mqtt: STA disconnected, stopping MQTT client
+I (260777) wifi: fast_path: ssid='CMCC-502' pwd_len=10 threshold=2(WPA) pmf(capable=1,required=0) scan=0
+I (260777) wifi: auto_connect: fast_path ssid=CMCC-502
+I (260807) wifi:state: init -> auth (0xb0)
+I (260817) wifi:state: auth -> assoc (0x0)
+I (260827) wifi:state: assoc -> run (0x10)
+I (260847) wifi:connected with CMCC-502, aid = 116, channel 3, BW20, bssid = 5c:c0:a0:bd:f6:28
+I (260847) wifi:security: WPA2-PSK, phy: bgn, rssi: -63, cipher(pairwise:0x3, group:0x1), pmf:0
+I (260857) wifi:pm start, type: 1
+
+I (260907) wifi:AP's beacon interval = 102400 us, DTIM period = 1
+I (262867) wifi: static ip 192.168.1.50: no ARP answer, no conflict
+I (263647) mqtt: Restart task exiting on stop event
+I (263667) wifi: STA_CONNECTED: static ip mode (connected at t=263027ms)
+I (263667) esp_netif_handlers: sta ip: 192.168.1.50, mask: 255.255.255.0, gw: 192.168.1.1
+I (263677) wifi: IP_EVENT_STA_GOT_IP: 192.168.1.50 (t=263033ms from boot, 6ms from connected)
+I (263687) netcheck: dns host='192.168.1.19' err=0 ok_pending=0
+I (263777) bt_gatts: central connected (conn=0) peer_ota=F8:A2:D6:CD:BD:94 type=0 peer_id=F8:A2:D6:CD:BD:94 type=0
+I (263777) bt_gatts: conn params policy: itvl=50ms lat=0 sup=6000ms -> satisfied, skip update request
+I (263817) netcheck: tcp soerr=104
+I (263877) bt_gatts: mtu negotiated: 256 (payload 253)
+I (263997) netcheck: tcp soerr=104
+I (263997) netcheck: fail_internet gen=39 stage=internet
+I (263997) netcheck: stack high watermark=2912 bytes
+W (263997) wifi: netcheck fail: gen=39 stage=internet active_profile=0 -> mark+disconnect
+I (264007) wifi:state: run -> init (0x0)
+I (264017) wifi:pm stop, total sleep time: 2264085 us / 3155281 us
+
+W (264027) wifi: STA disconnected: reason=8(ASSOC_LEAVE) retries=3 has_sta=1 profile=0
+I (264027) wifi: STA down with BLE connected: event-chain retry suppressed; 120s formal-only monitor owns recovery
+I (264037) mqtt: STA disconnected, stopping MQTT client
+I (264307) wifi: ble fast retry: link up, timer reset
+I (264307) wifi: ble fast retry: first attempt in 120000ms (formal SSID only, no scan)
+I (264817) bt_gatts: cmd TX subscribe on (handle=10)
+I (265167) bt_gatts: cmd RX write: 20 byte(s) last=0x72 newline=0
+I (265267) bt_gatts: cmd RX write: 20 byte(s) last=0x61 newline=0
+I (265367) bt_gatts: cmd RX write: 20 byte(s) last=0x22 newline=0
+I (265467) bt_gatts: cmd RX write: 20 byte(s) last=0x70 newline=0
+I (265567) bt_gatts: cmd RX write: 20 byte(s) last=0x0A newline=1
+I (265567) ble_cmd: cmd line queued (99 bytes)
+I (265577) ble_cmd: rx v1 cmd=auth.login id=login-1
+I (265577) ble_cmd: ble cmd login ok, token issued (ttl=600s)
+I (265577) NimBLE: GATT procedure initiated: notify; 
+I (265587) NimBLE: att_handle=10
+
+I (265917) bt_gatts: cmd RX write: 20 byte(s) last=0x65 newline=0
+I (266017) bt_gatts: cmd RX write: 20 byte(s) last=0x22 newline=0
+I (266117) bt_gatts: cmd RX write: 20 byte(s) last=0x7B newline=0
+I (266217) bt_gatts: cmd RX write: 20 byte(s) last=0x22 newline=0
+I (266287) wifi: static ip 192.168.1.50: no ARP answer, no conflict
+I (266317) bt_gatts: cmd RX write: 20 byte(s) last=0x74 newline=0
+I (266417) bt_gatts: cmd RX write: 20 byte(s) last=0x6B newline=0
+I (266517) bt_gatts: cmd RX write: 20 byte(s) last=0x46 newline=0
+I (266627) bt_gatts: cmd RX write: 20 byte(s) last=0x0A newline=1
+I (266627) ble_cmd: cmd line queued (159 bytes)
+I (266627) ble_cmd: rx v1 cmd=config.set id=s2-fix-2
+I (266647) NimBLE: GATT procedure initiated: notify; 
+I (266647) NimBLE: att_handle=10
+
+I (266677) NimBLE: GATT procedure initiated: notify; 
+I (266677) NimBLE: att_handle=10
+
+I (268767) bt_gatts: cmd TX subscribe off (handle=10)
+W (268767) bt_gatts: central disconnected (reason=0x213)
+I (268767) ble_cmd: cmd session token invalidated (disconnect)
+I (268777) NimBLE: GAP procedure initiated: advertise; 
+I (268777) NimBLE: disc_mode=2
+I (268787) NimBLE:  adv_channel_map=0 own_addr_type=0 adv_filter_policy=0 adv_itvl_min=32 adv_itvl_max=64
+I (268787) NimBLE: 
+
+I (268807) app_bt: advertising restart requested (after disconnect)
+I (269307) wifi: ble fast retry: link down, timer reset
+I (269307) wifi: runtime retry: cycle=1 step=0 backoff=5000ms ble_conn=0
+I (269307) wifi: fast_path: ssid='CMCC-502' pwd_len=10 threshold=2(WPA) pmf(capable=1,required=0) scan=0
+I (269317) wifi: auto_connect: fast_path ssid=CMCC-502
+I (269327) wifi:state: init -> auth (0xb0)
+I (269337) wifi:state: auth -> assoc (0x0)
+I (269337) wifi:state: assoc -> run (0x10)
+I (269367) wifi:connected with CMCC-502, aid = 115, channel 3, BW20, bssid = 5c:c0:a0:bd:f6:28
+I (269367) wifi:security: WPA2-PSK, phy: bgn, rssi: -66, cipher(pairwise:0x3, group:0x1), pmf:0
+I (269377) wifi:pm start, type: 1
+
+I (269377) wifi: STA_CONNECTED: static ip mode (connected at t=268737ms)
+I (269387) esp_netif_handlers: sta ip: 192.168.1.50, mask: 255.255.255.0, gw: 192.168.1.1
+I (269387) wifi: IP_EVENT_STA_GOT_IP: 192.168.1.50 (t=268749ms from boot, 12ms from connected)
+I (269397) netcheck: dns host='139.9.93.245' err=0 ok_pending=0
+I (269507) wifi:AP's beacon interval = 102400 us, DTIM period = 1
+I (271997) wifi: static ip 192.168.1.50: no ARP answer, no conflict
+I (273617) netcheck: mqtt not up after grace -> poke restart
+I (273617) netcheck: poll n=1 conn=0 fatal=0
+I (275617) netcheck: poll n=21 conn=0 fatal=0
+I (277617) netcheck: poll n=41 conn=0 fatal=0
+I (277927) diag: core idle: core0=73% core1=95%
+I (277927) diag: heap free=48496 min=31028 largest=38912 level=normal | wifi mode=1 ch=3/0 adv=1 conn=0 cf=7 rx_age=-1 role=ble mqtt_outbox=0 mqtt_shed=0 pipe_yield=0
+I (278327) wifi:<ba-add>idx:0 (ifx:0, 5c:c0:a0:bd:f6:28), tid:0, ssn:5, winSize:64
+I (279617) netcheck: poll n=61 conn=0 fatal=0
+I (281617) netcheck: poll n=81 conn=0 fatal=0
+I (283617) netcheck: poll n=101 conn=0 fatal=0
+I (285617) netcheck: poll n=121 conn=0 fatal=0
+I (286927) wifi:<ba-add>idx:1 (ifx:0, 5c:c0:a0:bd:f6:28), tid:6, ssn:5, winSize:64
+I (287617) netcheck: poll n=141 conn=0 fatal=0
+I (289617) netcheck: poll n=161 conn=0 fatal=0
+I (291617) netcheck: poll n=181 conn=0 fatal=0
+I (293617) netcheck: poll n=201 conn=0 fatal=0
+I (293687) mqtt: Restart task exiting on stop event

@@ -1,0 +1,46 @@
+From 090b827ccf472055bc973cdfbebd0a68011e8910 Mon Sep 17 00:00:00 2001
+From: 283879311 <283879311@local>
+Date: Tue, 3 Nov 2026 20:46:44 +0800
+Subject: [PATCH] test(wifi): add m1hook software reboot for RTC probe
+
+V1 needs a real esp_restart path (not EN reset) to verify RTC_NOINIT
+retention. Add diag.m1hook action=reboot which schedules the existing
+delayed reboot task after the response is sent.
+
+Test-only, under APP_WIFI_FAULT_INJECT; no config/NVS change.
+---
+ main/cmd.c | 11 +++++++++++
+ 1 file changed, 11 insertions(+)
+
+diff --git a/main/cmd.c b/main/cmd.c
+index 585b3d4..f6aef7c 100644
+--- a/main/cmd.c
++++ b/main/cmd.c
+@@ -18,6 +18,7 @@
+ #include "common.h"
+ #include "config.h"
+ #include "config_apply.h"
++#include "ota.h"
+ #include "constants.h"
+ #include "data_pipe.h"
+ #include "esp_app_desc.h"
+@@ -1347,6 +1348,16 @@ static void app_cmd_m1hook(const cJSON *params, app_cmd_source_t source,
+     if (!cJSON_IsString(action) || action->valuestring == NULL) {
+         *err_out = "params_required"; return;
+     }
++    if (strcmp(action->valuestring, "reboot") == 0) {
++        /* V1 RTC probe:软件复位(esp_restart 延迟 1.5s,先回包) */
++        app_reboot_schedule("m1_probe_reboot");
++        *resp_out = cJSON_CreateObject();
++        if (*resp_out == NULL) { *err_out = "out_of_memory"; return; }
++        cJSON_AddBoolToObject(*resp_out, "ok", true);
++        cJSON_AddStringToObject(*resp_out, "action", "reboot");
++        cJSON_AddBoolToObject(*resp_out, "reboot_scheduled", true);
++        return;
++    }
+     hook_err = app_wifi_test_hook(action->valuestring, stage_str, count, timeout_ms);
+     if (hook_err == ESP_ERR_INVALID_STATE) { *err_out = "busy"; return; }
+     if (hook_err != ESP_OK) { *err_out = "invalid_param"; return; }
+-- 
+2.43.0
+

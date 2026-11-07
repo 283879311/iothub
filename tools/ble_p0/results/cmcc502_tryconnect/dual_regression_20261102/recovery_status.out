@@ -1,0 +1,4 @@
+/home/tc/esp/workspace/iothub/.venv-bleak/lib/python3.12/site-packages/bleak/backends/bluezdbus/client.py:646: UserWarning: Using default MTU value. Call _acquire_mtu() or set _mtu_size first to avoid this warning.
+  warnings.warn(
+A {"sta_connected": true, "sta_has_ip": true, "sta_ip": "192.168.1.28", "connected_ssid": "CMCC-502", "mqtt_connected": true, "mqtt_last_error": "", "last_disconnect": "none"}
+B {"sta_connected": true, "sta_has_ip": true, "sta_ip": "192.168.1.45", "connected_ssid": "CMCC-502", "mqtt_connected": true, "mqtt_last_error": "", "last_disconnect": "none"}
