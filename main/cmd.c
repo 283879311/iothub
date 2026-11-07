@@ -807,53 +807,18 @@ static bool app_cmd_net_apply_async(const app_cmd_context_t *ctx,
         *err_out = "forbidden";
         return false;
     }
-    /* DEF-NET-001 兜底 v2(2026-11-07 t6 二跑实锤):tryconnect 拆链重连后
-     * 链路换代,新代次 netcheck 的启动/完成与"紧贴 got_ip 的 apply"存在
-     * 窗口竞态 —— 单点检查 running_for_gen 会在"gen 已换代、start 未跑/"
-     * 判决未归档"的瞬间误拒(v2 一跑复现:got_ip +0.4s apply → 误报
-     * mqtt_unavailable)。v2 改为有界轮询(≤12s,200ms 步进):
-     *   通过:ok_for_gen(cur) / 代次未变(试用判决即本链路判决);
-     *   拒绝:cur 代次终局 FAIL(按真实 stage 细分) / 预算到期(verify_timeout)。
-     * 拆链消耗性断开不换代 → 试用判决对未换代链路持续有效。 */
-    {
-        uint32_t cur_gen = app_wifi_link_generation();
-        uint32_t trial_gen = s_net_async.netcheck_gen;
-        int64_t deadline_ms = esp_timer_get_time() / 1000 + 12000;
-        bool verified = false;
-        bool wait_expired = false;
-        char stage[12] = "none";
-        app_netcheck_result_t dres;
-
-        for (;;) {
-            if (app_netcheck_ok_for_gen(cur_gen)) {
-                verified = true;
-                break;
-            }
-            if (cur_gen == trial_gen) {
-                /* 代次未变:试用判决(OK)即本链路判决,拆链消耗性断开不换代 */
-                verified = true;
-                break;
-            }
-            if (app_netcheck_read_done(cur_gen, &dres)) {
-                snprintf(stage, sizeof(stage), "%s",
-                         app_netcheck_outcome_stage(dres.outcome));
-                break;   /* 该代次终局 FAIL,按真实 stage 细分 */
-            }
-            if (esp_timer_get_time() / 1000 >= deadline_ms) {
-                wait_expired = true;
-                snprintf(stage, sizeof(stage), "none");
-                break;
-            }
-            vTaskDelay(pdMS_TO_TICKS(200));
-        }
-        if (!verified) {
-            ESP_LOGW(TAG, "apply rejected: netcheck gen=%u stage=%s expired=%d op=%s",
-                     cur_gen, stage, (int)wait_expired, status.id);
-            *err_out = wait_expired ? "verify_timeout"
-                       : (strcmp(stage, "mqtt") == 0) ? "mqtt_unavailable"
-                                                      : "internet_unverified";
-            return false;
-        }
+    /* DEF-NET-001 兜底 v3(2026-11-07 t6 三跑定稿):提交的是"试用已验证的
+     * 候选凭据",验证判决在 GOT_IP 交付时已按 operation 快照进 job(P6)。
+     * 本门只读 per-op 快照——无共享态、无竞态。v1(单点查当前链路)与
+     * v2(12s 轮询等重验证)在"拆链重连窗口"各输一种形态(误报
+     * mqtt_unavailable / 误报 verify_timeout),根因:拆链重连后当前链路
+     * 与本事务无关,查它没有意义且必然与重验证赛跑。候选网络状态在
+     * 验证后到提交前的变化,由既有恢复链(LKG/救援,当日两次实证)兜底。 */
+    if (!s_net_async.st_internet_verified) {
+        /* 理论不可达:GOT_IP 交付门槛保证 verified 才置位 */
+        ESP_LOGW(TAG, "apply rejected: trial verification missing op=%s", status.id);
+        *err_out = "verify_timeout";
+        return false;
     }
     {
         bool trial_ok;
