@@ -5,7 +5,9 @@
 > 本文是方案，不含脚本实现；确认后再落 `tools/soak/`。
 >
 > **2026-10-18 同步**：1h 四特征 @115200/9600 已完成（1.3-78/79）；页面 1h A/B 已过（1.3-80）；BLE 角色互换 A/B 双向已过（1.3-81）；手机 nRF Connect 四态待真机（§2.4）；另一台 Ubuntu 真机执行包见 §2.5；24h 按用户要求暂不排期。
-> `tools/soak/` 尚未实现；当前宿主为 VM，无 BlueZ/mosquitto，主机侧 BLE/MQTT 对照需换非 VM 环境或补装。
+> 【2026-11-07 更新】`tools/soak/` 已实现（soak6h.py）并于当日跑完 6h 单设备
+> BLE 口径 soak（七项判据 PASS，`docs/soak_6h_验收报告_2026-11-06.md`）；
+> 本文其余章节保留作为 24h/多机扩展的方案底稿。
 
 ## 0. 目标与判据
 
@@ -102,25 +104,23 @@
 
 1. **连接与订阅**：nRF Connect 扫描并连接 `IotHubBLE-XXXX`，展开 NUS 服务；确认上表四个特征都存在且属性正确。分别点开 **TX** 与 **CMD TX** 的 Notify（三箭头图标），确认 CCCD 写入成功；记录 MTU（1.3-81 实测 256，payload 253）。
 2. **RX 态**：保持 loopback 关闭；向 **RX(6E400002)** 写入 `TEST-RX-01`（用 Write with response，确认返回成功）。读 status：`rx_ble` 增加 10，`tx_uart1` 增加 10（默认路由 BLE→UART1），`dropped_ble`/`overrun_ble` 不变（MQTT 侧 QoS0 丢帧另计）。
-3. **TX 态**：用 PC 打开回环：
-   ```bash
-   curl -c /tmp/cj -d 'username=admin&password=123456' http://192.168.1.42/api/v1/auth/login -o /dev/null
-   curl -b /tmp/cj -X POST -H 'Content-Type: application/json' \
-        -d '{"enabled":true}' http://192.168.1.42/api/v1/data/loopback
+3. **TX 态**：在 CMD 通道用 v1 打开回环（HTTP 入口已删除）：
+   ```json
+   {"id":"3","version":"1.0","cmd":"data.loopback","args":{"enabled":true},"token":"<TOKEN>"}
    ```
    再向 RX 写 `TEST-TX-01`；**TX(6E400003)** 应收到完全相同的通知（可能按 MTU-3 分片，拼接后比对）。`tx_ble` 增加 10。完成后关闭回环（`{"enabled":false}`）。
-4. **CMD RX / CMD TX 态**：确认 **CMD TX(6E400005)** 通知已开。向 **CMD RX(6E400004)** 写登录命令，**必须以 `\n` 结尾**：
+4. **CMD RX / CMD TX 态**：确认 **CMD TX(6E400005)** 通知已开。向 **CMD RX(6E400004)** 写 v1 登录命令，**必须以 `\n` 结尾**：
    ```json
-   {"id":1,"method":"login","params":{"username":"admin","password":"123456"},"token":""}
+   {"id":"1","version":"1.0","cmd":"auth.login","args":{"username":"admin","password":"123456"}}
    ```
    > nRF Connect 的 Text 写入若没有 “Append newline” 选项，改用 Hex 模式，在 JSON 十六进制末尾加 `0A`。
-   > 当前固件登录回包多包了一层 `result`：token 在 `result.result.token`（已知协议瑕疵；若后续修复则为 `result.token`）。
+   > token 在 `data.token`；v0 `method/params` 已禁用。
 
    等待 ≥300ms（CMD 限频 200ms），从 **CMD TX** 取 token；再写：
    ```json
-   {"id":2,"method":"getStatus","params":{},"token":"<上一步的 token>"}
+   {"id":"2","version":"1.0","cmd":"io.get","args":{},"token":"<上一步的 token>"}
    ```
-   （同样以 `\n` 结尾。）应收到 `{"id":2,"ok":true,"result":{"relay_on":...,"led_on":...,"input_active":...,"net_mode":"...","sta_has_ip":...,"sta_ip":"..."}}`，不得出现 `auth_required`。
+   （同样以 `\n` 结尾。）应收到 `{"id":"2","ok":true,"data":{"relay_on":...,"led_on":...,"input_active":...,"net_mode":"...","sta_has_ip":...,"sta_ip":"..."}}`，不得出现 `unsupported_version`。
 5. **断开重广播**：在 App 里断开连接；status 应回到 `connected=false`、`adv_active=true`；重新扫描应能再次看到设备（1.3-78/81 已验证，此处复验手机侧）。
 6. **记录**：把四态的通过/失败、实际通知、status 差值填入下方记录表；失败时附 nRF Connect 日志与串口尾部。
 
@@ -130,8 +130,8 @@
 | --- | --- |
 | RX | 写入成功；`rx_ble`/`tx_uart1` 差值均 = 写入字节；`dropped_ble`/`overrun_ble` 不增长 |
 | TX | 通知字节与写入完全一致；`tx_ble` 差值 = 写入字节；`dropped_ble` 不增长；CCCD 订阅成功 |
-| CMD RX | CMD TX 收到 login 回包；token 非空；无 `auth_required` |
-| CMD TX | getStatus 回包字段完整；通知链路与数据 TX 独立 |
+| CMD RX | CMD TX 收到 `auth.login` 回包；`data.token` 非空；无 `unsupported_version` |
+| CMD TX | `io.get` 回包字段完整；通知链路与数据 TX 独立 |
 | 断开 | 重广播 `adv_active=true`；无复位/panic；heap 不异常下降 |
 
 **记录表（手机执行时填写）**
@@ -148,8 +148,10 @@
 
 ### 2.5 其他 Ubuntu 真机执行顺序（BLE 全项）
 
+> **2026-11-02 状态更新（历史失效）**：当前固件已删除 HTTP server，`role_swap.py` 依赖的 `PUT /api/v1/config/bluetooth` 入口不存在。§2.5.1–§2.5.2 的角色互换命令**仅作历史记录，不能作为当前验收入口**；恢复 HTTP 或改为 BLE 配置前，角色互换结论为 **N/A**。本文其余 HTTP 命令同样需先确认入口存在。
+>
 > 适用：**非 VM Ubuntu** + A/B 两块板；四态另需手机 nRF Connect。
-> 本机验收 VM 的 `hci0` 没有 BlueZ，不能作为执行机；角色互换只依赖 HTTP，任意同网段 Ubuntu 都能跑。
+> 本机验收 VM 的 `hci0` 没有 BlueZ，不能作为执行机。角色互换原依赖 HTTP；当前固件已删除该入口。
 
 #### 2.5.1 环境准备
 
@@ -179,7 +181,9 @@ pip install bleak pyserial
 - 带到另一台机器的文件：`tools/ble_nus/role_swap.py`、`tools/ble_nus/ble_nus.py`、`tools/capture_serial.py` 和本文件。
   **注意**：`role_swap.py` 当前是工作区新增文件（未提交到 git），用 `git archive`/clone 导出时需单独拷贝，否则脚本不在包里。
 
-#### 2.5.2 角色互换（A/B，两个方向）
+#### 2.5.2 角色互换（A/B，两个方向）— 历史失效
+
+> **当前固件 N/A**：无 HTTP server，以下命令不可执行；保留仅用于恢复 HTTP 入口后的回归参考。
 
 ```bash
 python3 tools/ble_nus/role_swap.py --central B --peripheral A
@@ -228,8 +232,8 @@ python3 tools/capture_serial.py /dev/ttyUSB1 /tmp/ble_phone_B.log &
 
 | 用例 | 执行端 | 结果 | 证据 |
 | --- | --- | --- | --- |
-| 角色互换 B central → A peripheral | Ubuntu `role_swap.py` |  | 脚本输出 + A/B status |
-| 角色互换 A central → B peripheral | Ubuntu `role_swap.py` |  | 脚本输出 + A/B status |
+| 角色互换 B central → A peripheral | Ubuntu `role_swap.py` | N/A（HTTP 已删除，历史入口） | 无；待恢复 HTTP 或改 BLE 配置 |
+| 角色互换 A central → B peripheral | Ubuntu `role_swap.py` | N/A（HTTP 已删除，历史入口） | 无；待恢复 HTTP 或改 BLE 配置 |
 | 数据面 echo/soak（可选） | Ubuntu `ble_nus.py` |  | 计数差值 + 串口尾部 |
 | 手机四态 RX/TX/CMD RX/CMD TX | 手机 nRF Connect |  | §2.4 记录表 + 串口 |
 | 断开重广播 | 手机/串口 |  | `adv_active`、`advertising restart` 日志 |
@@ -239,8 +243,19 @@ python3 tools/capture_serial.py /dev/ttyUSB1 /tmp/ble_phone_B.log &
 #### 2.5.6 已知限制
 
 - central 侧扫描仍用 `bt_device_name` 前缀 + `"Iot*"` 兜底；同场有多台 `IotHubBLE-*` 时可能连错，双板测试场只留一台 peripheral。
-- 当前 CMD `login` 回包是双层 `result`，token 在 `result.result.token`；手机验收按现状取，后续若统一为单层再更新。
+- 当前 CMD 使用 v1 `auth.login`，token 在 `data.token`；v0 `method/params` 已禁用。
 - 角色互换脚本只改 `bt_role`，不校验业务数据 1:1；吞吐以 §2.4 四态和 1.3-78 的历史四特征压测为准。
+
+#### 2.5.7 2026-11-02 双设备未覆盖项
+
+> 证据记录：`tools/ble_p0/results/dual_soak_20261102/REPORT.md`（首轮工程 soak）；`REPORT_clean_6h.md`（2026-11-02 唯一 runner 干净重跑：BLE 6h PASS，Wi-Fi/MQTT 段因 TQ2018 08:32 消失不签）。
+
+- **同一 Android 微信同时连接 A/B**：未执行。PC BlueZ 双链路只证明设备侧可同时被两个 central 连接，不能替代手机 App/微信的并发连接能力。
+- **双设备同时断 Wi-Fi 后的 120s fast-path/恢复**：仍未覆盖。首轮 6h 全程 Wi-Fi 在线；干净重跑虽在 08:32 后无 AP，但短 BLE 会话反复 link up/down 重置计时器，`ble fast retry: cycle=0`，没有真正触发 120s 重试。需“持续 BLE 连接 ≥120s + 可控 AP 断/复”专门验证；单台现场通过不能替代双设备。
+- **双设备 MQTT broker 断连/恢复**：未执行，需可控 broker 停复。
+- **双设备 DATA/UART1 长跑**：BLOCKED。B 的 UART1 未接线；DATA 无应用 ACK/序号/重传/流控，当前只签功能，不签端到端可靠性。
+- **BLE 角色互换 A/B**：N/A。HTTP 配置入口已删除（见 §2.5 顶部状态更新）。
+- **正式 6h 单-run**：完整双设备 6h 仍不签收。08:21–14:21 的干净重跑已满足唯一 runner/独立 JSONL/独立 UART，BLE 段 1420/1420、6/6 dual、0 复位；但 TQ2018 在 08:32 消失，Wi-Fi/MQTT 只在线约 10 分钟。可签“干净 BLE 6h PASS”，不能签“BLE+Wi-Fi+MQTT 完整 6h”；需 AP 稳定后同 run 重跑。
 
 ## 3. 软件与工具
 

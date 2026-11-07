@@ -1,5 +1,8 @@
 # BLE 设备侧要求检查表（微信小程序）
 
+> **2026-11-04 v1-only**：当前固件只接受 v1 envelope；本文 v0 检查项按历史兼容记录阅读，不用于新验收。
+
+
 > 日期：2026-10-22
 > 固件：HTTP-free + G3 第二轮异步事务
 > 对照：`main/bt.c`、`main/bt_gatts_nimble.c`、`main/ble_cmd.c`、`main/cmd.c`、`main/operation.c`
@@ -16,15 +19,15 @@
 | # | 要求 | 状态 | 固件现状与缺口 | 建议 |
 | --- | --- | --- | --- | --- |
 | 1 | MTU/单包短写（按 20B 设计） | ✅ | CMD RX 支持任意短写并做 512B 行重组；Notify 按 `mtu-3` 分片，MTU 未协商时回退 20B | 小程序按 20B 写入即可 |
-| 1b | 分片间 20–50ms 间隔 | 🟡 | 已改为独立 `ble_cmd_tx` 任务，CMD TX 每片之间 20ms；命令任务不再被发送阻塞。真机 Android/iOS 长响应尚未复测 | 真机连续 10 次长响应验证 |
+| 1b | 分片间 20–50ms 间隔 | 🟡 | 已改为独立 `ble_cmd_tx` 任务，CMD TX 每片之间 20ms；命令任务不再被发送阻塞。**2026-11-02 设备侧**：`config.get` 1130B / MTU256 5 片完整（253×4+118），实测片间 44–89ms（约 45ms 连接间隔；其中 88.7ms 超出 20–50ms 设计区间），源码 20ms 下限；Android/iOS 长响应仍未复测 | 真机连续 10 次长响应验证 |
 | 2 | 固定 128-bit UUID / Service 稳定 | ✅ | NUS Service 与 4 个特征值固定 128-bit，见 `bt_gatts_nimble.c` | 不要按设备随机化 |
-| 2b | 广播携带 Service UUID 以便 `services` 过滤 | 🟡 | 代码已在 ADV 加入 NUS 128-bit UUID，ADV=flags 3B + UUID 18B + 短名 9B = 30B；待小程序 `services` 过滤真机验证 | 用微信小程序按 Service UUID 扫描验证 |
+| 2b | 广播携带 Service UUID 以便 `services` 过滤 | 🟡 | 代码已在 ADV 加入 NUS 128-bit UUID，ADV=flags 3B + UUID 18B + 短名 9B = 30B。**2026-11-02 设备侧**：BlueZ/Bleak 按 NUS UUID 过滤，A/B 2/2 命中；微信小程序 `services` 过滤仍待真机验证 | 用微信小程序按 Service UUID 扫描验证 |
 | 3 | 写特征支持 Write With/Without Response | ✅ | CMD RX 与 DATA RX 都是 `WRITE | WRITE_NO_RSP` | 小程序可优先用 With Response |
 | 4 | 必须有 Notify 特征 | ✅ | CMD TX、DATA TX 都是 `NOTIFY`；需客户端订阅 | 小程序先开 notify 再发命令 |
 | 4b | indicate 可选 | 🟡 | 只有 notify，没有 indicate | 当前协议有 `id` + 查询，不必强加 indicate |
-| 5 | 设备名可识别（iOS） | 🟡 | ADV 改为短名 `IH-65D8`，完整名 `IotHubBLE-65D8` 进 Scan Response；待 iOS 实测 | iOS 微信扫描确认名称 |
-| 6 | ADV ≤31B | ✅ | 当前 flags+name+tx_power 约 19B | 加 UUID 后必须重新分配：短名进 ADV，完整名进 Scan Response |
-| 6b | Scan Response | 🟡 | 已配置 Scan Response：完整名 `IotHubBLE-65D8` + tx power；待 iOS 名称显示验证 | 用 iOS 微信小程序扫描验证 |
+| 5 | 设备名可识别（iOS） | 🟡 | ADV 改为短名 `IH-65D8`，完整名 `IotHubBLE-65D8` 进 Scan Response；**2026-11-02** 源码 `main/bt.c:338-383` 与 BlueZ 合并名（A/B 均完整名）已复核，iOS 仍待实测 | iOS 微信扫描确认名称 |
+| 6 | ADV ≤31B | ✅ | 当前 flags+UUID128+短名约 30B；完整名/tx power 在 Scan Response | 加 UUID 后必须重新分配：短名进 ADV，完整名进 Scan Response |
+| 6b | Scan Response | 🟡 | 已配置 Scan Response：完整名 `IotHubBLE-65D8` + tx power；**2026-11-02** 源码确认字段，`btmon` 因无 HCI 权限未能做原始逐字段拆分；iOS 名称显示待验 | 用 iOS 微信小程序扫描验证 |
 | 7 | 业务主键不用平台 deviceId | ✅ | `device.info.device_id` 使用主机名 `IotHub-XXXX`，来自 MAC 后缀 | 小程序用 `device_id`，不要用 iOS UUID/Android MAC |
 
 ## B. 连接与配对

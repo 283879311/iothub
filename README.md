@@ -4,16 +4,19 @@
 
 当前固件版本:**1.2**(`CMakeLists.txt` → `set(PROJECT_VER "1.2")`)。v1.2 起规划**统一命令解析层(控制面 / 数据面双平面)+ MCP 兼容**,把 MQTT、串口、BLE 收敛到同一套命令语义(经典蓝牙 / SPP 已于本版本移除),详见 `问题与版本优化.md`。
 
+> **v1-only 边界（2026-11-04）**：外部 BLE/MQTT 命令只接受 `{"id","version":"1.0","cmd","args"}`；v0 `method/params` 返回 `unsupported_version`（2026-11-05 起 v0 源码、旧方法别名与 `APP_CMD_V0_COMPAT` 开关已全部删除，无回退路径）。成功读 `data`，错误读 `{code,message}`。MQTT/ThingsBoard 只是传输服务器，不需要协议迁移；发送命令的客户端必须用 v1 payload。
+
 ## 功能
 
 - **UART 数据面**:UART 参数配置与原始字节收发,数据经 `data_pipe` 在 UART/BLE/MQTT 间路由;Web 串口调试台已删除。
 - **GPIO/命令层**:继电器、LED、触摸输入统一走 `cmd.c`;MQTT RPC 与 BLE CMD 共用 `led.set/led.toggle/relay.set/io.set/io.get` 及旧别名;触摸按下调用同一 `led.toggle`,长按不重复;每路可配置上电策略,引脚由 Kconfig 统一配置。
 - **BLE 本地管理**:NUS CMD 通道提供登录、配置、Wi-Fi 扫描/试连/提交、MQTT 配置、GPIO/UART 命令;Web 管理页和强制门户已删除。
 - **网络**:STA 为正常目标;BLE 配网提交显式写入 STA;旧 AP/APSTA 配置仍兼容但不再有 Web 门户。最多 5 条 STA profile,RSSI 择优自动重连。
-- **MQTT(ThingsBoard)**:10s 周期遥测(继电器/LED/输入/堆内存)+ attributes 上报;下行 RPC `setRelay/setLed/getStatus/setState` 控 GPIO;支持 tb_cloud / tb_selfhost / 自定义 topic,TLS(证书 bundle,可选)与 LWT;数据面自 1.3-82 起走 QoS1。
+- **MQTT(ThingsBoard)**:10s 周期遥测(继电器/LED/输入/堆内存)+ attributes 上报;下行命令使用 v1 envelope（`cmd/args`），TB 只负责转发；支持 tb_cloud / tb_selfhost / 自定义 topic,TLS(证书 bundle,可选)与 LWT;数据面自 1.3-82 起走 QoS1。
+- **联网验证(DEF-NET-001,2026-11-07)**:Wi-Fi 拿到 IP 后自动验证 Broker 路径(TCP)与 MQTT 会话,通过才算 settle;`network.status` 增 `internet_verified`/`net_verify_stage`,`operation.get` 增 `stages`;tryconnect 的 `got_ip` 语义 = IP+联网+MQTT 就绪,验证失败自动回滚(`internet_unverified`/`mqtt_unavailable`/`verify_timeout`);详见 `docs/R-NET设备验收报告_2026-11-07.md`。
 - **OTA**:OTA 确认/回滚核心保留;HTTP 上传入口和网页资源分区已删除,当前没有 OTA 传输通道,后续需通过 BLE/MQTT 等新通道接入。
 - **恢复出厂**:BOOT 键(GPIO0)长按 5s 后 LED 闪烁提示；松开后 LED 恢复原状态，设备清除默认配置、已保存 Wi-Fi 列表和配网 PIN/状态，再重启。
-- **蓝牙**:BLE NUS GATT 数据面(peripheral 从机 + central 主机),支持数据 RX/TX 与 CMD 通道(命令写 `6E400004`、回包订阅 `6E400005`;先 `login` 换 token,回包在 `result.token`);默认 NimBLE 主机栈,可回退 Bluedroid;A/B 双向角色互换脚本 `tools/ble_nus/role_swap.py` 已通过(1.3-81);经典蓝牙 / SPP 已于 v1.2 移除(CONFIG_BT_CLASSIC_ENABLED=n)。
+- **蓝牙**:BLE NUS GATT 数据面(peripheral 从机 + central 主机),支持数据 RX/TX 与 CMD 通道(命令写 `6E400004`、回包订阅 `6E400005`);v1 先 `auth.login` 换 token，token 在 `data.token`;默认 NimBLE 主机栈,可回退 Bluedroid;经典蓝牙 / SPP 已于 v1.2 移除(CONFIG_BT_CLASSIC_ENABLED=n)。
 
 ## 硬件引脚(编译期固定,`main/constants.h`)
 
@@ -68,9 +71,9 @@ nvs 16K / otadata / phy / **ota_0 + ota_1 各 1.9375MB(双 OTA)** / storage(原�
 ## 首次使用（BLE-only）
 
 1. 连接 BLE NUS 设备 `IotHubBLE-XXXX`（XXXX 为 MAC 后缀），订阅 CMD TX `6E400005`；
-2. 在 CMD RX `6E400004` 发送 `login`，用户名/口令为本地管理凭据（默认 `admin / 123456`，可经 BLE `auth.admin.set` 修改）；
-3. 用 `network.scan` 扫描，`network.tryconnect` 验证上游 WiFi，再用 `network.apply` 提交；提交会显式进入 STA；
-4. 用 `config.set` 配置 ThingsBoard MQTT，设备获取 STA IP 后自动连接并上报。
+2. 在 CMD RX `6E400004` 发送 v1 `auth.login`（`args.username/password`），token 在 `data.token`；默认 `admin / 123456`，可经 `auth.admin.set` 修改；
+3. 用 `network.scan` 扫描，`network.tryconnect` 创建异步事务，轮询 `operation.get` 到 `got_ip`，再用 `network.apply`（`operation_id`）提交；取消用 `network.cancel`；
+4. 用 v1 `config.set`（`args.patch`）配置 MQTT/静态 IP；BLE v1 允许 network/static 域，设备获取 STA IP 后自动连接并上报。
 
 ## 目录结构
 
@@ -96,3 +99,11 @@ docs/archive/     原始日志/历史归档(只读留证)
 - Web/HTTP/captive 已删除；C 65D8 在 STA-only + MQTT 下稳态 heap≈55KB、largest≈49KB，BLE+MQTT+worker 峰值已重新获得余量。
 - BLE 真机四态(RX/TX/CMD RX/CMD TX)尚未执行;断连重广播、A/B 双向角色互换(1.3-78/81)已通过,手机 nRF Connect 步骤见 `docs/soak_test_plan.md` §2.4,另一台 Ubuntu 的角色互换/数据面/回传执行包见 §2.5。
 - MQTT 数据面旧实现误用 `esp_mqtt_client_enqueue` 的 QoS0/store=false(返回 -1、未真正入队),导致实际漏发远大于 `dropped_mqtt` 记录的 2%;已改 QoS1/store=true,1KB/s 负载 6min 0 丢、outbox 0(1.3-82)。
+
+##测试环境与账号密码
+模拟mqtt设备token：A3_TEST_TOKEN 设备id：85236050-c890-11f1-9a00-67dba22715ad
+WIFI SSID：CMCC-502 密码：ct61993100
+WIFI SSID：TQ2018 密码：57402003
+
+mqtt测试服务器：http://139.9.93.245:1883
+

@@ -1,5 +1,7 @@
 # BLE 现有功能与目标功能清单
 
+> **2026-11-04 状态**：本文多数“当前实现”是 v0 时代快照，已被 v1-only 取代。当前合同见 `docs/BLE命令协议规范.md`；v0 `method/params` 外部入口已禁用。
+
 > 基线：`feature/shared-config-cmd`，G1 代码提交 `b50426e`。
 > 结论：产品 BLE 使用现有 NUS + JSON 命令体系，不使用官方 ESP BLE Provisioning 协议。
 > `probe/ble-prov` 是独立探针分支，不属于产品配置路径。
@@ -35,16 +37,16 @@
 
 | 项目 | 当前实现 |
 | --- | --- |
-| 命令格式 | `{"id":N,"method":"...","params":{...},"token":"..."}` |
+| 命令格式 | v1-only：`{"id":"...","version":"1.0","cmd":"...","args":{...},"token":"..."}` |
 | 行结束 | 支持 `\n` 结尾，也支持一次写入完整 JSON、无换行 |
-| 响应 | `{"id":N,"ok":true,"result":{...}}` 或 `{"id":N,"ok":false,"error":"..."}` |
-| 登录 | `login` 使用 Web 管理员凭据换 600s token |
+| 响应 | `{"id":"...","ok":true,"data":{...}}` 或 `{"id":"...","ok":false,"error":{"code","message"}}` |
+| 登录 | `auth.login` 使用管理员凭据换 600s token，token 在 `data.token` |
 | token | 连接级、断线失效；重启不保留 |
 | 限频 | 约 5 次/秒；超限返回 `rate_limited` |
 | 超长命令 | G1 后返回 `{"ok":false,"error":"line_too_long"}` |
 | 分片失败 | G1 后低层返回实际发送字节数；部分发送记录 `truncated`，不误报完整成功 |
 | 链路安全 | NimBLE `SM_LVL=0`，无强制配对/绑定/加密；token 只是应用层认证 |
-| 命令权限 | 统一进入 `app_cmd_execute_ex()`；G1 已收紧 MQTT 来源，BLE 来源保留既有本地能力 |
+| 命令权限 | 统一进入 v1 registry/`app_cmd_execute_ctx()`；MQTT/BLE source 策略见当前协议规范 |
 
 ### 1.4 当前可用命令
 
@@ -52,16 +54,16 @@
 | --- | --- | --- |
 | 配置读取 | `config.get`（`domains` 过滤） | ✅；仍混有部分运行态 |
 | 配置写入 | `config.set` | 🟡；网络字段直接落盘，无试连/事务 |
-| 状态摘要 | `getStatus` / `io.get` | 🟡；只有 IO/网络摘要 |
+| 状态摘要 | `io.get` / `device.status` | ✅；v1 `io.get` 保留摘要，`device.status` 更完整 |
 | GPIO | `led.set/toggle`、`relay.set/toggle`、`io.set` | ✅ |
 | 网络扫描 | `network.scan` | ✅；同步 |
-| profile 列表/删除 | `network.profiles`、`network.profile.delete` | ✅/🟡；无“正在使用”保护 |
-| Wi-Fi 重配 | `network.restart` | 🟡；无完成状态/取消 |
+| profile 列表/删除 | `network.profile.list`、`network.profile.delete` | ✅；最后 profile 删除返回 `last_profile` |
+| Wi-Fi 重配 | `network.reconnect` | ✅（由 restart 复用） |
 | UART 发送 | `uart.send` | ✅；响应字段 `sent` |
 | 数据回环 | `data.loopback` | ✅ |
-| 管理员凭据 | `web.auth.set` | 🟡；不作废旧 Web 会话 |
+| 管理员凭据 | `auth.admin.set` | ✅；成功后作废旧会话 |
 | 配网 PIN | `provisioning.pin.set` | ✅ HTTP 实测；存储 `ble_prov/pop` |
-| 异步查询 | 无 | ❌ |
+| 异步查询 | `operation.get` | ✅；网络 tryconnect/apply/cancel 使用 operation_id |
 
 ### 1.5 当前数据面
 
