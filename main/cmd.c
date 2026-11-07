@@ -807,35 +807,51 @@ static bool app_cmd_net_apply_async(const app_cmd_context_t *ctx,
         *err_out = "forbidden";
         return false;
     }
-    /* DEF-NET-001 兜底 + 选 B 修正(2026-11-07 t6 首跑实锤):tryconnect 拆链
-     * 重连后链路换代,重验证在飞时"紧贴 got_ip 的 apply"曾被误拒
-     * (stage 透传了候选链路的旧判决 → 误报 mqtt_unavailable)。
-     * 通过条件(任一):
-     *   a) 当前代次已验证(ok_for_gen);
-     *   b) 代次未变 = 试用验证时的链路(拆链消耗性断开不换代,判决已 OK);
-     *   c) 当前代次重验证在飞 → 有界等待 10s(紧贴 got_ip 的正常节奏)。
-     * 仍不通过才按阶段拒绝;等待到期归 verify_timeout。 */
+    /* DEF-NET-001 兜底 v2(2026-11-07 t6 二跑实锤):tryconnect 拆链重连后
+     * 链路换代,新代次 netcheck 的启动/完成与"紧贴 got_ip 的 apply"存在
+     * 窗口竞态 —— 单点检查 running_for_gen 会在"gen 已换代、start 未跑/"
+     * 判决未归档"的瞬间误拒(v2 一跑复现:got_ip +0.4s apply → 误报
+     * mqtt_unavailable)。v2 改为有界轮询(≤12s,200ms 步进):
+     *   通过:ok_for_gen(cur) / 代次未变(试用判决即本链路判决);
+     *   拒绝:cur 代次终局 FAIL(按真实 stage 细分) / 预算到期(verify_timeout)。
+     * 拆链消耗性断开不换代 → 试用判决对未换代链路持续有效。 */
     {
         uint32_t cur_gen = app_wifi_link_generation();
-        bool ok = app_netcheck_ok_for_gen(cur_gen) ||
-                  cur_gen == s_net_async.netcheck_gen;
+        uint32_t trial_gen = s_net_async.netcheck_gen;
+        int64_t deadline_ms = esp_timer_get_time() / 1000 + 12000;
+        bool verified = false;
+        bool wait_expired = false;
+        char stage[12] = "none";
+        app_netcheck_result_t dres;
 
-        if (!ok && app_netcheck_running_for_gen(cur_gen)) {
-            app_netcheck_result_t dres;
-
-            ok = app_netcheck_wait(cur_gen, 10000, &dres);
-            ESP_LOGI(TAG, "apply wait reverify gen=%u -> %d", cur_gen, (int)ok);
+        for (;;) {
+            if (app_netcheck_ok_for_gen(cur_gen)) {
+                verified = true;
+                break;
+            }
+            if (cur_gen == trial_gen) {
+                /* 代次未变:试用判决(OK)即本链路判决,拆链消耗性断开不换代 */
+                verified = true;
+                break;
+            }
+            if (app_netcheck_read_done(cur_gen, &dres)) {
+                snprintf(stage, sizeof(stage), "%s",
+                         app_netcheck_outcome_stage(dres.outcome));
+                break;   /* 该代次终局 FAIL,按真实 stage 细分 */
+            }
+            if (esp_timer_get_time() / 1000 >= deadline_ms) {
+                wait_expired = true;
+                snprintf(stage, sizeof(stage), "none");
+                break;
+            }
+            vTaskDelay(pdMS_TO_TICKS(200));
         }
-        if (!ok) {
-            char stage[12];
-
-            app_netcheck_last_stage(stage, sizeof(stage));
-            ESP_LOGW(TAG, "apply rejected: netcheck not ok for gen=%u stage=%s op=%s",
-                     cur_gen, stage, status.id);
-            *err_out = (app_netcheck_state() == APP_NETCHECK_RUNNING)
-                           ? "verify_timeout"
-                           : (strcmp(stage, "mqtt") == 0) ? "mqtt_unavailable"
-                                                          : "internet_unverified";
+        if (!verified) {
+            ESP_LOGW(TAG, "apply rejected: netcheck gen=%u stage=%s expired=%d op=%s",
+                     cur_gen, stage, (int)wait_expired, status.id);
+            *err_out = wait_expired ? "verify_timeout"
+                       : (strcmp(stage, "mqtt") == 0) ? "mqtt_unavailable"
+                                                      : "internet_unverified";
             return false;
         }
     }

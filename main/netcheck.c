@@ -597,6 +597,18 @@ void app_netcheck_last_stage(char *out, size_t out_size)
     portEXIT_CRITICAL(&s_nc.mux);
 }
 
+const char *app_netcheck_outcome_stage(app_netcheck_outcome_t o)
+{
+    switch (o) {
+    case APP_NETCHECK_OUT_FAIL_INTERNET: return "internet";
+    case APP_NETCHECK_OUT_FAIL_MQTT: return "mqtt";
+    case APP_NETCHECK_OUT_CANCELLED:
+    case APP_NETCHECK_OUT_TIMEOUT:
+    case APP_NETCHECK_OUT_GEN_MISMATCH:
+    default: return "none";
+    }
+}
+
 void app_netcheck_set_observer(void (*fn)(uint32_t gen, bool ok, const char *stage))
 {
     s_observer = fn;

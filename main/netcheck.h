@@ -66,6 +66,10 @@ app_netcheck_state_t app_netcheck_state(void);
 /* 最近一次收尾的阶段名(拷贝出参,锁内快照):"none"/"internet"/"mqtt"/"skipped"。 */
 void app_netcheck_last_stage(char *out, size_t out_size);
 
+/* outcome → 阶段名(同一词汇表):FAIL_INTERNET→"internet"、FAIL_MQTT→"mqtt"、
+ * 其余(CANCELLED/TIMEOUT/GEN_MISMATCH)→"none"。apply 拒绝细分用。 */
+const char *app_netcheck_outcome_stage(app_netcheck_outcome_t o);
+
 /* 完成观察者:netcheck 任务上下文回调,不得长阻塞。
  * 仅在收尾为 OK/FAIL_* 且未被新代次取代时调用;CANCELLED 不回调。
  * wifi 用它把"验证通过 → 清 mask/退避归零"落到运行态(评审修订:
