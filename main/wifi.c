@@ -3390,8 +3390,12 @@ static esp_err_t app_wifi_perform_scan_impl(void)
     scan_cfg.channel = 0;
     scan_cfg.show_hidden = false;
     scan_cfg.scan_type = WIFI_SCAN_TYPE_ACTIVE;
-    scan_cfg.scan_time.active.min = 50;
-    scan_cfg.scan_time.active.max = 100;
+    /* DEF-SCAN-002(2026-11-08):BLE 开启时驱动要求默认 active scan time
+     * (T4 用例4 串口实锤:自定义 50/100ms 在 BLE notify 活跃时扫描饿死,
+     * 30s 无回包 → 客户端级联 SKIP)。0/0 = 交还驱动默认值,共存调度兼容;
+     * 无 BLE 时行为不变(驱动默认与本自定义几乎等长)。 */
+    scan_cfg.scan_time.active.min = 0;
+    scan_cfg.scan_time.active.max = 0;
 
     err = esp_wifi_scan_start(&scan_cfg, true);
     if (err != ESP_OK) {
