@@ -25,7 +25,10 @@ extern app_config_t s_config;
 /* 总预算(评审 P1-1):25s,accepted_ttl=45s 覆盖 15s 连接 + 25s 验证。 */
 #define APP_NETCHECK_BUDGET_MS 25000
 #define APP_NETCHECK_TCP_TIMEOUT_MS 2500
-#define APP_NETCHECK_TCP_ATTEMPTS 2
+/* 3 次 × 2s 间隔(2026-11-07 TQ2018/18:52 实测定案):拆链重连后路由未就绪
+ * 窗口 W 实测 0.5~6s+ 波动,探测点 0.5/3.0/5.6s 覆盖之;总预算 25s 仍兜底 */
+#define APP_NETCHECK_TCP_ATTEMPTS 3
+#define APP_NETCHECK_TCP_RETRY_GAP_MS 2000
 #define APP_NETCHECK_POLL_MS 100
 #define APP_NETCHECK_MQTT_GRACE_MS 4000
 /* DNS 独立子预算(核验 P3-1):慢解析不得挤占 TCP/MQTT 段,归属不漂移 */
@@ -285,10 +288,8 @@ static app_netcheck_state_t nc_run_once(uint32_t gen, char *stage_out,
             if (facts.tcp_ok) {
                 break;
             }
-            /* 1s 间隔(DEF-NET-001 真机实锤):GOT_IP 后 ~100ms 内 DHCP 新租约的
-             * 路由可能未就绪(EHOSTUNREACH),100ms 重试会双双落进瞬态窗口 */
             if (i + 1 < APP_NETCHECK_TCP_ATTEMPTS) {
-                vTaskDelay(pdMS_TO_TICKS(1000));
+                vTaskDelay(pdMS_TO_TICKS(APP_NETCHECK_TCP_RETRY_GAP_MS));
             }
         }
         facts.tcp_done = true;
