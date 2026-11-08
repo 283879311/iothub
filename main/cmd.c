@@ -491,22 +491,21 @@ static esp_err_t app_cmd_net_async_run(app_operation_t *op, void *ctx)
             s_net_async.netcheck_gen = link_gen;   /* cleanup 的取消依据 */
             app_cmd_net_job_unlock();
             if (verified) {
-                /* P6:交付快照(当前 operation 在当前代次的阶段真值) */
-                bool w, ip_, nv, mc;
-
-                app_wifi_runtime_lock();
-                w = s_wifi.sta_connected;
-                ip_ = s_wifi.sta_has_ip;
-                nv = s_wifi.net_verified;
-                app_wifi_runtime_unlock();
-                app_mqtt_lock();
-                mc = s_mqtt.connected;
-                app_mqtt_unlock();
+                /* P6:交付快照 —— 全部取 worker 在手真值,零竞速。
+                 * 2026-11-08 实锤(用户 BLE 源 apply 被拒):旧实现读活运行态,
+                 * 而本流程的拆链(finish 内 esp_wifi_disconnect)会并发触发
+                 * STA_DISCONNECTED(gen++/net_verified=false/sta_connected=false),
+                 * 拆链后读活标志 = 自伤竞速:MQTT 源轻载 3/3 赢,BLE 连接态
+                 * (NimBLE 洪泛、事件延迟 60ms)即输 → gate 误拒 → op 滞留
+                 * got_ip 至 300s TTL。TRY_OK(require_ip) 本身即 wifi+ip 的
+                 * 交付语义;判决真值(verified)与阶段串(dres.stage)来自
+                 * read_done 不可变快照,全部确定性可得。 */
                 app_cmd_net_job_lock();
-                s_net_async.st_wifi_connected = w;
-                s_net_async.st_ip_acquired = ip_;
-                s_net_async.st_internet_verified = nv;
-                s_net_async.st_mqtt_connected = mc;
+                s_net_async.st_wifi_connected = true;
+                s_net_async.st_ip_acquired = true;
+                s_net_async.st_internet_verified = verified;
+                s_net_async.st_mqtt_connected =
+                    strcmp(dres.stage, "mqtt") == 0;
                 app_cmd_net_job_unlock();
             } else {
                 ESP_LOGW(TAG, "async tryconnect op=%s netcheck have=%d outcome=%d gen=%u stage=%s -> rollback",
