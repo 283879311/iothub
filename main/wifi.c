@@ -29,7 +29,6 @@ static const char *TAG = "wifi";
  * 锁 = 命令分发任务永久卡死(设备"能广播能 MQTT 但 APP 无响应")。 */
 static SemaphoreHandle_t s_scan_done_sem;
 static StaticSemaphore_t s_scan_done_sem_buf;
-static portMUX_TYPE s_scan_done_mux = portMUX_INITIALIZER_UNLOCKED;
 /* 同一 profile 断线后先直连重试的次数,超过才拉黑换下一个 profile。
  * 取 3 避免边缘 AP 一次抖动就永久跳走;总时长仍受 90s 启动窗口约束。 */
 static const uint8_t APP_WIFI_STA_RETRY_LIMIT = 3;
@@ -3416,27 +3415,23 @@ static esp_err_t app_wifi_perform_scan_impl(void)
     /* R-SCAN-3:非阻塞启动 + 有界等 SCAN_DONE。block=true 在共存饿死时
      * 永不返回,会把命令分发任务永久卡死(2026-11-08 09:35 事故)。超时
      * 停扫释放射频 → ESP_ERR_TIMEOUT → 客户端拿到 wifi_scan_failed。 */
-    {
-        SemaphoreHandle_t done_sem = app_mutex_ensure(&s_scan_done_sem,
-                                                      &s_scan_done_sem_buf,
-                                                      &s_scan_done_mux, false);
-        while (xSemaphoreTake(done_sem, 0) == pdTRUE) {
-        }   /* 排空陈旧计数(上次超时停扫后迟到的事件) */
+    /* 二值信号量(一次性创建):SCAN_DONE 是跨任务信号(事件任务 give、
+     * 命令任务 take)——不能用互斥量(优先继承断言:give 者≠持有者即 panic,
+     * 2026-11-08 三次 panic 实锤)。 */
+    if (s_scan_done_sem == NULL) {
+        s_scan_done_sem = xSemaphoreCreateBinaryStatic(&s_scan_done_sem_buf);
     }
+    while (xSemaphoreTake(s_scan_done_sem, 0) == pdTRUE) {
+    }   /* 排空陈旧计数(上次超时停扫后迟到的事件) */
     err = esp_wifi_scan_start(&scan_cfg, false);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "scan: start failed: %s", esp_err_to_name(err));
         return err;
     }
-    {
-        SemaphoreHandle_t done_sem = app_mutex_ensure(&s_scan_done_sem,
-                                                      &s_scan_done_sem_buf,
-                                                      &s_scan_done_mux, false);
-        if (xSemaphoreTake(done_sem, pdMS_TO_TICKS(15000)) != pdTRUE) {
-            esp_wifi_scan_stop();
-            ESP_LOGW(TAG, "scan: not done in 15s — stopped (BLE coexistence starvation?)");
-            return ESP_ERR_TIMEOUT;
-        }
+    if (xSemaphoreTake(s_scan_done_sem, pdMS_TO_TICKS(15000)) != pdTRUE) {
+        esp_wifi_scan_stop();
+        ESP_LOGW(TAG, "scan: not done in 15s — stopped (BLE coexistence starvation?)");
+        return ESP_ERR_TIMEOUT;
     }
     err = esp_wifi_scan_get_ap_records(&number, S_WIFI_SCAN_RECORDS);
     if (err != ESP_OK) {
