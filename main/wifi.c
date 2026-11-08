@@ -23,6 +23,13 @@
 #include "wifi.h"
 
 static const char *TAG = "wifi";
+/* R-SCAN-3(2026-11-08):非阻塞扫描的完成信号——SCAN_DONE 事件 give,
+ * perform_scan_impl 有界等待;超时 esp_wifi_scan_stop() 释放射频。
+ * 背景:2026-11-08 09:35 事故——共存饿死扫描 + block=true + portMAX_DELAY
+ * 锁 = 命令分发任务永久卡死(设备"能广播能 MQTT 但 APP 无响应")。 */
+static SemaphoreHandle_t s_scan_done_sem;
+static StaticSemaphore_t s_scan_done_sem_buf;
+static portMUX_TYPE s_scan_done_mux = portMUX_INITIALIZER_UNLOCKED;
 /* 同一 profile 断线后先直连重试的次数,超过才拉黑换下一个 profile。
  * 取 3 避免边缘 AP 一次抖动就永久跳走;总时长仍受 90s 启动窗口约束。 */
 static const uint8_t APP_WIFI_STA_RETRY_LIMIT = 3;
@@ -368,11 +375,13 @@ static void app_wifi_restart_unlock(void)
     }
 }
 
-static void app_wifi_scan_lock(void)
+static bool app_wifi_scan_lock(void)
 {
     SemaphoreHandle_t lock = app_mutex_ensure(&s_wifi_scan_lock, &s_wifi_scan_lock_buf,
                                               &s_wifi_scan_lock_mux, true);
-    xSemaphoreTakeRecursive(lock, portMAX_DELAY);
+    /* R-SCAN-3:20s 有界获取,取不到返 false(调用方回 busy 语义)——分发任务
+     * 不许 portMAX_DELAY 等射频相关锁 */
+    return xSemaphoreTakeRecursive(lock, pdMS_TO_TICKS(20000)) == pdTRUE;
 }
 
 static void app_wifi_scan_unlock(void)
@@ -2031,6 +2040,13 @@ static void app_wifi_event_handler(void *arg, esp_event_base_t event_base, int32
             }
             break;
         }
+        case WIFI_EVENT_SCAN_DONE: {
+            /* R-SCAN-3:非阻塞扫描的完成信号(perform_scan_impl 有界等待) */
+            if (s_scan_done_sem != NULL) {
+                xSemaphoreGive(s_scan_done_sem);
+            }
+            break;
+        }
         case WIFI_EVENT_STA_DISCONNECTED: {
             wifi_event_sta_disconnected_t *disconnected = event_data;
             uint32_t dying_gen;
@@ -3397,10 +3413,30 @@ static esp_err_t app_wifi_perform_scan_impl(void)
     scan_cfg.scan_time.active.min = 0;
     scan_cfg.scan_time.active.max = 0;
 
-    err = esp_wifi_scan_start(&scan_cfg, true);
+    /* R-SCAN-3:非阻塞启动 + 有界等 SCAN_DONE。block=true 在共存饿死时
+     * 永不返回,会把命令分发任务永久卡死(2026-11-08 09:35 事故)。超时
+     * 停扫释放射频 → ESP_ERR_TIMEOUT → 客户端拿到 wifi_scan_failed。 */
+    {
+        SemaphoreHandle_t done_sem = app_mutex_ensure(&s_scan_done_sem,
+                                                      &s_scan_done_sem_buf,
+                                                      &s_scan_done_mux, false);
+        while (xSemaphoreTake(done_sem, 0) == pdTRUE) {
+        }   /* 排空陈旧计数(上次超时停扫后迟到的事件) */
+    }
+    err = esp_wifi_scan_start(&scan_cfg, false);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "scan: start failed: %s", esp_err_to_name(err));
         return err;
+    }
+    {
+        SemaphoreHandle_t done_sem = app_mutex_ensure(&s_scan_done_sem,
+                                                      &s_scan_done_sem_buf,
+                                                      &s_scan_done_mux, false);
+        if (xSemaphoreTake(done_sem, pdMS_TO_TICKS(15000)) != pdTRUE) {
+            esp_wifi_scan_stop();
+            ESP_LOGW(TAG, "scan: not done in 15s — stopped (BLE coexistence starvation?)");
+            return ESP_ERR_TIMEOUT;
+        }
     }
     err = esp_wifi_scan_get_ap_records(&number, S_WIFI_SCAN_RECORDS);
     if (err != ESP_OK) {
@@ -3417,7 +3453,9 @@ esp_err_t app_wifi_perform_scan(void)
 {
     esp_err_t err;
 
-    app_wifi_scan_lock();
+    if (!app_wifi_scan_lock()) {
+        return ESP_ERR_INVALID_STATE;   /* R-SCAN-3:锁 20s 未得,回 busy 语义 */
+    }
     err = app_wifi_perform_scan_impl();
     app_wifi_scan_unlock();
     return err;
@@ -3433,7 +3471,14 @@ esp_err_t app_wifi_perform_scan_command(void)
         ESP_LOGW(TAG, "scan command: auto-connect task still busy");
         return ESP_ERR_TIMEOUT;
     }
-    err = app_wifi_perform_scan();
+    if (!app_wifi_scan_lock()) {
+        /* R-SCAN-3:锁 20s 未得——不进 impl,回 busy 语义 */
+        app_wifi_auto_connect_resume();
+        ESP_LOGW(TAG, "scan command: scan lock busy 20s");
+        return ESP_ERR_INVALID_STATE;
+    }
+    err = app_wifi_perform_scan_impl();
+    app_wifi_scan_unlock();
     app_wifi_auto_connect_resume();
     return err;
 }
