@@ -53,9 +53,11 @@ with ser, open(OUT, "ab") as f:
     while True:
         try:
             if not ser.is_open:
-                ser.open()
+                # DTR/RTS 必须在 open 之前置低——open() 默认拉高 DTR,
+                # EN 脉冲会把板子 POWERON 复位(2026-11-08 干净环境 3 连复位根因)
                 ser.dtr = False
                 ser.rts = False
+                ser.open()
             while True:
                 data = ser.read(4096)
                 if data:
