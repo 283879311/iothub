@@ -45,25 +45,48 @@ with ser, open(OUT, "ab") as f:
     # 故心跳写进独立 <logfile>.heartbeat,不污染 SUMS 校验对象)。
     import time as _t
     _last_beat = 0.0
-    try:
-        while True:
-            data = ser.read(4096)
-            if data:
-                f.write(data)
-                f.flush()
-            now = _t.time()
-            if now - _last_beat >= 60.0:
-                _last_beat = now
-                try:
-                    with open(OUT + ".heartbeat", "a") as hf:
-                        hf.write("# heartbeat pid=%d bytes=%d %s\n" % (
-                            __import__("os").getpid(), f.tell(),
-                            _t.strftime("%Y-%m-%dT%H:%M:%S")))
-                except OSError:
-                    pass
-    finally:
+    # 2026-11-08:ModemManager 周期性探测 ttyUSB 会造成 SerialException
+    # ("readiness but no data / multiple access")——旧版直接死亡(三次抓包
+    # 事故的根因)。改为:异常后重开端口继续(探测瞬间可能丢几字节,
+    # 但抓包不死);重开前恢复 DTR/RTS 电平,防止 EN 复位。
+    _reopens = 0
+    while True:
         try:
-            ser.dtr = False
-            ser.rts = False
-        except (serial.SerialException, OSError):
-            pass
+            if not ser.is_open:
+                ser.open()
+                ser.dtr = False
+                ser.rts = False
+            while True:
+                data = ser.read(4096)
+                if data:
+                    f.write(data)
+                    f.flush()
+                now = _t.time()
+                if now - _last_beat >= 60.0:
+                    _last_beat = now
+                    try:
+                        with open(OUT + ".heartbeat", "a") as hf:
+                            hf.write("# heartbeat pid=%d bytes=%d reopens=%d %s\n" % (
+                                __import__("os").getpid(), f.tell(), _reopens,
+                                _t.strftime("%Y-%m-%dT%H:%M:%S")))
+                    except OSError:
+                        pass
+        except serial.SerialException as e:
+            _reopens += 1
+            print("capture: SerialException #%d (%s) — reopening in 2s" % (
+                _reopens, str(e)[:80]), flush=True)
+            try:
+                ser.close()
+            except Exception:
+                pass
+            _t.sleep(2.0)
+            if _reopens > 200:
+                print("capture: too many reopens, giving up", flush=True)
+                break
+    # 退出:恢复电平(HUPCL 已清,通常无 EN 脉冲;防御性保留)
+    try:
+        ser.dtr = False
+        ser.rts = False
+        ser.close()
+    except (serial.SerialException, OSError):
+        pass
