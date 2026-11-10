@@ -76,6 +76,9 @@ static volatile uint32_t s_conn_since_ms = 0;
  * 僵尸链路回收判据必须看**双向**静默:UART→BLE 单向上报的会话可以长时间
  * 没有 GATT 写,只看 RX 会误杀。 */
 static volatile uint32_t s_last_tx_ms = 0;
+/* P2:terminate 已发起、等 DISCONNECT 事件期间不再重复下发(避免每秒重开
+ * GAP procedure;发起失败则立刻清位,下一秒 tick 自然重试)。 */
+static volatile bool s_term_pending = false;
 #define APP_BLE_IDLE_TERMINATE_S 90
 /* 订阅态会话的回收阈值。旧实现硬豁免订阅会话——2026-11-09 实测:手机
  * GATT 层停滞但链路层仍 ACK 的僵尸链路持续 21 分钟不可恢复(设备认为
@@ -257,6 +260,7 @@ void app_ble_gatts_nimble_on_connect(uint16_t conn_handle)
     s_connected = true;
     s_last_rx_ms = 0;   /* DEF-BLE-001:新连接重新计"最近写入" */
     s_last_tx_ms = 0;   /* P2:新连接重新计"最近发送" */
+    s_term_pending = false;
     s_conn_since_ms = (uint32_t)(esp_timer_get_time() / 1000);
     s_data_subscribed = false;
     s_cmd_subscribed = false;
@@ -315,6 +319,7 @@ void app_ble_gatts_nimble_on_disconnect(int reason)
     s_connected = false;
     s_last_rx_ms = 0;
     s_last_tx_ms = 0;
+    s_term_pending = false;
     s_conn_since_ms = 0;
     s_data_subscribed = false;
     s_cmd_subscribed = false;
@@ -380,6 +385,7 @@ void app_ble_gatts_reset(void)
     s_connected = false;
     s_last_rx_ms = 0;
     s_last_tx_ms = 0;
+    s_term_pending = false;
     s_conn_since_ms = 0;
     s_data_subscribed = false;
     s_cmd_subscribed = false;
@@ -520,6 +526,9 @@ void app_ble_gatts_idle_reap_poll(void)
     if (!s_connected) {
         return;
     }
+    if (s_term_pending) {
+        return;   /* 终止已发起,等 DISCONNECT 事件;不再重复下发 */
+    }
     if (app_ble_cmd_net_busy()) {
         return;   /* 配网在途:断链会触发 cancel→cleanup→restore 链 */
     }
@@ -547,7 +556,14 @@ void app_ble_gatts_idle_reap_poll(void)
     }
     ESP_LOGW(TAG, "idle terminate conn=%u idle=%us subscribed=%d (both directions silent)",
              (unsigned)handle, (unsigned)(idle_ms / 1000U), (int)subscribed);
-    (void)ble_gap_terminate(handle, BLE_ERR_REM_USER_CONN_TERM);
+    s_term_pending = true;
+    {
+        int trc = ble_gap_terminate(handle, BLE_ERR_REM_USER_CONN_TERM);
+        if (trc != 0) {
+            s_term_pending = false;   /* 发起失败:下一秒 tick 自然重试 */
+            ESP_LOGW(TAG, "idle terminate call failed: rc=%d", trc);
+        }
+    }
 }
 
 int32_t app_ble_gatts_rx_age_ms(void)
