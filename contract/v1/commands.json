@@ -1,0 +1,83 @@
+{
+  "contract_version": "1.1-draft",
+  "firmware_baseline": "1.3-9e1d6c5 / build_sha 8cc566bd0 (2026-11-10)",
+  "$comment": "命令表（单一事实源候选）。args 命名冻结：ssid/password/operation_id/idempotency_key。改任何既有字段名=破坏性变更。",
+  "envelope": {
+    "request": { "id": "string|number（回显必须一致）", "version": "1.0", "cmd": "string", "args": "object" },
+    "success": { "id": "echo", "ok": true, "data": "object" },
+    "error": { "id": "echo", "ok": false, "error": { "code": "string", "message": "string" } }
+  },
+  "commands": {
+    "device.info": {
+      "args": {},
+      "data": {
+        "model": "string", "firmware": "string（1.3-<git短SHA>）", "build_sha": "string（ELF SHA-256 前 9 位）",
+        "device_id": "IotHub-<尾号>", "build_variant": "string", "protocol_versions": "array",
+        "uptime_ms": "number", "reset_reason": "string",
+        "security": { "link_encrypted": "bool", "bonded": "bool", "l2_ready": "bool", "sensitive_writes_allowed": "bool" }
+      },
+      "client_timeout_ms": 10000,
+      "notes": "uptime_ms 是客户端时间线与串口对时的唯一锚；身份绑定以 device_id 尾号为准（MAC 尾号不同源，不参与）"
+    },
+    "auth.login": {
+      "args": { "username": "string", "password": "string" },
+      "data": { "token": "string(32)", "expires_in": "number(600)" },
+      "errors": ["invalid_credentials", "rate_limited"],
+      "client_timeout_ms": 10000,
+      "notes": "token 只存内存；断连即作废；重登作废旧 token（同来源单槽）"
+    },
+    "network.status": {
+      "args": {},
+      "data": {
+        "sta_connected": "bool", "sta_has_ip": "bool", "sta_ip": "string", "last_disconnect": "string",
+        "connected_ssid": "string", "connected_profile": "number", "internet_verified": "bool",
+        "net_verify_stage": "string(none|internet|mqtt|skipped)", "nc_tcp_fails_last": "number",
+        "nc_tcp_last_errno": "number", "rssi": "number", "channel": "number", "bssid": "string",
+        "rssi_valid": "bool", "net_mode": "string", "mqtt_connected": "bool", "sta_ssid": "string",
+        "bluetooth": { "advertising": "bool", "adv_retry_count": "number", "rx_age_ms": "number", "conn": "number" }
+      },
+      "client_timeout_ms": 10000,
+      "notes": "sta_has_ip≠已联网；判联网看 internet_verified。僵尸链路判据：conn=1 且 rx_age_ms>90000（adv_retry_count 恒 0 不代表看门狗正常）"
+    },
+    "network.scan": {
+      "args": { "$ref": "见固件 cmd.c" },
+      "data": { "aps": "array", "count": "number" },
+      "errors": ["busy", "wifi_scan_failed"],
+      "client_timeout_ms": 30000,
+      "notes": "固件 3s 节流回 busy（等 1s 重试）；BLE 开启下扫描 5-8s 属正常"
+    },
+    "network.tryconnect": {
+      "args": { "ssid": "string", "password": "string", "idempotency_key": "string, 建议" },
+      "data": { "operation_id": "string", "state": "accepted" },
+      "possible_errors": ["busy", "wifi_config_offline", "invalid_argument", "static_ip_pinned", "wifi_scan_failed"],
+      "client_timeout_ms": 20000,
+      "notes": "受理回包必须在操作完成前出站；got_ip 语义见 states.json"
+    },
+    "operation.get": {
+      "args": { "operation_id": "string, required" },
+      "data": "见 states.json#operation_get",
+      "possible_errors": ["not_found", "params_required", "invalid_argument"],
+      "client_timeout_ms": 10000,
+      "notes": "轮询跳出=terminal_states(4)；500ms 间隔建议"
+    },
+    "network.apply": {
+      "args": { "operation_id": "string, required" },
+      "data": { "operation_id": "string", "state": "success", "saved": "bool", "applied": "bool" },
+      "possible_errors": ["params_required", "operation_state", "not_found", "verify_timeout", "storage_failed", "apply_failed", "static_ip_pinned"],
+      "client_timeout_ms": 15000,
+      "notes": "前置 state=got_ip；apply success≠已拿到 IP，需继续轮询 network.status 直到 sta_has_ip 且 connected_ssid=目标"
+    },
+    "network.cancel": {
+      "args": { "operation_id": "string, required" },
+      "data": { "operation_id": "string", "state": "cancelled" },
+      "possible_errors": ["operation_state", "not_found"],
+      "client_timeout_ms": 10000,
+      "notes": "cancel 返回≠清理收敛：restore 窗口 2-6s 内新 tryconnect 可能得 wifi_config_offline（瞬态，重试）"
+    },
+    "config.get": { "args": {}, "data": "配置对象（~1.1KB）", "client_timeout_ms": 30000 },
+    "config.set": { "args": "配置对象（域级）", "data": { "effect": "none|reboot", "changed": "array" }, "client_timeout_ms": 30000 },
+    "network.profile.list": { "args": {}, "client_timeout_ms": 15000 },
+    "network.profile.delete": { "args": { "profile_id": "string" }, "possible_errors": ["last_profile", "not_found"], "client_timeout_ms": 15000 },
+    "data.loopback": { "args": { "on": "bool" }, "client_timeout_ms": 10000 }
+  }
+}

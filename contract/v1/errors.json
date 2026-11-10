@@ -1,0 +1,81 @@
+{
+  "contract_version": "1.1-draft",
+  "firmware_baseline": "1.3-9e1d6c5 / build_sha 8cc566bd0 (2026-11-10)",
+  "status": "基线冻结候选：先按当前真实行为成文，双方逐条签字后冻结；不签字不得据此改码",
+  "$comment": "错误码登记表（单一事实源候选）。任何新增/改义必须走 docs/协议契约整改方案_2026-11-10.md §4 变更流程。",
+  "wire_shapes": {
+    "shell_error": {
+      "where": "任何 v1 命令响应 {\"id\",\"ok\":false,\"error\":{...}}",
+      "shape": { "code": "string", "message": "string" },
+      "status": "v1 冻结，2.0 前不得改形状"
+    },
+    "operation_error": {
+      "where": "operation.get 的 data.error",
+      "shape": "flat string",
+      "no_error_value": "none",
+      "status": "v1 冻结；1.1 起并行新增 data.error_detail={code,message}（可选字段），2.0 再统一"
+    }
+  },
+  "classes": {
+    "auth": "认证/会话：重登一次或提示重新登录",
+    "input": "参数/协议错误：不改参数重试无意义",
+    "transient": "瞬态：按 retry_after_ms 重试；同码连续 N 次才按缺陷上报",
+    "capacity": "容量：等待资源回收后重试",
+    "state": "状态机拒绝：按当前 state 处置",
+    "op_terminal": "op 终态失败码：不要原样重试，按语义处置",
+    "internal": "内部错误：可重试一次，频发上报"
+  },
+  "codes": [
+    { "code": "unauthorized", "scope": "shell", "class": "auth", "action": "relogin_once" },
+    { "code": "auth_required", "scope": "shell", "class": "auth", "action": "relogin_once", "note": "v0 外壳遗留码；v1 统一为 unauthorized" },
+    { "code": "invalid_credentials", "scope": "shell", "class": "auth", "action": "show_input_error" },
+    { "code": "forbidden", "scope": "shell", "class": "auth", "action": "none" },
+    { "code": "invalid_old_password", "scope": "shell", "class": "auth", "action": "show_input_error" },
+
+    { "code": "invalid_argument", "scope": "shell", "class": "input", "action": "fix_request" },
+    { "code": "params_required", "scope": "shell", "class": "input", "action": "fix_request", "note": "缺必填参数（如 operation_id）" },
+    { "code": "invalid_param", "scope": "shell", "class": "input", "action": "fix_request" },
+    { "code": "invalid_config", "scope": "shell", "class": "input", "action": "fix_request" },
+    { "code": "domain_not_supported", "scope": "shell", "class": "input", "action": "fix_request" },
+    { "code": "invalid_json", "scope": "shell", "class": "input", "action": "fix_request" },
+    { "code": "unknown_command", "scope": "shell", "class": "input", "action": "fix_request" },
+    { "code": "unknown_method", "scope": "shell", "class": "input", "action": "fix_request" },
+    { "code": "unsupported_version", "scope": "shell", "class": "input", "action": "fix_request", "note": "只接受 version=1.0" },
+    { "code": "line_too_long", "scope": "shell", "class": "input", "action": "fix_request", "note": "单行上限 512B" },
+    { "code": "password_too_short", "scope": "shell", "class": "input", "action": "show_input_error" },
+
+    { "code": "rate_limited", "scope": "shell", "class": "transient", "action": "retry", "retry_after_ms": 350, "note": "全通道 5 次/秒、最短 200ms；客户端内部 auth.login 重试同样受限" },
+    { "code": "busy", "scope": "shell", "class": "transient", "action": "retry", "retry_after_ms": 1500, "note": "有活动 op；先 operation.get，必要时 network.cancel 再重试" },
+    { "code": "conflict", "scope": "shell", "class": "transient", "action": "retry", "retry_after_ms": 1000 },
+    { "code": "network_failed", "scope": "shell", "class": "transient", "action": "retry", "retry_after_ms": 2000 },
+    { "code": "connect_timeout", "scope": "shell", "class": "transient", "action": "retry", "retry_after_ms": 2000 },
+    { "code": "restart_failed", "scope": "shell", "class": "internal", "action": "retry_once" },
+    { "code": "save_failed", "scope": "shell", "class": "op_terminal", "action": "check_device" },
+    { "code": "internal_error", "scope": "both", "class": "internal", "action": "retry_once", "note": "与口令无关，禁止引导用户重输密码" },
+
+    { "code": "no_slot", "scope": "shell", "class": "capacity", "action": "wait", "wait_hint": "终态保留 600s；满表时新请求会回收最老终态记录；仍出现多为旧固件" },
+    { "code": "not_found", "scope": "both", "class": "state", "action": "reprovision", "note": "op 已被回收或 id 不存在" },
+    { "code": "operation_state", "scope": "both", "class": "state", "action": "read_state", "note": "当前 state 不允许该动作（如 got_ip 前 apply、success 后 cancel）" },
+    { "code": "trial_invalid", "scope": "both", "class": "state", "action": "reprovision", "note": "试用会话过期（300s）或已拆链" },
+    { "code": "cancelled", "scope": "both", "class": "state", "action": "none" },
+    { "code": "expired", "scope": "both", "class": "state", "action": "reprovision", "note": "accepted 45s / got_ip 300s 到期；终态集合成员（客户端必须处理）" },
+    { "code": "guard_rejected", "scope": "shell", "class": "state", "action": "none", "note": "静态 IP 锁定等策略门（见 static_ip_pinned）" },
+
+    { "code": "wrong_password", "scope": "op", "class": "op_terminal", "action": "fix_credentials", "note": "无线层实测=4WAY_HANDSHAKE_TIMEOUT(15/202/2)、关联成功但密钥协商失败" },
+    { "code": "ap_not_found", "scope": "op", "class": "op_terminal", "action": "rescan", "note": "对应 reason 201/203" },
+    { "code": "connect_failed", "scope": "op", "class": "op_terminal", "action": "retry", "note": "其余 reason 一律此码；≤4s 快速 abort 属瞬态（旧链断开事件未观测），可重试一次" },
+    { "code": "wifi_scan_failed", "scope": "op", "class": "op_terminal", "action": "retry", "note": "候选预扫描两次失败，未进入连接" },
+    { "code": "cleanup_failed", "scope": "op", "class": "op_terminal", "action": "check_device" },
+    { "code": "rollback_failed", "scope": "op", "class": "op_terminal", "action": "check_device" },
+    { "code": "storage_failed", "scope": "op", "class": "op_terminal", "action": "check_device" },
+    { "code": "apply_failed", "scope": "op", "class": "op_terminal", "action": "check_device" },
+    { "code": "verify_timeout", "scope": "op", "class": "op_terminal", "action": "retry_once_then_check_network", "note": "验证等待 25s 上限到期" },
+    { "code": "internet_unverified", "scope": "op", "class": "op_terminal", "action": "change_network", "note": "拿到 IP 但 broker 路径不通；已自动回滚" },
+    { "code": "mqtt_unavailable", "scope": "op", "class": "op_terminal", "action": "check_broker", "note": "TCP 通但 MQTT 会话未建立；已自动回滚" },
+    { "code": "wifi_config_offline", "scope": "op", "class": "transient", "action": "retry", "retry_after_ms": 1500, "max_retries": 3, "note": "cancel/expire 清理的 restore 窗口（实测 2-6s）内入口门拒绝；瞬态非缺陷" },
+    { "code": "static_ip_pinned", "scope": "both", "class": "op_terminal", "action": "turn_off_static_first" },
+    { "code": "last_profile", "scope": "both", "class": "op_terminal", "action": "none", "note": "不允许删除最后一个 profile" },
+    { "code": "timeout", "scope": "op", "class": "state", "action": "reprovision", "note": "与 expired 配对出现的 error 值（expired/timeout）" },
+    { "code": "none", "scope": "op", "class": "state", "action": "none", "note": "无错误的规范值；客户端不得把缺省/空串当 none" }
+  ]
+}

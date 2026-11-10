@@ -1,0 +1,54 @@
+{
+  "contract_version": "1.1-draft",
+  "firmware_baseline": "1.3-9e1d6c5 / build_sha 8cc566bd0 (2026-11-10)",
+  "states": ["free", "accepted", "connecting", "got_ip", "committing", "success", "failed", "cancelled", "expired"],
+  "active_states": ["accepted", "connecting", "got_ip", "committing"],
+  "terminal_states": ["success", "failed", "cancelled", "expired"],
+  "$comment_terminal": "客户端轮询跳出条件必须等于本集合。2026-11-08 事故：客户端漏 expired → op 到期后空转到超时，误报客户端超时。",
+  "transitions": {
+    "accepted": ["connecting", "cancelled", "expired", "failed"],
+    "connecting": ["got_ip", "failed", "cancelled", "expired"],
+    "got_ip": ["committing", "success", "failed", "cancelled", "expired"],
+    "committing": ["success", "failed"],
+    "success": [],
+    "failed": [],
+    "cancelled": [],
+    "expired": []
+  },
+  "ttl": {
+    "accepted_ms": 45000,
+    "got_ip_ms": 300000,
+    "terminal_retention_ms": 600000,
+    "slots": 4,
+    "reclaim_rule": "满表时新请求回收最老终态记录；同 key 重试在保留期内幂等返回原终态"
+  },
+  "got_ip_semantics": {
+    "definition": "IP + 联网验证（broker TCP 路径）+ MQTT 会话就绪；三者缺一不交付 got_ip",
+    "since": "DEF-NET-001（2026-11-07），在 wire 版本 1.0 内实施",
+    "freeze": "契约 v1.1 起冻结；再改语义必须升 minor 并双方同批上线"
+  },
+  "stages": {
+    "fields": ["wifi_connected", "ip_acquired", "internet_verified", "mqtt_connected"],
+    "source": "operation 交付 got_ip 时刻的 per-op 快照（P6）",
+    "assertion_rule": "客户端只在 state=got_ip 的当次响应上断言四阶段；终态之后不得断言",
+    "v1_known_caveat": "op job 清理后 operation.get 回落读活运行态，apply 后重建链路的数秒内可能四项全 false；1.1 计划新增 stages_source: snapshot|live 显式标注",
+    "failed_trace_rule": "失败终态保留已完成阶段（failed 时 stages 仍可读到最后快照）"
+  },
+  "operation_get": {
+    "args": { "operation_id": "string, required" },
+    "success_data": {
+      "operation_id": "string",
+      "state": "enum above",
+      "error": "flat string（无错=none）",
+      "trial_id": "string, 仅试用存在时",
+      "ssid": "string, 仅试用存在时",
+      "stages": { "wifi_connected": "bool", "ip_acquired": "bool", "internet_verified": "bool", "mqtt_connected": "bool" }
+    },
+    "planned_1_1_additive": ["error_detail:{code,message}", "finished_uptime_ms", "stages_source"]
+  },
+  "apply_preconditions": {
+    "required_state": "got_ip",
+    "gate": "per-op 快照 internet_verified 必须为 true；否则 apply 返回 verify_timeout 语义拒绝",
+    "violations": { "before_got_ip": "operation_state", "after_terminal": "not_found 或 operation_state", "gate_missing": "apply rejected: trial verification missing（服务端日志）" }
+  }
+}

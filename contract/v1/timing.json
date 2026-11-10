@@ -1,0 +1,70 @@
+{
+  "contract_version": "1.1-draft",
+  "firmware_baseline": "1.3-9e1d6c5 / build_sha 8cc566bd0 (2026-11-10)",
+  "$comment": "计时与容量常量登记表。改任何一个值都算语义变更（§4 变更流程）。",
+  "ble_transport": {
+    "cmd_line_max_bytes": 512,
+    "cmd_line_overflow_error": "line_too_long",
+    "write_fragment_bytes_default": 20,
+    "mtu_default": 23,
+    "notify_fragment_max_bytes_default": 20,
+    "cmd_rate_per_sec": 5,
+    "cmd_min_interval_ms": 200,
+    "rate_limit_error": "rate_limited",
+    "rate_limit_retry_ms": 350,
+    "$comment_rate": "限流按通道（transport）计，认证重登与业务请求共用同一配额。2026-11-09 实测：并发 401 后合并重登撞 200ms 窗被拒，客户端再发一次——属客户端应节流的盲区。"
+  },
+  "auth": {
+    "token_ttl_ms": 600000,
+    "token_storage": "RAM only（不落 NVS，重启即失效）",
+    "token_invalidated_on": ["BLE 断连", "同来源重新登录", "改密（全来源作废）"],
+    "token_slots": "按来源分槽（BLE/UART/MQTT/HTTP 互不覆盖）",
+    "cross_device_rule": "token 绑定设备实例；A 的 token 在 B 上必须 unauthorized"
+  },
+  "operation": {
+    "accepted_ttl_ms": 45000,
+    "got_ip_ttl_ms": 300000,
+    "terminal_retention_ms": 600000,
+    "slots": 4,
+    "$comment_accepted": "45s 覆盖连接 15s + 验证 25s + 余量；测试钩子可 clamp [500,60000]"
+  },
+  "netcheck": {
+    "budget_ms": 25000,
+    "tcp_timeout_ms": 2500,
+    "tcp_attempts": 3,
+    "tcp_retry_gap_ms": 2000,
+    "dns_budget_ms": 3000,
+    "mqtt_grace_ms": 4000,
+    "poll_ms": 100,
+    "verify_wait_ms": 25000,
+    "fail_stages": ["internet", "mqtt"],
+    "skipped_when": "mqtt_host 为空或 port=0（stage=skipped，不伪装成已验证）"
+  },
+  "wifi": {
+    "tryconnect_connect_timeout_ms": 15000,
+    "scan_done_wait_ms": 15000,
+    "scan_lock_max_ms": 20000,
+    "scan_time_rule": "BLE 开启时必须用默认 active scan time（0/0）；自定义 50/100ms 会被共存调度饿死（DEF-SCAN-002）",
+    "scan_throttle": "3s（连发 network.scan 会回 busy，客户端等 1s 重试）"
+  },
+  "ble_link": {
+    "idle_terminate_unsubscribed_s": 90,
+    "idle_terminate_subscribed_s": 300,
+    "idle_terminate_rule": "双向静默（无 GATT 写且无 notify 成功交出）≥ 阈值；无在途 net op；终止后自动广播",
+    "adv_watchdog_silent_s": 5,
+    "conn_param_policy": "设备按 policy 请求 itvl/sup 更新（如对端 sup=420ms 会请求调整）"
+  },
+  "network_recovery": {
+    "backoff_sequence_s": [5, 10, 30, 60],
+    "ble_connected_suppress": "BLE 连接期间事件链重试抑制，120s formal-only monitor 接管",
+    "note": "BLE 连接态拆链后不自动重连是产品决策 A；apply 正常提交时由 config 重放接管"
+  },
+  "derived_client_budgets": {
+    "tryconnect_worst_case_ms": 45000,
+    "op_poll_interval_recommended_ms": 500,
+    "post_apply_verify_budget_ms": 60000,
+    "cancel_then_new_op_min_wait_ms": 2000,
+    "$comment_cancel_wait": "cancel/expire 清理的 restore 窗口实测 2-6s；立即重发会得 wifi_config_offline 或快速 connect_failed（瞬态）"
+  },
+  "status": "基线冻结候选（与 errors.json/states.json 同版本）"
+}
