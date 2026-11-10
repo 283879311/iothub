@@ -44,7 +44,13 @@
       "ssid": "string, 仅试用存在时",
       "stages": { "wifi_connected": "bool", "ip_acquired": "bool", "internet_verified": "bool", "mqtt_connected": "bool" }
     },
-    "planned_1_1_additive": ["error_detail:{code,message}", "finished_uptime_ms", "stages_source"]
+    "implemented_1_1": {
+      "since": "1.3-2ef2a38 (2026-11-10, C8E4 已烧写)",
+      "fields": ["error_detail:{code,message}", "finished_uptime_ms", "stages_source"],
+      "stages_source": "snapshot|live——命中 job/终态快照缓存=snapshot；仅未命中才 live",
+      "terminal_snapshot_retention": "4 槽按 op id 的进程内缓存；job 清理后仍返回该 op 最后阶段真值",
+      "wire_evidence": "op-36A936F9E7909901 终态 +5s：stages 四项全 true、stages_source=snapshot、finished_uptime_ms=61305"
+    }
   },
   "apply_preconditions": {
     "required_state": "got_ip",
