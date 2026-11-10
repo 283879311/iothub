@@ -100,6 +100,102 @@ typedef struct {
 
 static app_cmd_net_async_job_t s_net_async;
 static bool s_net_async_apply_internal = false;
+
+/* 契约 v1.1(Phase 1):终态 stages 快照缓存(按 op id,4 槽环形,与 operation 槽数一致)。
+ * 背景:job 清理后 operation.get 回落读活运行态,apply 后重建链路的数秒内四项
+ * 全 false(2026-11-08 实测),与"stages=该 op 的阶段真值"语义冲突。终态后由本
+ * 缓存继续提供该 op 的最后快照,响应标 stages_source="snapshot";未命中才回落
+ * 活运行态并标 "live"。 */
+typedef struct {
+    char operation_id[APP_OPERATION_ID_LEN];
+    bool valid;
+    bool w;
+    bool ip;
+    bool nv;
+    bool mc;
+} app_cmd_stage_snap_t;
+
+#define APP_CMD_STAGE_SNAP_SLOTS APP_OPERATION_MAX_SLOTS
+static app_cmd_stage_snap_t s_stage_snaps[APP_CMD_STAGE_SNAP_SLOTS];
+static unsigned s_stage_snap_next = 0;
+static portMUX_TYPE s_stage_snap_mux = portMUX_INITIALIZER_UNLOCKED;
+
+static void app_cmd_net_stage_snap_put(const char *op_id, bool w, bool ip, bool nv, bool mc)
+{
+    size_t n;
+    unsigned i;
+
+    if (op_id == NULL || op_id[0] == '\0') {
+        return;
+    }
+    n = strlen(op_id);
+    if (n >= sizeof(s_stage_snaps[0].operation_id)) {
+        n = sizeof(s_stage_snaps[0].operation_id) - 1U;
+    }
+    portENTER_CRITICAL(&s_stage_snap_mux);
+    for (i = 0; i < APP_CMD_STAGE_SNAP_SLOTS; i++) {
+        if (s_stage_snaps[i].valid &&
+            strncmp(s_stage_snaps[i].operation_id, op_id, n) == 0 &&
+            s_stage_snaps[i].operation_id[n] == '\0') {
+            s_stage_snaps[i].w = w;
+            s_stage_snaps[i].ip = ip;
+            s_stage_snaps[i].nv = nv;
+            s_stage_snaps[i].mc = mc;
+            portEXIT_CRITICAL(&s_stage_snap_mux);
+            return;
+        }
+    }
+    {
+        app_cmd_stage_snap_t *slot = &s_stage_snaps[s_stage_snap_next];
+        s_stage_snap_next = (s_stage_snap_next + 1U) % APP_CMD_STAGE_SNAP_SLOTS;
+        memcpy(slot->operation_id, op_id, n);
+        slot->operation_id[n] = '\0';
+        slot->w = w;
+        slot->ip = ip;
+        slot->nv = nv;
+        slot->mc = mc;
+        slot->valid = true;
+    }
+    portEXIT_CRITICAL(&s_stage_snap_mux);
+}
+
+static bool app_cmd_net_stage_snap_get(const char *op_id, bool *w, bool *ip, bool *nv, bool *mc)
+{
+    size_t n;
+    unsigned i;
+    bool hit = false;
+
+    if (op_id == NULL || op_id[0] == '\0') {
+        return false;
+    }
+    n = strlen(op_id);
+    if (n >= sizeof(s_stage_snaps[0].operation_id)) {
+        n = sizeof(s_stage_snaps[0].operation_id) - 1U;
+    }
+    portENTER_CRITICAL(&s_stage_snap_mux);
+    for (i = 0; i < APP_CMD_STAGE_SNAP_SLOTS; i++) {
+        if (s_stage_snaps[i].valid &&
+            strncmp(s_stage_snaps[i].operation_id, op_id, n) == 0 &&
+            s_stage_snaps[i].operation_id[n] == '\0') {
+            if (w != NULL) {
+                *w = s_stage_snaps[i].w;
+            }
+            if (ip != NULL) {
+                *ip = s_stage_snaps[i].ip;
+            }
+            if (nv != NULL) {
+                *nv = s_stage_snaps[i].nv;
+            }
+            if (mc != NULL) {
+                *mc = s_stage_snaps[i].mc;
+            }
+            hit = true;
+            break;
+        }
+    }
+    portEXIT_CRITICAL(&s_stage_snap_mux);
+    return hit;
+}
 #ifdef APP_WIFI_FAULT_INJECT
 /* E1 测试旋钮(仅故障注入构建):一次性覆盖下一次 operation 的 ACCEPTED TTL。
  * 护栏:clamp [500,60000];只影响 accepted_ttl,绝不触碰 GOT_IP_TTL。 */
@@ -507,6 +603,10 @@ static esp_err_t app_cmd_net_async_run(app_operation_t *op, void *ctx)
                 s_net_async.st_mqtt_connected =
                     strcmp(dres.stage, "mqtt") == 0;
                 app_cmd_net_job_unlock();
+                /* 契约 v1.1:终态快照缓存(job 清理后 operation.get 仍返回本 op
+                 * 的阶段真值,不再回落活运行态)。 */
+                app_cmd_net_stage_snap_put(app_operation_id(op), true, true, verified,
+                                           strcmp(dres.stage, "mqtt") == 0);
             } else {
                 ESP_LOGW(TAG, "async tryconnect op=%s netcheck have=%d outcome=%d gen=%u stage=%s -> rollback",
                          app_operation_id(op), (int)have, (int)dres.outcome,
@@ -520,6 +620,9 @@ static esp_err_t app_cmd_net_async_run(app_operation_t *op, void *ctx)
                              app_operation_id(op));
                     return ESP_OK;
                 }
+                /* 契约 v1.1:失败终态也保留"已完成阶段"真值(候选拿到过 IP
+                 * 才有 netcheck 判决;wifi/ip 已达成,联网/MQTT 未达成)。 */
+                app_cmd_net_stage_snap_put(app_operation_id(op), true, true, false, false);
                 /* 判别点 B(state != COMMITTING → restore_persistent):清 trial/job
                  * + schedule_restart 回持久配置,再给 op 终态。 */
                 (void)app_cmd_net_async_cleanup(op, job);
@@ -536,6 +639,9 @@ static esp_err_t app_cmd_net_async_run(app_operation_t *op, void *ctx)
     }
 
     app_cmd_net_async_clear_job_sync();
+    /* 契约 v1.1:连接阶段失败/取消 = 本 op 未达成任何阶段,写入全 false 快照,
+     * 避免 operation.get 回落活运行态(那是"别的链路"的状态)。 */
+    app_cmd_net_stage_snap_put(app_operation_id(op), false, false, false, false);
     if (result == APP_WIFI_TRY_CANCELLED) {
         return app_operation_set_state(op, APP_OP_CANCELLED,
                                        APP_OPERATION_ERR_CANCELLED);
@@ -719,20 +825,38 @@ static cJSON *app_cmd_net_operation_status(const app_cmd_context_t *ctx,
     }
     cJSON_AddStringToObject(resp, "operation_id", status.id);
     cJSON_AddStringToObject(resp, "state", app_op_state_name(status.state));
-    cJSON_AddStringToObject(resp, "error", app_operation_error_name(status.error));
+    {
+        /* 契约 v1.1:error 保持扁平字符串(v1 冻结);并行新增 error_detail 对象,
+         * 2.0 再统一。两者值同源,客户端可任选。 */
+        const char *err_name = app_operation_error_name(status.error);
+        cJSON *detail;
+
+        cJSON_AddStringToObject(resp, "error", err_name);
+        detail = cJSON_AddObjectToObject(resp, "error_detail");
+        if (detail != NULL) {
+            cJSON_AddStringToObject(detail, "code", err_name);
+            cJSON_AddStringToObject(detail, "message", err_name);
+        }
+    }
+    if (app_op_state_is_terminal(status.state) && status.terminal_ms > 0) {
+        /* 契约 v1.1:终态时刻(设备时钟,与 device.status.uptime_ms 同源)。
+         * 客户端复核耗时不再依赖墙钟。 */
+        cJSON_AddNumberToObject(resp, "finished_uptime_ms", (double)status.terminal_ms);
+    }
     if (s_net_trial.valid && strcmp(s_net_trial.operation_id, status.id) == 0) {
         cJSON_AddStringToObject(resp, "trial_id", s_net_trial.id);
         cJSON_AddStringToObject(resp, "ssid", s_net_trial.ssid);
     }
     /* DEF-NET-001(评审回复 §5):阶段结果对象,状态/错误语义不变。
-     * P6:operation 仍持有 job 快照时优先读快照(任务书 §7.2"来自当前
-     * operation 和当前 generation");否则回落全局运行态真值。 */
+     * 契约 v1.1(Phase 1)优先级:job 快照 > 终态快照缓存 > 活运行态,
+     * 并以 stages_source 显式标注来源——终态后不再回落成零值。 */
     {
         cJSON *stages = cJSON_AddObjectToObject(resp, "stages");
         bool wifi_connected;
         bool ip_acquired;
         bool net_verified;
         bool mqtt_connected;
+        const char *source;
         bool have_snapshot = (s_net_async.active &&
                               strcmp(s_net_async.operation_id, status.id) == 0);
 
@@ -741,6 +865,10 @@ static cJSON *app_cmd_net_operation_status(const app_cmd_context_t *ctx,
             ip_acquired = s_net_async.st_ip_acquired;
             net_verified = s_net_async.st_internet_verified;
             mqtt_connected = s_net_async.st_mqtt_connected;
+            source = "snapshot";
+        } else if (app_cmd_net_stage_snap_get(status.id, &wifi_connected, &ip_acquired,
+                                              &net_verified, &mqtt_connected)) {
+            source = "snapshot";
         } else {
             app_wifi_runtime_lock();
             wifi_connected = s_wifi.sta_connected;
@@ -750,6 +878,7 @@ static cJSON *app_cmd_net_operation_status(const app_cmd_context_t *ctx,
             app_mqtt_lock();
             mqtt_connected = s_mqtt.connected;
             app_mqtt_unlock();
+            source = "live";
         }
         if (stages != NULL) {
             cJSON_AddBoolToObject(stages, "wifi_connected", wifi_connected);
@@ -757,6 +886,7 @@ static cJSON *app_cmd_net_operation_status(const app_cmd_context_t *ctx,
             cJSON_AddBoolToObject(stages, "internet_verified", net_verified);
             cJSON_AddBoolToObject(stages, "mqtt_connected", mqtt_connected);
         }
+        cJSON_AddStringToObject(resp, "stages_source", source);
     }
     app_cmd_net_job_unlock();
     return resp;
