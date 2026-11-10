@@ -45,11 +45,14 @@
     "scan_done_wait_ms": 15000,
     "scan_lock_max_ms": 20000,
     "scan_time_rule": "BLE 开启时必须用默认 active scan time（0/0）；自定义 50/100ms 会被共存调度饿死（DEF-SCAN-002）",
-    "scan_throttle": "3s（连发 network.scan 会回 busy，客户端等 1s 重试）"
+    "scan_throttle_s": 3,
+    "scan_throttle_client_rule": "残余冷却自「扫描结束」起算（客户端记 scanDoneAt，≤3s）；固定等 1s 是 2026-11-09 实测的待修行为（连接吃 2 次 busy、单轮 ~7.6s），不冻结",
+    "scan_throttle_error": "busy（与 op 占用的 busy 同码不同语义；本项不套用 retry_after_ms=1500）"
   },
   "ble_link": {
     "idle_terminate_unsubscribed_s": 90,
     "idle_terminate_subscribed_s": 300,
+    "idle_terminate_subscribed_s_note": "自 1.3-9e1d6c5 起生效（C8E4 已烧写 2026-11-10 08:02）；65D8 仍为 1.3-1ebfc70（订阅豁免），待刷同镜像。端到端 300s 回收时延待手机侧验证（PC 适配器 LL 过程超时无法覆盖）。11-09 及以前固件=订阅豁免，不得按本值判旧机。",
     "idle_terminate_rule": "双向静默（无 GATT 写且无 notify 成功交出）≥ 阈值；无在途 net op；终止后自动广播",
     "adv_watchdog_silent_s": 5,
     "conn_param_policy": "设备按 policy 请求 itvl/sup 更新（如对端 sup=420ms 会请求调整）"

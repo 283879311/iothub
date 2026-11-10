@@ -13,11 +13,34 @@
       "data": {
         "model": "string", "firmware": "string（1.3-<git短SHA>）", "build_sha": "string（ELF SHA-256 前 9 位）",
         "device_id": "IotHub-<尾号>", "build_variant": "string", "protocol_versions": "array",
-        "uptime_ms": "number", "reset_reason": "string",
         "security": { "link_encrypted": "bool", "bonded": "bool", "l2_ready": "bool", "sensitive_writes_allowed": "bool" }
       },
       "client_timeout_ms": 10000,
-      "notes": "uptime_ms 是客户端时间线与串口对时的唯一锚；身份绑定以 device_id 尾号为准（MAC 尾号不同源，不参与）"
+      "notes": "不含 uptime_ms/reset_reason（在 device.status，见下）。身份绑定以 device_id 尾号为准（MAC 尾号不同源，不参与）。wire 实录 2026-11-10（1.3-9e1d6c5）核对。"
+    },
+    "device.status": {
+      "args": {},
+      "data": {
+        "model": "string", "firmware": "string", "build_sha": "string", "device_id": "string",
+        "uptime_ms": "number（客户端时间线与串口对时的唯一锚）",
+        "reset_reason": "string（poweron|sw|…）",
+        "partition": "object", "heap": "object",
+        "mqtt": { "connected": "bool", "connecting": "bool", "last_error": "string", "outbox": "number", "telemetry_shed": "number" },
+        "network": {
+          "mode": "string", "cfg_state": "string", "sta_connected": "bool", "sta_has_ip": "bool", "sta_ip": "string",
+          "sta_ssid": "string", "connected_ssid": "string", "connected_profile": "number",
+          "internet_verified": "bool", "net_verify_stage": "string", "mqtt_connected": "bool",
+          "nc_tcp_fails_last": "number", "nc_tcp_last_errno": "number",
+          "last_disconnect": "string", "rssi": "number", "rssi_valid": "bool", "channel": "number", "bssid": "string",
+          "persistent_use_static": "bool", "persistent_static_ip": "string", "password_set": "bool", "trial": "object"
+        },
+        "ble": {
+          "advertising": "bool", "connected": "bool", "conn_find": "number", "mtu": "number",
+          "adv_retry_count": "number", "rx_age_ms": "number", "runtime_mode": "number", "last_error": "string"
+        }
+      },
+      "client_timeout_ms": 10000,
+      "notes": "僵尸链路判据：ble.connected=true 且 ble.rx_age_ms>90000（adv_retry_count 恒 0 不代表看门狗正常——设备认为自己还连着，从未进广播重试）。wire 实录 2026-11-10（1.3-9e1d6c5）逐字段核对。"
     },
     "auth.login": {
       "args": { "username": "string", "password": "string" },

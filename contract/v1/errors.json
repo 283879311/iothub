@@ -45,7 +45,7 @@
     { "code": "password_too_short", "scope": "shell", "class": "input", "action": "show_input_error" },
 
     { "code": "rate_limited", "scope": "shell", "class": "transient", "action": "retry", "retry_after_ms": 350, "note": "全通道 5 次/秒、最短 200ms；客户端内部 auth.login 重试同样受限" },
-    { "code": "busy", "scope": "shell", "class": "transient", "action": "retry", "retry_after_ms": 1500, "note": "有活动 op；先 operation.get，必要时 network.cancel 再重试" },
+    { "code": "busy", "scope": "shell", "class": "transient", "action": "retry", "retry_after_ms": 1500, "note": "仅适用「op 占用」场景：有活动 op，先 operation.get，必要时 network.cancel 再重试。scan 节流是另一语义（见 timing.json#wifi.scan_throttle：残余冷却自扫描结束起算 ≤3s），不套用本值" },
     { "code": "conflict", "scope": "shell", "class": "transient", "action": "retry", "retry_after_ms": 1000 },
     { "code": "network_failed", "scope": "shell", "class": "transient", "action": "retry", "retry_after_ms": 2000 },
     { "code": "connect_timeout", "scope": "shell", "class": "transient", "action": "retry", "retry_after_ms": 2000 },
