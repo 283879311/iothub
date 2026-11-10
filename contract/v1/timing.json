@@ -85,7 +85,10 @@
       "client_scan_budget_ms": 26000,
       "rule": "设备订阅态僵尸链路自救上限 300s，远大于客户端 26s 扫描预算——客户端必须在扫描两窗失败后提供适配器级重启（resetAdapter，按钮触发）作为唯一快速恢复路径；不得依赖等待",
       "evidence": "2026-11-09/11-10 两次实测：conn=1/rx_age>90s 期间设备依规不广播，客户端 26s 扫不到"
-    }
+    },
+    "client_adv_wait_ms": 12000,
+    "client_adv_wait_rule": "断链后等外设重新广播的窗口（设备侧断连证据）；与 scan 预算分开计。客户端 P2-2 已收口为单常量，Phase 3 起改读本值",
+    "client_link_stale_code": "link_stale（客户端本地结果码，非 wire 错误码）：拆旧链后 waitForAdvertising 未见广播 → 走适配器重启，不烧扫描窗口"
   },
   "status": "基线冻结候选（与 errors.json/states.json 同版本）"
 }
