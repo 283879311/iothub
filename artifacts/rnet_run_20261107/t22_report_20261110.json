@@ -1,0 +1,35 @@
+{
+  "time": "2026-11-10 20:38:37",
+  "devices": {
+    "A": "IotHubBLE-C8E4",
+    "B": "IotHubBLE-65D8"
+  },
+  "cases": [
+    {
+      "case": "A tokenA 业务请求",
+      "ok": true,
+      "detail": "len=32/fp=eedc5fc2"
+    },
+    {
+      "case": "B 注入 A 的 token → unauthorized",
+      "ok": true,
+      "detail": "id=inject-2 code=unauthorized"
+    },
+    {
+      "case": "B tokenB 业务请求",
+      "ok": true,
+      "detail": "ok"
+    },
+    {
+      "case": "A tokenA 复查（B 活动后）",
+      "ok": true,
+      "detail": "ok"
+    },
+    {
+      "case": "tokenA ≠ tokenB",
+      "ok": true,
+      "detail": "A len=32/fp=eedc5fc2 / B len=32/fp=50aaf692"
+    }
+  ],
+  "summary": "5/5 PASS"
+}

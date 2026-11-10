@@ -70,15 +70,17 @@ async def open_session(addr: str, name: str) -> tuple[BleakClient, P.Session]:
 
 
 async def biz(sess: P.Session, prefix: str, token_override: str | None = None):
-    """业务请求；token_override 时显式注入（禁自动重登/重试），拿第一手判决。"""
-    seq = getattr(sess, "seq", 0) + 1
-    sess.seq = seq
-    req = {"id": f"{prefix}-{seq}", "version": "1.0", "cmd": "network.status", "args": {}}
-    if token_override is not None:
-        req["token"] = token_override
+    """业务请求；token_override 时显式注入（禁自动重登/重试），拿第一手判决。
+
+    注意（2026-11-10 harness 自伤）：p0_acceptance 的 send_request **首发不附 token**
+    （只在 401 重试分支附 self.token），v1() 才自动附。所以这里必须显式写
+    req["token"]——裸发会被设备按 auth_required/unauthorized 拒绝，误判成
+    "token 失效"。"""
+    rid = f"{prefix}-{sess.next_seq()}"
+    tok = token_override if token_override is not None else sess.token
+    req = {"id": rid, "version": "1.0", "cmd": "network.status", "args": {}, "token": tok or ""}
     r = await sess.send_request(req, timeout=10, retries=0,
-                                allow_relogin=token_override is None,
-                                allow_reconnect=False)
+                                allow_relogin=False, allow_reconnect=False)
     code = ""
     if r.obj.get("ok") is not True:
         err = r.obj.get("error")
@@ -98,7 +100,9 @@ async def main() -> int:
 
     cli_a, sess_a = await open_session(addr[names[0]], "A(C8E4)")
     tok_a = sess_a.token
-    results.append({"case": "A tokenA 业务请求", "ok": True, "detail": fp(tok_a)})
+    obj, code = await biz(sess_a, "biza0")
+    results.append({"case": "A tokenA 业务请求", "ok": obj.get("ok") is True,
+                    "detail": fp(tok_a) + (f" code={code}" if code else "")})
 
     cli_b, sess_b = await open_session(addr[names[1]], "B(65D8)")
     tok_b = sess_b.token
