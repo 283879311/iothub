@@ -226,3 +226,140 @@ caller 取值（覆盖评审要求的五类）：
    故障排查手册，非本轮）。
 4. **#6 的 APPLY 与 CLEANUP 并存**：由"boot 期无 op / 运行期 cleanup"的时间互斥保证；
    若未来新增运行期显式 apply 命令，需重新评审（当前无此命令）。
+
+---
+
+# 11. C1–C3 修订说明（第二轮评审新增，2026-11-12）
+
+## 11.1 C1（P0）TRYX 等待者优先——互斥之外补"进展性"
+
+**问题确认**：`claim_owner(TRYX,8s)` 只认 `owner==NONE`；AUTO 非阻塞 + monitor 每秒重试 +
+三个事件旁路短持有 AUTO，均可能在 TRYX 的 50ms 轮询间隙插入，导致 TRYX 8s 超时 →
+`busy`，RACE-02 的 `ap_not_found` 不可达。**互斥不保证进展。**
+
+**修订**：
+1. 新增等待者计数 `s_tryx_waiter`（在 `s_tryconnect_mux` 保护下）：
+   - `claim_owner(TRYX, ms)`：**先置位再轮询**；取得/超时/取消时清零；
+   - 取得路径不变（`owner==NONE` → CAS）。
+2. **所有 AUTO 取得点**（`claim_owner(AUTO,0)`，含事件旁路 #3/#4/#5）统一加前置条件：
+   `if (s_tryx_waiter > 0) → 拒绝`
+   日志：`AUTO claim denied: TRYX waiter (owner=%s by=%s)`；置 `fast_path_pending=true` 退出。
+3. `schedule_connect_task` 入口同步检查 `s_tryx_waiter>0` → 直接 `refused reason=tryx_waiting`
+   （少创建/销毁一次任务，日志更干净）。
+4. 公平性论证：TRYX 置位后，任何 AUTO 取得都被拒；当前持有者（AUTO/APPLY）释放时
+   经 `release_or_handover` 到 NONE（或 CLEANUP）→ TRYX 下一轮 50ms 轮询必然取得。
+   CLEANUP 期间 AUTO 本来就被 owner 挡住；CLEANUP 结束→NONE 后 TRYX 先于 AUTO（waiter 位仍在）。
+   TRYX 超时/取消 → 清位 → AUTO 在 monitor 下一拍（≤1s）恢复。
+5. 并发约束：operation 单槽模型保证 TRYX waiter ≤1；若检测到 >1，`ESP_LOGE` 并按 1 处理。
+6. 超时预算（与 C3 的 cleanup 时长联动）：
+   - TRYX 等待上限 **12s**（原 8s 上调）；
+   - CLEANUP 最坏时长 ≈ 3×apply_cfg（每次 ≤1s）+ 退避（0.5+1+2s）= **≤6.5s**；
+   - 余量 ≥5.5s，且 < op TTL 45s、< 客户端 tryconnect 20s 预算（客户端在 op 上等）。
+
+## 11.2 C2（P1）cleanup_request 的 notify 失败回退 + 卡死看门狗
+
+**问题确认**：owner==NONE 时先置 CLEANUP 再 notify；若 `schedule_restart` 失败
+（任务创建失败）或通知丢失，owner 永久停在 CLEANUP，新 op 每次 8s 后 busy、
+AUTO 永久被拒，且日志无法区分"正在清理"与"通知丢了"。
+
+**修订（双保险）**：
+1. **同步回退**：`cleanup_request()` 在 owner==NONE 分支：
+   ```
+   owner = CLEANUP
+   if (!app_wifi_schedule_restart()) {        /* 仅任务创建失败会返回 false */
+       owner = NONE;                          /* 立即回退，不留假 CLEANUP */
+       ESP_LOGE("cleanup request failed: restart task create failed op=%s", id);
+       return false;                          /* operation → failed/cleanup_failed */
+   }
+   ```
+   （FreeRTOS 任务通知是计数型、先 give 后 wait 不丢失；本项回退只覆盖创建失败。
+   restart 任务在新设计中**长期存活**，句柄不会失效。）
+2. **卡死看门狗**（monitor 1s 节拍，覆盖"通知理论上不该丢但实际卡住"）：
+   - `owner==CLEANUP` 持续 **>12s** 未完成 → 重新 `schedule_restart()`（幂等 re-notify），
+     日志 `cleanup watchdog: re-notify op=%s elapsed=%lldms`；
+   - 持续 **>25s** → `owner=CLEANUP_FAILED`，日志 `cleanup watchdog: forced FAILED op=%s`；
+   - 计时起点 `s_wifi_cleanup_started_ms` 在 owner 进入 CLEANUP 时记录。
+
+## 11.3 C3（P1）事件旁路被拒后的接续（写实版）
+
+### 11.3.1 #3 PMF 重试被拒
+
+**事实核对**：`app_wifi_retry_with_pmf_required()` 的目标是 **`s_config.sta_ssid`
+（正式 SSID）**，`pmf.required=true`，且 `s_wifi_pmf_required_tried` 每 boot 一次。
+monitor 的 formal-only 走 fast_path 时 `pmf_cfg.required=false`——**接不住**（评审判断正确）。
+
+**修订**：
+- 被拒（owner 忙/waiter）→ 置 `s_wifi_pmf_required_pending=true`，日志
+  `pmf_retry deferred: owner=%s pending=1`；
+- **接续点**：下一次 AUTO 执行（`app_wifi_connect_best_saved_profile` 入口）检查该 pending：
+  - 为真时**强制走 fast_path 且 `pmf_cfg.required=true`**，清除 pending，日志
+    `pmf_retry consumed by <caller>`；
+  - 若 `esp_wifi_set_config` 同步失败 → 保留 pending（再给一次机会）；
+  - 若 `esp_wifi_connect` 已发起（事件路径）→ 清除（维持"每 boot 一次"的既有策略）；
+- **时限**：pending 置位后 30s 内未消费 → 清除 + 日志 `pmf_retry expired`；
+- **接续延迟**：TRYX finish 的 400ms 任务或 monitor 1s 节拍（≤1s）；若当前 owner=CLEANUP
+  则任务被拒/让位，cleanup 结束后 monitor 下一拍（≤1s）消费。
+
+### 11.3.2 #5 netcheck 拆链被拒
+
+**问题确认**：被拒即跳过 disconnect，坏链路可能保留到下一次判决。
+
+**修订**：
+- 被拒 → 置 `s_wifi_netcheck_teardown_pending=true` + `pending_gen=link_gen`，日志
+  `netcheck teardown deferred: owner=%s gen=%u`；
+- **接续点**：monitor 每拍检查：`pending && owner==NONE` → 非阻塞 claim AUTO → 执行
+  disconnect → 清位，日志 `netcheck teardown executed by monitor (gen=%u)`；
+  owner 忙 → 保持 pending，下一拍再试；
+- **失效条件**：`link_gen` 变化（链路已换代）→ 清 pending（陈旧请求，日志 `teardown stale gen`）；
+- **时限**：pending 持续 >10s 打一次 `ESP_LOGW("netcheck teardown pending >10s owner=%s")`，
+  继续等待（不放弃——这是恢复动作，放弃等于留坏链路）；
+- **接续延迟**：owner 释放后 ≤1s（monitor 节拍）。
+
+## 11.4 B3 三项条件的落实
+
+1. **恢复入口不依赖 STA**：`config.set` 走 BLE 命令面（NimBLE 外设，与 Wi-Fi 状态无关），
+   `effect=reboot` 由 config 层执行重启；MQTT 通道在设备离线时不可用，仅作记录。
+   文档要求：把"设备进入 CLEANUP_FAILED 后如何恢复"写入故障排查手册（本轮只出设计，
+   手册随补丁批次提交）。
+2. **进入/离开各一条带 op_id 的日志**：
+   - 进入：`cleanup state: -> CLEANUP_FAILED op=<id> stage=<stage> err=<n> attempts=3`
+   - 离开：`cleanup state: CLEANUP_FAILED cleared by <config.set+reboot|poweron>`
+3. **时长预算**：apply_cfg 在 A8 只等 `STA_START`（不等 DHCP），单次 ≤1s；
+   CLEANUP 最坏 ≈ 3×1s + 3.5s = 6.5s < TRYX 等待 12s < op TTL 45s。
+   **明确取舍**：cleanup 路径**不调用** LKG→DHCP 救援链（那是 config apply 的恢复策略），
+   三次直连重试失败即 FAILED——换取有界时长与"失败不假装释放"。
+
+# 12. B5 日志格式样例（格式样例，代码未实施，非设备实录）
+
+```
+I (199645510) wifi: auto_connect: scheduled by tryconnect_finish delay=400ms owner=NONE
+W (199645520) wifi: auto_connect: schedule refused by monitor_ble_fast delay=0ms reason=tryx_waiting
+I (199645530) wifi: op_owner: NONE -> TRYX by tryconnect_begin waiter=1
+I (199650429) wifi: auto_connect: schedule refused by sta_start delay=0ms reason=owner_busy(CLEANUP)
+I (199651029) wifi: op_owner: CLEANUP -> NONE by cleanup_complete op=op-12730EEC7F1F64AA attempts=1
+```
+
+字段约定：
+- 时间戳 = 现有 `esp_log` 的 boot ms（与串口/证据完全同源）；
+- `caller` ∈ {apply_start_released, sta_start, sta_disconnected_ble, apply_start_probe,
+  tryconnect_finish, monitor_runtime_retry, monitor_ble_fast, monitor_startup}；
+- `reason` ∈ {tryx_waiting, owner_busy(<owner>), suspended, offline, task_busy, mode}；
+- `op_owner` 迁移行覆盖 claim/release/handover，`waiter` 仅 TRYX 相关行出现。
+
+# 13. Q1.4 措辞修正（时序自洽版）
+
+原表述"finish 在其前、400ms 后任务创建 ≈1996455xx"与"等待自 199645189 起"不自洽。
+修正为：
+
+- `finish` 的时刻**未知**，只知 ≤ `stale` 打印（199645179）；差值 = worker 从
+  `try_connect_ip` 返回到 stale 检查之间的耗时（含 netcheck 结果读取/状态检查，数百 ms）；
+- 其 `schedule_connect_task(400ms)` 任务创建于 **≈ finish+0.4s（约 1996451xx–1996452xx）**，
+  即新 op 的 `wait_connect_task_idle` **首次轮询之前或附近**；
+- 存在两种自洽解释（日志无判别行）：
+  a) **等待挡住**：任务已创建，`wait_connect_task_idle` 阻塞至 199650429（任务清指针）；
+  b) **扫描锁挡住**：任务创建晚于 wait 首轮，新 op 进入 `perform_scan` 后阻塞在
+     scan lock（被该任务的静默扫描持有 ≈4.9s），锁释放后 scan_start 才执行；
+- **共同结论不变**：旧任务与新 op 重叠，且现有两个等待原语（任务指针/扫描锁）都
+  不覆盖 STA 状态；调度源仍唯一（其余五源当时条件均不成立）；
+- **判别手段**：B5 落地后 `scheduled by tryconnect_finish` + 首条 `perform_scan` 的相对
+  时间可区分 a/b；在此之前标"待 B5 闭环"。
