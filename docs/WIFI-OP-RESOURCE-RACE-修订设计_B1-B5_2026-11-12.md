@@ -11,7 +11,7 @@
 | --- | --- | --- |
 | B1 | P0：CANCEL_CLEANUP 成为 owner 枚举值；apply_cfg 为其内部子阶段 | §2：owner 六值；§3：**无 NONE 窗口的移交协议**（TRYX/AUTO/APPLY 释放时直接 handover 到 CLEANUP）；apply_cfg 全程在 CLEANUP 内，不再 claim APPLY |
 | B2 | P0：claim_auto 检查完整仲裁态 | §4：claim 统一入口，检查 owner 六值；`cleanup_pending` 退出历史（不再作为第二套所有权） |
-| B3 | P0：新增 CLEANUP_FAILED，失败不得转 NONE | §5：CLEANUP 内重试 3 次（1/2/4s）→ 仍失败转 **CLEANUP_FAILED（粘性）**；auto 不得抢占、新 op 返回既有 `cleanup_failed`；清除入口 = 显式重配（config.set → reboot） |
+| B3 | P0：新增 CLEANUP_FAILED，失败不得转 NONE | §5：CLEANUP 内重试 3 次（0.5/1/2s）→ 仍失败转 **CLEANUP_FAILED（粘性）**；auto 不得抢占、新 op 返回既有 `cleanup_failed`；清除入口 = 显式重配（config.set → reboot） |
 | B4 | P0：9 点覆盖表 | §6：逐点填写，含触发来源/上下文/现有检查/修订后归属/失败处理 |
 | B5 | P1：caller 标签，调度时刻打印 | §7：`schedule_connect_task(delay, caller)` + 调度瞬间日志；覆盖 8 个调度点 + resume 调用者 |
 
@@ -116,9 +116,9 @@ restart 任务（单实例，wifi_restart）
   wait_owner(CLEANUP)（由 request/handover 保证，8s 上限）
   ├─ 尝试 1: apply_cfg() （全程持 CLEANUP；含 stop/mode/set_config/start + A8 await）
   │    ├─ 成功 → owner=NONE；日志 cleanup complete op=<id> result=ok
-  │    └─ 失败 → 1s
-  ├─ 尝试 2: apply_cfg() → 失败 → 2s
-  ├─ 尝试 3: apply_cfg() → 失败 → 4s
+  │    └─ 失败 → 0.5s
+  ├─ 尝试 2: apply_cfg() → 失败 → 1s
+  ├─ 尝试 3: apply_cfg() → 失败 → 2s
   └─ 仍失败 → owner=CLEANUP_FAILED（粘性）
        日志 cleanup failed op=<id> stage=<stage> err=<n>（含 op_id 与阶段）
 ```
