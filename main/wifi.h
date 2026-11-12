@@ -18,6 +18,12 @@ esp_err_t app_wifi_perform_scan(void);
 esp_err_t app_wifi_perform_scan_command(void);
 void app_wifi_restart_task(void *arg);
 bool app_wifi_schedule_restart(void);
+/* WIFI-OP-RESOURCE-RACE:cleanup 请求(所有权状态机);false = CLEANUP_FAILED/唤醒失败 */
+bool app_wifi_cleanup_request(const char *op_id);
+/* network.scan:owner 忙与扫描节流 busy 区分(P3);owner_busy 输出可为 NULL */
+esp_err_t app_wifi_perform_scan_command_ex(bool *owner_busy);
+/* 监控:cleanup 看门狗/事件旁路 pending 的接续(monitor 1s 节拍调用) */
+void app_wifi_owner_monitor_tick(void);
 void app_start_wifi(void);
 
 bool app_wifi_scan_record_at(uint16_t index,
@@ -48,6 +54,7 @@ typedef enum {
     APP_WIFI_TRY_INVALID_ARG,
     APP_WIFI_TRY_SCAN_FAILED,     /* P1-10:预扫描两次失败,未进入连接(勿伪装成 connect_failed) */
     APP_WIFI_TRY_CONFIG_OFFLINE,  /* M1 R9:离线门控,入口拒绝,未进入候选生命周期 */
+    APP_WIFI_TRY_CLEANUP_FAILED,  /* WIFI-OP-RESOURCE-RACE:CLEANUP_FAILED 粘性,拒绝新 op */
 } app_wifi_try_result_t;
 
 app_wifi_try_result_t app_wifi_try_connect(const char *ssid, const char *password,

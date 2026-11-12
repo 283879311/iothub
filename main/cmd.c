@@ -496,8 +496,11 @@ static bool app_cmd_net_async_cleanup(app_operation_t *op, void *ctx)
          * 不走 LKG/DHCP 救援链,不改变 M1 语义。 */
         ESP_LOGW(TAG, "rescue=restore_persistent op=%s (cleanup without commit)",
                  app_operation_id(op));
-        if (!app_wifi_schedule_restart()) {
-            ESP_LOGW(TAG, "rescue=restore_persistent schedule failed");
+        if (!app_wifi_cleanup_request(app_operation_id(op))) {
+            /* CLEANUP_FAILED 粘性或唤醒失败:不得假装已释放(B3/C2) */
+            ESP_LOGE(TAG, "rescue=restore_persistent failed (cleanup request) op=%s",
+                     app_operation_id(op));
+            return false;
         }
     }
     return true;
@@ -513,6 +516,7 @@ static app_operation_error_t app_cmd_net_wifi_error(app_wifi_try_result_t result
     case APP_WIFI_TRY_CANCELLED:      return APP_OPERATION_ERR_CANCELLED;
     /* M1 R9:离线门控拒绝,独立错误,不得混入 connect_failed */
     case APP_WIFI_TRY_CONFIG_OFFLINE: return APP_OPERATION_ERR_WIFI_CONFIG_OFFLINE;
+    case APP_WIFI_TRY_CLEANUP_FAILED: return APP_OPERATION_ERR_CLEANUP_FAILED;
     case APP_WIFI_TRY_OK:
     case APP_WIFI_TRY_CONNECT_FAILED:
     case APP_WIFI_TRY_BUSY:
@@ -2665,15 +2669,23 @@ esp_err_t app_cmd_execute_method(const app_cmd_context_t *ctx, const char *metho
             cJSON *arr;
             uint16_t scan_count;
             uint16_t index;
+            bool scan_owner_busy = false;
+            esp_err_t scan_rc;
 
             if (source == APP_CMD_SOURCE_MQTT) {
                 err = "guard_rejected";
             } else if (!app_cmd_scan_gate_check()) {
                 /* DEF-SCAN-001:距上次扫描结束不足 3s,直接拒绝(射频需空闲) */
                 err = "busy";
-            } else if (app_wifi_perform_scan_command() != ESP_OK) {
-                app_cmd_scan_gate_stamp();   /* 失败同样占用过射频 */
-                err = "wifi_scan_failed";
+            } else if ((scan_rc = app_wifi_perform_scan_command_ex(&scan_owner_busy)) != ESP_OK) {
+                if (scan_owner_busy) {
+                    /* P3:owner 忙是运态拒绝,回 conflict(1s);不占用 3s 扫描节流窗 */
+                    err = "conflict";
+                } else {
+                    (void)scan_rc;
+                    app_cmd_scan_gate_stamp();   /* 失败同样占用过射频 */
+                    err = "wifi_scan_failed";
+                }
             } else {
                 app_cmd_scan_gate_stamp();
                 app_wifi_runtime_lock();
