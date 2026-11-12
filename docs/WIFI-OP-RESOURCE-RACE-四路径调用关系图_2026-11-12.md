@@ -1,0 +1,200 @@
+# WIFI-OP-RESOURCE-RACE · 四路径调用关系图（2026-11-12）
+
+> 配套：[修订设计 B1–B5](WIFI-OP-RESOURCE-RACE-修订设计_B1-B5_2026-11-12.md)。
+> 标注约定：`(n)` = B4 覆盖表第 n 个 STA 驱动调用点；`★` = owner 取得/释放/交接；
+> `▣` = 异步任务真正退出的位置。行号基于固件 `1.3-2ef2a38`。
+
+## 1. owner 状态机（总图）
+
+```
+                    claim_owner(TRYX,8s)
+        ┌───────────────────────────────────────► TRYX ◄── P1
+        │                                            │ release_or_handover
+        │        claim_owner(AUTO,0)                 │
+        ├───────────────────────────────────────► AUTO ◄── P3
+        │                                            │ release_or_handover
+        │        claim_owner(APPLY,15s)              │
+        ├───────────────────────────────────────► APPLY ◄─ P4
+        │                                            │ release_or_handover
+   ┌────┴────┐                                       │
+   │  NONE   │◄──────────────────────────────────────┘
+   └────┬────┘
+        │ cleanup_request()（owner==NONE 时直接取得）
+        │ 或 任一持有者 release 时发现 s_cleanup_requested → 直接 handover
+        ▼
+   ┌─────────┐   apply_cfg×3 全失败        ┌──────────────────┐
+   │ CLEANUP │────────────────────────────►│ CLEANUP_FAILED   │
+   │  (P2)   │◄──── 重试（1/2/4s）          │  （粘性，禁止一切 │
+   └────┬────┘                              │   STA 发起）      │
+        │ apply 成功                         └────────┬─────────┘
+        ▼                                            │ 仅 config.set+reboot
+      NONE                                           ▼
+                                                  NONE（重启后）
+```
+
+**关键不变量**：`TRYX/AUTO/APPLY → NONE` 的路径被"释放即交接"取代——释放点在同一
+把锁内检查 `s_cleanup_requested`，为真则直接转 `CLEANUP`，**不产生可被抢占的 NONE 窗口**。
+
+---
+
+## 2. P1 · OP_ACTIVE（tryconnect）
+
+```
+[cmd worker 任务]（operation run_fn 动态创建）
+  app_cmd_net_async_run()
+    └─ app_wifi_try_connect_ip()
+        └─ app_wifi_try_connect_common()  :3520
+             ★ claim_owner(TRYX, 8000ms)            owner: NONE → TRYX
+               │  - owner==CLEANUP     → 轮询等待（restart 任务在恢复）
+               │  - owner==CLEANUP_FAILED → 立即 failed/cleanup_failed
+               │  - 超时 → failed/busy
+             app_wifi_auto_connect_suspend()         （仅挡新调度）
+             wait_connect_task_idle(15000)           （只等任务指针；本设计保留）
+             ┌─ 预扫描 app_wifi_perform_scan() → perform_scan_impl (7) :3426
+             │    fail ×2（500ms 间隔）→ wifi_scan_failed
+             ├─ esp_wifi_disconnect() (9) :3661
+             ├─ esp_wifi_set_config(candidate) (9) :3679
+             ├─ esp_wifi_connect() (9) :3688
+             └─ defer 窗口（选 B）→ 等判决/取消
+             app_wifi_tryconnect_finish()  :3481
+               ├─ esp_wifi_disconnect() (8) :3498
+               ├─ esp_wifi_set_config(old_cfg) (8) :3501
+               ★ release_or_handover(TRYX)  :287
+                    ├─ s_cleanup_requested ? → CLEANUP（交接，通知 restart）
+                    └─ 否则 → NONE
+             ▣ run_fn 返回 → worker 任务自删
+```
+
+要点：
+- `(7)(8)(9)` 全部在 TRYX 持有期内；
+- **释放发生在 disconnect/restore set_config 完成之后**（评审释放原则），
+  candidate 连接已在 finish 内被 disconnect 收口；
+- 旧 op 的 finish 会 `schedule_connect_task(400ms, "tryconnect_finish")`（B5 标签）——
+  这正是 Q1.4 的元凶调度源；在新协议下，该任务若在 CLEANUP/OP_ACTIVE 期间醒来会
+  `schedule refused` 或 claim 被拒，不会驱动 STA。
+
+## 3. P2 · CANCEL_CLEANUP（cancel/expire 恢复链）
+
+```
+[expire 任务 或 cmd 任务] app_operation_cancel() :457 / expire_one() :619
+  └─ cleanup_fn = app_cmd_net_async_cleanup()  cmd.c:460
+       ├─ 清 trial/job、app_netcheck_cancel(gen)
+       ├─ state==CONNECTING → app_wifi_try_cancel()   （让 P1 尽快走到 finish）
+       ★ app_wifi_cleanup_request()
+            ├─ owner==NONE            → CLEANUP + notify
+            ├─ owner==TRYX/AUTO/APPLY → s_cleanup_requested=true（等释放移交）
+            └─ owner==CLEANUP_FAILED  → false → operation failed/cleanup_failed
+       └─ return true → operation 终态（CANCELLED/EXPIRED，terminal_ms 记录）
+          （终态 ≠ 资源释放：owner 此时可能已是 CLEANUP，也可能仍在等移交）
+
+[wifi_restart 任务] :3780（单实例，长期存活）
+  xTaskNotifyWait → vTaskDelay(250ms)
+  ★ wait_owner(CLEANUP, 8000ms)      （由 request 或 P1/P3/P4 的 release 交接而来）
+  循环最多 3 次：
+    apply_cfg() (6) :2999   ← 全程持 CLEANUP
+        esp_wifi_stop() → set_mode() → esp_wifi_set_config() (6) → esp_wifi_start()
+        → STA_START 事件 → handler 释放 hold/开窗口 + schedule("sta_start")
+        → A8 await 完成 → 返回
+    成功 → ★ owner=NONE；日志 cleanup complete op=<id> attempts=<n>
+    失败 → 1s/2s/4s 后重试
+  3 次全失败 → ★ owner=CLEANUP_FAILED
+              日志 cleanup failed op=<id> stage=<stage> attempts=3
+  ▣ 任务不退出（继续等下一次通知）；owner 已释放/转失败态
+```
+
+要点：
+- `apply_cfg` 的 `stop/start` 会触发 `STA_START`→`schedule_connect_task("sta_start")`；
+  该任务在 CLEANUP 期间 claim AUTO 被拒 → 置 pending 退出，**cleanup complete 后
+  由 monitor 1s 内重试**（RACE-03：CLEANUP 期间零 STA 发起操作）；
+- 无 "cleanup 释放 → apply 再 claim" 的窗口（B1 验收点 1）：apply 不 claim APPLY，
+  外层的 CLEANUP 一直持有到 apply 返回。
+
+## 4. P3 · AUTO_CONNECT（后台自动连接）
+
+```
+[wifi_auto_connect 任务]（schedule_connect_task 创建，一次性）
+  vTaskDelay(delay)                     ← 调度时刻已打印 caller（B5）
+  复核：owner==NONE && !suspended && !offline
+  ★ claim_owner(AUTO, 0)  （非阻塞）
+      deny → ESP_LOGW("AUTO claim denied owner=%s by=%s")
+             s_wifi_fast_path_pending=true；▣ 任务退出（monitor 1s 重试）
+  app_wifi_connect_best_saved_profile() :975   ← AUTO 唯一入口/唯一释放点
+      ├─ fast_path 分支：
+      │    esp_wifi_disconnect() (2) :1035
+      │    esp_wifi_set_config() (2) :1036
+      │    esp_wifi_connect()  (2) :1050
+      └─ profile 分支：
+           app_wifi_perform_scan() (7) → perform_scan_impl :3426
+           app_wifi_connect_profile_index() :901
+             esp_wifi_disconnect() (1) :939
+             esp_wifi_set_config() (1) :942
+             esp_wifi_connect()  (1) :960
+  ★ release_or_handover(AUTO)（所有 return 统一）
+      ├─ s_cleanup_requested → CLEANUP（交接）
+      └─ 否则 → NONE
+  ▣ 任务自删
+
+事件旁路（wifi 事件任务 / netcheck 任务，均非阻塞 claim AUTO）：
+  · reason=210 → app_wifi_retry_with_pmf_required() (3) :1520/1526
+  · STA_DISCONNECTED 直连重试 → esp_wifi_connect() (4) :2157
+  · netcheck fail_internet → esp_wifi_disconnect() (5) :2352
+      被拒：让位 + 日志，退避/monitor 接续（不削弱恢复）
+```
+
+要点：
+- 事件任务**永不退出**，因此事件路径的 claim 必须非阻塞（否则会卡死事件链）；
+- `(1)(2)(7)` 在 AUTO 持有期内；`(3)(4)(5)` 各自短持有 AUTO（仅覆盖一次驱动调用）。
+
+## 5. P4 · BOOT / 显式 APPLY
+
+```
+[boot 任务] app_wifi_boot_apply_or_recover()
+  ★ claim_owner(APPLY, 15000)
+  apply_cfg() (6) :3378
+      stop → mode → set_config → start → STA_START → A8 await
+  ★ release_or_handover(APPLY) → NONE（或 CLEANUP，若此刻有 cleanup 请求——运行期不存在）
+  ▣ boot 流程继续
+
+运行期：当前无显式 apply 命令；config.set 走 effect=reboot（重启后重新 boot）。
+CLEANUP 的 apply 不在此路径（见 P2）。
+```
+
+---
+
+## 6. 9 个驱动点 × 路径归属总表
+
+| # | 驱动点 | 所属路径 | owner 持有区间 | 异步退出/交接 |
+| --- | --- | --- | --- | --- |
+| 1 | `connect_profile_index` :939/942/960 | P3 | AUTO（入口 #2 claim） | 随 #2 的 release_or_handover |
+| 2 | `connect_best_saved_profile` :1035/1036/1050 | P3 | AUTO（claim + release 同点） | 函数返回即释放/交接 |
+| 3 | `retry_with_pmf_required` :1520/1526 | P3 旁路 | AUTO（单次驱动，短持有） | 调用后立即释放 |
+| 4 | `event_handler retry_direct` :2157 | P3 旁路 | AUTO（单次驱动，短持有） | 同上 |
+| 5 | `netcheck_on_result` :2352 | P3 旁路 | AUTO（仅 disconnect，短持有） | 同上 |
+| 6 | `apply_cfg` :2999 | P2（cleanup）/ P4（boot） | CLEANUP 全程 / APPLY 全程 | P2：任务不退出但 owner 释放；P4：boot 流程 |
+| 7 | `perform_scan_impl` :3426 | P1（预扫描）/ P3（profile 扫描）/ 命令扫描 | 随调用者（TRYX/AUTO/AUTO） | 随调用者释放 |
+| 8 | `tryconnect_finish` :3498/3501 | P1 | TRYX | release_or_handover（finish 内） |
+| 9 | `try_connect_common` :3661/3679/3688 | P1 | TRYX | 经 #8 统一释放 |
+
+## 7. 取消场景的交接时序（RACE-02 关键路径）
+
+```
+t0  [旧 op]  P1 持 TRYX，候选在飞
+t1  [cancel] cleanup_request(): owner==TRYX → s_cleanup_requested=true
+t2  [旧 op]  try_cancel → try_connect_common 提前走 finish
+t3  [旧 op]  finish: disconnect + restore set_config 完成
+t4  [旧 op]  release_or_handover(TRYX): requested → owner=CLEANUP + notify
+             ▣ worker 返回自删（owner 已不由它持有）
+t5  [新 op]  claim_owner(TRYX,8s): owner==CLEANUP → 等待（日志 waiting owner=CLEANUP）
+t6  [restart] wait_owner(CLEANUP) 成功 → apply_cfg(6)（全程 CLEANUP）
+t7  [restart] 成功 → owner=NONE，日志 cleanup complete
+t8  [新 op]  claim 成功 → 预扫描(7) 真正启动并完成 → 终态 ap_not_found
+```
+无 `NONE` 可抢占窗口；无"cleanup 释放后 apply 再 claim"；新 op 只等一个 owner。
+
+## 8. 与评审三验收点的对应
+
+| 评审要求 | 图中证据位置 |
+| --- | --- |
+| B1：apply_cfg 全程不释放外层所有权 | §3：`apply_cfg(6)` 在 `wait_owner(CLEANUP)` 之后、`owner=NONE` 之前，中间无 release；§7 t6-t7 |
+| B4：9 点逐点有 owner | §6 表（每点一行）+ §2/§3/§4/§5 各路径图中 `(n)` 标注 |
+| B5：日志在调度时刻 | §4 顶部 `vTaskDelay(delay)` 前已打印 caller；§3 `sta_start` 调度同样带标签 |
