@@ -228,9 +228,10 @@ caller 取值（覆盖评审要求的五类）：
    **R1（实现约束）**：`s_tryx_waiter>0` 的判断必须与 owner 的 CAS 在**同一临界区**
    （`s_tryconnect_mux`），不得拆成两次加锁，否则"检查通过→AUTO 插入→TRYX 落空"
    的窄窗口仍存在。
-   **R2（已知代价）**：TRYX waiter 期间（≤12s），`sta_disconnected_ble` 的 250ms
-   恢复路径同样被拒——BLE 断开后的 Wi-Fi 恢复最坏延后 12s。用户此刻正在主动配网，
-   可接受；若后续出现"断 BLE 后 12s 不恢复"的现场反馈，按本条已知代价处理，不记新缺陷。
+   **R2（明确验收项，非"无削弱"）**：TRYX waiter 期间（≤12s），`sta_disconnected_ble`
+   的 250ms 恢复路径同样被拒——BLE 断开后的 Wi-Fi 恢复最坏延后 12s。用户此刻正在
+   主动配网，属**有意的设计取舍**；**列为真机验收项**：TRYX 结束后立即断 BLE，
+   实测 Wi-Fi 恢复 ≤12s+1s，不达标即退回评审。
 2. **AUTO 被拒后的恢复延迟**：monitor 1s 节拍 → 最坏 1s 额外延迟，BLE 恢复路径语义不变。
 3. **CLEANUP_FAILED 的可运维性**：仅显式重配可清除；现场需文档说明（建议写入
    故障排查手册，非本轮）。
@@ -414,3 +415,24 @@ CLEANUP 持有期间：
 | 正常 cleanup 时长 | ≤6.5s（3×≤1s + 3.5s 退避），TRYX 12s 余量 ≥5.5s |
 | 旧 AP 消失场景 | `apply_cfg` 仍成功（A8 等 STA_START），设备回持久配置后由 monitor/profile 逻辑决定连谁 |
 | config apply 路径 | 不受影响，LKG/DHCP 救援链原样保留 |
+
+
+---
+
+# 15. 第三轮修订记录（2026-11-13，复审问题 1–4 的处置汇总）
+
+| # | 复审问题 | 处置 | 位置 |
+| --- | --- | --- | --- |
+| 1 | C2 看门狗强制 FAILED 可能发生在 `apply_cfg` 仍在执行时 | **watchdog 不再夺权**：>25s 仅置 `s_wifi_cleanup_abort`（不改 owner）；`CLEANUP_FAILED` 转换只由 restart 任务在**安全点**（apply_cfg 已返回的边界）自转换；卡死时 owner 保持 CLEANUP（无 unsafe 交接） | §11.2 重写 + 调用图 P2 |
+| 2 | B5 缺 op_id/generation、调度与执行不可关联 | 日志行增加 `op=<op_id|-> gen=<u>`；新增 `auto_connect: task run caller=... gen=...`（执行时刻）；op_id 来源 = 新 API `app_wifi_set_active_operation()`（cmd.c run 开始写入/终态清空） | §7 重写 |
+| 3 | 旧 worker 释放后仍有 STA 操作的证明缺失 | 调用链枚举证明：`try_connect_ip` 返回后 worker 仅剩读状态/快照/`set_state`/cleanup（无直接 STA）；cmd.c 全文件 0 处 `esp_wifi_*`；所有权不变量兜底 | 调用图 P1"释放后零 STA 证明" |
+| 4 | 文档时序口径不统一（12s/8000ms、0.5-1-2/1-2-4、Q1.4 双口径） | 调用图 P1→12000ms、P2→0.5/1/2s；Q1.4 统一为"唯一候选源 + 定案待 B5"（§0 已同步） | 调用图全文 + §0 |
+| 5 | R2 应为验收项而非"无削弱" | §10 R2 重写：明确取舍 + 真机验收项（TRYX 结束后断 BLE，恢复 ≤12s+1s，不达标退回评审） | §10 |
+
+**附加约束（实现阶段，第三轮）**：
+- B5 字段实现需新增 `app_wifi_set_active_operation(op_id)`（cmd.c ↔ wifi.c 各一处调用）；
+- fencing 需新增 `s_wifi_cleanup_abort` 标志（monitor 置位、restart 任务消费）；
+- commit `185e029` 的对应实现（monitor 强制 FAILED 分支）**需按本节调整**——
+  已在 185e029 之后的下一版补丁中处理，本轮不改代码。
+
+**本轮边界**：仅文档修订；未改代码、未烧录、未动设备。

@@ -24,7 +24,7 @@
         ▼
    ┌─────────┐   apply_cfg×3 全失败        ┌──────────────────┐
    │ CLEANUP │────────────────────────────►│ CLEANUP_FAILED   │
-   │  (P2)   │◄──── 重试（1/2/4s）          │  （粘性，禁止一切 │
+   │  (P2)   │◄──── 重试（0.5/1/2s）        │  （粘性，禁止一切 │
    └────┬────┘                              │   STA 发起）      │
         │ apply 成功                         └────────┬─────────┘
         ▼                                            │ 仅 config.set+reboot
@@ -44,7 +44,8 @@
   app_cmd_net_async_run()
     └─ app_wifi_try_connect_ip()
         └─ app_wifi_try_connect_common()  :3520
-             ★ claim_owner(TRYX, 8000ms)            owner: NONE → TRYX
+             ★ claim_owner(TRYX, 12000ms)           owner: NONE → TRYX
+               │  （日志带 op=<active_op> gen=<link_gen>，B5 第三轮字段）
                │  - owner==CLEANUP     → 轮询等待（restart 任务在恢复）
                │  - owner==CLEANUP_FAILED → 立即 failed/cleanup_failed
                │  - 超时 → failed/busy
@@ -70,8 +71,21 @@
 - **释放发生在 disconnect/restore set_config 完成之后**（评审释放原则），
   candidate 连接已在 finish 内被 disconnect 收口；
 - 旧 op 的 finish 会 `schedule_connect_task(400ms, "tryconnect_finish")`（B5 标签）——
-  这正是 Q1.4 的元凶调度源；在新协议下，该任务若在 CLEANUP/OP_ACTIVE 期间醒来会
-  `schedule refused` 或 claim 被拒，不会驱动 STA。
+  这正是 Q1.4 的元凶候选调度源（**定案待 B5 日志闭环**，见修订设计 §0/§13）；
+  在新协议下，该任务若在 CLEANUP/OP_ACTIVE 期间醒来会 `schedule refused` 或
+  claim 被拒，不会驱动 STA。
+
+**释放后零 STA 证明（第三轮评审问题 3）**：
+`release_or_handover(TRYX)` 位于 `tryconnect_finish` 内；worker 在
+`app_cmd_net_async_run` 中 `try_connect_ip` 返回之后的全部语句：
+1. `app_operation_get_status`（读）→ stale 分支 `return ESP_OK`；
+2. OK 分支：读 `trial_verify_gen`/`read_done`/写 P6 快照/`set_state(GOT_IP)`；
+3. 回滚分支：`app_cmd_net_async_cleanup`（try_cancel 置位、cleanup_request——
+   均非直接 STA）+ `set_state(FAILED)`。
+以上 **无任何 `esp_wifi_*` 调用**（cmd.c 全文件 0 处直接驱动调用，见 9 点表）；
+而 release 之后 worker 已不持 TRYX，任何 wifi.c 内的 STA 操作都需要 owner ⇒
+"释放后旧 worker 不再执行 STA 操作"由调用链枚举 + 所有权不变量共同证明。
+（`app_wifi_try_cancel()` 只置取消标志；`app_netcheck_cancel` 只取消验证任务。）
 
 ## 3. P2 · CANCEL_CLEANUP（cancel/expire 恢复链）
 
@@ -89,17 +103,28 @@
 
 [wifi_restart 任务] :3780（单实例，长期存活）
   xTaskNotifyWait → vTaskDelay(250ms)
-  ★ wait_owner(CLEANUP, 8000ms)      （由 request 或 P1/P3/P4 的 release 交接而来）
+  ★ wait_owner(CLEANUP)               （由 request 或 P1/P3/P4 的 release 交接而来）
+  看门狗 fencing（第三轮）：
+    abort 只由 monitor 置位（CLEANUP >25s），**不改变 owner**；
+    owner→CLEANUP_FAILED 的转换只发生在本任务的"安全点"
+    （= apply_cfg() 已返回、无在飞驱动调用的边界：入口处 / 每次失败退避后）
+    ——每处检查 s_wifi_cleanup_abort
   循环最多 3 次：
+    [安全点] abort? → ★ CLEANUP_FAIL（自转换）→ owner=CLEANUP_FAILED
+                      日志 cleanup aborted by watchdog op=<id> → 结束
     apply_cfg() (6) :2999   ← 全程持 CLEANUP
         esp_wifi_stop() → set_mode() → esp_wifi_set_config() (6) → esp_wifi_start()
         → STA_START 事件 → handler 释放 hold/开窗口 + schedule("sta_start")
         → A8 await 完成 → 返回
     成功 → ★ owner=NONE；日志 cleanup complete op=<id> attempts=<n>
-    失败 → 1s/2s/4s 后重试
-  3 次全失败 → ★ owner=CLEANUP_FAILED
+            （abort 已置位也清除：资源已合法释放）
+    失败 → 0.5s/1s/2s 后重试（不跑 LKG/DHCP 链；回到上方安全点检查）
+  3 次全失败且无 abort → ★ owner=CLEANUP_FAILED
               日志 cleanup failed op=<id> stage=<stage> attempts=3
   ▣ 任务不退出（继续等下一次通知）；owner 已释放/转失败态
+  安全论证：CLEANUP_FAILED 转换只出现在"apply_cfg 已返回"的边界；
+  转换前 owner=CLEANUP，其他主体本被拒——不存在"旧任务仍能操作 STA 时
+  owner 被改"的窗口；apply_cfg 卡死（理论）时 owner 保持 CLEANUP，无 unsafe 交接。
 ```
 
 要点：
