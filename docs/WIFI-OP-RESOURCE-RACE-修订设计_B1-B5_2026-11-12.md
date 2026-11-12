@@ -123,8 +123,13 @@ restart 任务（单实例，wifi_restart）
        日志 cleanup failed op=<id> stage=<stage> err=<n>（含 op_id 与阶段）
 ```
 
-- `apply_cfg` 的既有恢复链（LKG→DHCP→离线）在每次尝试内部保持不变；
-- 三次尝试全失败才进入 CLEANUP_FAILED，避免瞬态（DHCP 慢）误判；
+- **cleanup 路径不调用 LKG→DHCP→离线救援链**：三次尝试均为直接 `apply_cfg()`，
+  LKG/DHCP 救援链只服务 config apply（P4）路径，两处语义不同（详见 §14 统一表述）；
+- 三次尝试全失败才进入 CLEANUP_FAILED（0.5/1/2s 退避，总时长有界 ≤6.5s）；
+- **STA_START 事实**：`apply_cfg` 的 A8 只等 `STA_START`，而 `STA_START` 在**发起
+  连接时**即触发，与目标 AP 是否在场无关 ⇒ "旧 SSID 的 AP 已消失"不会导致
+  `apply_cfg` 失败；CLEANUP_FAILED 只由 `stop/set_mode/set_config/start` 的真实
+  配置失败触发（概率极低）；
 - CLEANUP_FAILED 语义：
   - TRYX → `cleanup_failed`（既有 wire 码，op_terminal 类，**不复用
     `wifi_config_offline`**）；客户端按"设备清理失败，需检查/重配"处理；
@@ -144,7 +149,7 @@ restart 任务（单实例，wifi_restart）
 | 3 | `retry_with_pmf_required` :1520/1526 | `event_handler` reason=210（每次启动仅一次） | `wifi` 事件任务 | 无 | **AUTO（非阻塞 claim）** | claim 失败：跳过本次 PMF 重试，记 `pmf_retry deferred: owner=%d`，交 monitor |
 | 4 | `event_handler retry_direct` :2157 | `STA_DISCONNECTED` 直连重试（`sta_retries<3`，BLE 未连接） | `wifi` 事件任务 | 仅 `app_wifi_connect_begin("retry_direct")`（计数，不互斥） | **AUTO（非阻塞 claim）** | claim 失败：本拍不直连，保留重试计数与退避，monitor 接续 |
 | 5 | `netcheck_on_result` :2352（disconnect） | netcheck 判决 `fail_internet`（观察者回调） | `netcheck` 任务 | 仅 `link_gen` 匹配（事件归属，不是所有权） | **AUTO（非阻塞 claim，仅覆盖本次 disconnect）**；gen 不匹配仍直接丢弃 | claim 失败：跳过拆链（记日志），判决已归档不受影响；monitor/退避接续换 profile |
-| 6 | `apply_cfg` :2999（含 stop/mode/start） | boot（`source=boot`）、restart（`runtime_restart`）、恢复链（LKG/DHCP） | boot 任务 / `wifi_restart` 任务 | 调用者持 `APPLY`（boot/显式）；cleanup 路径**无独立 claim** | **boot/显式 = APPLY；cleanup 恢复 = 在 CLEANUP 内执行（B1）** | 每次尝试内部走既有 LKG→DHCP→离线；CLEANUP 内 3 次失败 → CLEANUP_FAILED |
+| 6 | `apply_cfg` :2999（含 stop/mode/start） | boot（`source=boot`）、restart（`runtime_restart`）、LKG/DHCP 救援链（仅 config apply 路径，cleanup 不走） | boot 任务 / `wifi_restart` 任务 | 调用者持 `APPLY`（boot/显式）；cleanup 路径**无独立 claim** | **boot/显式 = APPLY；cleanup 恢复 = 在 CLEANUP 内执行（B1）** | boot/显式：既有 LKG→DHCP→离线链；**CLEANUP：仅直接 apply_cfg×3，不跑救援链**，3 次失败 → CLEANUP_FAILED |
 | 7 | `perform_scan_impl` :3426 | ① tryconnect 预扫描（#9 内）② auto profile 扫描（#2 内）③ `network.scan` 命令 | worker / cmd 任务 | 无 STA 状态检查（仅 20s 扫描锁） | **随调用者：① TRYX ② AUTO ③ 命令扫描先非阻塞 claim AUTO** | ① 500ms 重试一次后 `wifi_scan_failed`（保留）② 记 scan_failed 并让 monitor 重试 ③ 忙则回 `busy`（客户端 1s 重试） |
 | 8 | `tryconnect_finish` :3498/3501 | tryconnect 所有退出路径 | worker / cmd 任务 | TRYX 持有中 | **TRYX 内**；disconnect/set_config 完成后走 `release_or_handover(TRYX)`（有 cleanup 请求→移交 CLEANUP） | restore 失败：记日志，仍按协议释放/移交 |
 | 9 | `try_connect_common` :3661/3679/3688 | tryconnect 主体（拆旧链/设候选/连候选） | worker / cmd 任务 | TRYX 持有中 | **TRYX 内** | 各阶段既有分类；取消/失败统一经 #8 finish 释放 |
@@ -217,10 +222,15 @@ caller 取值（覆盖评审要求的五类）：
 
 ## 10. 遗留风险与开放问题
 
-1. **CLEANUP 持有时长**：apply_cfg 含 `esp_wifi_stop/start` + A8 await（实测
-   数百 ms~2s）；若 DHCP 慢，三次重试最坏 ~10s 内 owner=CLEANUP，期间新 op 得
-   `busy`——可接受（客户端瞬态重试），但需在 RACE-02 判定里允许"先 busy 后成功"的
-   轨迹（以最终 ap_not_found 为准）。
+1. **CLEANUP 持有时长**：apply_cfg 含 `esp_wifi_stop/start` + A8 await（等
+   STA_START，不等 DHCP，单次 ≤1s）；三次 + 退避 0.5/1/2s = **≤6.5s**；期间新 op
+   等待（12s 上限）而非直接 busy。RACE-02 判定以最终 `ap_not_found` 为准。
+   **R1（实现约束）**：`s_tryx_waiter>0` 的判断必须与 owner 的 CAS 在**同一临界区**
+   （`s_tryconnect_mux`），不得拆成两次加锁，否则"检查通过→AUTO 插入→TRYX 落空"
+   的窄窗口仍存在。
+   **R2（已知代价）**：TRYX waiter 期间（≤12s），`sta_disconnected_ble` 的 250ms
+   恢复路径同样被拒——BLE 断开后的 Wi-Fi 恢复最坏延后 12s。用户此刻正在主动配网，
+   可接受；若后续出现"断 BLE 后 12s 不恢复"的现场反馈，按本条已知代价处理，不记新缺陷。
 2. **AUTO 被拒后的恢复延迟**：monitor 1s 节拍 → 最坏 1s 额外延迟，BLE 恢复路径语义不变。
 3. **CLEANUP_FAILED 的可运维性**：仅显式重配可清除；现场需文档说明（建议写入
    故障排查手册，非本轮）。
@@ -363,3 +373,44 @@ I (199651029) wifi: op_owner: CLEANUP -> NONE by cleanup_complete op=op-12730EEC
   不覆盖 STA 状态；调度源仍唯一（其余五源当时条件均不成立）；
 - **判别手段**：B5 落地后 `scheduled by tryconnect_finish` + 首条 `perform_scan` 的相对
   时间可区分 a/b；在此之前标"待 B5 闭环"。
+
+
+---
+
+# 14. D1 统一表述（§5 / §6-6 / §11.4.3 的唯一口径）
+
+> 本文替代表述冲突的三处旧文字；以本节为准。
+
+## 14.1 cleanup 恢复策略（唯一版本）
+
+```
+CLEANUP 持有期间：
+  尝试 1: app_wifi_apply_cfg()         失败 → 0.5s
+  尝试 2: app_wifi_apply_cfg()         失败 → 1s
+  尝试 3: app_wifi_apply_cfg()         失败 → 2s
+  仍失败 → owner = CLEANUP_FAILED（粘性）
+  ※ 全程不调用 LKG→DHCP→离线救援链
+```
+
+- **config apply（P4/boot）**：保持既有恢复链（LKG→DHCP→离线）**不变**；
+- **cleanup（P2）**：只用直接 `apply_cfg×3`，失败即 `CLEANUP_FAILED`。
+
+## 14.2 三条理由
+
+1. **语义**：LKG/DHCP 是"配置应用失败后的降级策略"，会引入第二套配置源，与
+   B1/B3 的单一所有权（谁拥有 STA、哪份配置为准）冲突；
+2. **时长**：救援链可能耗时数十秒，突破 TRYX 12s 与 op TTL 45s 预算；
+3. **触发概率**：`apply_cfg` 的 A8 只等 `STA_START`，而 `STA_START` 在**发起连接
+   时**即触发，**与目标 AP 是否在场无关** ⇒ "旧 SSID 的 AP 已消失"不会让
+   `apply_cfg` 失败。`CLEANUP_FAILED` 只会由 `esp_wifi_stop/set_mode/set_config/
+   start` 的真实配置失败触发——概率极低，因此"不跑救援链"不会被读成"旧 AP 不在
+   就锁死设备"。
+
+## 14.3 影响面
+
+| 项 | 结论 |
+| --- | --- |
+| CLEANUP_FAILED 触发概率 | 极低（仅驱动配置类失败；AP 不在场不触发） |
+| 正常 cleanup 时长 | ≤6.5s（3×≤1s + 3.5s 退避），TRYX 12s 余量 ≥5.5s |
+| 旧 AP 消失场景 | `apply_cfg` 仍成功（A8 等 STA_START），设备回持久配置后由 monitor/profile 逻辑决定连谁 |
+| config apply 路径 | 不受影响，LKG/DHCP 救援链原样保留 |
