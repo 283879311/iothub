@@ -2,7 +2,7 @@
 
 基于 ESP-IDF(v6.0,目标芯片 ESP32)的物联网控制与现场调试网关:本地管理走 BLE NUS 命令面,数据面含 UART/BLE/MQTT,云端为 ThingsBoard MQTT,GPIO 控制与状态上报由共享命令层承载。**Web/HTTP server、captive portal 和 Web OTA 已按产品决定删除**;OTA 核心保留但当前没有 HTTP 传输入口。
 
-当前固件版本:**1.2**(`CMakeLists.txt` → `set(PROJECT_VER "1.2")`)。v1.2 起规划**统一命令解析层(控制面 / 数据面双平面)+ MCP 兼容**,把 MQTT、串口、BLE 收敛到同一套命令语义(经典蓝牙 / SPP 已于本版本移除),详见 `问题与版本优化.md`。
+当前固件版本:**1.3**(`CMakeLists.txt` 在配置期由 `git describe --always --dirty --exclude=v*` 派生 `PROJECT_VER = 1.3-<git短SHA>[-dirty]`,例如 `1.3-2ef2a38`;`device.info` 返回的 `firmware` 即该串)。v1.2 起规划**统一命令解析层(控制面 / 数据面双平面)+ MCP 兼容**,把 MQTT、串口、BLE 收敛到同一套命令语义(经典蓝牙 / SPP 已于 v1.2 移除),详见 `问题与版本优化.md`。
 
 > **v1-only 边界（2026-11-04）**：外部 BLE/MQTT 命令只接受 `{"id","version":"1.0","cmd","args"}`；v0 `method/params` 返回 `unsupported_version`（2026-11-05 起 v0 源码、旧方法别名与 `APP_CMD_V0_COMPAT` 开关已全部删除，无回退路径）。成功读 `data`，错误读 `{code,message}`。MQTT/ThingsBoard 只是传输服务器，不需要协议迁移；发送命令的客户端必须用 v1 payload。
 
@@ -87,7 +87,7 @@ docs/archive/     原始日志/历史归档(只读留证)
 
 ## 文档导航
 
-- **唯一主记录**:`问题与版本优化.md` —— v1.0–v1.2.1 历史、v1.3 增量与当前清单(**1.3-70**)、附录 A NimBLE 评估、B 串口抓包、C 已解决索引、D UART 调试、E 手机验收测试卡。
+- **唯一主记录**:`问题与版本优化.md` —— v1.0–v1.2.1 历史、v1.3 增量与当前推进清单、附录 A NimBLE 评估、B 串口抓包、C 已解决索引、D UART 调试、E 手机验收测试卡。
 - **独立方案**:`docs/soak_test_plan.md`(全链路 soak;`tools/soak/` 尚未实现)。
 - **原始归档**:`docs/archive/`(日志/代码,只读留证)。
 
