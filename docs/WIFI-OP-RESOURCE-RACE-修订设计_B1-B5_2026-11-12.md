@@ -15,18 +15,19 @@
 | B4 | P0：9 点覆盖表 | §6：逐点填写，含触发来源/上下文/现有检查/修订后归属/失败处理 |
 | B5 | P1：caller 标签，调度时刻打印 | §7：`schedule_connect_task(delay, caller)` + 调度瞬间日志；覆盖 8 个调度点 + resume 调用者 |
 
-**Q1.4 已用归档日志定案（★ 补交）**：199650429 那发 auto_connect 的调度源 =
-**旧 op 的 `app_wifi_tryconnect_finish()` → `schedule_connect_task(400ms)`（wifi.c:3510）**。
-推理链（唯一与时间线一致）：
-1. `stale after wait` 199645179 证明旧 worker 的 `try_connect_ip` 已返回 ⇒ finish 在其前，
-   400ms 后任务创建 ≈1996455xx；
-2. 新 op 的 `wait_connect_task_idle` 自 199645189 起等待，199650429 任务清指针才返回
-   （402ms 后即预扫描）——与日志 199650449 完全吻合；
-3. 199645179–199650419 之间无任何 wifi 行 ⇒ 该任务在执行**静默成功的扫描**
-   （`connect_best_saved_profile` 非 fast_path 路径，scan 成功不打印）；
-4. 其余五个调度源当时条件均不成立（无 STA_START/无 APPLY/无断连事件/monitor 被
-   tryconnect 活跃挡住）。
-> B5 落地后此结论可由调度行 100% 证实；在此之前以"高置信推断"记档。
+**Q1.4：唯一候选调度源 = 旧 op 的 `app_wifi_tryconnect_finish()` →
+`schedule_connect_task(400ms)`（wifi.c:3510）；其余五源条件均不成立。
+但 finish 的准确时刻未知（§13 两种解释），**尚未由日志证实，最终定案待 B5
+调度日志与任务执行日志闭环**（§15 初稿曾误记为"已定案"，本版更正，见 §15.1）。
+推理链：
+1. `stale after wait` 199645179 证明旧 worker 的 `try_connect_ip` 已返回 ⇒ finish 在其前；
+2. 其 `schedule_connect_task(400ms)` 任务创建于 ≈ finish+0.4s（约 1996451xx–1996452xx），
+   即新 op 的 `wait_connect_task_idle` **首次轮询之前或附近**；
+3. 存在两种自洽解释（日志无判别行）：a) 等待挡住（任务已建，wait 阻塞至 199650429）；
+   b) 扫描锁挡住（任务晚于首轮，新 op 阻塞在 scan lock ≈4.9s）；
+4. 共同结论：旧任务与新 op 重叠，现有两个等待原语（任务指针/扫描锁）都不覆盖 STA 状态。
+> 判别手段：B5 落地后 `scheduled by tryconnect_finish` 与 `task run` 的相对时间可区分
+> a/b；在此之前不得把 finish 写成已定案的调度源。
 
 ## 1. 概念模型（终态 ≠ 资源释放）
 
@@ -91,18 +92,18 @@ release_or_handover(from):               /* 所有 release 的唯一出口 */
 `s_cleanup_requested` 置位（owner 忙），而**所有释放点在同一把锁内检查该位并直接
 移交 CLEANUP**。不存在"先归零、再被别人 claim、再回来要"的中间态。
 
-**新 op 等待**：`claim_owner(TRYX, 8000ms)` 轮询：
+**新 op 等待**：`claim_owner(TRYX, 12000ms)` 轮询：
 - `owner==NONE` → CAS 取得，继续；
 - `owner==CLEANUP` → 继续等（restart 任务正在恢复，通常 <2s）；
 - `owner==CLEANUP_FAILED` → **立即**返回 `cleanup_failed`（不等待、不绕过）；
 - 超时 → 返回 `busy`（瞬态，客户端已按 1.5s×3 重试）。
-**一个等待替代原 A3 的两个等待**（采纳 S2，8s 单值）。
+**一个等待替代原 A3 的两个等待**（采纳 S2，12s 单值）。
 
 ## 4. claim 矩阵（B2）
 
 | 发起者 | 允许的 owner 状态 | 等待 | 被拒结果 |
 | --- | --- | --- | --- |
-| TRYX（tryconnect begin） | NONE；CLEANUP（等） | ≤8s | `busy`；遇到 CLEANUP_FAILED → `cleanup_failed` |
+| TRYX（tryconnect begin） | NONE；CLEANUP（等） | ≤12s | `busy`；遇到 CLEANUP_FAILED → `cleanup_failed` |
 | AUTO（best_saved_profile 入口） | NONE | 不等待（非阻塞） | 不触碰 STA；置 `fast_path_pending=true` 退出，由 monitor 1s 重试 |
 | APPLY（boot / 显式 config） | NONE | ≤15s（沿用） | 放弃本轮，记 `APPLY_BUSY_*` |
 | CLEANUP（restart 任务） | 由 request/handover 取得，不再 claim | — | 取得后全程持有 |
@@ -113,7 +114,7 @@ release_or_handover(from):               /* 所有 release 的唯一出口 */
 
 ```
 restart 任务（单实例，wifi_restart）
-  wait_owner(CLEANUP)（由 request/handover 保证，8s 上限）
+  wait_owner(CLEANUP)（由 request/handover 保证，无需计时上限）
   ├─ 尝试 1: apply_cfg() （全程持 CLEANUP；含 stop/mode/set_config/start + A8 await）
   │    ├─ 成功 → owner=NONE；日志 cleanup complete op=<id> result=ok
   │    └─ 失败 → 0.5s
@@ -165,12 +166,24 @@ restart 任务（单实例，wifi_restart）
 
 接口变更：`app_wifi_schedule_connect_task(TickType_t delay_ticks, const char *caller)`。
 
-调度瞬间（无论是否创建任务成功）打印：
+调度瞬间（无论是否创建任务成功）打印；任务实际开始执行时再打一行（第三轮：
+调度与执行两行可关联，字段含 op_id/generation）：
 
 ```
-auto_connect: scheduled by <caller> delay=<ms> owner=<name>
-auto_connect: schedule refused by <caller> delay=<ms> reason=<suspended|offline|task_busy|mode>
+auto_connect: scheduled caller=<caller> delay=<ms> owner=<owner> op=<id|-> gen=<n>
+auto_connect: schedule refused caller=<caller> reason=<reason> op=<id|-> gen=<n>
+auto_connect: task run caller=<caller> op=<id|-> gen=<n> delay_actual=<ms>
 ```
+
+字段规则（第三轮评审要求）：
+- `op`：来自 `s_wifi_active_op_id`——新增 API `app_wifi_set_active_operation(op_id)`
+  （cmd.c 在 operation run 开始时写入、终态时清空）；**无活动 operation 记 `-`，
+  不得沿用上一个 operation 的 ID**；
+- `gen`（scheduled/refused 行）= 调度时刻的 `link_gen`；
+- **task run 行的 gen = 调度时捕获并随任务参数传入的值**，不重新读取
+  （执行时 link_gen 可能已变化，重读会破坏关联）；
+- 关联约定：`caller + op + gen(调度值) + 时间序` 把 scheduled 行与 task run 行配对；
+  `delay_actual` = 任务实际开始时刻 − 调度时刻。
 
 caller 取值（覆盖评审要求的五类）：
 | caller | 位置 |
@@ -203,7 +216,7 @@ caller 取值（覆盖评审要求的五类）：
 | 文件 | 函数/对象 | 改动 |
 | --- | --- | --- |
 | wifi.c | `app_wifi_op_owner_t` + claim/release 原语 | 六值枚举；`claim_owner(who, wait_ms)`；`release_or_handover(from)`；`cleanup_request()` |
-| wifi.c | `app_wifi_tryconnect_begin` | 改为 `claim_owner(TRYX, 8s)`；CLEANUP_FAILED → 立即失败 |
+| wifi.c | `app_wifi_tryconnect_begin` | 改为 `claim_owner(TRYX, 12s)`；CLEANUP_FAILED → 立即失败 |
 | wifi.c | `app_wifi_tryconnect_release` | 改为 `release_or_handover(TRYX)` |
 | wifi.c | `app_wifi_connect_best_saved_profile` | 入口 claim AUTO（非阻塞，检查六值）；所有出口 release_or_handover |
 | wifi.c | `app_wifi_connect_task_fn` | 延时后复核 owner==NONE；不满足则置 pending + 记 `schedule refused` |
@@ -244,7 +257,7 @@ caller 取值（覆盖评审要求的五类）：
 
 ## 11.1 C1（P0）TRYX 等待者优先——互斥之外补"进展性"
 
-**问题确认**：`claim_owner(TRYX,8s)` 只认 `owner==NONE`；AUTO 非阻塞 + monitor 每秒重试 +
+**问题确认**（历史口径：当时 TRYX 等待为 8s，第三轮已上调 12s）：`claim_owner(TRYX,8s)` 只认 `owner==NONE`；AUTO 非阻塞 + monitor 每秒重试 +
 三个事件旁路短持有 AUTO，均可能在 TRYX 的 50ms 轮询间隙插入，导致 TRYX 8s 超时 →
 `busy`，RACE-02 的 `ap_not_found` 不可达。**互斥不保证进展。**
 
@@ -267,29 +280,48 @@ caller 取值（覆盖评审要求的五类）：
    - CLEANUP 最坏时长 ≈ 3×apply_cfg（每次 ≤1s）+ 退避（0.5+1+2s）= **≤6.5s**；
    - 余量 ≥5.5s，且 < op TTL 45s、< 客户端 tryconnect 20s 预算（客户端在 op 上等）。
 
-## 11.2 C2（P1）cleanup_request 的 notify 失败回退 + 卡死看门狗
+## 11.2 C2（P1）cleanup_request 的失败回退 + 看门狗 fencing（第三轮重写，本节为准）
 
-**问题确认**：owner==NONE 时先置 CLEANUP 再 notify；若 `schedule_restart` 失败
-（任务创建失败）或通知丢失，owner 永久停在 CLEANUP，新 op 每次 8s 后 busy、
-AUTO 永久被拒，且日志无法区分"正在清理"与"通知丢了"。
+**问题确认（两项）**：
+① owner==NONE 时先置 CLEANUP 再 notify；若 `schedule_restart` 失败（任务创建失败）
+或通知丢失，owner 永久停在 CLEANUP，新 op 每次 12s 后 busy、AUTO 永久被拒，且日志
+无法区分"正在清理"与"通知丢了"；
+② 初版看门狗在 >25s 时**强制**把 owner 改为 CLEANUP_FAILED——若 restart 任务仍在
+`apply_cfg()` 内执行驱动调用，就出现"旧任务仍能操作 STA 时 owner 被改"，违反 B3
+释放原则（第三轮评审指出）。
 
-**修订（双保险）**：
-1. **同步回退**：`cleanup_request()` 在 owner==NONE 分支：
+**修订（fencing 版——watchdog 只请求中止，不夺权）**：
+1. **同步回退**（不变）：`cleanup_request()` 在 owner==NONE 分支：
    ```
    owner = CLEANUP
-   if (!app_wifi_schedule_restart()) {        /* 仅任务创建失败会返回 false */
+   if (!app_wifi_restart_wake()) {            /* 仅任务创建失败会返回 false */
        owner = NONE;                          /* 立即回退，不留假 CLEANUP */
        ESP_LOGE("cleanup request failed: restart task create failed op=%s", id);
        return false;                          /* operation → failed/cleanup_failed */
    }
    ```
-   （FreeRTOS 任务通知是计数型、先 give 后 wait 不丢失；本项回退只覆盖创建失败。
-   restart 任务在新设计中**长期存活**，句柄不会失效。）
-2. **卡死看门狗**（monitor 1s 节拍，覆盖"通知理论上不该丢但实际卡住"）：
-   - `owner==CLEANUP` 持续 **>12s** 未完成 → 重新 `schedule_restart()`（幂等 re-notify），
-     日志 `cleanup watchdog: re-notify op=%s elapsed=%lldms`；
-   - 持续 **>25s** → `owner=CLEANUP_FAILED`，日志 `cleanup watchdog: forced FAILED op=%s`；
-   - 计时起点 `s_wifi_cleanup_started_ms` 在 owner 进入 CLEANUP 时记录。
+   （FreeRTOS 任务通知是计数型、先 give 后 wait 不丢失；restart 任务**长期存活**，
+   句柄不会失效。）
+2. **看门狗只请求中止**（monitor 1s 节拍）：
+   - `owner==CLEANUP` 持续 **>12s** → 幂等 re-notify，日志
+     `cleanup watchdog: re-notify op=%s elapsed=%lldms`（不变）；
+   - 持续 **>25s** → **仅置 `s_wifi_cleanup_abort=true`**（与 owner 同一临界区），
+     日志 `cleanup watchdog: abort requested (owner stays CLEANUP) op=%s elapsed=%lldms`；
+     **monitor 不改变 owner**；
+   - 计时起点 `s_wifi_cleanup_started_ms`（owner 进入 CLEANUP 时记录）不变。
+3. **CLEANUP_FAILED 的转换只由 restart 任务在"安全点"自转换**：
+   安全点 = `apply_cfg()` 已返回、无在飞驱动调用的边界——任务入口（第 1 次尝试前）
+   与每次失败退避后。任务在这些点检查 abort：置位 → 停止重试 → 投递
+   `CLEANUP_FAIL` → owner=CLEANUP_FAILED → 日志 `cleanup aborted by watchdog op=%s`；
+   随后按 B3 粘性处理。
+   abort 置位后若某次 `apply_cfg()` **成功** → 正常 complete（owner=NONE、清 abort）：
+   资源已合法释放，顾虑消失，日志如实记录。
+4. **安全证明**：① 转换只发生在"无在飞驱动调用"的任务自身上下文；② 转换前
+   owner=CLEANUP，TRYX/AUTO/APPLY 本就被拒——卡住的任务是唯一还能操作 STA 的
+   主体，且它处于驱动内部（外部无并发写者）；③ abort 后任务在边界退出，不再
+   发起新尝试 ⇒ "旧任务仍能操作 STA 时改变 owner"被排除；④ `apply_cfg` 在驱动内
+   卡死（理论）时 owner 保持 CLEANUP——系统无 unsafe 交接，卡死由日志暴露，
+   人工介入（重启）。
 
 ## 11.3 C3（P1）事件旁路被拒后的接续（写实版）
 
@@ -343,11 +375,14 @@ monitor 的 formal-only 走 fast_path 时 `pmf_cfg.required=false`——**接不
 # 12. B5 日志格式样例（格式样例，代码未实施，非设备实录）
 
 ```
-I (199645510) wifi: auto_connect: scheduled by tryconnect_finish delay=400ms owner=NONE
-W (199645520) wifi: auto_connect: schedule refused by monitor_ble_fast delay=0ms reason=tryx_waiting
-I (199645530) wifi: op_owner: NONE -> TRYX by tryconnect_begin waiter=1
-I (199650429) wifi: auto_connect: schedule refused by sta_start delay=0ms reason=owner_busy(CLEANUP)
+I (199645509) wifi: auto_connect: scheduled caller=tryconnect_finish delay=400ms owner=NONE op=op-57378723A0693C10 gen=15
+W (199645520) wifi: op_owner: NONE -> TRYX by tryconnect_begin waiter=1
+I (199645535) wifi: auto_connect: task run caller=tryconnect_finish op=op-57378723A0693C10 gen=15 delay_actual=406ms
+W (199650419) wifi: auto_connect: schedule refused caller=sta_start reason=owner_busy(TRYX) op=op-12730EEC7F1F64AA gen=16
+I (199650429) wifi: op_owner: TRYX -> CLEANUP by tryconnect_release op=op-12730EEC7F1F64AA
 I (199651029) wifi: op_owner: CLEANUP -> NONE by cleanup_complete op=op-12730EEC7F1F64AA attempts=1
+I (199651035) wifi: auto_connect: scheduled caller=monitor_ble_fast delay=0ms owner=NONE op=- gen=17
+I (199651040) wifi: auto_connect: task run caller=monitor_ble_fast op=- gen=17 delay_actual=5ms
 ```
 
 字段约定：
@@ -355,7 +390,10 @@ I (199651029) wifi: op_owner: CLEANUP -> NONE by cleanup_complete op=op-12730EEC
 - `caller` ∈ {apply_start_released, sta_start, sta_disconnected_ble, apply_start_probe,
   tryconnect_finish, monitor_runtime_retry, monitor_ble_fast, monitor_startup}；
 - `reason` ∈ {tryx_waiting, owner_busy(<owner>), suspended, offline, task_busy, mode}；
-- `op_owner` 迁移行覆盖 claim/release/handover，`waiter` 仅 TRYX 相关行出现。
+- `op_owner` 迁移行覆盖 claim/release/handover，`waiter` 仅 TRYX 相关行出现；
+- `op`：无活动 operation 记 `-`，**不得沿用上一个 operation 的 ID**；
+- task run 行的 `gen` = **调度时捕获值**（随任务参数传入，不重读）；
+- scheduled ↔ task run 以 `caller + op + gen` 配对。
 
 # 13. Q1.4 措辞修正（时序自洽版）
 
@@ -371,7 +409,7 @@ I (199651029) wifi: op_owner: CLEANUP -> NONE by cleanup_complete op=op-12730EEC
   b) **扫描锁挡住**：任务创建晚于 wait 首轮，新 op 进入 `perform_scan` 后阻塞在
      scan lock（被该任务的静默扫描持有 ≈4.9s），锁释放后 scan_start 才执行；
 - **共同结论不变**：旧任务与新 op 重叠，且现有两个等待原语（任务指针/扫描锁）都
-  不覆盖 STA 状态；调度源仍唯一（其余五源当时条件均不成立）；
+  不覆盖 STA 状态；**唯一候选源**不变（其余五源当时条件均不成立）——定案仍待 B5；
 - **判别手段**：B5 落地后 `scheduled by tryconnect_finish` + 首条 `perform_scan` 的相对
   时间可区分 a/b；在此之前标"待 B5 闭环"。
 
@@ -426,7 +464,7 @@ CLEANUP 持有期间：
 | 1 | C2 看门狗强制 FAILED 可能发生在 `apply_cfg` 仍在执行时 | **watchdog 不再夺权**：>25s 仅置 `s_wifi_cleanup_abort`（不改 owner）；`CLEANUP_FAILED` 转换只由 restart 任务在**安全点**（apply_cfg 已返回的边界）自转换；卡死时 owner 保持 CLEANUP（无 unsafe 交接） | §11.2 重写 + 调用图 P2 |
 | 2 | B5 缺 op_id/generation、调度与执行不可关联 | 日志行增加 `op=<op_id|-> gen=<u>`；新增 `auto_connect: task run caller=... gen=...`（执行时刻）；op_id 来源 = 新 API `app_wifi_set_active_operation()`（cmd.c run 开始写入/终态清空） | §7 重写 |
 | 3 | 旧 worker 释放后仍有 STA 操作的证明缺失 | 调用链枚举证明：`try_connect_ip` 返回后 worker 仅剩读状态/快照/`set_state`/cleanup（无直接 STA）；cmd.c 全文件 0 处 `esp_wifi_*`；所有权不变量兜底 | 调用图 P1"释放后零 STA 证明" |
-| 4 | 文档时序口径不统一（12s/8000ms、0.5-1-2/1-2-4、Q1.4 双口径） | 调用图 P1→12000ms、P2→0.5/1/2s；Q1.4 统一为"唯一候选源 + 定案待 B5"（§0 已同步） | 调用图全文 + §0 |
+| 4 | 文档时序口径不统一（12s/8000ms、0.5-1-2/1-2-4、Q1.4 双口径） | 调用图 P1→12000ms、P2→0.5/1/2s；Q1.4 统一为"唯一候选源 + 定案待 B5"（§0 同步见 §15.1 更正说明） | 调用图全文 + §0 |
 | 5 | R2 应为验收项而非"无削弱" | §10 R2 重写：明确取舍 + 真机验收项（TRYX 结束后断 BLE，恢复 ≤12s+1s，不达标退回评审） | §10 |
 
 **附加约束（实现阶段，第三轮）**：
@@ -436,3 +474,10 @@ CLEANUP 持有期间：
   已在 185e029 之后的下一版补丁中处理，本轮不改代码。
 
 **本轮边界**：仅文档修订；未改代码、未烧录、未动设备。
+
+### 15.1 更正（2026-11-13，第四轮复审指出）
+
+§15 上表所列"位置"中，**§0 / §7 / §11.2 三处修订在初稿提交（5c13c78）中实际未落盘**
+——第三轮编辑脚本在最后一项断言（R2）失败后未写文件，仅 §10 R2 与调用图修改生效；
+初稿"已同步/已重写"的表述与文件不符。本提交补齐全部正文修订；**验收以正文实际
+内容为准，不以本表为准**。给评审带来的往返由我侧负责。

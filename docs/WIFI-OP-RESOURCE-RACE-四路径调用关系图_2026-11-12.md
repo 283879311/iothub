@@ -7,7 +7,7 @@
 ## 1. owner 状态机（总图）
 
 ```
-                    claim_owner(TRYX,8s)
+                    claim_owner(TRYX,12000ms)
         ┌───────────────────────────────────────► TRYX ◄── P1
         │                                            │ release_or_handover
         │        claim_owner(AUTO,0)                 │
@@ -75,16 +75,33 @@
   在新协议下，该任务若在 CLEANUP/OP_ACTIVE 期间醒来会 `schedule refused` 或
   claim 被拒，不会驱动 STA。
 
-**释放后零 STA 证明（第三轮评审问题 3）**：
-`release_or_handover(TRYX)` 位于 `tryconnect_finish` 内；worker 在
-`app_cmd_net_async_run` 中 `try_connect_ip` 返回之后的全部语句：
-1. `app_operation_get_status`（读）→ stale 分支 `return ESP_OK`；
-2. OK 分支：读 `trial_verify_gen`/`read_done`/写 P6 快照/`set_state(GOT_IP)`；
-3. 回滚分支：`app_cmd_net_async_cleanup`（try_cancel 置位、cleanup_request——
-   均非直接 STA）+ `set_state(FAILED)`。
-以上 **无任何 `esp_wifi_*` 调用**（cmd.c 全文件 0 处直接驱动调用，见 9 点表）；
-而 release 之后 worker 已不持 TRYX，任何 wifi.c 内的 STA 操作都需要 owner ⇒
-"释放后旧 worker 不再执行 STA 操作"由调用链枚举 + 所有权不变量共同证明。
+**释放后零 STA 证明（第三轮评审问题 3，分段闭合版——覆盖释放点之后的全部栈展开）**：
+
+```
+release_or_handover(TRYX) 返回
+  ↓ 段 1｜tryconnect_finish 剩余语句（wifi.c:3510-3512）
+      auto_connect_resume("tryconnect_finish")     —— 置 suspended=false + 日志，非驱动
+      schedule_connect_task(400ms, ...)            —— 仅创建任务，非驱动调用
+      return final_result
+  ↓ 段 2｜try_connect_common 剩余语句
+      所有 finish 调用点均为 `return app_wifi_tryconnect_finish(...)` 尾语句
+      ⇒ 剩余语句为空（wifi.c:4019/4024/4028/4039/4048/4077/4090/4118 逐一核实）
+  ↓ 段 3｜try_connect_ip 剩余语句
+      `return app_wifi_try_connect_common(...)` 尾语句 ⇒ 空
+  ↓ 段 4｜app_cmd_net_async_run 剩余语句（cmd.c）
+      stale 分支 return / OK 分支（读快照 + set_state）/
+      回滚分支（cleanup + set_state）/ 尾部 clear_job + 终态
+      ⇒ 无状态变更类驱动调用
+```
+
+- `esp_wifi_*` 状态变更类调用（disconnect/connect/set_config/scan_start/stop）
+  在 cmd.c 全文件 **0 处**（唯一驱动交互 = 只读查询 `esp_wifi_sta_get_ap_info`，
+  无副作用，不需要所有权）；
+- 段 1 的 `schedule_connect_task` 创建的任务在新协议下受仲裁：CLEANUP/OP_ACTIVE
+  期间醒来会 `schedule refused` 或 claim 被拒——旧 worker 释放后，"恢复动作"
+  在 CLEANUP 所有权下由 restart 任务执行；
+- 不变量兜底：release 后旧 worker 不持 TRYX，wifi.c 内任何状态变更类 STA 操作
+  都需要 owner。
 （`app_wifi_try_cancel()` 只置取消标志；`app_netcheck_cancel` 只取消验证任务。）
 
 ## 3. P2 · CANCEL_CLEANUP（cancel/expire 恢复链）
@@ -209,7 +226,7 @@ t2  [旧 op]  try_cancel → try_connect_common 提前走 finish
 t3  [旧 op]  finish: disconnect + restore set_config 完成
 t4  [旧 op]  release_or_handover(TRYX): requested → owner=CLEANUP + notify
              ▣ worker 返回自删（owner 已不由它持有）
-t5  [新 op]  claim_owner(TRYX,8s): owner==CLEANUP → 等待（日志 waiting owner=CLEANUP）
+t5  [新 op]  claim_owner(TRYX,12000ms): owner==CLEANUP → 等待（日志 waiting owner=CLEANUP）
 t6  [restart] wait_owner(CLEANUP) 成功 → apply_cfg(6)（全程 CLEANUP）
 t7  [restart] 成功 → owner=NONE，日志 cleanup complete
 t8  [新 op]  claim 成功 → 预扫描(7) 真正启动并完成 → 终态 ap_not_found
@@ -222,4 +239,4 @@ t8  [新 op]  claim 成功 → 预扫描(7) 真正启动并完成 → 终态 ap_
 | --- | --- |
 | B1：apply_cfg 全程不释放外层所有权 | §3：`apply_cfg(6)` 在 `wait_owner(CLEANUP)` 之后、`owner=NONE` 之前，中间无 release；§7 t6-t7 |
 | B4：9 点逐点有 owner | §6 表（每点一行）+ §2/§3/§4/§5 各路径图中 `(n)` 标注 |
-| B5：日志在调度时刻 | §4 顶部 `vTaskDelay(delay)` 前已打印 caller；§3 `sta_start` 调度同样带标签 |
+| B5：日志在调度时刻 + 可关联 | §4 顶部 `vTaskDelay(delay)` 前已打印 caller（调度瞬间）；§3 `sta_start` 同样带标签；scheduled/task run 两行均带 op/gen（第三轮字段），caller+op+gen 配对关联 |
