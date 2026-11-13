@@ -71,7 +71,7 @@
 - **释放发生在 disconnect/restore set_config 完成之后**（评审释放原则），
   candidate 连接已在 finish 内被 disconnect 收口；
 - 旧 op 的 finish 会 `schedule_connect_task(400ms, "tryconnect_finish")`（B5 标签）——
-  这正是 Q1.4 的元凶候选调度源（**定案待 B5 日志闭环**，见修订设计 §0/§13）；
+  这是 Q1.4 的唯一候选调度源（**定案待 B5 日志闭环**，见修订设计 §0/§13）；
   在新协议下，该任务若在 CLEANUP/OP_ACTIVE 期间醒来会 `schedule refused` 或
   claim 被拒，不会驱动 STA。
 

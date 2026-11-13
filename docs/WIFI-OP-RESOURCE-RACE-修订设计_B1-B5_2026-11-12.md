@@ -192,7 +192,7 @@ caller 取值（覆盖评审要求的五类）：
 | `sta_start` | wifi.c:1986 |
 | `sta_disconnected_ble` | wifi.c:2167 |
 | `apply_start_probe` | wifi.c:3111 |
-| `tryconnect_finish` | wifi.c:3510（**Q1.4 元凶，必须可追溯**） |
+| `tryconnect_finish` | wifi.c:3510（**Q1.4 唯一候选调度源，定案待 B5 闭环**） |
 | `monitor_runtime_retry` | wifi.c:1342 |
 | `monitor_ble_fast` | wifi.c:1369 |
 | `monitor_startup` | wifi.c:1376 |
