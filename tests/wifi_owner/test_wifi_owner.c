@@ -157,6 +157,57 @@ static void test_release_and_terminal(void)
     CHECK(r.action == APP_WIFI_OWNER_ACT_WAIT);          /* APPLY 阻塞等待 */
 }
 
+/* fencing 不变量:CLEANUP 态下除 DONE/FAIL 外,任何事件都不得改变 owner——
+ * 即 watchdog(只置 abort 标志,不投递事件)在状态机层面没有夺权路径。 */
+static void test_cleanup_fencing_invariants(void)
+{
+    const app_wifi_owner_ev_t evs[] = {
+        APP_WIFI_OWNER_EV_CLAIM_TRYX,
+        APP_WIFI_OWNER_EV_CLAIM_AUTO,
+        APP_WIFI_OWNER_EV_CLAIM_APPLY,
+        APP_WIFI_OWNER_EV_RELEASE_TRYX,
+        APP_WIFI_OWNER_EV_RELEASE_AUTO,
+        APP_WIFI_OWNER_EV_RELEASE_APPLY,
+        APP_WIFI_OWNER_EV_CLEANUP_REQUEST,
+    };
+    app_wifi_owner_state_t s = st(APP_WIFI_OWNER_CLEANUP, false, false);
+
+    for (unsigned i = 0; i < sizeof(evs) / sizeof(evs[0]); i++) {
+        app_wifi_owner_step_t r = step(&s, evs[i]);
+        CHECK(r.state.owner == APP_WIFI_OWNER_CLEANUP);
+    }
+    /* 只有任务自身(安全点)投递的 DONE/FAIL 能改变 owner */
+    app_wifi_owner_step_t r = step(&s, APP_WIFI_OWNER_EV_CLEANUP_DONE);
+    CHECK(r.state.owner == APP_WIFI_OWNER_NONE);
+    s = st(APP_WIFI_OWNER_CLEANUP, false, false);
+    r = step(&s, APP_WIFI_OWNER_EV_CLEANUP_FAIL);
+    CHECK(r.state.owner == APP_WIFI_OWNER_CLEANUP_FAILED);
+}
+
+/* fencing 不变量:CLEANUP_FAILED 粘性——除 BOOT_RESET 外全部拒绝或不变 */
+static void test_cleanup_failed_invariants(void)
+{
+    const app_wifi_owner_ev_t evs[] = {
+        APP_WIFI_OWNER_EV_CLAIM_TRYX,
+        APP_WIFI_OWNER_EV_CLAIM_AUTO,
+        APP_WIFI_OWNER_EV_CLAIM_APPLY,
+        APP_WIFI_OWNER_EV_RELEASE_TRYX,
+        APP_WIFI_OWNER_EV_RELEASE_AUTO,
+        APP_WIFI_OWNER_EV_RELEASE_APPLY,
+        APP_WIFI_OWNER_EV_CLEANUP_REQUEST,
+        APP_WIFI_OWNER_EV_CLEANUP_DONE,
+        APP_WIFI_OWNER_EV_CLEANUP_FAIL,
+    };
+    app_wifi_owner_state_t s = st(APP_WIFI_OWNER_CLEANUP_FAILED, false, false);
+
+    for (unsigned i = 0; i < sizeof(evs) / sizeof(evs[0]); i++) {
+        app_wifi_owner_step_t r = step(&s, evs[i]);
+        CHECK(r.state.owner == APP_WIFI_OWNER_CLEANUP_FAILED);
+    }
+    app_wifi_owner_step_t r = step(&s, APP_WIFI_OWNER_EV_BOOT_RESET);
+    CHECK(r.state.owner == APP_WIFI_OWNER_NONE);
+}
+
 int main(void)
 {
     test_claim_tryx();
@@ -164,6 +215,8 @@ int main(void)
     test_waiter_priority();
     test_cleanup_handover();
     test_release_and_terminal();
+    test_cleanup_fencing_invariants();
+    test_cleanup_failed_invariants();
 
     printf("wifi_owner: %d passed, %d failed\n", g_pass, g_fail);
     return g_fail == 0 ? 0 : 1;

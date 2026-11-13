@@ -471,6 +471,8 @@ static bool app_cmd_net_async_cleanup(app_operation_t *op, void *ctx)
      * 判别点(DEF-MQTT-003,评审选 B):"这次清理没有提交新配置" ⇔ state !=
      * COMMITTING。EXPIRED/CANCELLED/FAILED 都成立;COMMITTING 表示 apply 已
      * 接管新配置,不得回退。状态读取与 trial 检查放在同一临界区,单点决策。 */
+    /* B5(第三轮):本 op 终态清理时按 id 匹配清空活动登记(旧终态不误清新 op) */
+    app_wifi_clear_active_operation(app_operation_id(op));
     app_cmd_net_job_lock();
     nc_gen = s_net_async.netcheck_gen;   /* memset 前捕获(0=尚未验证,无需取消) */
     restore_persistent = (app_operation_state(op) != APP_OP_COMMITTING);
@@ -539,6 +541,8 @@ static esp_err_t app_cmd_net_async_run(app_operation_t *op, void *ctx)
     if (op == NULL || job == NULL || !job->active) {
         return ESP_ERR_INVALID_ARG;
     }
+    /* B5(第三轮):活动 operation 登记——scheduled/task run 日志的 op 字段 */
+    app_wifi_set_active_operation(app_operation_id(op));
     if (!app_operation_get_status(op, &st0)) {
         return ESP_ERR_INVALID_ARG;
     }
@@ -646,6 +650,7 @@ static esp_err_t app_cmd_net_async_run(app_operation_t *op, void *ctx)
     /* 契约 v1.1:连接阶段失败/取消 = 本 op 未达成任何阶段,写入全 false 快照,
      * 避免 operation.get 回落活运行态(那是"别的链路"的状态)。 */
     app_cmd_net_stage_snap_put(app_operation_id(op), false, false, false, false);
+    app_wifi_clear_active_operation(app_operation_id(op));
     if (result == APP_WIFI_TRY_CANCELLED) {
         return app_operation_set_state(op, APP_OP_CANCELLED,
                                        APP_OPERATION_ERR_CANCELLED);
@@ -1008,6 +1013,7 @@ static bool app_cmd_net_apply_async(const app_cmd_context_t *ctx,
     cJSON_Delete(inner);
     if (ok) {
         (void)app_operation_set_state(op, APP_OP_SUCCESS, APP_OPERATION_ERR_NONE);
+        app_wifi_clear_active_operation(status.id);
         app_cmd_net_async_clear_job();
         {
             cJSON *resp = cJSON_CreateObject();

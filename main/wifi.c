@@ -104,6 +104,12 @@ static int64_t s_wifi_cleanup_started_ms = 0;
 /* P2:拒绝日志限流(caller+reason 变化或 ≥2s 才打印) */
 static int64_t s_owner_log_last_ms = 0;
 static char s_owner_log_last_key[64];
+/* C2-fencing(第三轮):watchdog 只请求中止;CLEANUP_FAILED 转换由 restart 任务
+ * 在 apply_cfg 返回后的安全点自转换——monitor 永不夺权。 */
+static volatile bool s_wifi_cleanup_abort = false;
+/* B5(第三轮):活动 operation id——scheduled/refused/task run 日志的 op 字段来源;
+ * cmd.c 在 run 开始写入、终态清空(按 id 匹配清除,防旧终态误清新 op)。 */
+static char s_wifi_active_op_id[24];
 /* WIFI-OP-RESOURCE-RACE C3:事件旁路被拒后的接续状态 */
 static volatile bool s_wifi_pmf_required_pending = false;
 static volatile bool s_wifi_pmf_force_required = false;
@@ -304,7 +310,8 @@ static void app_wifi_owner_log_denied(const char *caller, const char *reason)
              caller, reason, app_wifi_owner_name(owner), (int)waiter, (int)requested);
 }
 
-static void app_wifi_schedule_log_refused(const char *caller, const char *reason)
+static void app_wifi_schedule_log_refused(const char *caller, const char *reason,
+                                          const char *op_id, uint32_t gen)
 {
     char key[64];
 
@@ -312,7 +319,8 @@ static void app_wifi_schedule_log_refused(const char *caller, const char *reason
     if (!app_wifi_log_should_emit(key)) {
         return;
     }
-    ESP_LOGW(TAG, "auto_connect: schedule refused by %s reason=%s", caller, reason);
+    ESP_LOGW(TAG, "auto_connect: schedule refused caller=%s reason=%s op=%s gen=%u",
+             caller, reason, (op_id && op_id[0]) ? op_id : "-", (unsigned)gen);
 }
 
 static app_wifi_owner_act_t app_wifi_owner_step_ev(app_wifi_owner_ev_t ev, const char *caller)
@@ -342,10 +350,10 @@ static app_wifi_owner_act_t app_wifi_owner_step_ev(app_wifi_owner_ev_t ev, const
     if (to == APP_WIFI_OWNER_CLEANUP_FAILED && from != to) {
         ESP_LOGE(TAG, "cleanup state: -> CLEANUP_FAILED op=%s by %s",
                  s_wifi_restart_op_id, caller);
-    } else if (from == APP_WIFI_OWNER_CLEANUP_FAILED &&
-               to == APP_WIFI_OWNER_NONE && ev == APP_WIFI_OWNER_EV_BOOT_RESET) {
-        ESP_LOGW(TAG, "cleanup state: CLEANUP_FAILED cleared by boot");
     }
+    /* BOOT_RESET 事件保留说明(评审条件):生产固件无调用点(grep 证实),
+     * 保留用于主机测试注入(粘性清除语义覆盖)与未来显式恢复通道;
+     * 任何运行期接线必须单独评审。原"cleared by boot"死日志分支已删。 */
     return act;
 }
 
@@ -410,6 +418,28 @@ static void app_wifi_owner_release(app_wifi_owner_ev_t ev, const char *caller)
     }
 }
 
+/* C2-fencing:原子"检查 abort + FAILED 转换"——同一临界区，关闭
+ * "检查后、转换前"被其他主体改动的窗口。返回 true=已转换(含日志)。 */
+static bool app_wifi_owner_cleanup_abort_consume(const char *caller)
+{
+    bool fired = false;
+    char op_id[24];
+
+    app_wifi_tryconnect_state_lock();
+    if (s_wifi_cleanup_abort && s_wifi_owner.owner == APP_WIFI_OWNER_CLEANUP) {
+        (void)app_wifi_owner_step_locked(APP_WIFI_OWNER_EV_CLEANUP_FAIL, NULL);
+        app_copy_string(op_id, sizeof(op_id), s_wifi_restart_op_id);
+        s_wifi_cleanup_started_ms = 0;
+        s_wifi_restart_kind = APP_WIFI_RESTART_APPLY;
+        fired = true;
+    }
+    app_wifi_tryconnect_state_unlock();
+    if (fired) {
+        ESP_LOGE(TAG, "cleanup aborted by watchdog op=%s by %s", op_id, caller);
+    }
+    return fired;
+}
+
 /* cleanup 请求(cmd.c cleanup 调用):成功返回 true;CLEANUP_FAILED 或唤醒失败返回 false。 */
 static bool app_wifi_owner_cleanup_request(const char *op_id)
 {
@@ -445,6 +475,25 @@ bool app_wifi_cleanup_request(const char *op_id)
     return app_wifi_owner_cleanup_request(op_id);
 }
 
+/* B5(第三轮):活动 operation 登记——scheduled/task run 日志的 op 字段来源。 */
+void app_wifi_set_active_operation(const char *op_id)
+{
+    app_wifi_tryconnect_state_lock();
+    app_copy_string(s_wifi_active_op_id, sizeof(s_wifi_active_op_id), op_id ? op_id : "");
+    app_wifi_tryconnect_state_unlock();
+}
+
+/* 按 id 匹配清除——旧 operation 终态不得误清新 operation 的 ID(评审条件)。 */
+void app_wifi_clear_active_operation(const char *op_id)
+{
+    app_wifi_tryconnect_state_lock();
+    if (op_id != NULL && s_wifi_active_op_id[0] != '\0' &&
+        strcmp(s_wifi_active_op_id, op_id) == 0) {
+        s_wifi_active_op_id[0] = '\0';
+    }
+    app_wifi_tryconnect_state_unlock();
+}
+
 /* monitor 1s 节拍:cleanup 看门狗 + 事件旁路 pending 接续(C2/C3)。 */
 void app_wifi_owner_monitor_tick(void)
 {
@@ -463,13 +512,20 @@ void app_wifi_owner_monitor_tick(void)
         int64_t elapsed = now - started;
 
         if (elapsed > 25000) {
-            ESP_LOGE(TAG, "cleanup watchdog: forced FAILED after %lldms op=%s",
-                     (long long)elapsed, op_id);
-            (void)app_wifi_owner_step_ev(APP_WIFI_OWNER_EV_CLEANUP_FAIL, "cleanup_watchdog");
+            /* C2-fencing:只请求中止，不夺权——owner 保持 CLEANUP，
+             * CLEANUP_FAILED 由 restart 任务在安全点(apply_cfg 返回后的边界)自转换 */
+            bool abort_requested = false;
+
             app_wifi_tryconnect_state_lock();
-            s_wifi_cleanup_started_ms = 0;
-            s_wifi_restart_kind = APP_WIFI_RESTART_APPLY;
+            if (s_wifi_owner.owner == APP_WIFI_OWNER_CLEANUP && !s_wifi_cleanup_abort) {
+                s_wifi_cleanup_abort = true;
+                abort_requested = true;
+            }
             app_wifi_tryconnect_state_unlock();
+            if (abort_requested) {
+                ESP_LOGE(TAG, "cleanup watchdog: abort requested (owner stays CLEANUP) "
+                              "op=%s elapsed=%lldms", op_id, (long long)elapsed);
+            }
         } else if (elapsed > 12000 &&
                    (s_wifi_cleanup_last_nudge_ms == 0 ||
                     now - s_wifi_cleanup_last_nudge_ms >= 12000)) {
@@ -646,6 +702,16 @@ static bool s_wifi_sta_connecting = false;
 static bool s_wifi_fast_path_pending = false;
 /* WIFI-OP-RESOURCE-RACE:auto-connect 任务最近一次调度者(B5,调度时刻打印) */
 static const char *s_wifi_connect_task_caller = "unknown";
+/* B5(第三轮):任务参数——携带调度时捕获的 caller/op/gen,task run 行使用,
+ * 不重新读取(执行时可能已变化)。单实例任务栅栏保证不被并发覆写。 */
+typedef struct {
+    TickType_t delay_ticks;
+    const char *caller;
+    char op_id[24];
+    uint32_t gen;
+    int64_t scheduled_ms;
+} app_wifi_auto_task_arg_t;
+static app_wifi_auto_task_arg_t s_wifi_auto_task_arg;
 /* 与 fast_path_pending 配套:为 true 时 connect task 只走正式 SSID,
  * 失败也不进入 profile 扫描(BLE 连接期间的降级路径)。 */
 static bool s_wifi_formal_only_pending = false;
@@ -1532,17 +1598,21 @@ static esp_err_t app_wifi_connect_best_saved_profile(bool allow_fast_path,
 
 static void app_wifi_connect_task_fn(void *arg)
 {
-    TickType_t delay_ticks = (TickType_t)(uintptr_t)arg;
-    const char *caller = s_wifi_connect_task_caller;
+    app_wifi_auto_task_arg_t *ta = (app_wifi_auto_task_arg_t *)arg;
+    const char *caller = ta->caller;
     bool allow_fast_path = false;
     bool allow_profile_scan = true;
     app_wifi_owner_t owner;
     bool waiter;
     bool requested;
 
-    if (delay_ticks > 0) {
-        vTaskDelay(delay_ticks);
+    if (ta->delay_ticks > 0) {
+        vTaskDelay(ta->delay_ticks);
     }
+    /* B5(第三轮):任务实际执行行——op/gen 为调度时捕获值(随任务参数传入,不重读) */
+    ESP_LOGI(TAG, "auto_connect: task run caller=%s op=%s gen=%u delay_actual=%dms",
+             caller, (ta->op_id[0] != '\0') ? ta->op_id : "-", (unsigned)ta->gen,
+             (int)(app_wifi_now_ms() - ta->scheduled_ms));
     /* M1 R4:已排队任务延时结束后二次检查离线门控;被门控时直接退出,
      * 不改 s_wifi_sta_connecting,也不发起任何连接。 */
     if (app_wifi_connect_blocked()) {
@@ -1559,7 +1629,8 @@ static void app_wifi_connect_task_fn(void *arg)
     app_wifi_tryconnect_state_unlock();
     if (owner != APP_WIFI_OWNER_NONE || waiter || requested) {
         app_wifi_schedule_log_refused(caller,
-                                      owner != APP_WIFI_OWNER_NONE ? "owner_busy" : "tryx_waiting");
+                                      owner != APP_WIFI_OWNER_NONE ? "owner_busy" : "tryx_waiting",
+                                      ta->op_id, ta->gen);
         app_wifi_runtime_lock();
         s_wifi_fast_path_pending = true;   /* 条件解除后由 monitor 重试 */
         app_wifi_runtime_unlock();
@@ -1800,17 +1871,34 @@ static bool app_wifi_schedule_connect_task(TickType_t delay_ticks, const char *c
             reason = "mode";
         }
     }
-    if (reason != NULL) {
-        app_wifi_schedule_log_refused(caller, reason);
-        return false;
+    {
+        char active_op[24];
+
+        app_wifi_tryconnect_state_lock();
+        app_copy_string(active_op, sizeof(active_op), s_wifi_active_op_id);
+        app_wifi_tryconnect_state_unlock();
+        if (reason != NULL) {
+            app_wifi_schedule_log_refused(caller, reason,
+                                          (active_op[0] != '\0') ? active_op : NULL,
+                                          app_wifi_link_generation());
+            return false;
+        }
+        /* B5(第三轮):调度时刻打印;op/gen 一并捕获进任务参数(task run 行使用) */
+        s_wifi_connect_task_caller = caller;
+        app_copy_string(s_wifi_auto_task_arg.op_id, sizeof(s_wifi_auto_task_arg.op_id),
+                        (active_op[0] != '\0') ? active_op : "-");
+        s_wifi_auto_task_arg.gen = app_wifi_link_generation();
+        s_wifi_auto_task_arg.scheduled_ms = app_wifi_now_ms();
+        s_wifi_auto_task_arg.caller = caller;
+        s_wifi_auto_task_arg.delay_ticks = delay_ticks;
+        ESP_LOGI(TAG, "auto_connect: scheduled caller=%s delay=%ums owner=%s op=%s gen=%u",
+                 caller, (unsigned)((uint32_t)delay_ticks * portTICK_PERIOD_MS),
+                 app_wifi_owner_name(owner),
+                 (active_op[0] != '\0') ? active_op : "-",
+                 (unsigned)s_wifi_auto_task_arg.gen);
     }
-    s_wifi_connect_task_caller = caller;
-    /* B5:调度时刻打印(与连接结果无关) */
-    ESP_LOGI(TAG, "auto_connect: scheduled by %s delay=%ums owner=%s",
-             caller, (unsigned)((uint32_t)delay_ticks * portTICK_PERIOD_MS),
-             app_wifi_owner_name(owner));
     if (xTaskCreate(app_wifi_connect_task_fn, "wifi_auto_connect", 4096,
-                    (void *)(uintptr_t)delay_ticks, 5, &s_wifi_connect_task) != pdPASS) {
+                    (void *)&s_wifi_auto_task_arg, 5, &s_wifi_connect_task) != pdPASS) {
         s_wifi_connect_task = NULL;
         ESP_LOGE(TAG, "Failed to create Wi-Fi auto-connect task");
         return false;
@@ -4258,10 +4346,19 @@ static void app_wifi_restart_run_cleanup(const char *op_id)
     }
     app_wifi_tryconnect_state_unlock();
 
+    /* C2-fencing:入口安全点——abort 已置位则不得开始任何驱动操作 */
+    if (app_wifi_owner_cleanup_abort_consume("cleanup_entry")) {
+        return;
+    }
+
     app_wifi_build_cfg_from_config(&cfg);
     for (attempt = 0; attempt < 3; attempt++) {
         if (attempt > 0) {
             vTaskDelay(pdMS_TO_TICKS(backoff_ms[attempt - 1]));
+            /* C2-fencing:失败退避后的安全点(apply_cfg 已返回) */
+            if (app_wifi_owner_cleanup_abort_consume("cleanup_backoff")) {
+                return;
+            }
         }
         stage = APP_WIFI_APPLY_STAGE_NONE;
         err = app_wifi_apply_cfg(&cfg, &stage);
@@ -4273,14 +4370,29 @@ static void app_wifi_restart_run_cleanup(const char *op_id)
     }
 
     if (err == ESP_OK) {
-        (void)app_wifi_owner_step_ev(APP_WIFI_OWNER_EV_CLEANUP_DONE, "cleanup_complete");
+        /* 成功路径:清 abort 与释放 owner 同一临界区(评审条件——
+         * 关闭"清 abort 后、释放前"被 monitor 再次置位的窗口) */
+        bool abort_discarded;
+
+        app_wifi_tryconnect_state_lock();
+        abort_discarded = s_wifi_cleanup_abort;
+        s_wifi_cleanup_abort = false;
+        (void)app_wifi_owner_step_locked(APP_WIFI_OWNER_EV_CLEANUP_DONE, NULL);
+        s_wifi_cleanup_started_ms = 0;
+        s_wifi_restart_kind = APP_WIFI_RESTART_APPLY;
+        app_wifi_tryconnect_state_unlock();
         app_wifi_set_cfg_state(cfg.sta_use_static ? APP_NET_CFG_STATE_STATIC
                                                   : APP_NET_CFG_STATE_DHCP);
-        ESP_LOGI(TAG, "cleanup complete op=%s attempts=%d", op_id, attempt + 1);
+        ESP_LOGI(TAG, "cleanup complete op=%s attempts=%d%s",
+                 op_id, attempt + 1,
+                 abort_discarded ? " (watchdog abort discarded: apply succeeded)" : "");
     } else {
-        (void)app_wifi_owner_step_ev(APP_WIFI_OWNER_EV_CLEANUP_FAIL, "cleanup_failed");
-        ESP_LOGE(TAG, "cleanup failed op=%s stage=%d err=%s attempts=3",
-                 op_id, (int)stage, esp_err_to_name(err));
+        /* 失败路径:原子"检查 abort + FAILED 转换"(评审条件——无抢占窗口) */
+        if (!app_wifi_owner_cleanup_abort_consume("cleanup_failed")) {
+            (void)app_wifi_owner_step_ev(APP_WIFI_OWNER_EV_CLEANUP_FAIL, "cleanup_failed");
+            ESP_LOGE(TAG, "cleanup failed op=%s stage=%d err=%s attempts=3",
+                     op_id, (int)stage, esp_err_to_name(err));
+        }
     }
     app_wifi_restart_kind_reset_after_cleanup();
 }

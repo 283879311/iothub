@@ -22,6 +22,10 @@ bool app_wifi_schedule_restart(void);
 bool app_wifi_cleanup_request(const char *op_id);
 /* network.scan:owner 忙与扫描节流 busy 区分(P3);owner_busy 输出可为 NULL */
 esp_err_t app_wifi_perform_scan_command_ex(bool *owner_busy);
+/* B5(第三轮):活动 operation 登记——scheduled/refused/task run 日志的 op 字段;
+ * clear 按 id 匹配,旧 operation 终态不会误清新 operation 的 ID */
+void app_wifi_set_active_operation(const char *op_id);
+void app_wifi_clear_active_operation(const char *op_id);
 /* 监控:cleanup 看门狗/事件旁路 pending 的接续(monitor 1s 节拍调用) */
 void app_wifi_owner_monitor_tick(void);
 void app_start_wifi(void);
