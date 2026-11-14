@@ -72,19 +72,35 @@ job_lock: trial_id[20] / trial_ssid[33] 值复制 → unlock
 
 - 锁内零 cJSON；R8 防撕读保护保持；OOM → trial_clear 语义不变。
 
-### 段 B 快照（栈局部，容量 98B）
+### 段 B 快照（栈局部，容量 98B；第三轮修正流程与失败语义）
 
 ```
-patch = CreateObject                    失败 → 跳过段 B（trial_ready 不执行 ✓）
-job_lock: trial_ssid[33] / trial_password[65] 值复制 → unlock
-锁外: Add sta_ssid / sta_password / net_mode="sta"（顺序不变）
-config_apply_patch(patch, ...)          成功/失败两路径汇合
-擦除 patch 堆副本（见 §2.1）→ cJSON_Delete(patch/changed)
-擦除栈副本（见 §2.1）
+apply dispatcher 入口守卫（现状不变，非本段引入）：
+  1. MQTT 来源 → guard_rejected
+  2. busy / trial_id 校验 + app_cmd_net_trial_ready() → trial_invalid
+  3. app_config_snapshot_save() 失败 → trial_clear + storage_failed
+
+patch = cJSON_CreateObject()
+  失败 → 保持现有失败处理：
+           apply_err 仍为 ESP_FAIL（未进 config_apply_patch）
+           snapshot_discard + trial_clear
+           err = "save_failed"（统一失败处理映射）
+  成功 →
+    job_lock: 值复制 trial_ssid[33] / trial_password[65] → unlock
+    锁外构建: sta_ssid / sta_password / net_mode="sta"（顺序不变）
+    config_apply_patch(patch, ...)                成功/失败两路径汇合
+    擦除点: patch 中 sta_password valuestring → secure_wipe（删除前）
+    cJSON_Delete(patch / changed)
+    栈局部 trial_password → secure_wipe
+  成功路径继续: save_wifi_profile → schedule_restart（既有后续，不动）
+  失败路径: snapshot_discard + trial_clear + save_failed（既有映射，不动）
 ```
 
 - `net_mode` 保持原锁外构建（评审认可项）；
-- 前置守卫不新增不削弱（MQTT guard / trial 校验 / snapshot_save 原位）。
+- 前置守卫不新增不削弱（§0 更正后的入口守卫 + snapshot_save 原位）；
+- **patch 创建失败的现有失败处理（snapshot_discard + trial_clear +
+  save_failed）不在快照重构中改变**——快照化只影响"成功进入复制后"的
+  清理增补（擦除点），不触碰 OOM 分支的既有语义。
 
 ### 2.1 `sta_password` 三副本清点与清理策略（评审 P1 核心项）
 
@@ -112,17 +128,20 @@ config_apply_patch(patch, ...)          成功/失败两路径汇合
 3. **共享副本（#1）与 config 层副本**：不声称清除——属于 trial/config 既有
    生命周期（CMD-02 边界排除 / 配置提交本身），文档如实记录边界。
 
-**实现形态**（设计，非代码）：
+**实现形态**（设计，非代码；patch 创建失败走既有统一失败处理——
+无堆副本、无新增擦除点，快照栈副本擦除在两路径各自保留）：
 
 ```
-[patch 创建成功]
-job_lock: 拷贝 trial_ssid/trial_password → 局部; unlock
-Add sta_ssid/sta_password/net_mode
-apply_err = config_apply_patch(...)
-[擦除点（成败汇合）]:
-    sta_password 节点 valuestring → secure_wipe
+patch = CreateObject
+  失败 → 既有失败处理（snapshot_discard + trial_clear + save_failed）
+         + 栈局部 trial_password secure_wipe（本次新增的清理，覆盖失败路径）
+  成功 →
+    job_lock: 拷贝 trial_ssid/trial_password → 局部; unlock
+    Add sta_ssid/sta_password/net_mode
+    config_apply_patch()
+    擦除点: patch 中 sta_password valuestring → secure_wipe（删除前）
     cJSON_Delete(patch/changed)
-[栈局部 trial_password → secure_wipe]
+    栈局部 trial_password → secure_wipe
 ```
 
 ## 3. 判定表（两段锁内均无判定——自动满足"判定完整迁移"）
@@ -173,4 +192,5 @@ snapshot_save）全部留在锁外原位。
 | 轮次 | 变更 |
 | --- | --- |
 | 初稿（6ba07b9） | 两段纯拷贝设计；sta_password 生命周期表（不完整） |
-| **第二轮（本版）** | ① 三副本清点表（含"不声称清除"边界）；② 栈副本 volatile 擦除 + patch 堆副本删除前擦除（成败汇合点）；③ 使用范围四条精确化；④ §0 前置守卫表述更正；⑤ 资源预算降级为估算 + -fstack-usage 口径 |
+| 第二轮（85407bd） | ① 三副本清点表；② 栈副本 volatile 擦除 + patch 堆副本删除前擦除；③ 使用范围四条精确化；④ §0 前置守卫表述更正；⑤ 资源估算降级 |
+| **第三轮（本版）** | §2 段 B 流程与失败语义修正——patch 创建在 trial_ready/snapshot_save **之后**；patch 创建失败走既有统一失败处理（apply_err=ESP_FAIL → snapshot_discard + trial_clear + save_failed），**不在快照重构中改变** |
