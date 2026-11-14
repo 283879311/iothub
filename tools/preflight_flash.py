@@ -58,12 +58,17 @@ def inspect_log(log_dir, port, max_age_sec):
     boot_idx = data.rfind("rst:0x1")
     mac = None
     macs = list(re.finditer(r"client_id=iothub-([0-9A-Fa-f]{12})", data))
-    if macs:
-        last = macs[-1]
-        info["client_id_after_boot"] = last.start() > boot_idx
-        if info["client_id_after_boot"]:
-            mac = last.group(1).upper()
+    # P1-1：必须先确认 boot 标记存在；无 boot 标记时 rfind 返回 -1，
+    # 若直接比较会把任意 client_id 误判为"boot 后证据"。
+    if boot_idx < 0:
+        info["boot_marker"] = False
+        info["client_id_after_boot"] = False
+    elif macs and macs[-1].start() > boot_idx:
+        info["boot_marker"] = True
+        info["client_id_after_boot"] = True
+        mac = macs[-1].group(1).upper()
     else:
+        info["boot_marker"] = True
         info["client_id_after_boot"] = False
     return mac, info
 
@@ -99,8 +104,11 @@ def main():
     args = ap.parse_args()
 
     name = Path(args.port).name
+    other = "ttyUSB1" if name == "ttyUSB0" else "ttyUSB0"
     observed_wifi, loginfo = inspect_log(args.log_dir, name, args.max_age_sec)
+    other_wifi, other_info = inspect_log(args.log_dir, other, args.max_age_sec)
     observed_id = dev_id_from_wifi_mac(observed_wifi)
+    other_id = dev_id_from_wifi_mac(other_wifi)
 
     elf = Path(args.elf)
     if not elf.is_file():
@@ -112,10 +120,13 @@ def main():
     print("=== 烧录前四元组 ===")
     print(f"  端口          : {args.port}  (日志名 {name})")
     print(f"  日志          : {loginfo.get('file')}")
-    print(f"    存在={loginfo.get('exists')} size={loginfo.get('size')} "
-          f"age={loginfo.get('age_sec')}s fresh={loginfo.get('fresh')} "
-          f"sha256[:16]={loginfo.get('sha256_16')} "
-          f"client_id_after_boot={loginfo.get('client_id_after_boot')}")
+    for tag, li in (("目标端口", loginfo), ("另一端口", other_info)):
+        print(f"  [{tag}] {li.get('file')}")
+        print(f"    存在={li.get('exists')} size={li.get('size')} "
+              f"age={li.get('age_sec')}s fresh={li.get('fresh')} "
+              f"sha256[:16]={li.get('sha256_16')} "
+              f"boot_marker={li.get('boot_marker')} "
+              f"client_id_after_boot={li.get('client_id_after_boot')}")
     print(f"  端口观测 WiFi MAC : {observed_wifi or '未知'}  → {observed_id}"
           f"（BLE≈{ble_from_wifi_mac(observed_wifi)}）")
     print(f"  期望 device_id    : {args.expect_device_id}")
@@ -131,11 +142,30 @@ def main():
         print(f"[FAIL] 日志过期（{loginfo.get('age_sec')}s > {args.max_age_sec}s）——"
               f"映射证据不是本次会话，请重新采集后再过门禁")
         ok = False
+    if not loginfo.get("boot_marker"):
+        print("[FAIL] 目标端口日志没有 boot 标记（rst:0x1），无法证明身份属于当前上电会话")
+        ok = False
     if observed_wifi is None:
-        print("[FAIL] 最近一次 boot 之后找不到 client_id=iothub-<WiFiMAC>，无法确认设备身份")
+        print("[FAIL] 目标端口最近一次 boot 之后找不到 client_id=iothub-<WiFiMAC>")
         ok = False
     elif observed_id.lower() != args.expect_device_id.lower():
         print(f"[FAIL] 端口设备不符：观测 {observed_id} ≠ 期望 {args.expect_device_id}")
+        ok = False
+    # P1-2：另一端口也必须提供"当前会话有效身份"，且与目标设备不同
+    if not other_info.get("exists"):
+        print(f"[FAIL] 另一端口日志缺失（{other}）——无法形成双端口映射证据")
+        ok = False
+    elif not other_info.get("fresh"):
+        print(f"[FAIL] 另一端口日志过期（{other}，{other_info.get('age_sec')}s）")
+        ok = False
+    elif not other_info.get("boot_marker"):
+        print(f"[FAIL] 另一端口日志没有 boot 标记（{other}）")
+        ok = False
+    elif other_wifi is None:
+        print(f"[FAIL] 另一端口 boot 之后无有效 client_id（{other}）")
+        ok = False
+    elif other_id.lower() == (observed_id or "").lower():
+        print(f"[FAIL] 两端口指向同一设备（{other_id}）——映射证据不可信")
         ok = False
     if build_sha.lower() != args.expect_build_sha.lower():
         print(f"[FAIL] 镜像身份不符：实际 {build_sha} ≠ 期望 {args.expect_build_sha}")
