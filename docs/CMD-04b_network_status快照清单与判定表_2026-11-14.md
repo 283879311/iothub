@@ -64,28 +64,44 @@ typedef struct {
 
 不变段：nc_tcp（netcheck API，自有锁）、rssi 段（已合规模式）。
 
-## 3. 实施流程与 trial_ready 触发条件（评审项 4）
+## 3. 实施流程与 trial_ready 触发条件（评审项 4，分阶段构建版）
 
 **触发条件逐字保持**：`trial_ready`（含过期清理副作用——`app_cmd_net_trial_ready`
 内部拿递归 job_lock 并对过期 trial 调 `app_cmd_net_trial_clear()`）**只在
-root 与 trial JSON 对象都创建成功时执行**——与现状完全一致：
+root 与 trial JSON 对象都创建成功时执行**。
+
+**第三轮修正（评审指出 `cJSON_AddObjectToObject` 是"创建+插入"合一）**：
+初版流程把 trial 对象的 AddObject 放在其他字段构建之前——对象在创建瞬间即
+插入 root，导致 trial 成为**第一个**顶层键，"trial 仍在最后"不成立。修订为
+**分阶段构建**：先完成全部非 trial 字段的构建，最后才创建 trial 对象：
 
 ```
 root = cJSON_CreateObject();            失败 → OOM return（trial_ready 不执行 ✓ 同现状）
+
 [capture runtime 域]                     （一次 runtime_lock，9 字段含 cfg_state）
 [nc_tcp 统计]                            （API，现状不变）
 [rssi 段]                                （现状不变：connected 快照 + 锁外 get_ap_info）
 [capture config 域]                      （一次 config_lock）
 [capture mqtt 域]                        （一次 mqtt_lock）
+
+[构建 runtime/nc_tcp/rssi/config/mqtt 字段]   ← 全部在锁外，键序与现状一致
+
 trial = cJSON_AddObjectToObject(root, "trial");
                                          失败 → trial 域跳过（trial_ready 不执行 ✓ 同现状）
-[trial != NULL → 一次 job_lock：trial_ready 判定 + 条件拷贝 trial_id/ssid]
-[构建：全部字段从快照，wire 键序与现状一致（trial 仍在最后）]
+
+[trial != NULL → 一次 job_lock：trial_ready 判定 + 条件拷贝 trial_id/ssid → unlock]
+
+[构建 trial 子字段（锁外）]：
+    ready → trial_id / state="got_ip" / ssid
+    else  → state="idle"
 ```
 
-**为什么不采用"trial 对象最先创建"**：那会使 wire JSON 键序改变（trial 从最后
-提前到最先）——JSON 对象按 key 解析无语义影响，但没有必要为此偏离现状键序；
-本流程同时保持键序与触发条件。golden 对照无需排序（键序一致）。
+逐条满足：
+- `trial_ready` 只在 root 与 trial 对象**均创建成功后**执行（清理副作用触发
+  条件不变）；
+- `trial` 仍是**最后一个顶层键**（键序与现状一致，golden 对照无需排序）；
+- job/runtime/config/mqtt 锁内零 cJSON；
+- trial 的 ready 判定与 id/ssid 拷贝在**同一次 job_lock** 内。
 
 ## 4. 一致性与 skew（评审项 2 修订）
 
@@ -113,7 +129,10 @@ trial = cJSON_AddObjectToObject(root, "trial");
 
 ## 6. 实施与验收（评审通过后）
 
-- 实现：`capture() + build()` 两段（trial 对象先建、trial 域条件捕获——§3）；
+- 实现：`app_cmd_build_network_status` 改为
+  **capture → 非 trial 字段构建 → trial 对象 → trial 域条件捕获 → trial 字段构建**
+  的分阶段流程（§3，trial 对象最后创建以保持键序）；快照结构 `sizeof` 实测
+  （目标编译器探针）+ `_Static_assert(sizeof <= 400)`；
   快照 312B + `_Static_assert(sizeof <= 400)`；
 - **验收（评审补充口径全纳入）**：
   - wire 逐字段一致 + **分支覆盖**：正常/缺字段/终态/过期/取消/owner 不匹配/
