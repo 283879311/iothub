@@ -2777,6 +2777,12 @@ esp_err_t app_cmd_execute_method(const app_cmd_context_t *ctx, const char *metho
                     app_copy_string(trial_password, sizeof(trial_password),
                                     s_net_trial.password);
                     app_cmd_net_job_unlock();
+                    /* CMD-04b 评审修正的恢复:候选 SSID/密码从快照副本加入
+                     * patch——字段顺序(1.sta_ssid 2.sta_password 3.net_mode)
+                     * 与现状一致。此前 969416e 遗漏了这两行,导致
+                     * config_apply_patch 收到无候选凭据的空 patch(P0)。 */
+                    cJSON_AddStringToObject(patch, "sta_ssid", trial_ssid);
+                    cJSON_AddStringToObject(patch, "sta_password", trial_password);
                     /* BLE-only 配网：提交必须是 STA，不能把 AP-only 旧配置推断成 APSTA。
                      * AP/Web 正在退出，apply 后不应继续保留 AP 的常驻内存开销。 */
                     cJSON_AddStringToObject(patch, "net_mode", "sta");
