@@ -1207,6 +1207,15 @@ _Static_assert(sizeof(app_cmd_network_status_snap_t) <= 400,
 static cJSON *app_cmd_build_network_status(void)
 {
     app_cmd_network_status_snap_t snap;
+    /* root 优先创建（设计 §3）：OOM 立即返回，不做无谓锁操作与驱动查询 */
+    cJSON *root;
+    cJSON *trial;
+
+    root = cJSON_CreateObject();
+    if (root == NULL) {
+        return NULL;
+    }
+
     /* nc_tcp/rssi 局部（设计 §2 不变段：API 自带锁 / 已合规模式） */
     uint32_t nc_tcp_fails_last = 0;
     int nc_tcp_last_errno = 0;
@@ -1214,8 +1223,6 @@ static cJSON *app_cmd_build_network_status(void)
     double rssi = -128;
     int channel = 0;
     char bssid[18] = "";
-    cJSON *root;
-    cJSON *trial;
 
     /* ---- 捕获段（分域单锁，零 cJSON；nc_tcp/rssi 为不变段） ---- */
     app_wifi_runtime_lock();
@@ -1266,10 +1273,6 @@ static cJSON *app_cmd_build_network_status(void)
     app_mqtt_unlock();
 
     /* ---- 构建段（全部锁外，键序与现状一致） ---- */
-    root = cJSON_CreateObject();
-    if (root == NULL) {
-        return NULL;
-    }
     cJSON_AddBoolToObject(root, "sta_connected", snap.sta_connected);
     cJSON_AddBoolToObject(root, "sta_has_ip", snap.sta_has_ip);
     cJSON_AddStringToObject(root, "sta_ip", snap.sta_ip);
