@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""S6 现场预采集执行脚本 v3（评审 2026-11-14 第二轮意见收口；窄授权：
-仅 MQTT async expired（须先观察到 GOT_IP）+ op-V job-clear 验证）。
+"""S6 现场预采集执行脚本 v4（v3 复审收口；窄授权：仅 MQTT async expired
+（须先观察到 GOT_IP）+ op-V job-clear 验证；两项都 PASS 才退出码 0）。
 
 v2→v3（评审 P0×2/P1×5/P2×2）：
 P0-1 _session_holder NameError → 移除容器，改模块级 _session；
@@ -20,7 +20,9 @@ P2 capture_log=事件流，session_raw.log=BLE TX/RX 原始流（stdout 重定�
 """
 
 import asyncio
+import hashlib
 import json
+import math
 import re
 import subprocess
 import sys
@@ -53,7 +55,12 @@ _session = None
 _repoint_state = RP_NA
 _recovery_state = None
 _origin_snapshot = None          # S0 实测核验的 (host, port)
+_results = {"op_e": None, "op_v": None}   # PASS/SKIPPED/FAILED/…
 _broker = None
+
+# Session 日志脱敏口径（评审 P2）：本 harness 的 TX/RX 记录为 JSON 脱敏截断流
+# （token/password 字段掩码、单帧截断 800/1200 字符），**不是原始字节流**；
+# 原始 GATT 帧落盘涉及明文凭据脱敏，列为后续增强，本轮证据口径如实标注。
 
 
 def log(t):
@@ -120,7 +127,8 @@ async def gate_ble(sess, cmd, args=None, timeout=20):
         raise RuntimeError("token renewal failed")
     req = {"id": f"s6-{sess.next_seq()}", "version": "1.0", "cmd": cmd,
            "args": args or {}, "token": sess.token}
-    res = await sess.send_request(req, timeout=timeout)
+    res = await sess.send_request(req, timeout=timeout,
+                                  allow_relogin=False, allow_reconnect=False)
     save(f"{cmd.replace('.', '_')}_ble", "ble", req, res.obj)
     return res.obj
 
@@ -134,7 +142,8 @@ async def recover_cmd(sess, cmd, args=None, timeout=20):
         raise RuntimeError("token renewal failed")
     req = {"id": f"rcv-{sess.next_seq()}", "version": "1.0", "cmd": cmd,
            "args": args or {}, "token": sess.token}
-    res = await sess.send_request(req, timeout=timeout)
+    res = await sess.send_request(req, timeout=timeout,
+                                  allow_relogin=False, allow_reconnect=False)
     save(f"recover_{cmd.replace('.', '_')}", "ble", req, res.obj)
     return res.obj
 
@@ -143,7 +152,8 @@ async def ble_scan_full(sess):
     """经 prot() 的受保护扫描（token 守卫由调用方 prot 承担）。"""
     req = {"id": f"s6-{sess.next_seq()}", "version": "1.0", "cmd": "network.scan",
            "args": {}, "token": sess.token}
-    res = await sess.send_request(req, timeout=30)
+    res = await sess.send_request(req, timeout=30,
+                                  allow_relogin=False, allow_reconnect=False)
     save("network_scan_ble", "ble", req, res.obj)
     return res.obj, res.frag_sizes
 
@@ -209,7 +219,8 @@ def serial_anchor_check():
             ok = False
     (OUT / "000_gate_serial_anchor.json").write_text(
         json.dumps(ev, indent=1), encoding="utf-8")
-    log(f"[gate] 串口锚点留证 {ev}")
+    log(f"[gate] 串口锚点留证 {ev}（静态文件证据；\"双 console 持续在录\"为"
+        f"外部门禁，由操作人员现场确认，不等同于本检查）")
     if not ok:
         stop("POWERON 锚点数异常（疑似新 boot）")
 
@@ -242,6 +253,8 @@ async def identity_gate(sess, tag, allow_abort=False):
         problems.append("SSID/连接态不符")
     if not str(d["sta_ip"] or "").startswith("192.168.1."):
         problems.append("sta_ip 网段不符")
+    if d["mqtt_connected"] is not True:
+        problems.append(f"mqtt_connected={d['mqtt_connected']}（S0 须在线）")
     if problems:
         stop("；".join(problems))
     return d
@@ -274,18 +287,58 @@ async def do_recovery(sess):
         back = await recover_cmd(_session, "config.get")
         mq = (back.get("data") or {}).get("mqtt") or {}
         readback = (mq.get("mqtt_host"), mq.get("mqtt_port"))
-        if ok and readback == _origin_snapshot:
+        ns2 = await recover_cmd(_session, "network.status")   # 回读邻近重采
+        ok2 = (ns2.get("data") or {}).get("mqtt_connected") is True
+        if ok and ok2 and readback == _origin_snapshot:
             _recovery_state = RC_OK
             log(f"[recover] 成功：mqtt_connected=true 且回读={readback}")
         else:
             _recovery_state = RC_FAIL
-            log(f"[recover] 失败：mqtt_connected={ok} 回读={readback}"
+            log(f"[recover] 失败：mqtt_connected={ok}/{ok2} 回读={readback}"
                 f"（不宣称恢复成功；保留 mini_broker 供只读观测/人工接管）")
     except Exception as exc:  # noqa: BLE001
         _recovery_state = RC_FAIL
         log(f"[recover] 异常 {type(exc).__name__}: {str(exc)[:120]}——"
             f"BLE 不可达或恢复失败；保留 mini_broker，人工接管")
 
+
+
+
+async def cleanup_confirm(sess, budget_s=120.0, need_consecutive=2):
+    """硬 deadline 的 cleanup 完成窗口：STA 回持久网络 + trial idle，
+    连续 need_consecutive 次满足即确认；每轮立即落盘；BLE 请求 timeout
+    不超过剩余预算。超时返回 False（调用方 STOP）。"""
+    deadline = time.monotonic() + budget_s
+    polls = []
+    streak = 0
+    path = OUT / "000_cleanup_window.json"
+    while True:
+        remain = deadline - time.monotonic()
+        if remain <= 0:
+            path.write_text(json.dumps(
+                {"result": "TIMEOUT", "polls": polls}, ensure_ascii=False, indent=1),
+                encoding="utf-8")
+            return False
+        await asyncio.sleep(min(10.0, max(1.0, remain - 1)))
+        remain = deadline - time.monotonic()
+        ns = await gate_ble(sess, "network.status", timeout=max(2.0, min(15.0, remain)))
+        dd = (ns or {}).get("data") or {}
+        poll = {"t": time.strftime("%H:%M:%S"), "mono": round(time.monotonic(), 3),
+                "sta": dd.get("connected_ssid"),
+                "connected": dd.get("sta_connected"),
+                "trial": ((dd.get("trial") or {}).get("state"))}
+        polls.append(poll)
+        path.write_text(json.dumps(
+            {"polls": polls}, ensure_ascii=False, indent=1), encoding="utf-8")
+        good = (poll["connected"] is True and poll["sta"] in ALLOWED_PERSIST_SSID
+                and poll["trial"] == "idle")
+        streak = streak + 1 if good else 0
+        if streak >= need_consecutive:
+            path.write_text(json.dumps(
+                {"result": "CONFIRMED", "polls": polls}, ensure_ascii=False, indent=1),
+                encoding="utf-8")
+            log(f"[cleanup] 确认（连续{streak}次满足，STA={poll['sta']}）")
+            return True
 
 async def run_round(sess, pw):
     global _repoint_state, _origin_snapshot
@@ -305,8 +358,9 @@ async def run_round(sess, pw):
     # uptime 数值校验
     u1, u2 = g1["uptime_ms"], g2["uptime_ms"]
     if not isinstance(u1, (int, float)) or not isinstance(u2, (int, float)) \
+            or not (math.isfinite(u1) and math.isfinite(u2)) \
             or u1 <= 0 or u2 < u1:
-        stop(f"uptime 缺失/回退 u1={u1} u2={u2}")
+        stop(f"uptime 缺失/非有限数/回退 u1={u1} u2={u2}")
         return
     du, dw = (u2 - u1) / 1000.0, g2["mono"] - g1["mono"]
     boot_wall = time.strftime("%H:%M:%S", time.localtime(time.time() - u1 / 1000.0))
@@ -324,10 +378,16 @@ async def run_round(sess, pw):
 
     # ---- 改指向（状态机：发送前置 ATTEMPTED）----
     _repoint_state = RP_ATT
-    await prot(sess, ble, sess, "config.set",
-               {"patch": {"mqtt_host": PC_IP, "mqtt_port": 21883}})
-    _repoint_state = RP_CONF
-    log(f"[S4] 改指向已确认（state={_repoint_state}）")
+    r = await prot(sess, ble, sess, "config.set",
+                   {"patch": {"mqtt_host": PC_IP, "mqtt_port": 21883}})
+    conf = False
+    if (r or {}).get("ok") is True:
+        back = await prot(sess, gate_ble, sess, "config.get")
+        mq = ((back or {}).get("data") or {}).get("mqtt") or {}
+        if (mq.get("mqtt_host"), mq.get("mqtt_port")) == (PC_IP, 21883):
+            conf = True
+    _repoint_state = RP_CONF if conf else RP_ATT
+    log(f"[S4] 改指向 state={_repoint_state}（成功回包+回读确认={conf}）")
     m = MqttV1("127.0.0.1:21883")
     try:
         if not await wait_broker(m):
@@ -366,43 +426,35 @@ async def run_round(sess, pw):
                     break
             if _abort:
                 return
+            if terminal is None:
+                stop(f"attempt{attempt} 轮询 420s 无终态（unknown）——不重试")
+                return
+            if terminal in ("cancelled", "failed"):
+                stop(f"attempt{attempt} 异常终态 {terminal}——立即 STOP，不重试")
+                return
             if terminal == "expired" and seen_got_ip:
                 target_hit = True
-                log(f"[S4] attempt{attempt} = GOT_IP→expired（目标分支 PASS 候选）")
+                _results["op_e"] = "PASS"
+                log(f"[S4] attempt{attempt} = GOT_IP→expired（目标分支 PASS）")
                 break
-            if terminal == "expired":
-                classification = "ACCEPTED_TTL_EXPIRED（未达 GOT_IP，不计目标验收）"
-                log(f"[S4] attempt{attempt} {classification}")
-            else:
-                classification = f"{terminal}（异常终止）"
-                log(f"[S4] attempt{attempt} {classification}")
+            # 唯一允许重试的分类：ACCEPTED_TTL_EXPIRED
+            classification = "ACCEPTED_TTL_EXPIRED（未达 GOT_IP，不计目标验收）"
+            log(f"[S4] attempt{attempt} {classification}")
             if attempt == 1:
-                log("[S4] 重试至多一次……")
-                await asyncio.sleep(30)
+                log("[S4] 分类重试（至多一次）；先确认前一次 cleanup 已结束")
+                if not await cleanup_confirm(sess, 120):
+                    stop("重试前 cleanup 确认失败")
+                    return
         if not target_hit:
-            stop(f"op-E 未达成 GOT_IP→expired（分类={classification}，两次机会已用）")
+            stop(f"op-E 未达成 GOT_IP→expired（分类={classification}，重试机会已用）")
+            _results["op_e"] = "FAILED"
             return
-        # ---- cleanup 完成窗口（≤120s，未确认不进 op-V）----
-        cleanup_ok = False
-        polls = []
-        for _ in range(12):
-            await asyncio.sleep(10)
-            ns = await prot(sess, gate_ble, sess, "network.status")
-            dd = ns.get("data") or {}
-            polls.append({"t": time.strftime("%H:%M:%S"),
-                          "sta": dd.get("connected_ssid"),
-                          "connected": dd.get("sta_connected"),
-                          "trial": ((dd.get("trial") or {}).get("state"))})
-            if (dd.get("sta_connected") and dd.get("connected_ssid") in ALLOWED_PERSIST_SSID
-                    and ((dd.get("trial") or {}).get("state")) == "idle"):
-                cleanup_ok = True
-                break
-        (OUT / "000_cleanup_window.json").write_text(
-            json.dumps(polls, ensure_ascii=False, indent=1), encoding="utf-8")
-        if not cleanup_ok:
+        _results["op_e"] = "PASS"
+        # ---- cleanup 完成窗口（硬 deadline ≤120s，未确认不进 op-V）----
+        if not await cleanup_confirm(sess, 120.0):
             stop("cleanup 完成窗口 120s 未确认（STA/trial 未恢复）")
+            _results["op_v"] = "SKIPPED"
             return
-        log(f"[S4] cleanup 确认（STA={polls[-1]['sta']} trial=idle）")
         # ---- op-V job-clear 验证 ----
         sc, frags = await prot(sess, ble_scan_full, sess)
         cond, reasons = scan_five_conditions(sc, frags)
@@ -427,12 +479,16 @@ async def run_round(sess, pw):
                 if opv_final in ("failed", "expired", "cancelled"):
                     break
             if opv_final == "failed" and opv_err == "ap_not_found":
+                _results["op_v"] = "PASS"
                 log("[S4] op-V PASS：failed/ap_not_found（run 内 clear_job_sync 路径）")
             else:
+                _results["op_v"] = "FAILED"
                 stop(f"op-V 终态断言失败 {opv_final}/{opv_err}")
                 return
         else:
-            log(f"[S4] 降级：{reasons}——op-V 放弃，该项记证据降级/未完成")
+            _results["op_v"] = "SKIPPED"
+            log(f"[S4] 降级：{reasons}——op-V 放弃，该项记证据降级/未完成"
+                f"（整轮非成功退出）")
     finally:
         m.cli.loop_stop()
 
@@ -441,7 +497,11 @@ async def main():
     global _log, _broker, _token_origin, _session
     OUT.mkdir(parents=True, exist_ok=True)
     _log = open(OUT / "capture_log.txt", "a", encoding="utf-8")
-    log("=== S6 round2（v3 脚本）开始（窄授权：MQTT async expired[须 GOT_IP] + op-V）===")
+    if (OUT / "capture_log.txt").exists():
+        print("[fatal] 证据目录非空（capture_log.txt 已存在）——禁止静默复用，"
+              "请归档后更换目录", flush=True)
+        return 2
+    log("=== S6 round2（v4 脚本）开始（窄授权：MQTT async expired[须 GOT_IP] + op-V）===")
     pw = load_password()
     code = 3
     _broker = subprocess.Popen(
@@ -461,7 +521,12 @@ async def main():
             log("[S0] 无条件 auth.login（token 计时起点）")
             try:
                 await run_round(sess, pw)
-                code = 0 if _abort is None else 3
+                all_pass = (_results.get("op_e") == "PASS"
+                            and _results.get("op_v") == "PASS"
+                            and _abort is None)
+                code = 0 if all_pass else 3
+                log(f"[result] {_results} abort={_abort} → exit={code}"
+                    f"（两项都 PASS 才为 0）")
             finally:
                 # 专用恢复路径：除 NOT_ATTEMPTED 外都尝试（allowlist 命令）
                 await do_recovery(sess)
@@ -474,7 +539,11 @@ async def main():
                     {"gate": gEnd, "abort": _abort, "recovery": _recovery_state,
                      "repoint_state": _repoint_state},
                     ensure_ascii=False, indent=1), encoding="utf-8")
-                await cli.disconnect()
+                closer = getattr(sess, "close", None)
+                if closer is not None:
+                    await closer()
+                else:
+                    await cli.disconnect()
     finally:
         # broker 收尾：仅 NOT_ATTEMPTED 或 RECOVERY_CONFIRMED 才终止
         if _repoint_state != RP_NA and _recovery_state != RC_OK:
@@ -485,7 +554,19 @@ async def main():
         elif _broker is not None:
             _broker.terminate()
             log("[finally] mini_broker 已终止")
-    log(f"[done] abort={_abort} repoint={_repoint_state} recovery={_recovery_state}")
+    # SHA256SUMS（目录内全部文件）
+    try:
+        lines = []
+        for f in sorted(OUT.iterdir()):
+            if f.is_file() and f.name != "SHA256SUMS":
+                h = hashlib.sha256(f.read_bytes()).hexdigest()
+                lines.append(f"{h}  {f.name}")
+        (OUT / "SHA256SUMS").write_text("\n".join(lines) + "\n", encoding="utf-8")
+        log(f"[evidence] SHA256SUMS 生成（{len(lines)} 文件）")
+    except Exception as exc:  # noqa: BLE001
+        log(f"[evidence] SHA256SUMS 生成失败 {type(exc).__name__}")
+    log(f"[done] abort={_abort} repoint={_repoint_state} recovery={_recovery_state} "
+        f"results={_results}")
     return code
 
 
