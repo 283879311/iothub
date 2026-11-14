@@ -189,6 +189,7 @@ typedef struct {
     uint32_t hold_gen;
     int hold_timeout_ms;
     uint32_t hold_seq;
+    int restart_wake_fail;      /* S6：一次性 restart_wake 失败注入（R4 用） */
 } app_wifi_test_hook_t;
 static app_wifi_test_hook_t s_wifi_hook;
 static portMUX_TYPE s_wifi_hook_mux = portMUX_INITIALIZER_UNLOCKED;
@@ -434,24 +435,27 @@ static app_wifi_owner_act_t app_wifi_claim_auto(const char *caller)
  * **不得**把 owner 直接放回 NONE（那会出现"清理没跑、owner 却显示空闲"的
  * 假恢复）。CLEANUP_FAILED 为粘性：拒绝后续 STA 操作，需 config.set+reboot
  * 或断电恢复——与 B3/C2 既有语义一致。 */
-static void app_wifi_handover_wake_failed(const char *caller)
+static void app_wifi_cleanup_wake_failed(const char *caller)
 {
     char op_id[24];
+    app_wifi_owner_t owner_snap;
     bool fired = false;
 
     app_wifi_tryconnect_state_lock();
-    if (s_wifi_owner.owner == APP_WIFI_OWNER_CLEANUP) {
+    owner_snap = s_wifi_owner.owner;
+    if (owner_snap == APP_WIFI_OWNER_CLEANUP) {
         (void)app_wifi_owner_step_locked(APP_WIFI_OWNER_EV_CLEANUP_FAIL, NULL);
         app_copy_string(op_id, sizeof(op_id), s_wifi_restart_op_id);
         fired = true;
     }
     app_wifi_tryconnect_state_unlock();
     if (fired) {
-        ESP_LOGE(TAG, "cleanup handover: restart wake failed -> CLEANUP_FAILED "
-                      "op=%s by %s", op_id, caller);
+        ESP_LOGE(TAG, "cleanup wake failed -> CLEANUP_FAILED op=%s by %s",
+                 op_id, caller);
     } else {
-        ESP_LOGE(TAG, "cleanup handover: restart wake failed (owner=%s) by %s",
-                 app_wifi_owner_name(s_wifi_owner.owner), caller);
+        /* 锁内快照，避免锁外读取并发变化 */
+        ESP_LOGE(TAG, "cleanup wake failed (owner=%s) by %s",
+                 app_wifi_owner_name(owner_snap), caller);
     }
 }
 
@@ -462,7 +466,7 @@ static void app_wifi_owner_release(app_wifi_owner_ev_t ev, const char *caller)
 
     if (act == APP_WIFI_OWNER_ACT_HANDOVER && !app_wifi_restart_wake()) {
         /* S6 修复：不再只打日志留 CLEANUP；进入明确终态 */
-        app_wifi_handover_wake_failed(caller);
+        app_wifi_cleanup_wake_failed(caller);
     }
 }
 
@@ -477,8 +481,7 @@ static bool app_wifi_owner_cleanup_abort_consume(const char *caller)
     if (s_wifi_cleanup_abort && s_wifi_owner.owner == APP_WIFI_OWNER_CLEANUP) {
         (void)app_wifi_owner_step_locked(APP_WIFI_OWNER_EV_CLEANUP_FAIL, NULL);
         app_copy_string(op_id, sizeof(op_id), s_wifi_restart_op_id);
-        s_wifi_cleanup_started_ms = 0;
-        s_wifi_restart_kind = APP_WIFI_RESTART_APPLY;
+        /* started_ms / restart_kind 已由 step_locked 的统一出口清理（单一来源） */
         fired = true;
     }
     app_wifi_tryconnect_state_unlock();
@@ -504,14 +507,9 @@ static bool app_wifi_owner_cleanup_request(const char *op_id)
         return false;
     }
     if (act == APP_WIFI_OWNER_ACT_NOTIFY && !app_wifi_restart_wake()) {
-        /* C2:唤醒/创建失败 -> 回退,不留假 CLEANUP */
-        (void)app_wifi_owner_step_ev(APP_WIFI_OWNER_EV_CLEANUP_DONE, "cleanup_request_fail");
-        app_wifi_tryconnect_state_lock();
-        s_wifi_restart_kind = APP_WIFI_RESTART_APPLY;
-        s_wifi_cleanup_started_ms = 0;
-        app_wifi_tryconnect_state_unlock();
-        ESP_LOGE(TAG, "cleanup request failed: restart wake failed op=%s",
-                 op_id ? op_id : "?");
+        /* S6 修复（P1）：与 HANDOVER 同口径——清理未执行就不得释放 owner。
+         * 旧行为是 CLEANUP_DONE→NONE，等于"没清理却显示空闲"的假恢复。 */
+        app_wifi_cleanup_wake_failed("cleanup_request");
         return false;
     }
     return true;
@@ -707,7 +705,7 @@ static void app_wifi_tryconnect_release(void)
                                   waiter_snap, requested_snap);
     if (act == APP_WIFI_OWNER_ACT_HANDOVER && !app_wifi_restart_wake()) {
         /* S6 修复：此路径原先只打日志（且因绕过 step_ev 连记账都缺失）→ 粘滞 */
-        app_wifi_handover_wake_failed("tryconnect_release");
+        app_wifi_cleanup_wake_failed("tryconnect_release");
     }
 }
 
@@ -3358,6 +3356,14 @@ esp_err_t app_wifi_test_hook(const char *action, const char *stage,
         ESP_LOGW(TAG, "hook_armed stop_fail count=%d", count);
         return ESP_OK;
     }
+    if (strcmp(action, "restart_wake_fail") == 0) {
+        int n = (count > 0) ? count : 1;
+        portENTER_CRITICAL(&s_wifi_hook_mux);
+        s_wifi_hook.restart_wake_fail += n;
+        portEXIT_CRITICAL(&s_wifi_hook_mux);
+        ESP_LOGW(TAG, "hook_armed restart_wake_fail count=%d", n);
+        return ESP_OK;
+    }
     if (strcmp(action, "connect_hold") == 0) {
         esp_err_t ret = ESP_OK;
         if (timeout_ms > 10000) {
@@ -4526,6 +4532,21 @@ static bool app_wifi_restart_wake(void)
     TaskHandle_t h;
     BaseType_t rt;
 
+#ifdef APP_WIFI_FAULT_INJECT
+    {   /* S6 R4 注入：一次性返回失败，用于验证唤醒失败 → CLEANUP_FAILED */
+        bool fail = false;
+        portENTER_CRITICAL(&s_wifi_hook_mux);
+        if (s_wifi_hook.restart_wake_fail > 0) {
+            s_wifi_hook.restart_wake_fail--;
+            fail = true;
+        }
+        portEXIT_CRITICAL(&s_wifi_hook_mux);
+        if (fail) {
+            ESP_LOGW(TAG, "hook: restart_wake forced fail (R4 injection)");
+            return false;
+        }
+    }
+#endif
     app_wifi_restart_lock();
     h = (TaskHandle_t)s_wifi.restart_task;
     if (h != NULL) {
