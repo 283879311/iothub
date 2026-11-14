@@ -610,6 +610,34 @@ async def case_v1132b():
     check("嵌套路径不判接入", got is False, str(p.seen))
 
 
+async def case_v1134():
+    print("[26] R2：按预期变更键判定（host 未变时仅 port 变更应通过）")
+    cur = {"mqtt_host": "139.9.93.245", "mqtt_port": 1883}
+    exp = S.expected_changed_keys(cur, ("139.9.93.245", 21883))
+    check("预期键=仅 mqtt_port", exp == ["mqtt_port"], str(exp))
+    st, det = S.r2_classify({"ok": True, "data": {"changed": ["mqtt_port"]}},
+                            tuple(exp))
+    check("仅 port 变更 → OK", st == "OK", str(det))
+    st2, _ = S.r2_classify({"ok": True, "data": {"changed": []}}, tuple(exp))
+    check("changed 为空（缺预期键）→ UNCONFIRMED", st2 == "UNCONFIRMED", st2)
+    exp2 = S.expected_changed_keys({"mqtt_host": "1.1.1.1", "mqtt_port": 1},
+                                   ("139.9.93.245", 21883))
+    check("两键均需变更", exp2 == ["mqtt_host", "mqtt_port"], str(exp2))
+    st3, _ = S.r2_classify(
+        {"ok": True, "data": {"changed": ["mqtt_host"]}}, tuple(exp2))
+    check("只改 host 缺 port → UNCONFIRMED", st3 == "UNCONFIRMED", st3)
+    st4, _ = S.r2_classify(
+        {"ok": True, "data": {"changed": ["mqtt_host", "mqtt_port"]}},
+        tuple(exp2))
+    check("两键齐全 → OK", st4 == "OK", st4)
+    # 已是目标值（无预期变更）：ok:true 且 changed 为空也应通过
+    exp3 = S.expected_changed_keys({"mqtt_host": "139.9.93.245",
+                                    "mqtt_port": 21883},
+                                   ("139.9.93.245", 21883))
+    st5, _ = S.r2_classify({"ok": True, "data": {"changed": []}}, tuple(exp3))
+    check("无预期变更 + 空 changed → OK", st5 == "OK" and exp3 == [], f"{st5}/{exp3}")
+
+
 async def main():
     await case_lifecycle()
     await case_presence()
@@ -621,6 +649,7 @@ async def main():
     await case_v1131()
     await case_v1132()
     await case_v1132b()
+    await case_v1134()
     print(f"\nselftest: {PASS} passed, {FAIL} failed")
     return 0 if FAIL == 0 else 1
 

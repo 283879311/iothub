@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""S6 现场预采集执行脚本 v11.3.3（MQTT 轮询 + 分阶段恢复；窄授权：仅 MQTT async expired
+"""S6 现场预采集执行脚本 v11.3.4（MQTT 轮询 + 分阶段恢复；窄授权：仅 MQTT async expired
 （须先观察到 GOT_IP）+ op-V job-clear 验证）。
 
 v4→v5（评审阻断项与缺口）：
@@ -887,6 +887,16 @@ def tcp_precheck(host, port, timeout=5.0):
         return (False, f"{type(exc).__name__}: {exc}")
 
 
+def expected_changed_keys(current, target):
+    """写回前根据当前值算出"应该变更"的键（host 未变则只期望 port）。"""
+    exp = []
+    for k, tgt in zip(("mqtt_host", "mqtt_port"), target):
+        cur = current.get(k) if isinstance(current, dict) else None
+        if cur != tgt:
+            exp.append(k)
+    return exp
+
+
 def r2_classify(resp, keys=("mqtt_host", "mqtt_port")):
     """R2 精确分类（v11.2）。返回 (state, detail)，state ∈
     {"OK", "REJECTED", "UNCONFIRMED"}：
@@ -909,8 +919,9 @@ def r2_classify(resp, keys=("mqtt_host", "mqtt_port")):
         return ("UNCONFIRMED",
                 {"why": f"changed_not_str_list:{type(changed).__name__}"})
     missing = [k for k in keys if k not in changed]
-    det = {"changed": changed, "missing": missing}
+    det = {"changed": changed, "expected": list(keys), "missing": missing}
     if missing:
+        # 允许 changed 多于预期（设备可能重写同值键），但不允许少于预期
         return ("UNCONFIRMED", {"why": "missing_keys", **det})
     return ("OK", det)
 
@@ -998,11 +1009,15 @@ async def do_recovery(sess=None):
             stages["R1_session"] = "TOKEN_FAIL"
             finish(RC_UNCONF, "token 续签失败")
             return
-        # R2 写回并确认响应（要求 changed 含目标键）
+        # R2 写回并确认响应：先读当前值，按"实际需要变更的键"判定
+        cur_cfg = await recover_cmd(s, "config.get")
+        cur_mq = ((cur_cfg or {}).get("data") or {}).get("mqtt") or {}
+        exp_keys = expected_changed_keys(cur_mq, _origin_snapshot)
+        stages["R2_expected_keys"] = json.dumps(exp_keys)
         r = await recover_cmd(s, "config.set",
                               {"patch": {"mqtt_host": _origin_snapshot[0],
                                          "mqtt_port": _origin_snapshot[1]}})
-        w_state, w_det = r2_classify(r)
+        w_state, w_det = r2_classify(r, tuple(exp_keys))
         stages["R2_write"] = json.dumps({"state": w_state, **w_det},
                                        ensure_ascii=False)
         if w_state == "REJECTED":
@@ -1151,6 +1166,37 @@ async def run_round(sess, pw):
             return
         log(f"[S4] broker 侧确认设备接入（首条 {pres.seen[-1][1]}；"
             f"证据={pres.evidence_class()}）")
+
+        # ---- v11.3.4：改指向会触发 MQTT 重启 → 可能引发 netcheck teardown /
+        # WiFi owner=CLEANUP。等"连续两次安静轮询"再创建 op-E，避免 tryconnect
+        # 抢 owner 超时（第四轮 attempt2 实测 owner=wait_timeout CLEANUP）。
+        quiet_ok = False
+        quiet_deadline = time.monotonic() + 90
+        quiet_streak = 0
+        while time.monotonic() < quiet_deadline and not _abort:
+            await asyncio.sleep(10)
+            k, ns = await rpc.status()
+            if k != "OK":
+                log(f"[S4] 静默窗轮询传输失败（{ns}）——停止等待")
+                break
+            d = ns or {}
+            good = (d.get("sta_connected") is True
+                    and d.get("internet_verified") is True
+                    and ((d.get("trial") or {}).get("state")) == "idle")
+            quiet_streak = quiet_streak + 1 if good else 0
+            log(f"[S4] 静默窗 streak={quiet_streak} "
+                f"sta={d.get('sta_connected')} verified={d.get('internet_verified')} "
+                f"trial={(d.get('trial') or {}).get('state')}")
+            if quiet_streak >= 2:
+                quiet_ok = True
+                break
+        (OUT / "000_quiet_window.json").write_text(json.dumps(
+            {"ok": quiet_ok, "streak": quiet_streak}, indent=1), encoding="utf-8")
+        if not quiet_ok:
+            stop("改指向后 90s 内未取得安静窗（设备仍在校验/清理）——不创建 op-E")
+            _results["op_e"] = _results["op_v"] = "NOT_RUN"
+            return
+        log("[S4] 安静窗确认（连续两次 sta+verified+trial idle）")
 
         # ---- op-E：MQTT 创建 + MQTT 轮询 ----
         kind, resp = await rpc.call("network.tryconnect",
@@ -1301,7 +1347,7 @@ async def main():
     trace_f = open(OUT / "session_trace.log", "a", encoding="utf-8")
     prev_stdout = sys.stdout
     sys.stdout = _Tee(prev_stdout, trace_f)   # session_trace：脱敏截断 TX/RX 跟踪流
-    log(f"=== S6 round4（v11.3.3 脚本/EMQX {EMQX_HOST}:{EMQX_PORT}）开始（窄授权：MQTT async expired[须 GOT_IP] + op-V）===")
+    log(f"=== S6 round4（v11.3.4 脚本/EMQX {EMQX_HOST}:{EMQX_PORT}）开始（窄授权：MQTT async expired[须 GOT_IP] + op-V）===")
     code = 3
     cli = None
     try:                                   # 启动与运行全部纳入统一收尾
