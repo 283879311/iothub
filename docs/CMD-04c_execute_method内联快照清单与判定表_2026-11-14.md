@@ -177,9 +177,11 @@ snapshot_save）全部留在锁外原位。
 
 ## 6. 实施与验收
 
-- **实现完成**（commit `7f6354e`，单 commit 可 revert；patch sha 前 16 位
-  `ce9b5016604fc647`）：两段各 ~15 行改动（Add 移锁外 + 局部拷贝 +
-  `app_cmd_secure_wipe` 助手 + patch 堆副本擦除）；
+- **实现完成 + 第一轮评审修正**（`7f6354e` + `7f86720`，均可独立 revert；
+  修正 patch sha 前 16 位 `06fcfb3cde66857b`）：两段各 ~15 行改动（Add 移锁外 +
+  局部拷贝 + `app_cmd_secure_wipe` 助手 + patch 堆副本擦除）；
+  **`7f86720` 修正**：恢复 B 段 `sta_ssid`/`sta_password` 锁外构建——第一轮
+  重构遗漏导致 config_apply_patch 收到无候选凭据的空 patch（P0）；
 - **`-fstack-usage` 实测已完成**：`app_cmd_execute_method` 栈帧
   **04b=912B / 04c=912B（零增长）**——快照栈局部被编译器与既有局部复用抵消；
 - 待烧录窗口验收：段 A wire 逐字段一致（补抓 sync tryconnect 受理响应
@@ -193,4 +195,5 @@ snapshot_save）全部留在锁外原位。
 | --- | --- |
 | 初稿（6ba07b9） | 两段纯拷贝设计；sta_password 生命周期表（不完整） |
 | 第二轮（85407bd） | ① 三副本清点表；② 栈副本 volatile 擦除 + patch 堆副本删除前擦除；③ 使用范围四条精确化；④ §0 前置守卫表述更正；⑤ 资源估算降级 |
-| **第三轮（本版）** | §2 段 B 流程与失败语义修正——patch 创建在 trial_ready/snapshot_save **之后**；patch 创建失败走既有统一失败处理（apply_err=ESP_FAIL → snapshot_discard + trial_clear + save_failed），**不在快照重构中改变** |
+| 第三轮（6f6b5c2） | §2 段 B 流程与失败语义修正——patch 创建在 trial_ready/snapshot_save 之后；patch 创建失败走既有统一失败处理，不在快照重构中改变 |
+| **第四轮（代码归档）** | `7f86720`：恢复 B 段 sta_ssid/sta_password 锁外构建，修复 patch 缺失候选凭据的 **P0 回归**（第一轮重构遗漏）。**审查经验**：锁内零 cJSON 只证明锁边界合规，锁外 JSON/patch 字段完整性必须单独验收——两项已分开验收 |
