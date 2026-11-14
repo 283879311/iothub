@@ -48,7 +48,8 @@ app_cmd_net_job_unlock();
 
 锁内耗时 = 1 次 find（s_ops_mux spinlock）+ 1 次 get_status（s_ops_mux 快照）
 + ~12 字段拷贝——**零 cJSON、零字符串格式化**（约束 4：锁内复制耗时以实测确认，
-设计预期 <10µs）。
+设计预期 <10µs）。注意：find 与 get_status 是**两次独立的 s_ops_mux 临界区**
+（各自进出，非同一快照）——两者之间的槽位复用由 §4 的 P1 身份复核封闭。
 
 ## 3. 分支判定表（锁内判定 → 锁外等价判定，全部基于单次快照）
 
@@ -80,27 +81,30 @@ wire 逐字段一致（含字段省略/类型/条件出现）：
 | accepted/connecting 在飞（trial 块出现） | 烧录窗口随批补造 |
 | expired（300s TTL） | 烧录窗口随批补造（静置 5 分钟） |
 
-**generation/owner 关联**（约束 2）：`find(status_id)` + `get_status` 在
-s_ops_mux 快照内完成——槽位复用后 id 变化 → find 返回 NULL → not_found；
-id 幂等重试 → 同一 op 同一 generation。快照携带 owner 供校验，
-**不携带 generation**（wire 无此字段；关联性由 find-by-id + s_ops_mux 快照保证）。
+**generation/owner 关联**（约束 2）：`find(status_id)` 与 `get_status` 是**两次
+独立的 s_ops_mux 临界区**——两者之间槽位可能被其他任务的 operation_start 回收
+复用（满表覆盖/600s 到期），`get_status` 读到的是**新 operation** 的状态。
+P1 身份复核（`get_status` 返回的 `st.id` 与请求 ID 二次比对）识别并拒绝这种情况：
+不一致即判 `not_found`。快照携带 owner 供校验，**不携带 generation**
+（wire 无此字段；关联性由 find-by-id + P1 二次比对保证）。
 
 ## 5. 栈/堆预算（约束 4）
 
-| 项 | 基线（改版前实测 `stack_baseline_pre_04a.json`，1.3-2ef2a38 设备，2026-11-14） |
+**证据口径（P2 第二轮评审修正）**：`app_diag_stack_snapshot()` 的 low 列表只
+记录**已找到且 HWM < 2048B** 的任务——"不在列表"可能是 HWM ≥ 2048B，**也可能是
+任务未被找到**。因此"不在 low 列表"**不能单独证明** >2KB 余量；`+36B` 是静态
+估算值，不替代实测。基线记录降级为"间接证据"，**逐任务 HWM 实测列入烧录窗口
+必做项**：
+
+| 调用任务 | 烧录窗口必须记录（改造前/后同设备、同固件配置、同查询路径） |
 | --- | --- |
-| **调用任务 1：ble_cmd**（8192B 栈，operation_status 的 BLE 调用方） | **未出现在 <2KB low 列表** ⇒ 栈余量 >2KB；net 增量 ≈ +36B（快照 112B − 被替换的 status 局部 ~72B + bool×4） |
-| **调用任务 2：mqtt 事件任务**（esp-mqtt 内建栈，operation_status 的 MQTT 查询调用方） | 同上：未出现在 low 列表 ⇒ 余量 >2KB |
-| 全局最低（IDLE1=976B） | 与本改造无关——快照不在 IDLE 栈上分配；不作为本项验收口径 |
-| 堆 | 改造前后 job 锁内均无堆分配；cJSON 分配总量不变（同字段集） |
+| `ble_cmd`（8192B，BLE operation.get/operation.get 调用方） | ① 任务确实存在（被诊断器找到）② 实际任务名 ③ HWM 字节数 |
+| MQTT 事件任务（esp-mqtt 内建，MQTT 查询调用方） | 同上：存在性/实际任务名/HWM 字节数 |
 
-**验收口径修正（P2，评审指出）**：全局 min_free(IDLE1) 不能证明调用任务栈安全；
-改为——①烧录窗口按 `device.status.stack.low` 列表对照：ble_cmd / mqtt 事件任务
-**不得新出现在 low 列表**（即保持 >2KB）；②如固件后续暴露 per-task HWM，
-按任务逐一对照改造前后值。
-
-烧录窗口复测项：锁内复制/锁外构建耗时实测（替换"设计预期 <10µs"）、heap
-largest 无回退。
+判定：改造后同任务 HWM 相对基线的下降量 ≤ 快照净增量（估算 +36B）且任务
+仍 >2KB 余量 ⇒ 栈预算验收通过；否则退回评审。
+全局 IDLE1=976B 与本改造无关（快照不在 IDLE 栈上分配），仅作存档。堆：改造
+前后 job 锁内均无堆分配；cJSON 分配总量不变（同字段集）。
 
 ## 6. 失败路径与资源释放（约束 3）
 
@@ -112,9 +116,12 @@ largest 无回退。
 
 ## 7. skew 边界（约束 5）
 
-> **更正记录（第二轮评审后）**：本清单初稿的基线口径（e1d2058+）、sizeof 估算
-> （≈148B）、栈基线（全局 IDLE1）已按第二轮评审意见更正为 dc254d5 口径 /
-> 目标编译器实测 112B / 按调用任务口径——见 §0/§1/§5。
+> **更正记录**：
+> - 第二轮：基线口径（e1d2058+→dc254d5）、sizeof 估算（≈148B→实测 112B）、
+>   栈基线（全局 IDLE1→按调用任务口径）——见 §0/§1/§5；
+> - 第三轮（本轮）：§4 修正"两次独立 s_ops_mux 临界区"+ P1 复核表述；
+>   §5 栈证据降级为间接证据 + 烧录窗口逐任务 HWM 必做项（low 列表口径
+>   不充分）。
 
 - runtime 域 8 字段：单锁一致 ✓；
 - trial 域 2 字段 + 匹配判定：单锁一致 ✓；
