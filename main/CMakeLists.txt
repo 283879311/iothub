@@ -3,7 +3,7 @@ option(APP_OPERATION_SELFTEST "Build G3 operation table/worker selftest (default
 option(APP_OPERATION_LIFECYCLE_TEST "Build G3 worker lifecycle/memory measurement (default OFF)" OFF)
 option(APP_OPERATION_WORKER_STATIC "Use static FreeRTOS stack/TCB for the G3 worker (default OFF)" OFF)
 option(APP_C1_TEST_HOOKS "Experiment-only C1 review hooks (cleanup pause + state-machine probe, default OFF)" OFF)
-option(APP_WIFI_FAULT_INJECT "M1 fault-injection hooks (apply/stop fail, connect hold; default OFF)" OFF)
+option(APP_WIFI_FAULT_INJECT "Fault-injection hooks (apply/stop fail, connect hold, restart wake fail; default OFF)" OFF)
 option(APP_CMD_MQTT_NET_TXN_TEST_BUILD "Enable MQTT network-transaction test build (default OFF)" OFF)
 
 idf_component_register(

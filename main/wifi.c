@@ -3410,6 +3410,7 @@ esp_err_t app_wifi_test_hook(const char *action, const char *stage,
         bool await;
         uint32_t consumed;
         uint32_t completed;
+        int rw_fail;
 
         portENTER_CRITICAL(&s_wifi_hook_mux);
         active = s_wifi_hook.active;
@@ -3417,6 +3418,7 @@ esp_err_t app_wifi_test_hook(const char *action, const char *stage,
         fail_count = s_wifi_hook.fail_count;
         stop_count = s_wifi_hook.stop_fail_count;
         hold_armed = s_wifi_hook.hold_armed;
+        rw_fail = s_wifi_hook.restart_wake_fail;
         portEXIT_CRITICAL(&s_wifi_hook_mux);
         app_wifi_runtime_lock();
         await = s_wifi_apply_await_start;
@@ -3424,9 +3426,10 @@ esp_err_t app_wifi_test_hook(const char *action, const char *stage,
         completed = s_wifi_apply_start_completed_gen;
         app_wifi_runtime_unlock();
         ESP_LOGI(TAG, "hook_status active=%d fail_stage=%s fail_count=%d stop_fail=%d "
-                      "hold_armed=%d await=%d consumed=%u completed=%u",
+                      "hold_armed=%d restart_wake_fail=%d await=%d consumed=%u completed=%u",
                  (int)active, app_wifi_apply_stage_name(st), fail_count, stop_count,
-                 (int)hold_armed, (int)await, (unsigned)consumed, (unsigned)completed);
+                 (int)hold_armed, rw_fail, (int)await, (unsigned)consumed,
+                 (unsigned)completed);
         return ESP_OK;
     }
     if (strcmp(action, "clear") == 0) {
@@ -3440,6 +3443,7 @@ esp_err_t app_wifi_test_hook(const char *action, const char *stage,
         s_wifi_hook.active = false;
         s_wifi_hook.fail_count = 0;
         s_wifi_hook.stop_fail_count = 0;
+        s_wifi_hook.restart_wake_fail = 0;   /* S6：R4 注入撤销，避免残留影响后续唤醒 */
         s_wifi_hook.hold_timeout_ms = 0;
         portEXIT_CRITICAL(&s_wifi_hook_mux);
         ESP_LOGW(TAG, "hook_cleared");
@@ -4533,17 +4537,28 @@ static bool app_wifi_restart_wake(void)
     BaseType_t rt;
 
 #ifdef APP_WIFI_FAULT_INJECT
-    {   /* S6 R4 注入：一次性返回失败，用于验证唤醒失败 → CLEANUP_FAILED */
-        bool fail = false;
-        portENTER_CRITICAL(&s_wifi_hook_mux);
-        if (s_wifi_hook.restart_wake_fail > 0) {
-            s_wifi_hook.restart_wake_fail--;
-            fail = true;
-        }
-        portEXIT_CRITICAL(&s_wifi_hook_mux);
-        if (fail) {
-            ESP_LOGW(TAG, "hook: restart_wake forced fail (R4 injection)");
-            return false;
+    {   /* S6 R4 注入：仅当"确实要走 cleanup 唤醒"时消耗并返回失败，
+         * 避免普通 APPLY restart 误消耗注入（评审 P1）。 */
+        bool target;
+
+        app_wifi_tryconnect_state_lock();
+        target = (s_wifi_owner.owner == APP_WIFI_OWNER_CLEANUP &&
+                  s_wifi_restart_kind == APP_WIFI_RESTART_CLEANUP);
+        app_wifi_tryconnect_state_unlock();
+        if (target) {
+            bool fail = false;
+            portENTER_CRITICAL(&s_wifi_hook_mux);
+            if (s_wifi_hook.restart_wake_fail > 0) {
+                s_wifi_hook.restart_wake_fail--;
+                fail = true;
+            }
+            portEXIT_CRITICAL(&s_wifi_hook_mux);
+            if (fail) {
+                ESP_LOGW(TAG, "hook: restart_wake forced fail (R4 injection, cleanup path)");
+                return false;
+            }
+        } else {
+            ESP_LOGD(TAG, "hook: restart_wake_fail armed but not cleanup path, skipped");
         }
     }
 #endif

@@ -20,7 +20,7 @@
 现场实测：自第一轮 `8122661ms` 起 3.5 小时零转移、`cleanup complete/failed/watchdog`
 各 0 次，三轮 `connect_failed` 同因。
 
-## 2. 补丁（`main/wifi.c`，5 处；纯状态机 `wifi_op_owner.c` 零改动）
+## 2. 补丁（`main/wifi.c` 共 8 处 + `main/CMakeLists.txt` 1 处；纯状态机 `wifi_op_owner.c` 零改动）
 
 | # | 位置 | 改动 |
 | --- | --- | --- |
@@ -38,9 +38,9 @@
 | 项 | 值 |
 | --- | --- |
 | build | 0 error / 0 warning |
-| **功能镜像 build_sha** | **`acde8863e`**（ELF，`APP_WIFI_FAULT_INJECT=OFF`，0 error / 0 warning） |
-| **FI 镜像 build_sha** | **`3dcf4f7db84e`**（ELF，`-DAPP_WIFI_FAULT_INJECT=ON`，R4 专用；构建期有 4 条 **uart.c 既有** unused-function 警告，与本次改动无关——功能镜像 0 警告） |
-| 栈帧（`-fstack-usage`） | `owner_step_locked` 48B、`owner_step_ev` 80B、`handover_wake_failed` 96B、`restart_task_fn` 288B（任务栈 4096B，余量充足） |
+| **功能镜像 build_sha** | **`95315d5ae46b`**（ELF，`APP_WIFI_FAULT_INJECT=OFF`，0 error / 0 warning） |
+| **FI 镜像 build_sha** | **`a805202f2b07`**（ELF，`-DAPP_WIFI_FAULT_INJECT=ON`，R4 专用；构建期仍有 4 条 **`uart.c` 既有** unused-function 警告，与本次改动无关——功能镜像 0 警告） |
+| 栈帧（`-fstack-usage`，两镜像一致） | `app_wifi_owner_step_locked` 48B、`app_wifi_owner_step_ev` 80B、**`app_wifi_cleanup_wake_failed` 96B**、`app_wifi_cleanup_request` 32B、`app_wifi_restart_task_fn` 288B（任务栈 4096B，余量充足） |
 | 主机测试 | `tests/wifi_owner` **59 passed / 0 failed**（纯状态机未改） |
 
 ## 4. 修复后回归矩阵（**设备侧执行**，需烧录后另行授权）
@@ -50,8 +50,8 @@
 | R1 | TRYX 持有期间收到 cleanup 请求，随后正常释放 | 日志 `TRYX -> CLEANUP`；kind=CLEANUP、started>0；随后 `cleanup complete`；owner → NONE |
 | R2 | **同上但 BLE 断连触发取消**（本次现场故障复现路径） | 同上；**不得**出现 owner 停留 CLEANUP 且无 cleanup 终态 |
 | R3 | restart 任务正常执行 | `cleanup complete` 或 `cleanup failed` 至少一条；owner 不停在 CLEANUP |
-| R4a | **FI 镜像**：TRYX 持有期间请求 cleanup，释放时唤醒失败<br>步骤：BLE `diag.m1hook {action:"restart_wake_fail", count:1}` → 发起 tryconnect → 中途 `network.cancel`（使 release 时 `cleanup_requested=true`） | 日志 `hook: restart_wake forced fail` + `cleanup wake failed -> CLEANUP_FAILED op=… by tryconnect_release`；owner=CLEANUP_FAILED（可诊断，**非**假 NONE） |
-| R4b | **FI 镜像**：owner=NONE 时直接请求 cleanup 且唤醒失败<br>步骤：BLE `diag.m1hook {action:"restart_wake_fail", count:1}` → 触发一次 cleanup 请求（cancel 一个已 ready 的 trial 或由 op 终态 cleanup 发起） | 日志 `cleanup wake failed -> CLEANUP_FAILED op=… by cleanup_request`；`app_wifi_cleanup_request` 返回 false；owner=CLEANUP_FAILED，**不得**回 NONE |
+| **R4a** | **FI 镜像**，前置：`hook_status` 显示 `restart_wake_fail=0`、owner=NONE、无活动 op<br>步骤：① `diag.m1hook {action:"restart_wake_fail", count:1}`（`hook_status` 应显示 1）② 发起 tryconnect ③ 期间 BLE `network.cancel`，使释放时 `cleanup_requested=true` | 日志 `hook: restart_wake forced fail (R4 injection, cleanup path)` + `cleanup wake failed -> CLEANUP_FAILED op=… by tryconnect_release`；owner=CLEANUP_FAILED（**非**假 NONE）；`hook_status` 的 `restart_wake_fail` 归 0 |
+| **R4b** | **FI 镜像**，**必须在 R4a 之后单独复位设备**（CLEANUP_FAILED 粘性，不复位会被入口 `DENY_FAILED` 拒绝，走不到 NOTIFY）<br>复位后前置：owner=NONE、无活动 op、`restart_wake_fail=0`<br>步骤：① 重新布防 `restart_wake_fail=1` ② 在 owner=NONE 时直接触发 cleanup 请求（如对已 ready trial 调 `network.cancel`） | 日志 `cleanup wake failed -> CLEANUP_FAILED op=… by cleanup_request`；`app_wifi_cleanup_request` 返回 false；owner=CLEANUP_FAILED，**不得**回 NONE |
 | R5 | 无 cleanup 请求时 TRYX 正常释放 | owner → NONE；**不**误启动 cleanup（无 cleanup 日志） |
 | R6 | monitor 看门狗超时 | 12s 重通知 / 25s abort（`cleanup aborted by watchdog`）可观测——不再因 started=0 失效 |
 
@@ -77,3 +77,21 @@
 | **P1** | R4 缺可重复注入手段 | 新增一次性 `restart_wake_fail` 注入（仅 FI 构建），R4a/R4b 两条路径均给出具体执行步骤 |
 | P2 | `else` 分支锁外读 `s_wifi_owner.owner` | 改为**锁内快照** `owner_snap` 后再打日志 |
 | P2 | `abort_consume` 重复清理 started/kind | 删除重复赋值，统一由 `step_locked` 出口处理 |
+
+## 8. 第三轮复审修订（FI 注入闭环）
+
+| 编号 | 审查意见 | 处理 |
+| --- | --- | --- |
+| **P1** | `clear` 未清 `restart_wake_fail`，残留注入会误伤后续唤醒 | `clear` 增加 `restart_wake_fail = 0` |
+| **P1** | `status` 不输出注入计数，操作者无法确认布防/消费/撤销 | `hook_status` 增加 `restart_wake_fail=%d` |
+| **P1** | 注入在 `restart_wake()` 入口无条件消耗，可能影响普通 APPLY restart | 仅当 **`owner==CLEANUP && restart_kind==CLEANUP`**（确实走 cleanup 唤醒）时消耗；非 cleanup 路径打 `hook: ... skipped` 日志后正常唤醒 |
+| **P1** | R4a/R4b 未隔离：CLEANUP_FAILED 粘性会让 R4b 被入口 `DENY_FAILED` 拒绝 | 矩阵写明 **R4b 前必须单独复位设备**并核对 owner=NONE / 无活动 op / `restart_wake_fail=0`；两次结果分别归档 |
+| P2 | 烧录引用旧 sha、栈帧旧符号、改动数量、"5 处" | 全部同步：功能镜像 `95315d5ae46b` / FI `a805202f2b07`；栈帧按新符号实测；改动数 8+1 |
+| P2 | CMake 选项说明未含 restart wake fail | `option(APP_WIFI_FAULT_INJECT ...)` 文案补充 `restart wake fail` |
+
+### 8.1 注入口径
+
+- 布防：`diag.m1hook {"action":"restart_wake_fail","count":1}`
+- 观测：`diag.m1hook {"action":"status"}` → 含 `restart_wake_fail=N`（1=已布防、0=已消费或已撤销）
+- 撤销：`diag.m1hook {"action":"clear"}`（清全部注入并置零该计数）
+- 仅 `APP_WIFI_FAULT_INJECT=ON` 构建存在；功能镜像无此入口。
