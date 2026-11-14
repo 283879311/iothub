@@ -237,6 +237,9 @@ class Rpc:
         self._subscribe_rc = None
         self._connected = False
         self.connect_error = None
+        self.generation = 0        # v11.2：连接代次
+        self._subscribe_mid = None
+        self._suback_mid = None
         self._loop = None
         self._lock = asyncio.Lock()
         self.seq = 0
@@ -247,22 +250,36 @@ class Rpc:
         self.disconnected = False
 
     def _on_conn(self, _c, _u, _flags, rc, _props=None):
-        """CONNACK 之后才订阅——修复 v11 的 connect/subscribe 时序缺陷。"""
+        """CONNACK 之后才订阅。v11.2：每次 CONNACK 开新代次并清空旧订阅状态，
+        旧代 SUBACK 永不代表新连接就绪。"""
+        self.generation += 1
+        self._suback = None
+        self._suback_mid = None
+        self._subscribe_rc = None
+        self._subscribe_mid = None
         self._connack = rc
         if int(getattr(rc, "value", rc)) != 0:
             self.connect_error = f"connack_rc={rc}"
+            self._connected = False
             return
         self._connected = True
+        self.disconnected = False        # 可恢复策略：新代次重新就绪
+        self.connect_error = None
         try:
-            result, _mid = self.cli.subscribe(
+            result, mid = self.cli.subscribe(
                 "v1/devices/me/rpc/response/+", 1)
             self._subscribe_rc = int(result)
+            self._subscribe_mid = mid
         except Exception as exc:  # noqa: BLE001
             self._subscribe_rc = -1
             self.connect_error = f"subscribe_exc:{type(exc).__name__}"
 
     def _on_suback(self, _c, _u, mid, reason_codes, _props=None):
+        # 只接受本代 SUBSCRIBE 的 mid
+        if self._subscribe_mid is None or mid != self._subscribe_mid:
+            return
         self._suback = list(reason_codes or [])
+        self._suback_mid = mid
 
     def _on_disc(self, _c, _u, _flags, _rc, _props=None):
         self.disconnected = True
@@ -276,7 +293,8 @@ class Rpc:
                 return (False, self.connect_error)
             if self._subscribe_rc not in (None, 0):
                 return (False, f"subscribe_rc={self._subscribe_rc}")
-            if self._connected and self._suback is not None:
+            if self._connected and self._suback is not None \
+                    and self._suback_mid == self._subscribe_mid:
                 if not self._suback:
                     return (False, "suback_empty")
                 bad = [str(rc) for rc in self._suback
@@ -399,6 +417,9 @@ class Presence:
         self._connected = False
         self.connect_error = None
         self.disconnect_count = 0
+        self.generation = 0        # v11.2：连接代次
+        self._subscribe_mid = None
+        self._suback_mid = None
         self.cli = cli if cli is not None else mqtt.Client(
             mqtt.CallbackAPIVersion.VERSION2, protocol=mqtt.MQTTv311)
         self.cli.on_connect = self._on_conn
@@ -412,20 +433,31 @@ class Presence:
         self.cli.loop_start()
 
     def _on_conn(self, _c, _u, _flags, rc, _props=None):
+        self.generation += 1
+        self._suback = None
+        self._suback_mid = None
+        self._subscribe_rc = None
+        self._subscribe_mid = None
         self._connack = rc
         if int(getattr(rc, "value", rc)) != 0:
             self.connect_error = f"connack_rc={rc}"
+            self._connected = False
             return
         self._connected = True
+        self.connect_error = None
         try:
-            result, _mid = self.cli.subscribe("v1/devices/me/#", 1)
+            result, mid = self.cli.subscribe("v1/devices/me/#", 1)
             self._subscribe_rc = int(result)
+            self._subscribe_mid = mid
         except Exception as exc:  # noqa: BLE001
             self._subscribe_rc = -1
             self.connect_error = f"subscribe_exc:{type(exc).__name__}"
 
     def _on_suback(self, _c, _u, mid, reason_codes, _props=None):
+        if self._subscribe_mid is None or mid != self._subscribe_mid:
+            return
         self._suback = list(reason_codes or [])
+        self._suback_mid = mid
 
     def _on_disc(self, _c, _u, _flags, _rc, _props=None):
         self._connected = False
@@ -440,7 +472,8 @@ class Presence:
                 return (False, self.connect_error)
             if self._subscribe_rc not in (None, 0):
                 return (False, f"subscribe_rc={self._subscribe_rc}")
-            if self._connected and self._suback is not None:
+            if self._connected and self._suback is not None \
+                    and self._suback_mid == self._subscribe_mid:
                 if not self._suback:
                     return (False, "suback_empty")
                 bad = [str(rc) for rc in self._suback
@@ -450,6 +483,13 @@ class Presence:
                 return (True, "ready")
             await asyncio.sleep(0.1)
         return (False, "ready_timeout")
+
+    def is_alive(self):
+        """当前连接是否仍有效（v11.2：R4 开始/结束都要校验）。"""
+        try:
+            return bool(self._connected and self.cli.is_connected())
+        except Exception:  # noqa: BLE001
+            return False
 
     def _on_msg(self, _c, _u, msg):
         self.seen.append((time.monotonic(), getattr(msg, "topic", "?")))
@@ -501,6 +541,21 @@ async def ssid_precheck(sess, ssid):
         stop(f"目标 SSID 等于当前已连 SSID（{cur}）——拒绝运行")
         return False
     log(f"[gate] SSID 前置通过：目标={ssid} 持久={persist} 当前={cur}")
+    return True
+
+
+def tcp_gate():
+    """门禁（v11.2）：改指向**之前**的 PC 侧 TCP 预检，失败即 STOP。
+    限制：只证明 broker 从本机可达，不是目标 AP 的出网证明。"""
+    tcp_ok, tcp_why = tcp_precheck(EMQX_HOST, EMQX_PORT)
+    (OUT / "000_tcp_precheck.json").write_text(json.dumps(
+        {"host": EMQX_HOST, "port": EMQX_PORT, "ok": tcp_ok, "detail": tcp_why,
+         "limit": "PC 侧可达性，非目标 AP 出网证据"}, ensure_ascii=False, indent=1),
+        encoding="utf-8")
+    log(f"[gate] TCP 预检 {EMQX_HOST}:{EMQX_PORT} ok={tcp_ok}（{tcp_why}）")
+    if not tcp_ok:
+        stop("TCP 预检失败：broker 从本机不可达——不进入测试")
+        return False
     return True
 
 
@@ -722,30 +777,71 @@ def tcp_precheck(host, port, timeout=5.0):
         return (False, f"{type(exc).__name__}: {exc}")
 
 
-def r2_write_ok(resp, keys=("mqtt_host", "mqtt_port")):
-    """R2：写回必须 ok:true 且 changed 同时包含两个目标键。返回 (ok, 明细)。"""
-    d = (resp or {}).get("data") or {}
-    ok = (resp or {}).get("ok") is True
-    changed = d.get("changed") or []
+def r2_classify(resp, keys=("mqtt_host", "mqtt_port")):
+    """R2 精确分类（v11.2）。返回 (state, detail)，state ∈
+    {"OK", "REJECTED", "UNCONFIRMED"}：
+      REJECTED    = 设备**明确** ok:false（唯一可称"设备拒绝写回"的情形）
+      UNCONFIRMED = ok 缺失/非布尔、data/changed 结构异常、缺目标键
+    另：changed 必须是**字符串数组**，否则不参与成员判断。"""
+    if not isinstance(resp, dict):
+        return ("UNCONFIRMED", {"why": f"response_not_dict:{type(resp).__name__}"})
+    ok = resp.get("ok")
+    if ok is False:
+        return ("REJECTED", {"why": "ok_false"})
+    if ok is not True:
+        return ("UNCONFIRMED", {"why": f"ok_missing_or_nonbool:{ok!r}"})
+    d = resp.get("data")
+    if not isinstance(d, dict):
+        return ("UNCONFIRMED", {"why": f"data_not_dict:{type(d).__name__}"})
+    changed = d.get("changed")
+    if not isinstance(changed, list) or \
+            not all(isinstance(x, str) for x in changed):
+        return ("UNCONFIRMED",
+                {"why": f"changed_not_str_list:{type(changed).__name__}"})
     missing = [k for k in keys if k not in changed]
-    return (ok and not missing, {"ok": ok, "changed": changed, "missing": missing})
+    det = {"changed": changed, "missing": missing}
+    if missing:
+        return ("UNCONFIRMED", {"why": "missing_keys", **det})
+    return ("OK", det)
+
+
+def r2_write_ok(resp, keys=("mqtt_host", "mqtt_port")):
+    """兼容包装：True 仅当分类为 OK。"""
+    state, det = r2_classify(resp, keys)
+    return (state == "OK", {"state": state, **det})
 
 
 async def r4_silence_check(pres, window_s=30.0):
-    """R4：监听必须先就绪，再完整观察 window_s；期间断链或收到设备消息都
-    不能记通过。返回 (ok, 明细)。"""
+    """R4（v11.2）：断链基线与就绪判定在同一窗口内。
+    开始先记 disconnect_count → wait_ready → 期间有断链即失败 →
+    开始时校验连接有效 → 观察满 window_s → 结束时再次校验连接/代次/计数。
+    只有"当前连接持续有效 + 订阅本代生效 + 窗口内 0 设备消息"才通过。"""
+    dc_start = pres.disconnect_count
+    gen_start = pres.generation
     ready, why = await pres.wait_ready(12.0)
     if not ready:
         return (False, {"stage": "LISTENER_NOT_READY", "why": why})
+    if pres.disconnect_count != dc_start or pres.generation != gen_start:
+        return (False, {"stage": "LISTENER_RESET_DURING_INIT",
+                        "disconnects": pres.disconnect_count - dc_start,
+                        "generation_delta": pres.generation - gen_start})
+    if not pres.is_alive():
+        return (False, {"stage": "LISTENER_NOT_CONNECTED_AT_START"})
     t0 = time.monotonic()
-    dc0 = pres.disconnect_count
     await asyncio.sleep(window_s)
+    dc = pres.disconnect_count - dc_start
+    gen = pres.generation - gen_start
+    alive = pres.is_alive()
     recent = [(round(t - t0, 1), topic) for t, topic in pres.seen if t >= t0]
-    dc = pres.disconnect_count - dc0
     detail = {"window_s": window_s, "msgs_in_window": len(recent),
-              "sample": recent[:3], "disconnects_in_window": dc}
+              "sample": recent[:3], "disconnects_total": dc,
+              "generation_delta": gen, "alive_at_end": alive}
     if dc > 0:
         return (False, {"stage": "LISTENER_DISCONNECTED", **detail})
+    if gen > 0:
+        return (False, {"stage": "LISTENER_GENERATION_CHANGED", **detail})
+    if not alive:
+        return (False, {"stage": "LISTENER_LOST_AT_END", **detail})
     if recent:
         return (False, {"stage": "STILL_ON_EMQX", **detail})
     return (True, detail)
@@ -785,13 +881,14 @@ async def do_recovery(sess=None):
         r = await recover_cmd(s, "config.set",
                               {"patch": {"mqtt_host": _origin_snapshot[0],
                                          "mqtt_port": _origin_snapshot[1]}})
-        w_ok, w_det = r2_write_ok(r)
-        stages["R2_write"] = json.dumps(w_det, ensure_ascii=False)
-        if not w_ok:
-            if (r or {}).get("ok") is not True:
-                finish(RC_FAIL, "设备拒绝写回")
-            else:
-                finish(RC_UNCONF, f"写回回包缺少目标键 changed（missing={w_det['missing']}）")
+        w_state, w_det = r2_classify(r)
+        stages["R2_write"] = json.dumps({"state": w_state, **w_det},
+                                       ensure_ascii=False)
+        if w_state == "REJECTED":
+            finish(RC_FAIL, "设备明确拒绝写回（ok:false）")
+            return
+        if w_state == "UNCONFIRMED":
+            finish(RC_UNCONF, f"写回结果无法确认（{w_det.get('why')}）")
             return
         # R3 独立回读
         back = await recover_cmd(s, "config.get")
@@ -860,6 +957,10 @@ async def run_round(sess, pw):
         return
     # ---- SSID 前置（评审裁决 §5）：目标 ≠ 持久 ≠ 当前 ----
     if not await ssid_precheck(sess, _ssid):
+        _results["op_e"] = _results["op_v"] = "NOT_RUN"
+        return
+    # ---- TCP 门禁（v11.2 显式调用；必须在改指向之前）----
+    if not tcp_gate():
         _results["op_e"] = _results["op_v"] = "NOT_RUN"
         return
     log("[gate] 通过（本轮：MQTT async expired[须 GOT_IP] + op-V；轮询走 MQTT）")
