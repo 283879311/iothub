@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""S6 v11.1 离线自检（不连设备/不连 broker，全部替身对象）。
+"""S6 v11.3.2 离线自检（不连设备/不连 broker，全部替身对象）。
 
 覆盖评审要求的 7 类用例：
   1 连接失败（connect 抛异常）
@@ -467,11 +467,12 @@ async def case_v1131():
     check("证据分类记录 harness_request 计数",
           ev["harness_request_msgs"] == 2 and ev["device_msgs"] == 0, str(ev))
 
-    print("[21b] 设备上报（telemetry/attributes/rpc response）→ 判为接入")
+    print("[21b] 设备上报（telemetry/attributes/request/已登记 rid 的 rpc response）")
+    S._harness_rids.add("hp-1-dead")     # v11.3.2：response 需与本轮请求关联
     for topic in ("v1/devices/me/telemetry",
                   "v1/devices/me/attributes/request/2588",
                   "v1/devices/me/rpc/response/hp-1-dead"):
-        msg = types.SimpleNamespace(topic=topic, payload=b"{}")
+        msg = types.SimpleNamespace(topic=topic, payload=b"{}", retain=False)
         p2._on_msg(None, None, msg)
     check("device 类进入证据", len(p2.seen) == 3, str(p2.evidence_class()))
     got2 = await p2.wait(0.5, since=t0 - 1)
@@ -494,6 +495,82 @@ async def case_v1131():
     check("harness 噪声不阻塞静默判定", ok4, json.dumps(det4, ensure_ascii=False))
 
 
+async def case_v1132():
+    print("[22] P0：retained 消息不得计入设备在线证据")
+    cli = FakeCli(suback=(1,))
+    p = S.Presence("h", 1, cli=cli)
+    ok, why = await p.wait_ready(2.0)
+    check("Presence 就绪", ok, why)
+    t0 = __import__("time").monotonic()
+    # Broker 重放历史 retained telemetry：topic 是 device 类，但 retain=True
+    p._on_msg(None, None, types.SimpleNamespace(
+        topic="v1/devices/me/telemetry", payload=b"{}", retain=True))
+    check("retained 不进 seen", p.seen == [], str(p.all_seen))
+    got = await p.wait(0.6, since=t0 - 1)
+    check("retained 不判设备接入", got is False, str(p.seen))
+    ev = p.evidence_class()
+    check("证据记录 retained_msgs=1", ev["retained_msgs"] == 1, str(ev))
+    # 同一主题的非 retained 消息才有效
+    p._on_msg(None, None, types.SimpleNamespace(
+        topic="v1/devices/me/telemetry", payload=b"{}", retain=False))
+    check("非 retained 同主题 → 计入", len(p.seen) == 1, str(p.seen))
+
+    print("[23] P0：attributes/response 与根 attributes 不计入设备证据")
+    cli2 = FakeCli(suback=(1,))
+    p2 = S.Presence("h", 1, cli=cli2)
+    await p2.wait_ready(2.0)
+    t1 = __import__("time").monotonic()
+    for tp in ("v1/devices/me/attributes/response/abc",
+               "v1/devices/me/attributes"):
+        p2._on_msg(None, None, types.SimpleNamespace(
+            topic=tp, payload=b"{}", retain=False))
+    check("两类均不进 seen", p2.seen == [], str(p2.all_seen))
+    got2 = await p2.wait(0.5, since=t1 - 1)
+    check("不判设备接入", got2 is False, str(p2.seen))
+    ev2 = p2.evidence_class()
+    check("分类计数 server_response=1 / ambiguous=1",
+          ev2["server_response_msgs"] == 1 and ev2["ambiguous_msgs"] == 1,
+          str(ev2))
+    # attributes/request 仍是设备来源
+    p2._on_msg(None, None, types.SimpleNamespace(
+        topic="v1/devices/me/attributes/request/2588",
+        payload=b"{}", retain=False))
+    check("attributes/request 计入", len(p2.seen) == 1, str(p2.seen))
+
+    print("[24] P0：rpc/response 需与本轮请求 ID 关联")
+    cli3 = FakeCli(suback=(1,))
+    r = S.Rpc("h", 1, cli=cli3)
+    r.start(asyncio.get_running_loop())
+    await r.wait_ready(2.0)
+    p3 = S.Presence("h", 1, cli=FakeCli(suback=(1,)))
+    await p3.wait_ready(2.0)
+    t2 = __import__("time").monotonic()
+    # 未知 rid（不是本轮 harness 发出）→ 不计入
+    p3._on_msg(None, None, types.SimpleNamespace(
+        topic="v1/devices/me/rpc/response/unknown-999",
+        payload=b"{}", retain=False))
+    check("未知 rid → 不计入", p3.seen == [], str(p3.all_seen))
+    # 本轮 rid（Rpc.call 会登记）→ 计入
+    fut = asyncio.ensure_future(r.call("operation.get", {}, timeout=0.5))
+    await asyncio.sleep(0.05)
+    rid = next(iter(r._waiters), None)
+    check("call 已登记 rid", rid is not None and rid in S._harness_rids, str(rid))
+    if rid:
+        p3._on_msg(None, None, types.SimpleNamespace(
+            topic=f"v1/devices/me/rpc/response/{rid}",
+            payload=json.dumps({"id": rid, "ok": True}).encode(), retain=False))
+        msg = types.SimpleNamespace(
+            topic=f"v1/devices/me/rpc/response/{rid}",
+            payload=json.dumps({"id": rid, "ok": True,
+                               "data": {"state": "got_ip"}}).encode())
+        r._on_msg(None, None, msg)
+    await fut
+    check("本轮 rid → 计入设备证据", len(p3.seen) == 1, str(p3.seen))
+    ev3 = p3.evidence_class()
+    check("uncorrelated 计数=1", ev3["uncorrelated_rpc_response_msgs"] == 1,
+          str(ev3))
+
+
 async def main():
     await case_lifecycle()
     await case_presence()
@@ -503,6 +580,7 @@ async def main():
     await case_v112()
     await case_v113()
     await case_v1131()
+    await case_v1132()
     print(f"\nselftest: {PASS} passed, {FAIL} failed")
     return 0 if FAIL == 0 else 1
 

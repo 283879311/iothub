@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""S6 现场预采集执行脚本 v11（MQTT 轮询 + 分阶段恢复；窄授权：仅 MQTT async expired
+"""S6 现场预采集执行脚本 v11.3.2（MQTT 轮询 + 分阶段恢复；窄授权：仅 MQTT async expired
 （须先观察到 GOT_IP）+ op-V job-clear 验证）。
 
 v4→v5（评审阻断项与缺口）：
@@ -62,22 +62,40 @@ TB_HOST, TB_PORT = "139.9.93.245", 21883        # 恢复目标（1 号 ThingsBoa
 CLOUD_HOST, CLOUD_PORT = TB_HOST, TB_PORT          # 授权基线（守卫用）= 恢复目标
 SSID = "CMCC-502"
 PROBE = "__jobclear_probe__"
-# 设备在场证据只认设备上报主题（v11.3.1 P0）：
-#   telemetry / attributes（含 attributes/request/<id>）/ rpc/response
-# 明确排除 rpc/request/*——那是 harness 自己发布的（含 ACL 预检），
-# 否则会被 EMQX 回环给同为订阅者的 Presence，造成"设备已接入"假通过。
-DEVICE_TOPICS = ("v1/devices/me/telemetry",
-                 "v1/devices/me/attributes",
-                 "v1/devices/me/rpc/response")
+# 设备在场证据（v11.3.2 P0）：只认**方向明确为设备→服务器**的主题。
+#   telemetry                  设备上报
+#   attributes/request/<id>    设备发起属性请求
+#   rpc/response/<rid>         **且 rid ∈ 本轮 harness 发出的请求**（方向关联）
+# 明确排除：
+#   rpc/request/*              harness 自己发布（含 ACL 预检）→ 回环会假通过
+#   attributes/response/<id>   服务器→设备（不是设备在线证据）
+#   attributes（根路径）        双向语义，方向不确定
+TELEMETRY_PREFIX = "v1/devices/me/telemetry"
+ATTR_REQUEST_PREFIX = "v1/devices/me/attributes/request/"
+ATTR_RESPONSE_PREFIX = "v1/devices/me/attributes/response/"
+ATTR_ROOT = "v1/devices/me/attributes"
+RPC_REQUEST_PREFIX = "v1/devices/me/rpc/request/"
+RPC_RESPONSE_PREFIX = "v1/devices/me/rpc/response/"
+
+_harness_rids = set()      # 本轮 harness 发出的 RPC 请求 ID（用于方向关联）
 
 
 def classify_topic(topic):
-    """返回 'device' / 'harness_request' / 'other'。"""
-    if topic.startswith("v1/devices/me/rpc/request"):
+    """返回 device / harness_request / server_response / ambiguous /
+    uncorrelated_rpc_response / other。只有 device 计入在场证据。"""
+    if topic.startswith(RPC_REQUEST_PREFIX):
         return "harness_request"
-    for pfx in DEVICE_TOPICS:
-        if topic == pfx or topic.startswith(pfx + "/"):
-            return "device"
+    if topic == TELEMETRY_PREFIX or topic.startswith(TELEMETRY_PREFIX + "/"):
+        return "device"
+    if topic.startswith(ATTR_REQUEST_PREFIX):
+        return "device"
+    if topic.startswith(ATTR_RESPONSE_PREFIX):
+        return "server_response"
+    if topic == ATTR_ROOT:
+        return "ambiguous"
+    if topic.startswith(RPC_RESPONSE_PREFIX):
+        rid = topic[len(RPC_RESPONSE_PREFIX):]
+        return "device" if rid in _harness_rids else "uncorrelated_rpc_response"
     return "other"
 TOKEN_LIMIT_S = 480.0
 ALLOWED_PERSIST_SSID = ("CMCC-502", "TQ2026")
@@ -399,6 +417,7 @@ class Rpc:
                 return ("TRANSPORT", f"not_ready:{why}")
             self.seq += 1
             rid = f"hp-{self.seq}-{uuid.uuid4().hex[:4]}"
+            _harness_rids.add(rid)     # 供 Presence 关联 rpc/response 方向
             ev = asyncio.Event()
             self._waiters[rid] = (ev, {})
             try:
@@ -549,24 +568,30 @@ class Presence:
 
     def _on_msg(self, _c, _u, msg):
         topic = getattr(msg, "topic", "?")
-        klass = classify_topic(topic)
+        retained = bool(getattr(msg, "retain", False))
+        # v11.3.2 P0：retained 是 Broker 在新订阅时重放的历史消息，
+        # 不代表设备当前在线——只记日志，不进 seen、不参与 wait()/R4。
+        klass = "retained" if retained else classify_topic(topic)
         self.all_seen.append((time.monotonic(), topic, klass))
-        if klass == "device":          # 只有设备上报才算在场证据
+        if klass == "device":
             self.seen.append((time.monotonic(), topic, klass))
-        else:
-            # 保留日志但不进入判据（含 harness 自己的 rpc/request 预检）
-            pass
 
     def last_mono(self):
         return self.seen[-1][0] if self.seen else None
 
     def evidence_class(self):
-        """证据来源摘要（写入归档，便于复核是哪类设备上报触发）。"""
+        """证据来源摘要（写入归档，便于复核是哪类消息触发）。"""
+        cnt = {}
+        for _t, _tp, k in self.all_seen:
+            cnt[k] = cnt.get(k, 0) + 1
         return {"device_msgs": len(self.seen),
-                "harness_request_msgs": sum(1 for _, _, k in self.all_seen
-                                            if k == "harness_request"),
-                "other_msgs": sum(1 for _, _, k in self.all_seen
-                                  if k == "other")}
+                "harness_request_msgs": cnt.get("harness_request", 0),
+                "retained_msgs": cnt.get("retained", 0),
+                "server_response_msgs": cnt.get("server_response", 0),
+                "ambiguous_msgs": cnt.get("ambiguous", 0),
+                "uncorrelated_rpc_response_msgs":
+                    cnt.get("uncorrelated_rpc_response", 0),
+                "other_msgs": cnt.get("other", 0)}
 
     async def wait(self, seconds=240.0, since=None):
         """等到 since 之后的首条消息。调用前必须 wait_ready() 成功。"""
@@ -1260,7 +1285,7 @@ async def main():
     trace_f = open(OUT / "session_trace.log", "a", encoding="utf-8")
     prev_stdout = sys.stdout
     sys.stdout = _Tee(prev_stdout, trace_f)   # session_trace：脱敏截断 TX/RX 跟踪流
-    log(f"=== S6 round4（v11.3.1 脚本/EMQX {EMQX_HOST}:{EMQX_PORT}）开始（窄授权：MQTT async expired[须 GOT_IP] + op-V）===")
+    log(f"=== S6 round4（v11.3.2 脚本/EMQX {EMQX_HOST}:{EMQX_PORT}）开始（窄授权：MQTT async expired[须 GOT_IP] + op-V）===")
     code = 3
     cli = None
     try:                                   # 启动与运行全部纳入统一收尾
