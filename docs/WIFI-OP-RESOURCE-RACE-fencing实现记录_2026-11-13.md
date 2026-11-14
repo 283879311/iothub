@@ -1,4 +1,6 @@
 # WIFI-OP-RESOURCE-RACE · fencing 差量实现记录（2026-11-13）
+> **状态**：ACTIVE（fencing 差量待复审）（文档状态标定 2026-11-14，定义与索引见 [docs/README.md](README.md)）
+
 
 > 评审方式：以 `artifacts/wifi_op_race_20261112/fencing_delta.patch` 的实际 diff 为准。
 > 代码 commit：`0eb30ce47795cff5201388793f926cc4302b5dd8`（基线 `185e029`，单 commit 可 revert）。

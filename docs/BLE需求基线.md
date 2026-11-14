@@ -1,4 +1,6 @@
 # BLE 需求基线（常态本地管理通道）
+> **状态**：ARCHIVED（文档状态标定 2026-11-14，定义与索引见 [docs/README.md](README.md)）
+
 
 > **2026-11-04**：固件已进入 v1-only；本文的 v0 现状表是历史基线，当前命令合同以 `docs/BLE命令协议规范.md` 为准。v0 `method/params` 已禁用。
 

@@ -1,4 +1,6 @@
 # BLE 命令协议规范（v1-only，2026-11-04）
+> **状态**：ACTIVE（v1 wire 协议规范；语义以 contract/v1 为准）（文档状态标定 2026-11-14，定义与索引见 [docs/README.md](README.md)）
+
 
 > 适用：iothub 固件 BLE CMD 通道、微信小程序/App BLE 客户端。
 > 当前固件：v1-only；v0 `method/params` 入口已**彻底删除**（源码、旧方法别名、编译开关均无，2026-11-05）。

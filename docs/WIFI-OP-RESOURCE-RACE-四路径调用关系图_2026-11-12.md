@@ -1,4 +1,6 @@
 # WIFI-OP-RESOURCE-RACE · 四路径调用关系图（2026-11-12）
+> **状态**：ACTIVE（与修订设计同步）（文档状态标定 2026-11-14，定义与索引见 [docs/README.md](README.md)）
+
 
 > 配套：[修订设计 B1–B5](WIFI-OP-RESOURCE-RACE-修订设计_B1-B5_2026-11-12.md)。
 > 标注约定：`(n)` = B4 覆盖表第 n 个 STA 驱动调用点；`★` = owner 取得/释放/交接；

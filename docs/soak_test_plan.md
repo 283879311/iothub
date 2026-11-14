@@ -1,4 +1,6 @@
 # 非 VM Ubuntu 全链路 soak 测试方案（2026-10-18）
+> **状态**：LEGACY（HTTP/Web 章节描述已删除功能；T5 BLE/soak 章节历史有效）（文档状态标定 2026-11-14，定义与索引见 [docs/README.md](README.md)）
+
 
 > 目标：把 soak 从当前 VM 迁到一台**非虚拟机 Ubuntu**，覆盖 **BLE / HTTP / UART / MQTT**，
 > 验证全开（BLE + MQTT + 页面 + UART）长时间稳定，并给出 NimBLE 默认 / Bluedroid 回退的 A/B 结论。

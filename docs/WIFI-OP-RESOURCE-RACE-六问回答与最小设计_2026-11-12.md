@@ -1,4 +1,6 @@
 # WIFI-OP-RESOURCE-RACE · 六问回答与最小改动设计（固件侧，2026-11-12）
+> **状态**：ARCHIVED（已被修订设计 B1-B5 取代）（文档状态标定 2026-11-14，定义与索引见 [docs/README.md](README.md)）
+
 
 > 对应：[WIFI-OP-RESOURCE-RACE-确认清单.md]（客户端仓 docs/）。
 > 本轮**只回答与设计，不修改任何固件代码**；代码修改与烧录需单独批准。

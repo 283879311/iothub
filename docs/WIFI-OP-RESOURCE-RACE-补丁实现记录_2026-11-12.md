@@ -1,4 +1,6 @@
 # WIFI-OP-RESOURCE-RACE · 补丁实现记录（提审用，2026-11-12）
+> **状态**：ACTIVE（185e029 实现记录）（文档状态标定 2026-11-14，定义与索引见 [docs/README.md](README.md)）
+
 
 > 状态：**代码已实现、编译零告警、主机自测全绿；未提交、未烧录、未动设备。**
 > 评审方式：以 `artifacts/wifi_op_race_20261112/wifi_op_race.patch` 的实际 diff 为准

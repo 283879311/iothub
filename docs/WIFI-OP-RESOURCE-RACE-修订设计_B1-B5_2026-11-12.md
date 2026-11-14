@@ -1,4 +1,6 @@
 # WIFI-OP-RESOURCE-RACE · 修订设计（B1–B5 全量覆盖，2026-11-12）
+> **状态**：ACTIVE（设计已签收；§14/§15.1 为唯一口径）（文档状态标定 2026-11-14，定义与索引见 [docs/README.md](README.md)）
+
 
 > 评审输入：`wx-ble-provision/docs/WIFI-OP-RESOURCE-RACE-设计评审_2026-11-12.md` §5 裁决。
 > 本文件**只设计、不含代码**；代码修改与烧录需单独批准。
