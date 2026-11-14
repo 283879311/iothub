@@ -17,7 +17,7 @@
 
 | ID | 优先级 | 项目 | 状态 | 验收要求 |
 |---|---|---|---|---|
-| CMD-01 | P0 | `io.get` Wi-Fi runtime 状态读取加锁快照 | TODO | 无锁读取消失；JSON 在锁外构建 |
+| CMD-01 | P0 | `io.get` Wi-Fi runtime 状态读取加锁快照 | IN_PROGRESS | 静态检查通过；待 ESP-IDF 构建与入口回归 |
 | CMD-02 | P0 | 全面盘点 `s_net_async` 读写点并统一快照接口 | TODO | 每个字段有明确锁保护/单任务所有权说明 |
 | CMD-03 | P0 | 复核 operation/job 锁序及 callback 时序 | TODO | operation 临界区不回调 cmd；cleanup/run/cancel 时序有证据 |
 | CMD-04 | P1 | network/device status 改为快照后构造 JSON | TODO | 锁持有期间无 cJSON 分配；字段兼容 |
@@ -35,7 +35,7 @@
 
 ### 阶段 A：锁与快照，不移动业务代码
 
-- [ ] CMD-01：修复 `io.get` 对 `s_wifi.sta_has_ip` / `s_wifi.sta_ip` 的读取边界。
+- [x] CMD-01：已修复 `io.get` 对 `s_wifi.sta_has_ip` / `s_wifi.sta_ip` 的读取边界；锁内复制快照，锁外构造 JSON。代码提交：`add93e7`。静态检查通过；构建与 BLE/MQTT 入口回归尚未执行。
 - [ ] CMD-02：列出 `s_net_async` 每个字段的全部读写点，标记任务上下文、锁状态、生命周期。
 - [ ] CMD-03：审查 `operation.c` 的锁、回调、cancel、expire 和槽位复用。
 - [ ] CMD-05：审查 config/profile 锁序。
@@ -101,5 +101,5 @@
 - [x] 第一轮 `cmd.c` 静态审查完成。
 - [x] 形成函数职责、调用关系、锁关系、重复逻辑和拆分建议文档。
 - [ ] 建立代码级并发专项审查证据。
-- [ ] 阶段 A 尚未实施。
-- [ ] 尚未对 `cmd.c` 做代码修改、编译或真机验收。
+- [ ] 阶段 A 尚未整体完成（CMD-01 已实施，CMD-02/03/05 未开始）。
+- [x] `cmd.c` 已有 CMD-01 最小代码修改（`add93e7`）；尚未执行 ESP-IDF 编译或真机验收。
