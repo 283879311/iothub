@@ -801,46 +801,97 @@ static bool app_cmd_net_tryconnect_async(const cJSON *params,
     return true;
 }
 
+/* CMD-04a:单次 job_lock 值快照——锁外判定与构建(锁内零 cJSON,评审约束 1/2)。
+ * 字段清单与分支判定表见 docs/CMD-04a_operation_status快照清单与判定表_2026-11-14.md。 */
+typedef struct {
+    bool op_found;
+    app_op_state_t state;
+    app_operation_error_t error;
+    char operation_id[APP_OPERATION_ID_LEN];
+    app_operation_owner_t owner;
+    int64_t terminal_ms;
+    bool have_job_snapshot;
+    bool st_wifi_connected;
+    bool st_ip_acquired;
+    bool st_internet_verified;
+    bool st_mqtt_connected;
+    bool trial_match;
+    char trial_id[20];   /* 与 app_cmd_net_trial_t.id 同宽 */
+    char trial_ssid[33]; /* 与 app_cmd_net_trial_t.ssid 同宽 */
+} app_cmd_net_op_status_snap_t;
+
+/* 唯一 job_lock 临界区:find/get_status/job 域/trial 域一次捕获,零 cJSON。
+ * 字符串全部按值复制——不含指向共享状态的指针(评审约束 1)。 */
+static void app_cmd_net_op_status_capture(const char *operation_id,
+                                          app_cmd_net_op_status_snap_t *snap)
+{
+    app_operation_t *op;
+    app_operation_status_t st;
+
+    memset(snap, 0, sizeof(*snap));
+
+    app_cmd_net_job_lock();
+    op = app_operation_find(operation_id);
+    snap->op_found = (op != NULL && app_operation_get_status(op, &st));
+    if (snap->op_found) {
+        snap->state = st.state;
+        snap->error = st.error;
+        snap->owner = st.owner;
+        snap->terminal_ms = st.terminal_ms;
+        app_copy_string(snap->operation_id, sizeof(snap->operation_id), st.id);
+    }
+    snap->have_job_snapshot = (s_net_async.active &&
+                               strcmp(s_net_async.operation_id, operation_id) == 0);
+    if (snap->have_job_snapshot) {
+        snap->st_wifi_connected = s_net_async.st_wifi_connected;
+        snap->st_ip_acquired = s_net_async.st_ip_acquired;
+        snap->st_internet_verified = s_net_async.st_internet_verified;
+        snap->st_mqtt_connected = s_net_async.st_mqtt_connected;
+    }
+    snap->trial_match = (s_net_trial.valid &&
+                         strcmp(s_net_trial.operation_id, operation_id) == 0);
+    if (snap->trial_match) {
+        app_copy_string(snap->trial_id, sizeof(snap->trial_id), s_net_trial.id);
+        app_copy_string(snap->trial_ssid, sizeof(snap->trial_ssid), s_net_trial.ssid);
+    }
+    app_cmd_net_job_unlock();
+}
+
 static cJSON *app_cmd_net_operation_status(const app_cmd_context_t *ctx,
                                            const char *operation_id, const char **err_out)
 {
-    app_operation_t *op;
-    app_operation_status_t status;
+    /* CMD-04a:单次 job_lock 值快照——锁外判定与构建(锁内零 cJSON,评审约束 1/2)。
+     * 字段清单与分支判定表见 docs/CMD-04a_operation_status快照清单与判定表_2026-11-14.md。 */
+    app_cmd_net_op_status_snap_t snap;
     cJSON *resp;
 
-    /* R8:读取 trial 字段(operation_id/ssid),与 worker store/断连 clear
-     * 跨任务 —— 整体入 job 锁(内部 operation API 走 ops_mux,锁序不变)。 */
-    app_cmd_net_job_lock();
-    op = app_operation_find(operation_id);
-    if (op == NULL || !app_operation_get_status(op, &status)) {
+    app_cmd_net_op_status_capture(operation_id, &snap);
+
+    if (!snap.op_found) {
         *err_out = "not_found";
-        app_cmd_net_job_unlock();
         return NULL;
     }
     if (ctx != NULL && ctx->source == APP_CMD_SOURCE_MQTT &&
-        status.owner != APP_OPERATION_OWNER_MQTT) {
+        snap.owner != APP_OPERATION_OWNER_MQTT) {
         *err_out = "not_found";
-        app_cmd_net_job_unlock();
         return NULL;
     }
     if (ctx != NULL && ctx->source == APP_CMD_SOURCE_HTTP &&
-        status.owner != APP_OPERATION_OWNER_HTTP) {
+        snap.owner != APP_OPERATION_OWNER_HTTP) {
         *err_out = "not_found";
-        app_cmd_net_job_unlock();
         return NULL;
     }
     resp = cJSON_CreateObject();
     if (resp == NULL) {
         *err_out = "out_of_memory";
-        app_cmd_net_job_unlock();
         return NULL;
     }
-    cJSON_AddStringToObject(resp, "operation_id", status.id);
-    cJSON_AddStringToObject(resp, "state", app_op_state_name(status.state));
+    cJSON_AddStringToObject(resp, "operation_id", snap.operation_id);
+    cJSON_AddStringToObject(resp, "state", app_op_state_name(snap.state));
     {
         /* 契约 v1.1:error 保持扁平字符串(v1 冻结);并行新增 error_detail 对象,
          * 2.0 再统一。两者值同源,客户端可任选。 */
-        const char *err_name = app_operation_error_name(status.error);
+        const char *err_name = app_operation_error_name(snap.error);
         cJSON *detail;
 
         cJSON_AddStringToObject(resp, "error", err_name);
@@ -850,35 +901,34 @@ static cJSON *app_cmd_net_operation_status(const app_cmd_context_t *ctx,
             cJSON_AddStringToObject(detail, "message", err_name);
         }
     }
-    if (app_op_state_is_terminal(status.state) && status.terminal_ms > 0) {
+    if (app_op_state_is_terminal(snap.state) && snap.terminal_ms > 0) {
         /* 契约 v1.1:终态时刻(设备时钟,与 device.status.uptime_ms 同源)。
          * 客户端复核耗时不再依赖墙钟。 */
-        cJSON_AddNumberToObject(resp, "finished_uptime_ms", (double)status.terminal_ms);
+        cJSON_AddNumberToObject(resp, "finished_uptime_ms", (double)snap.terminal_ms);
     }
-    if (s_net_trial.valid && strcmp(s_net_trial.operation_id, status.id) == 0) {
-        cJSON_AddStringToObject(resp, "trial_id", s_net_trial.id);
-        cJSON_AddStringToObject(resp, "ssid", s_net_trial.ssid);
+    if (snap.trial_match) {
+        cJSON_AddStringToObject(resp, "trial_id", snap.trial_id);
+        cJSON_AddStringToObject(resp, "ssid", snap.trial_ssid);
     }
     /* DEF-NET-001(评审回复 §5):阶段结果对象,状态/错误语义不变。
      * 契约 v1.1(Phase 1)优先级:job 快照 > 终态快照缓存 > 活运行态,
-     * 并以 stages_source 显式标注来源——终态后不再回落成零值。 */
+     * 并以 stages_source 显式标注来源——终态后不再回落成零值。
+     * live 回落的 runtime/mqtt 捕获已移出 job 锁(第三轮:消除嵌套锁段)。 */
     {
-        cJSON *stages = cJSON_AddObjectToObject(resp, "stages");
+        cJSON *stages_obj = cJSON_AddObjectToObject(resp, "stages");
         bool wifi_connected;
         bool ip_acquired;
         bool net_verified;
         bool mqtt_connected;
         const char *source;
-        bool have_snapshot = (s_net_async.active &&
-                              strcmp(s_net_async.operation_id, status.id) == 0);
 
-        if (have_snapshot) {
-            wifi_connected = s_net_async.st_wifi_connected;
-            ip_acquired = s_net_async.st_ip_acquired;
-            net_verified = s_net_async.st_internet_verified;
-            mqtt_connected = s_net_async.st_mqtt_connected;
+        if (snap.have_job_snapshot) {
+            wifi_connected = snap.st_wifi_connected;
+            ip_acquired = snap.st_ip_acquired;
+            net_verified = snap.st_internet_verified;
+            mqtt_connected = snap.st_mqtt_connected;
             source = "snapshot";
-        } else if (app_cmd_net_stage_snap_get(status.id, &wifi_connected, &ip_acquired,
+        } else if (app_cmd_net_stage_snap_get(operation_id, &wifi_connected, &ip_acquired,
                                               &net_verified, &mqtt_connected)) {
             source = "snapshot";
         } else {
@@ -892,15 +942,14 @@ static cJSON *app_cmd_net_operation_status(const app_cmd_context_t *ctx,
             app_mqtt_unlock();
             source = "live";
         }
-        if (stages != NULL) {
-            cJSON_AddBoolToObject(stages, "wifi_connected", wifi_connected);
-            cJSON_AddBoolToObject(stages, "ip_acquired", ip_acquired);
-            cJSON_AddBoolToObject(stages, "internet_verified", net_verified);
-            cJSON_AddBoolToObject(stages, "mqtt_connected", mqtt_connected);
+        if (stages_obj != NULL) {
+            cJSON_AddBoolToObject(stages_obj, "wifi_connected", wifi_connected);
+            cJSON_AddBoolToObject(stages_obj, "ip_acquired", ip_acquired);
+            cJSON_AddBoolToObject(stages_obj, "internet_verified", net_verified);
+            cJSON_AddBoolToObject(stages_obj, "mqtt_connected", mqtt_connected);
         }
         cJSON_AddStringToObject(resp, "stages_source", source);
     }
-    app_cmd_net_job_unlock();
     return resp;
 }
 
