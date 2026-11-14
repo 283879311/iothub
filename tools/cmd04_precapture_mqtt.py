@@ -85,6 +85,51 @@ def mqtt_send(m: MqttV1, cmd: str, args: dict | None = None, wait: float = 8.0):
     return resp
 
 
+class IdentityMismatch(RuntimeError):
+    pass
+
+
+async def verify_identity(sess: Session, adv_addr: str, expected: dict,
+                          record_prefix: str = "idcheck") -> dict:
+    """六维身份守卫（评审 2026-11-14 要求）：广播地址/device_id/build_sha/
+    SSID+IP/mqtt host:port/uptime 全部核对；任一不符即拒绝操作。
+    choose_target 的静默回退不允许——地址不匹配直接失败。"""
+    recs = await scan_filtered(10.0)
+    hit = [r for r in recs if r["address"].lower() == adv_addr.lower()]
+    if not hit:
+        raise IdentityMismatch(f"{adv_addr} 不在广播中（不做静默回退）")
+    actual = {"adv_addr": adv_addr, "adv_name": hit[0].get("name")}
+    info = (await sess.v1("device.info", timeout=15)).obj.get("data", {})
+    st = (await sess.v1("device.status", timeout=15)).obj.get("data", {})
+    net = (await sess.v1("network.status", timeout=15)).obj.get("data", {})
+    cfg = (await sess.v1("config.get", timeout=15)).obj.get("data", {})
+    actual.update({
+        "device_id": info.get("device_id"),
+        "build_sha": info.get("build_sha"),
+        "uptime_ms": st.get("uptime_ms"),
+        "sta_ssid": net.get("connected_ssid"),
+        "sta_ip": net.get("sta_ip"),
+        "mqtt_host": (cfg.get("mqtt") or {}).get("mqtt_host"),
+        "mqtt_port": (cfg.get("mqtt") or {}).get("mqtt_port"),
+        "mqtt_connected": net.get("mqtt_connected"),
+    })
+    save(record_prefix + "_identity", "ble",
+         {"_note": "身份守卫", "expected": expected}, actual)
+    problems = []
+    for k, want in expected.items():
+        if want is None:
+            continue
+        got = actual.get(k)
+        if got is None or (isinstance(want, int) and got != want) or \
+           (not isinstance(want, int) and str(got).lower() != str(want).lower()):
+            problems.append(f"{k}: 期望 {want!r} 实测 {got!r}")
+    if problems:
+        raise IdentityMismatch("; ".join(problems))
+    log(f"[identity] 六维校验通过 device_id={actual['device_id']} "
+        f"build_sha={actual['build_sha']} uptime={actual['uptime_ms']}")
+    return actual
+
+
 async def wait_broker_link(m: MqttV1, seconds: float = 75) -> bool:
     deadline = time.time() + seconds
     while time.time() < deadline:
