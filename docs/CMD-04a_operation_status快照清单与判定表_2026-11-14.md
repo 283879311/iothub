@@ -1,0 +1,115 @@
+> **状态**：ACTIVE（CMD-04a 字段快照清单与分支判定表；随最小 diff 一并提交）
+
+# CMD-04a · `app_cmd_net_operation_status` 快照清单与分支判定表（2026-11-14）
+
+> 基线：`e1d2058`+（含 49707a9/dc254d5）。评审约束逐条对应：
+> 值快照（约束 1）/ 判定完整迁移（约束 2）/ 协议语义（约束 3）/ 栈堆预算（约束 4）/ skew 边界（约束 5）。
+
+## 1. 快照结构（值快照，零悬空指针）
+
+```c
+typedef struct {
+    bool op_found;                       /* find+get_status 结果(同临界区) */
+    app_op_state_t state;
+    app_operation_error_t error;
+    char operation_id[APP_OPERATION_ID_LEN];   /* 20B,来自 status.id */
+    app_operation_owner_t owner;         /* MQTT/HTTP owner 校验用 */
+    int64_t terminal_ms;                 /* finished_uptime_ms 用 */
+    bool have_job_snapshot;              /* job 快照命中(active 且 operation_id 匹配) */
+    bool st_wifi_connected;
+    bool st_ip_acquired;
+    bool st_internet_verified;
+    bool st_mqtt_connected;
+    bool trial_match;                    /* s_net_trial 归属本 op */
+    char trial_id[20];                   /* 与 app_cmd_net_trial_t.id 同宽 */
+    char trial_ssid[33];                 /* 与 app_cmd_net_trial_t.ssid 同宽 */
+} app_cmd_net_op_status_snap_t;
+```
+
+- **sizeof ≈ 148B**（含对齐；编译实测为准）；调用方 = ble_cmd(8192B)/mqtt 任务
+  ——栈增量 <2%（栈水位基线见 §5）；
+- **全部值为拷贝**：operation_id/trial_id/trial_ssid 按字节复制，不含指向
+  `s_net_async`/`s_net_trial`/`s_config`/runtime 内部成员的任何指针（约束 1）；
+- 无全局快照对象（约束：不新增全局状态）；`stage_snap_get` 为既有独立锁 API，
+  锁外调用（自有 s_stage_snap_mux，不与 job 锁嵌套）。
+
+## 2. 唯一锁内临界区（捕获段，零 cJSON）
+
+```
+app_cmd_net_job_lock();
+  op = find(operation_id); get_status(op,&st)          → op_found/state/error/
+                                                         operation_id/owner/terminal_ms
+  have_job_snapshot = active && job.operation_id==status_id
+  have_job_snapshot ? 拷贝 st_*×4                        （job 快照域）
+  trial_match = trial.valid && trial.operation_id==status_id
+  trial_match ? 拷贝 trial_id/ssid                      （trial 域）
+app_cmd_net_job_unlock();
+```
+
+锁内耗时 = 1 次 find（s_ops_mux spinlock）+ 1 次 get_status（s_ops_mux 快照）
++ ~12 字段拷贝——**零 cJSON、零字符串格式化**（约束 4：锁内复制耗时以实测确认，
+设计预期 <10µs）。
+
+## 3. 分支判定表（锁内判定 → 锁外等价判定，全部基于单次快照）
+
+| # | 现锁内判定（dc254d5 行号） | 快照字段 | 锁外判定 | 响应/语义 |
+| --- | --- | --- | --- | --- |
+| 1 | find 失败/get_status 失败（:815） | `op_found=false` | 同 | `not_found`，NULL |
+| 2 | MQTT owner 校验（:820-824） | `ctx->source`（调用方参数）+ `snap.owner` | 同 | `not_found`，NULL |
+| 3 | HTTP owner 校验（:826-830） | 同上 | 同 | `not_found`，NULL |
+| 4 | finished_uptime_ms 条件（terminal && terminal_ms>0） | `snap.state` + `snap.terminal_ms` | 同 | 加法字段 |
+| 5 | trial 块（trial.valid && operation_id 匹配） | `snap.trial_match` + `trial_id/ssid` | 同 | trial_id/ssid 字段 |
+| 6 | stages source 三分支（have_job_snapshot / stage_snap 命中 / live） | `have_job_snapshot` + st_* + `stage_snap_get(id)`（自有锁）+ live 捕获（runtime/mqtt，**移出 job 锁**——现状嵌套于 job 锁内，本改造顺带消除嵌套） | 同 | stages/stages_source |
+| 7 | OOM（CreateObject 失败） | — | 同 | `out_of_memory`，NULL |
+
+**判定完整迁移确认（约束 2）**：现锁内判定共 7 类（上表）——owner 校验、
+have_snapshot、trial 匹配、operation 状态关联（state/error/terminal_ms 同一次
+get_status 快照）、stages 回落、OOM、not_found——**全部基于同一次锁内捕获**；
+锁外不再回读 `s_net_async`/`s_net_trial`/runtime 原始成员。
+
+## 4. 协议语义保持（约束 3）——分支矩阵与 golden
+
+wire 逐字段一致（含字段省略/类型/条件出现）：
+
+| 分支 | golden（改版前实测，`artifacts/wifi_op_race_20261112/golden_pre_04a.json`，sha 前 16 位 `15401a735dc9d829`） |
+| --- | --- |
+| success 终态（op-36A936F9E7909901） | ✅ 已抓 |
+| failed 终态 ap_not_found（op-12730EEC7F1F64AA） | ✅ 已抓 |
+| network.status（trial 块 + live 字段） | ✅ 已抓 |
+| owner 不匹配（MQTT 查 BLE op → not_found） | 烧录窗口随批补抓 |
+| accepted/connecting 在飞（trial 块出现） | 烧录窗口随批补造 |
+| expired（300s TTL） | 烧录窗口随批补造（静置 5 分钟） |
+
+**generation/owner 关联**（约束 2）：`find(status_id)` + `get_status` 在
+s_ops_mux 快照内完成——槽位复用后 id 变化 → find 返回 NULL → not_found；
+id 幂等重试 → 同一 op 同一 generation。快照携带 owner 供校验，
+**不携带 generation**（wire 无此字段；关联性由 find-by-id + s_ops_mux 快照保证）。
+
+## 5. 栈/堆预算（约束 4）
+
+| 项 | 基线（改版前实测 `stack_baseline_pre_04a.json`，1.3-2ef2a38 设备） |
+| --- | --- |
+| 任务栈最低剩余 | min_free=976B（IDLE1）；low 列表：tcpip=1960 mqtt_telemetry=1636 mqtt_boost=1304 mqtt_restart=1788 app_diag=1716 TmrSvc=1660 IDLE0=980 IDLE1=976 |
+| 快照结构 | sizeof ≈ 148B（ble_cmd 8192B / mqtt 任务栈增量 <2%；IDLE 不受影响——快照仅在命令任务栈上） |
+| 堆 | 改造前后 job 锁内均无堆分配；cJSON 分配总量不变（同字段集） |
+
+烧录窗口复测项：同任务栈 HWM 对照（≥基线 -148B 预算内）、heap largest 无回退、
+锁内复制/锁外构建耗时实测（替换"设计预期 <10µs"）。
+
+## 6. 失败路径与资源释放（约束 3）
+
+- CreateObject 失败 → `out_of_memory`、NULL——与现状一致（快照为栈对象，
+  无需释放）；
+- 子 Add 失败（cJSON 返回 NULL）：**保持现状不检查**（部分响应返回）——
+  现状同行为，不因快照化改变；
+- 无敏感字段（04a 无 password；04c 的 sta_password 生命周期在 04c 清单单独定义）。
+
+## 7. skew 边界（约束 5）
+
+- runtime 域 8 字段：单锁一致 ✓；
+- trial 域 2 字段 + 匹配判定：单锁一致 ✓；
+- job 快照 st_*×4：单锁一致 ✓；
+- **跨域**（如 state=success 与 stages live 值）：现状即非原子、客户端已容忍；
+  快照化不劣化。不可能组合的防护：`have_job_snapshot` 与 `trial_match` 同锁
+  判定——不会出现"stages 来自新 op 快照、state 来自旧 op 终态"的混搭
+  （二者判定同一次锁内捕获，且 operation_id 匹配锚定同一 op）。
