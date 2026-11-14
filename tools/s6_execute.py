@@ -62,6 +62,23 @@ TB_HOST, TB_PORT = "139.9.93.245", 21883        # 恢复目标（1 号 ThingsBoa
 CLOUD_HOST, CLOUD_PORT = TB_HOST, TB_PORT          # 授权基线（守卫用）= 恢复目标
 SSID = "CMCC-502"
 PROBE = "__jobclear_probe__"
+# 设备在场证据只认设备上报主题（v11.3.1 P0）：
+#   telemetry / attributes（含 attributes/request/<id>）/ rpc/response
+# 明确排除 rpc/request/*——那是 harness 自己发布的（含 ACL 预检），
+# 否则会被 EMQX 回环给同为订阅者的 Presence，造成"设备已接入"假通过。
+DEVICE_TOPICS = ("v1/devices/me/telemetry",
+                 "v1/devices/me/attributes",
+                 "v1/devices/me/rpc/response")
+
+
+def classify_topic(topic):
+    """返回 'device' / 'harness_request' / 'other'。"""
+    if topic.startswith("v1/devices/me/rpc/request"):
+        return "harness_request"
+    for pfx in DEVICE_TOPICS:
+        if topic == pfx or topic.startswith(pfx + "/"):
+            return "device"
+    return "other"
 TOKEN_LIMIT_S = 480.0
 ALLOWED_PERSIST_SSID = ("CMCC-502", "TQ2026")
 
@@ -354,6 +371,12 @@ class Rpc:
         结构，若有其他设备订阅同主题它们也会收到）——证据口径如实标注。"""
         r_ok, r_why = self._is_ready()
         sub_ok = r_ok
+        if not r_ok:
+            # v11.3.1 P1：未就绪连预检请求也不发（与 call() 规则一致）
+            return (False, False, {"ready": False, "ready_why": r_why,
+                                   "published": False,
+                                   "suback": [str(x) for x in (self._suback or [])],
+                                   "client_id": self.client_id})
         topic = f"v1/devices/me/rpc/request/preflight-{uuid.uuid4().hex[:6]}"
         info = self.cli.publish(topic, b'{"id":"preflight","version":"1.0",'
                                        b'"cmd":"device.info","args":{}}', qos=1)
@@ -363,6 +386,7 @@ class Rpc:
             pass
         pub_ok = info.is_published() and info.rc == self._mqtt.MQTT_ERR_SUCCESS
         return (sub_ok, pub_ok, {"ready": r_ok, "ready_why": r_why,
+                                 "published": True,
                                  "suback": [str(r) for r in (self._suback or [])],
                                  "pub_rc": info.rc, "client_id": self.client_id})
 
@@ -430,7 +454,8 @@ class Presence:
 
     def __init__(self, host, port, cli=None):
         import paho.mqtt.client as mqtt
-        self.seen = []
+        self.seen = []          # 仅 device 类（在场证据）
+        self.all_seen = []      # 全部（含 harness_request/other，仅日志）
         self._mqtt = mqtt
         self._connack = None
         self._suback = None
@@ -523,10 +548,25 @@ class Presence:
         return all(int(getattr(rc, "value", rc)) != 128 for rc in self._suback)
 
     def _on_msg(self, _c, _u, msg):
-        self.seen.append((time.monotonic(), getattr(msg, "topic", "?")))
+        topic = getattr(msg, "topic", "?")
+        klass = classify_topic(topic)
+        self.all_seen.append((time.monotonic(), topic, klass))
+        if klass == "device":          # 只有设备上报才算在场证据
+            self.seen.append((time.monotonic(), topic, klass))
+        else:
+            # 保留日志但不进入判据（含 harness 自己的 rpc/request 预检）
+            pass
 
     def last_mono(self):
         return self.seen[-1][0] if self.seen else None
+
+    def evidence_class(self):
+        """证据来源摘要（写入归档，便于复核是哪类设备上报触发）。"""
+        return {"device_msgs": len(self.seen),
+                "harness_request_msgs": sum(1 for _, _, k in self.all_seen
+                                            if k == "harness_request"),
+                "other_msgs": sum(1 for _, _, k in self.all_seen
+                                  if k == "other")}
 
     async def wait(self, seconds=240.0, since=None):
         """等到 since 之后的首条消息。调用前必须 wait_ready() 成功。"""
@@ -871,10 +911,11 @@ async def r4_silence_check(pres, window_s=30.0):
     dc = pres.disconnect_count - dc_start
     gen = pres.generation - gen_start
     alive = pres.is_alive()
-    recent = [(round(t - t0, 1), topic) for t, topic in pres.seen if t >= t0]
+    recent = [(round(t - t0, 1), topic) for t, topic, _k in pres.seen if t >= t0]
     detail = {"window_s": window_s, "msgs_in_window": len(recent),
               "sample": recent[:3], "disconnects_total": dc,
-              "generation_delta": gen, "alive_at_end": alive}
+              "generation_delta": gen, "alive_at_end": alive,
+              "evidence": pres.evidence_class()}
     if dc > 0:
         return (False, {"stage": "LISTENER_DISCONNECTED", **detail})
     if pres.generation != gen0:
@@ -1067,7 +1108,8 @@ async def run_round(sess, pw):
             stop("设备未在 240s 内接入 EMQX（broker 侧无遥测）")
             _results["op_e"] = _results["op_v"] = "NOT_RUN"
             return
-        log(f"[S4] broker 侧确认设备接入（首条 {pres.seen[-1][1]}）")
+        log(f"[S4] broker 侧确认设备接入（首条 {pres.seen[-1][1]}；"
+            f"证据={pres.evidence_class()}）")
 
         # ---- op-E：MQTT 创建 + MQTT 轮询 ----
         kind, resp = await rpc.call("network.tryconnect",
@@ -1218,7 +1260,7 @@ async def main():
     trace_f = open(OUT / "session_trace.log", "a", encoding="utf-8")
     prev_stdout = sys.stdout
     sys.stdout = _Tee(prev_stdout, trace_f)   # session_trace：脱敏截断 TX/RX 跟踪流
-    log(f"=== S6 round4（v11 脚本/EMQX {EMQX_HOST}:{EMQX_PORT}）开始（窄授权：MQTT async expired[须 GOT_IP] + op-V）===")
+    log(f"=== S6 round4（v11.3.1 脚本/EMQX {EMQX_HOST}:{EMQX_PORT}）开始（窄授权：MQTT async expired[须 GOT_IP] + op-V）===")
     code = 3
     cli = None
     try:                                   # 启动与运行全部纳入统一收尾

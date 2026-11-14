@@ -173,7 +173,7 @@ async def case_presence():
     async def inject():
         await asyncio.sleep(0.1)
         p.seen.append((__import__("time").monotonic(),
-                       "v1/devices/me/telemetry"))
+                       "v1/devices/me/telemetry", "device"))
 
     asyncio.ensure_future(inject())
     ok4, det4 = await S.r4_silence_check(p, 1.0)
@@ -412,7 +412,7 @@ async def case_v113():
     check("构造时 generation=0（确为首次）", gen_after_construct == 0,
           str(gen_after_construct))
 
-    print("[19b] Presence 初始化期间真实断链（gen_start>0）仍判负")
+    print("[19b] Presence 初始化期间代次变化（子类模拟，非真实 Broker 重连）仍判负")
     cli3 = FakeCli(suback=(1,))
     p3 = S.Presence("h", 1, cli=cli3)
     await p3.wait_ready(2.0)            # 现在 generation=1
@@ -431,6 +431,69 @@ async def case_v113():
           json.dumps(det4b, ensure_ascii=False))
 
 
+async def case_v1131():
+    print("[20] P1：ACL 预检未就绪 → 零 publish")
+    cli = FakeCli(suback=(1,))
+    r = S.Rpc("h", 1, cli=cli)
+    r.start(asyncio.get_running_loop())
+    await r.wait_ready(2.0)
+    cli.auto_suback = False
+    cli.simulate_disconnect()
+    cli.simulate_reconnect()            # 新代 SUBACK 故意未到
+    n_before = cli.publish_count
+    sub_ok, pub_ok, det = r.acl_preflight()
+    check("未就绪 → sub_ok=False", not sub_ok, str(det))
+    check("未就绪 → published=False", det.get("published") is False, str(det))
+    check("未就绪 → 零 publish", cli.publish_count == n_before,
+          f"{n_before}->{cli.publish_count}")
+
+    print("[21] P0：Presence 不得把 harness 自己的 rpc/request 预检当设备接入")
+    cli2 = FakeCli(suback=(1,))
+    p2 = S.Presence("h", 1, cli=cli2)
+    ok, why = await p2.wait_ready(2.0)
+    check("Presence 就绪", ok, why)
+    t0 = __import__("time").monotonic()
+
+    # 模拟 EMQX 回环：harness 发布的预检请求被 Presence 收到
+    for topic in ("v1/devices/me/rpc/request/preflight-abc123",
+                  "v1/devices/me/rpc/request/hp-1-dead"):
+        msg = types.SimpleNamespace(topic=topic, payload=b"{}")
+        p2._on_msg(None, None, msg)
+    check("harness_request 不进入设备证据", p2.seen == [],
+          str(p2.all_seen))
+    got = await p2.wait(0.8, since=t0 - 1)
+    check("预检消息不判为设备接入", got is False, str(p2.seen))
+    ev = p2.evidence_class()
+    check("证据分类记录 harness_request 计数",
+          ev["harness_request_msgs"] == 2 and ev["device_msgs"] == 0, str(ev))
+
+    print("[21b] 设备上报（telemetry/attributes/rpc response）→ 判为接入")
+    for topic in ("v1/devices/me/telemetry",
+                  "v1/devices/me/attributes/request/2588",
+                  "v1/devices/me/rpc/response/hp-1-dead"):
+        msg = types.SimpleNamespace(topic=topic, payload=b"{}")
+        p2._on_msg(None, None, msg)
+    check("device 类进入证据", len(p2.seen) == 3, str(p2.evidence_class()))
+    got2 = await p2.wait(0.5, since=t0 - 1)
+    check("设备上报 → 判定接入", got2 is True, str(p2.seen))
+    ev2 = p2.evidence_class()
+    check("device_msgs=3 / harness_request=2",
+          ev2["device_msgs"] == 3 and ev2["harness_request_msgs"] == 2, str(ev2))
+
+    print("[21c] R4 窗口内只有 harness 预检消息 → 仍判静默通过")
+    cli3 = FakeCli(suback=(1,))
+    p3 = S.Presence("h", 1, cli=cli3)
+
+    async def harness_noise():
+        await asyncio.sleep(0.2)
+        p3._on_msg(None, None, types.SimpleNamespace(
+            topic="v1/devices/me/rpc/request/preflight-zzz", payload=b"{}"))
+
+    asyncio.ensure_future(harness_noise())
+    ok4, det4 = await S.r4_silence_check(p3, 0.6)
+    check("harness 噪声不阻塞静默判定", ok4, json.dumps(det4, ensure_ascii=False))
+
+
 async def main():
     await case_lifecycle()
     await case_presence()
@@ -439,6 +502,7 @@ async def main():
     case_tcp()
     await case_v112()
     await case_v113()
+    await case_v1131()
     print(f"\nselftest: {PASS} passed, {FAIL} failed")
     return 0 if FAIL == 0 else 1
 
