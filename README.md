@@ -18,6 +18,38 @@
 - **恢复出厂**:BOOT 键(GPIO0)长按 5s 后 LED 闪烁提示；松开后 LED 恢复原状态，设备清除默认配置、已保存 Wi-Fi 列表和配网 PIN/状态，再重启。
 - **蓝牙**:BLE NUS GATT 数据面(peripheral 从机 + central 主机),支持数据 RX/TX 与 CMD 通道(命令写 `6E400004`、回包订阅 `6E400005`);v1 先 `auth.login` 换 token，token 在 `data.token`;默认 NimBLE 主机栈,可回退 Bluedroid;经典蓝牙 / SPP 已于 v1.2 移除(CONFIG_BT_CLASSIC_ENABLED=n)。
 
+## 软件架构概览
+
+固件采用分层、双控制入口与控制面/数据面分离的结构：
+
+```text
+ThingsBoard MQTT（云端命令 / 遥测 / attributes）
+                  |
+BLE NUS（本地管理）| 统一 v1 命令协议
+                  v
+       command context / policy / dispatch
+                  |
+     +------------+-------------+
+     |            |             |
+  配置与事务    设备控制       状态查询
+  Wi-Fi/OTA     GPIO/UART      device/network
+     |            |             |
+     +------ ESP-IDF / FreeRTOS +
+                  |
+       NVS / Wi-Fi / NimBLE / MQTT
+                  |
+      data_pipe：UART / BLE / MQTT
+```
+
+- **控制面**：BLE NUS 与 ThingsBoard MQTT 共用 v1 命令语义；命令来源通过 context 参与权限策略判断。
+- **网络事务**：Wi-Fi tryconnect/apply/cancel 采用异步 operation，维护 owner、operation 状态、trial、联网验证和 cleanup。
+- **数据面**：`data_pipe` 负责 UART/BLE/MQTT 数据路由；不与命令 JSON 通道混为一体。
+- **配置面**：配置结构、Wi-Fi profile 和运行态配置应用由各自模块管理；配置事务 guard 用于串行化配置变更。
+- **设备能力**：GPIO、UART、BLE、MQTT、OTA 分别由专用模块实现，命令层负责协调而不应取代底层模块。
+- **资源约束**：ESP32 内存有限，异步任务、队列、JSON 构建和锁持有时间均需纳入资源与并发审查。
+
+当前命令层的详细函数职责、调用关系、锁审查和拆分建议见 [`docs/cmd.c_review_2026-11-14.md`](docs/cmd.c_review_2026-11-14.md)；后续执行顺序与验收状态见 [`docs/cmd_refactor_plan.md`](docs/cmd_refactor_plan.md)。
+
 ## 硬件引脚(编译期固定,`main/constants.h`)
 
 | 功能 | GPIO |
@@ -100,10 +132,6 @@ docs/archive/     原始日志/历史归档(只读留证)
 - BLE 真机四态(RX/TX/CMD RX/CMD TX)尚未执行;断连重广播、A/B 双向角色互换(1.3-78/81)已通过,手机 nRF Connect 步骤见 `docs/soak_test_plan.md` §2.4,另一台 Ubuntu 的角色互换/数据面/回传执行包见 §2.5。
 - MQTT 数据面旧实现误用 `esp_mqtt_client_enqueue` 的 QoS0/store=false(返回 -1、未真正入队),导致实际漏发远大于 `dropped_mqtt` 记录的 2%;已改 QoS1/store=true,1KB/s 负载 6min 0 丢、outbox 0(1.3-82)。
 
-##测试环境与账号密码
-模拟mqtt设备token：A3_TEST_TOKEN 设备id：85236050-c890-11f1-9a00-67dba22715ad
-WIFI SSID：CMCC-502 密码：ct61993100
-WIFI SSID：TQ2018 密码：57402003
+## 测试凭据管理
 
-mqtt测试服务器：http://139.9.93.245:1883
-
+测试设备 Token、Wi-Fi 密码和管理口令不得提交到公开 README 或其他公开文档。请通过设备本地配置、受控的环境变量或不纳入版本控制的本地文件管理；曾经公开过的凭据应视为已泄露并轮换。\n
