@@ -175,17 +175,17 @@ snapshot_save）全部留在锁外原位。
   以上四条列入实施阶段代码审查的明确检查项；
 - 协议兼容：字段省略条件（OOM/对象创建失败分支）与权限行为不变。
 
-## 6. 实施与验收（评审通过后）
+## 6. 实施与验收
 
-- 实现：两段各 ~12 行改动（Add 移锁外 + 局部拷贝 + `app_cmd_secure_wipe`
-  助手 + patch 堆副本擦除）；
-- 验收：
-  - 段 A wire 逐字段一致（**烧录窗口补抓 sync tryconnect 受理响应 golden**）；
-  - 段 B 以代码审为主：密码三副本清点表逐项核对 + 四条 config_apply_patch
-    检查项在案；
-  - job 锁两段区间 grep 零 cJSON + build 0/0 + 主机 8 套；
-  - `-fstack-usage` 04b/04c 对照归档。
-- 分期：04c 单独 commit（基线 = 04b 签收版），可独立 revert。
+- **实现完成**（commit `7f6354e`，单 commit 可 revert；patch sha 前 16 位
+  `ce9b5016604fc647`）：两段各 ~15 行改动（Add 移锁外 + 局部拷贝 +
+  `app_cmd_secure_wipe` 助手 + patch 堆副本擦除）；
+- **`-fstack-usage` 实测已完成**：`app_cmd_execute_method` 栈帧
+  **04b=912B / 04c=912B（零增长）**——快照栈局部被编译器与既有局部复用抵消；
+- 待烧录窗口验收：段 A wire 逐字段一致（补抓 sync tryconnect 受理响应
+  golden）；
+- 其余验收（锁内 grep 零 cJSON / build 0/0 / 主机 8 套 / 密码三副本生命周期
+  代码审）已在本 commit 树完成。
 
 ## 7. 修订记录
 
