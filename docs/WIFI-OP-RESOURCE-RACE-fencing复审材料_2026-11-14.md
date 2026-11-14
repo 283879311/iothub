@@ -104,7 +104,27 @@
 | --- | --- | --- |
 | 1 | run 入口早退路径残留 active_op_id（log-only） | 提请裁决——补丁提案见 §5（补 2 行或接受现状） |
 
-## 5. 自查项 1 的裁决就绪提案（run 入口早退残留）
+## 5. 自查项 1 裁决与修正记录（2026-11-14 终审）
+
+**评审正式结论**（逐项）：C2 watchdog 不夺 CLEANUP owner / abort 检查与
+FAILED 转换原子性 / restart cleanup 安全点 / 成功路径清 abort 与释放同锁 /
+B5 调度捕获 caller-op-gen / active operation 按 ID 匹配清除 / BOOT_RESET 死
+日志清理——**全部通过**；run 入口早退残留**裁决 (b) 采纳补丁**；主机 59/0
+为申报方实测（评审未本地复跑），且其性质是状态机不变量验证，**不能代替真机
+并发验收**（RACE-01/02/03 仍在烧录窗口执行）。
+
+**修正已合入**（本提案原样采纳）+ 构建证据：
+
+| 项 | 值 |
+| --- | --- |
+| 新镜像 build_sha | ELF `ae8a3abb5` / BIN `d25828d58`（0 error/0 warning） |
+| `execute_method` | **912B（与 04c 锚点不变）** |
+| `net_async_run` | 修正前 464B = 修正后 **464B（零栈增长）** |
+| 其余逐函数首录 | `build_network_status` 496B / `net_operation_status` 320B / `net_async_cleanup` 48B |
+| 主机测试（修后复跑） | **59 passed / 0 failed** |
+
+**合并烧录镜像必须包含本修正**；旧 build_sha（abc097643）作废，烧录窗口
+申请的目标镜像 SHA 将按新值更新（等 S6/资源项复核后一并重提）。
 
 现状（patch 行 27-31，wifi.c 无涉）：
 

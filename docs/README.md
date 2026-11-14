@@ -25,8 +25,8 @@
 - [CMD-04c_execute_method内联快照清单与判定表_2026-11-14.md](CMD-04c_execute_method内联快照清单与判定表_2026-11-14.md)——execute_method 两段内联快照设计（已签收，含 7f86720 P0 修正）
 - [CMD-04系列_合并烧录窗口申请_2026-11-14.md](CMD-04系列_合并烧录窗口申请_2026-11-14.md)——fencing+04a/b/c 四项合并烧录申请（pre-golden 预采集→烧录→diff）
 - [R_数据路由层架构_2026-10-26.md](R_数据路由层架构_2026-10-26.md)——data_pipe 架构现状
-- [WIFI-OP-RESOURCE-RACE-fencing实现记录_2026-11-13.md](WIFI-OP-RESOURCE-RACE-fencing实现记录_2026-11-13.md)——fencing 差量待复审
-- [WIFI-OP-RESOURCE-RACE-fencing复审材料_2026-11-14.md](WIFI-OP-RESOURCE-RACE-fencing复审材料_2026-11-14.md)——0eb30ce 最终复审包（纯代码差量 417 行+逐 hunk 映射+59/0 实测），待签收
+- [WIFI-OP-RESOURCE-RACE-fencing实现记录_2026-11-13.md](WIFI-OP-RESOURCE-RACE-fencing实现记录_2026-11-13.md)——fencing 已签收（终审通过+裁决(b)修正 ae8a3abb5）
+- [WIFI-OP-RESOURCE-RACE-fencing复审材料_2026-11-14.md](WIFI-OP-RESOURCE-RACE-fencing复审材料_2026-11-14.md)——0eb30ce 复审包（终审通过；裁决(b)修正已合入，见 §5 构建证据）
 - [WIFI-OP-RESOURCE-RACE-修订设计_B1-B5_2026-11-12.md](WIFI-OP-RESOURCE-RACE-修订设计_B1-B5_2026-11-12.md)——设计已签收；§14/§15.1 为唯一口径
 - [WIFI-OP-RESOURCE-RACE-四路径调用关系图_2026-11-12.md](WIFI-OP-RESOURCE-RACE-四路径调用关系图_2026-11-12.md)——与修订设计同步
 - [WIFI-OP-RESOURCE-RACE-补丁实现记录_2026-11-12.md](WIFI-OP-RESOURCE-RACE-补丁实现记录_2026-11-12.md)——185e029 实现记录
