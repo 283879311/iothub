@@ -11,9 +11,18 @@
 注意：ESP32 的 **BLE 地址 = WiFi MAC + 2**（实测 C8E6↔C8E4、65DA↔65D8），
 所以 BLE 扫描地址不能直接与 client_id 比较。
 
-用法：
-  tools/preflight_flash.py --port /dev/ttyUSB1 --expect-mac 10:97:BD:D3:65:DA \
+用法（全部参数必填）：
+  tools/preflight_flash.py --port /dev/ttyUSB1 \
+      --log-dir artifacts/cmd04_flash_20261114/phaseA \
+      --expect-device-id IotHub-65D8 --expect-build-sha 7e9b8520d \
       --elf build-release/iothub.elf
+
+校验项（任一不符 → 非零退出，禁止烧录）：
+  1) 该端口日志的 **最近一次 boot 之后** 有 client_id=iothub-<WiFiMAC>（证明映射属于当前上电会话）；
+  2) 两份日志 mtime 都在 --max-age-sec 内（证明 capture 仍在写，映射是本次会话的新鲜证据）；
+  3) 端口对应 device_id 与 --expect-device-id 一致；
+  4) ELF 的 build_sha（sha256 前 9 位）与 --expect-build-sha 一致。
+注意：本门禁放行只证明"设备身份 + 镜像身份"，**不替代**烧录后 `device.info.build_sha` 反证。
 """
 
 import argparse
@@ -26,23 +35,37 @@ from pathlib import Path
 SERIAL_DIR = Path("artifacts/cmd04_flash_20261114/phaseA")
 
 
-def port_device_map():
-    """从两份 console 日志反推端口 → 最近一次设备 MAC。"""
-    out = {}
-    for port in ("ttyUSB0", "ttyUSB1"):
-        f = SERIAL_DIR / f"serial_{port}.log"
-        if not f.is_file():
-            out[port] = None
-            continue
-        # 只读尾部 2MB，避免整份大日志
-        size = f.stat().st_size
-        with open(f, "rb") as fh:
-            if size > 2 * 1024 * 1024:
-                fh.seek(size - 2 * 1024 * 1024)
-            data = fh.read().decode("utf-8", "replace")
-        macs = re.findall(r"client_id=iothub-([0-9A-Fa-f]{12})", data)
-        out[port] = macs[-1].upper() if macs else None
-    return out
+def inspect_log(log_dir, port, max_age_sec):
+    """返回 (wifi_mac|None, info dict)。要求 client_id 出现在最近一次 boot 之后。"""
+    import time as _t
+    f = Path(log_dir) / f"serial_{port}.log"
+    info = {"file": str(f), "exists": f.is_file()}
+    if not f.is_file():
+        return None, info
+    st = f.stat()
+    info["size"] = st.st_size
+    info["age_sec"] = round(_t.time() - st.st_mtime, 1)
+    info["fresh"] = info["age_sec"] <= max_age_sec
+    info["sha256_16"] = hashlib.sha256(f.read_bytes()).hexdigest()[:16]
+
+    # 只读尾部 2MB
+    size = st.st_size
+    with open(f, "rb") as fh:
+        if size > 2 * 1024 * 1024:
+            fh.seek(size - 2 * 1024 * 1024)
+        data = fh.read().decode("utf-8", "replace")
+
+    boot_idx = data.rfind("rst:0x1")
+    mac = None
+    macs = list(re.finditer(r"client_id=iothub-([0-9A-Fa-f]{12})", data))
+    if macs:
+        last = macs[-1]
+        info["client_id_after_boot"] = last.start() > boot_idx
+        if info["client_id_after_boot"]:
+            mac = last.group(1).upper()
+    else:
+        info["client_id_after_boot"] = False
+    return mac, info
 
 
 def dev_id_from_wifi_mac(mac12):
@@ -64,14 +87,19 @@ def ble_from_wifi_mac(mac12):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--port", required=True)
+    ap.add_argument("--log-dir", required=True,
+                    help="本次会话的 console 日志目录（必填，不使用历史默认值）")
     ap.add_argument("--expect-device-id", required=True,
                     help="目标 device_id，如 IotHub-65D8（由 WiFi MAC 末 4 位推出）")
+    ap.add_argument("--expect-build-sha", required=True,
+                    help="期望 build_sha（ELF sha256 前 9 位），如 7e9b8520d")
     ap.add_argument("--elf", required=True)
+    ap.add_argument("--max-age-sec", type=int, default=120,
+                    help="日志新鲜度上限（秒），超龄视为映射证据过期")
     args = ap.parse_args()
 
     name = Path(args.port).name
-    mapping = port_device_map()
-    observed_wifi = mapping.get(name)
+    observed_wifi, loginfo = inspect_log(args.log_dir, name, args.max_age_sec)
     observed_id = dev_id_from_wifi_mac(observed_wifi)
 
     elf = Path(args.elf)
@@ -83,18 +111,34 @@ def main():
 
     print("=== 烧录前四元组 ===")
     print(f"  端口          : {args.port}  (日志名 {name})")
+    print(f"  日志          : {loginfo.get('file')}")
+    print(f"    存在={loginfo.get('exists')} size={loginfo.get('size')} "
+          f"age={loginfo.get('age_sec')}s fresh={loginfo.get('fresh')} "
+          f"sha256[:16]={loginfo.get('sha256_16')} "
+          f"client_id_after_boot={loginfo.get('client_id_after_boot')}")
     print(f"  端口观测 WiFi MAC : {observed_wifi or '未知'}  → {observed_id}"
           f"（BLE≈{ble_from_wifi_mac(observed_wifi)}）")
     print(f"  期望 device_id    : {args.expect_device_id}")
     print(f"  镜像 ELF      : {elf}  sha256[:16]={elf_sha[:16]}  build_sha={build_sha}")
+    print(f"  期望 build_sha: {args.expect_build_sha}")
     print("====================")
 
     ok = True
+    if not loginfo.get("exists"):
+        print("[FAIL] 日志文件不存在（本次会话未采集）")
+        ok = False
+    elif not loginfo.get("fresh"):
+        print(f"[FAIL] 日志过期（{loginfo.get('age_sec')}s > {args.max_age_sec}s）——"
+              f"映射证据不是本次会话，请重新采集后再过门禁")
+        ok = False
     if observed_wifi is None:
-        print("[FAIL] 该端口日志里找不到 client_id=iothub-<MAC>，无法确认设备身份")
+        print("[FAIL] 最近一次 boot 之后找不到 client_id=iothub-<WiFiMAC>，无法确认设备身份")
         ok = False
     elif observed_id.lower() != args.expect_device_id.lower():
         print(f"[FAIL] 端口设备不符：观测 {observed_id} ≠ 期望 {args.expect_device_id}")
+        ok = False
+    if build_sha.lower() != args.expect_build_sha.lower():
+        print(f"[FAIL] 镜像身份不符：实际 {build_sha} ≠ 期望 {args.expect_build_sha}")
         ok = False
     if not ok:
         print("[STOP] 拒绝烧录（四元组核验未通过）")
