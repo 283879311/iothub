@@ -184,8 +184,16 @@ snapshot_save）全部留在锁外原位。
   重构遗漏导致 config_apply_patch 收到无候选凭据的空 patch（P0）；
 - **`-fstack-usage` 实测已完成**：`app_cmd_execute_method` 栈帧
   **04b=912B / 04c=912B（零增长）**——快照栈局部被编译器与既有局部复用抵消；
-- 待烧录窗口验收：段 A wire 逐字段一致（补抓 sync tryconnect 受理响应
-  golden）；
+- **段 A wire 验收重定界（2026-11-14 执行期发现，评审裁决）**：
+  `cmd_v1.c` 把全部 v1 `network.tryconnect`（含 BLE）路由到
+  `tryconnect_adapter → async`（dc254d5 与 main 同接线；实测帧 050 实证），
+  execute_method 内 sync tryconnect 分支为**不可达死代码**——段 A 的 wire
+  形态在 v1 命令面不存在。处置：保留代码审查记录；**运行时 wire 验收标
+  不可达**；不宣称段 A wire 真机 PASS；是否清理该死代码另行做代码影响评估
+  （不在预采集内修改）。**段 B 保持有效**：`network.apply` 经 async adapter
+  → internal child context → `execute_method("network.apply")`——apply
+  dispatcher 的 trial patch（段 B）仍可由真实异步 apply 生命周期触发；
+  段 B 验收在烧录窗口以 async apply 全流程覆盖（原计划不变）。
 - 其余验收（锁内 grep 零 cJSON / build 0/0 / 主机 8 套 / 密码三副本生命周期
   代码审）已在本 commit 树完成。
 
@@ -196,4 +204,5 @@ snapshot_save）全部留在锁外原位。
 | 初稿（6ba07b9） | 两段纯拷贝设计；sta_password 生命周期表（不完整） |
 | 第二轮（85407bd） | ① 三副本清点表；② 栈副本 volatile 擦除 + patch 堆副本删除前擦除；③ 使用范围四条精确化；④ §0 前置守卫表述更正；⑤ 资源估算降级 |
 | 第三轮（6f6b5c2） | §2 段 B 流程与失败语义修正——patch 创建在 trial_ready/snapshot_save 之后；patch 创建失败走既有统一失败处理，不在快照重构中改变 |
+| **第五轮（执行期重定界）** | 段 A wire 验收对象经 cmd_v1 分发核实为不可达死代码（实测帧 050 + 双固件接线比对）——运行时 wire 验收标不可达、不宣称真机 PASS；段 B 经 async apply internal child 路径确认可达、验收保持。死代码清理另行评估 |
 | **第四轮（代码归档）** | `7f86720`：恢复 B 段 sta_ssid/sta_password 锁外构建，修复 patch 缺失候选凭据的 **P0 回归**（第一轮重构遗漏）。**审查经验**：锁内零 cJSON 只证明锁边界合规，锁外 JSON/patch 字段完整性必须单独验收——两项已分开验收 |

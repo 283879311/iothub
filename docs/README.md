@@ -22,9 +22,10 @@
 - [BLE微信小程序交互协议_T4_2026-10-24.md](BLE微信小程序交互协议_T4_2026-10-24.md)——T4 交互协议；Web/HTTP 章节为 LEGACY
 - [R-NET设备验收报告_2026-11-07.md](R-NET设备验收报告_2026-11-07.md)——在续写的总证据文档；§1-§17 按节归档
 - [CMD-04b_network_status快照清单与判定表_2026-11-14.md](CMD-04b_network_status快照清单与判定表_2026-11-14.md)——network_status 四段快照化设计（已签收）
-- [CMD-04c_execute_method内联快照清单与判定表_2026-11-14.md](CMD-04c_execute_method内联快照清单与判定表_2026-11-14.md)——execute_method 两段内联快照设计（已签收，含 7f86720 P0 修正）
+- [CMD-04c_execute_method内联快照清单与判定表_2026-11-14.md](CMD-04c_execute_method内联快照清单与判定表_2026-11-14.md)——execute_method 两段内联快照设计（已签收；段 A wire 验收重定界为不可达（v1 分发死代码），段 B 经 async apply 保持有效）
 - [S6预采集解冻申请_2026-11-14.md](S6预采集解冻申请_2026-11-14.md)——密码分支四项补采解冻申请 v11（设计过审 2415983；执行口径唯一锁定）
 - [S6执行授权与窗口申请_2026-11-14.md](S6执行授权与窗口申请_2026-11-14.md)——S6 现场执行操作授权申请 v2（§4 正常/异常双结束状态；uptime 证据链+双 console 单入口两项强制核验），待批
+- [S6第二轮窄范围执行授权申请_2026-11-14.md](S6第二轮窄范围执行授权申请_2026-11-14.md)——仅 MQTT async expired + op-V（脚本 v2 五项评审意见落实），待批
 - [CMD-04系列_合并烧录窗口申请_2026-11-14.md](CMD-04系列_合并烧录窗口申请_2026-11-14.md)——fencing+04a/b/c 四项合并烧录申请（pre-golden 预采集→烧录→diff）
 - [R_数据路由层架构_2026-10-26.md](R_数据路由层架构_2026-10-26.md)——data_pipe 架构现状
 - [WIFI-OP-RESOURCE-RACE-fencing实现记录_2026-11-13.md](WIFI-OP-RESOURCE-RACE-fencing实现记录_2026-11-13.md)——fencing 已签收（终审通过+裁决(b)修正 ae8a3abb5）
