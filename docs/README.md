@@ -23,7 +23,7 @@
 - [R-NET设备验收报告_2026-11-07.md](R-NET设备验收报告_2026-11-07.md)——在续写的总证据文档；§1-§17 按节归档
 - [CMD-04b_network_status快照清单与判定表_2026-11-14.md](CMD-04b_network_status快照清单与判定表_2026-11-14.md)——network_status 四段快照化设计（已签收）
 - [CMD-04c_execute_method内联快照清单与判定表_2026-11-14.md](CMD-04c_execute_method内联快照清单与判定表_2026-11-14.md)——execute_method 两段内联快照设计（已签收，含 7f86720 P0 修正）
-- [S6预采集解冻申请_2026-11-14.md](S6预采集解冻申请_2026-11-14.md)——密码分支四项补采解冻申请 v4（BLE-only 前置/改指向最后；cancel 分支 sync 构造零 op；双 TTL 计时起点分立观测），待复审
+- [S6预采集解冻申请_2026-11-14.md](S6预采集解冻申请_2026-11-14.md)——密码分支四项补采解冻申请 v5（Δ 源码口径修正：store→GOT_IP 实际间隔；方案1 专用 sync TTL 分支独立证明 trial 过期清理；async A 降机会性；台账口径澄清），待复审
 - [CMD-04系列_合并烧录窗口申请_2026-11-14.md](CMD-04系列_合并烧录窗口申请_2026-11-14.md)——fencing+04a/b/c 四项合并烧录申请（pre-golden 预采集→烧录→diff）
 - [R_数据路由层架构_2026-10-26.md](R_数据路由层架构_2026-10-26.md)——data_pipe 架构现状
 - [WIFI-OP-RESOURCE-RACE-fencing实现记录_2026-11-13.md](WIFI-OP-RESOURCE-RACE-fencing实现记录_2026-11-13.md)——fencing 已签收（终审通过+裁决(b)修正 ae8a3abb5）
