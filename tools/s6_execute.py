@@ -583,12 +583,12 @@ async def main():
     finally:
         # 统一收尾：恢复 → 终态身份（会话可用时）→ end_state（全路径必有）
         # → 会话关闭 → broker 处置 → 日志关闭 → SHA256SUMS
+        gEnd = None                    # 无会话路径（未广播/连接/口令失败）也为 None，不 UnboundLocalError
         if _session is not None:
             try:
                 await do_recovery(_session)
             except Exception as exc:  # noqa: BLE001
                 log(f"[recover] 兜底异常 {type(exc).__name__}: {str(exc)[:120]}")
-            gEnd = None
             try:
                 gEnd = await identity_gate(_session, "end", allow_abort=True)
             except Exception as exc:  # noqa: BLE001
