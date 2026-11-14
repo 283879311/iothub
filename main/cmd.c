@@ -558,6 +558,9 @@ static esp_err_t app_cmd_net_async_run(app_operation_t *op, void *ctx)
     /* B5(第三轮):活动 operation 登记——scheduled/task run 日志的 op 字段 */
     app_wifi_set_active_operation(app_operation_id(op));
     if (!app_operation_get_status(op, &st0)) {
+        /* fencing 终审(2026-11-14,裁决(b)):早退与 set 对偶清除,残留 id 不再
+         * 污染后续 scheduled/task run 日志的 op 字段(log-only 语义不变) */
+        app_wifi_clear_active_operation(app_operation_id(op));
         return ESP_ERR_INVALID_ARG;
     }
     generation = st0.generation;   /* R5:跨阻塞调用校验槽位未被复用 */
