@@ -19,7 +19,9 @@
 
 校验项（任一不符 → 非零退出，禁止烧录）：
   1) 该端口日志的 **最近一次 boot 之后** 有 client_id=iothub-<WiFiMAC>（证明映射属于当前上电会话）；
-  2) 两份日志 mtime 都在 --max-age-sec 内（证明 capture 仍在写，映射是本次会话的新鲜证据）；
+  2) **两份日志对应的 capture 进程仍存活且持有该串口**（PID 文件 + /proc/<pid>/fd
+     指向 /dev/ttyUSBx）——这是"当前会话正在采集"的主证据；
+  2b) 两份日志 mtime 在 --max-age-sec 内（**辅助**新鲜度条件，不单独证明录制在运行）；
   3) 端口对应 device_id 与 --expect-device-id 一致；
   4) ELF 的 build_sha（sha256 前 9 位）与 --expect-build-sha 一致。
 注意：本门禁放行只证明"设备身份 + 镜像身份"，**不替代**烧录后 `device.info.build_sha` 反证。
@@ -33,6 +35,50 @@ import sys
 from pathlib import Path
 
 SERIAL_DIR = Path("artifacts/cmd04_flash_20261114/phaseA")
+
+
+def inspect_capture(log_dir, port):
+    """录制活动性证据（主证据）：PID 存活 + cmdline 含 capture_serial +
+    /proc/<pid>/fd 中有指向该串口的句柄。"""
+    import os
+    log = Path(log_dir) / f"serial_{port}.log"
+    pidfile = Path(str(log) + ".pid")
+    dev = f"/dev/{port}"
+    info = {"pidfile": str(pidfile), "pidfile_exists": pidfile.is_file()}
+    if not pidfile.is_file():
+        info["running"] = False
+        return info
+    try:
+        pid = int(pidfile.read_text(encoding="utf-8").strip())
+    except Exception:  # noqa: BLE001
+        info["running"] = False
+        return info
+    info["pid"] = pid
+    proc = Path(f"/proc/{pid}")
+    info["proc_exists"] = proc.is_dir()
+    if not info["proc_exists"]:
+        info["running"] = False
+        return info
+    try:
+        cmd = (proc / "cmdline").read_bytes().replace(b"\x00", b" ").decode(
+            "utf-8", "replace")
+    except OSError:
+        cmd = ""
+    info["cmd_ok"] = ("capture_serial" in cmd) and (port in cmd)
+    fd_ok = False
+    try:
+        for fd in (proc / "fd").iterdir():
+            try:
+                if os.readlink(fd) == dev:
+                    fd_ok = True
+                    break
+            except OSError:
+                continue
+    except OSError:
+        fd_ok = False
+    info["holds_port"] = fd_ok
+    info["running"] = bool(info["cmd_ok"] and fd_ok)
+    return info
 
 
 def inspect_log(log_dir, port, max_age_sec):
@@ -107,6 +153,8 @@ def main():
     other = "ttyUSB1" if name == "ttyUSB0" else "ttyUSB0"
     observed_wifi, loginfo = inspect_log(args.log_dir, name, args.max_age_sec)
     other_wifi, other_info = inspect_log(args.log_dir, other, args.max_age_sec)
+    capinfo = inspect_capture(args.log_dir, name)
+    capother = inspect_capture(args.log_dir, other)
     observed_id = dev_id_from_wifi_mac(observed_wifi)
     other_id = dev_id_from_wifi_mac(other_wifi)
 
@@ -120,6 +168,11 @@ def main():
     print("=== 烧录前四元组 ===")
     print(f"  端口          : {args.port}  (日志名 {name})")
     print(f"  日志          : {loginfo.get('file')}")
+    for tag, ci in (("目标端口", capinfo), ("另一端口", capother)):
+        print(f"  [{tag} capture] pid={ci.get('pid')} 存活={ci.get('proc_exists')} "
+              f"cmd_ok={ci.get('cmd_ok')} 持有{args.log_dir and ''}"
+              f"端口={ci.get('holds_port')} running={ci.get('running')} "
+              f"pidfile={ci.get('pidfile_exists')}")
     for tag, li in (("目标端口", loginfo), ("另一端口", other_info)):
         print(f"  [{tag}] {li.get('file')}")
         print(f"    存在={li.get('exists')} size={li.get('size')} "
@@ -135,6 +188,16 @@ def main():
     print("====================")
 
     ok = True
+    # 主证据：录制进程仍存活并持有串口；mtime 只作辅助
+    if not capinfo.get("running"):
+        print(f"[FAIL] 目标端口录制未运行（pid存活={capinfo.get('proc_exists')} "
+              f"cmd_ok={capinfo.get('cmd_ok')} 持端口={capinfo.get('holds_port')}）"
+              f"——映射证据不是实时采集")
+        ok = False
+    if not capother.get("running"):
+        print(f"[FAIL] 另一端口录制未运行（pid存活={capother.get('proc_exists')} "
+              f"cmd_ok={capother.get('cmd_ok')} 持端口={capother.get('holds_port')}）")
+        ok = False
     if not loginfo.get("exists"):
         print("[FAIL] 日志文件不存在（本次会话未采集）")
         ok = False
