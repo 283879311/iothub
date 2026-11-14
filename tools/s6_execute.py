@@ -1,16 +1,22 @@
 #!/usr/bin/env python3
-"""S6 现场预采集执行脚本 v2（评审 2026-11-14 修订；执行口径 v11=2415983 + 分支重定界）。
+"""S6 现场预采集执行脚本 v3（评审 2026-11-14 第二轮意见收口；窄授权：
+仅 MQTT async expired（须先观察到 GOT_IP）+ op-V job-clear 验证）。
 
-v1→v2（评审五项）：
-① STOP 后专用恢复路径：_abort 只拦采集命令；恢复走独立 allowlist
-   （config.set 恢复 + network.status/config.get 验证），失败保留
-   mini_broker 运行（不提前终止设备可能依赖的 broker）并输出人工接管指引；
-② 恢复成功判据 = mqtt_connected=true **且** config.get 回读 host/port ==
-   原值；失败绝不输出恢复成功；
-③ ble_scan_full 经 prot()（逐命令 token 守卫）；
-④ 扫描加 data.status=="ok"；op-V 断言终态 failed + error=ap_not_found；
-⑤ 全程 try/finally 收尾；每轮独立证据目录（本轮 round2）。
-口令只从 .local/test-env.md 内存读取，帧内 sanitize 脱敏，不落盘明文。
+v2→v3（评审 P0×2/P1×5/P2×2）：
+P0-1 _session_holder NameError → 移除容器，改模块级 _session；
+P0-2 改指向状态机 NOT_ATTEMPTED→ATTEMPTED_OR_UNKNOWN（发送前置位）→
+     REPOINT_CONFIRMED（收到回包）→RECOVERY_CONFIRMED/FAILED——除
+     NOT_ATTEMPTED 外任何状态退出都触发恢复兜底；
+P1 恢复快照 = S0 实测并核验的设备 MQTT 配置（两次读取一致且等于授权云端
+     基线，否则 STOP），恢复与回读比较均用该快照；
+P1 op-E 必须先观察到 GOT_IP，expired 才计目标分支 PASS；无 GOT_IP 的
+     expired 单列 ACCEPTED_TTL_EXPIRED（重试至多一次，两次均如此则 STOP）；
+P1 expired 后增加 cleanup 完成窗口（≤120s：STA 回持久网络 + trial idle，
+     轮询全留证），未确认不进 op-V；
+P1 identity_gate/recover_cmd 全部纳入逐命令 token 守卫；
+P1 恢复 POWERON 锚点检查（phaseA 串口）；uptime 缺失/回退 → STOP；
+P2 capture_log=事件流，session_raw.log=BLE TX/RX 原始流（stdout 重定向），
+     目录内生成 SHA256SUMS。
 """
 
 import asyncio
@@ -31,16 +37,23 @@ from p0_acceptance import Session, scan_filtered, sanitize  # noqa: E402
 OUT = Path("artifacts/cmd04_flash_20261114/s6_round2")
 TARGET = "B0:A7:32:28:C8:E6"
 PC_IP = "192.168.1.19"
-CLOUD_HOST, CLOUD_PORT = "139.9.93.245", 21883
+CLOUD_HOST, CLOUD_PORT = "139.9.93.245", 21883   # 授权基线（守卫用）
 SSID = "CMCC-502"
 PROBE = "__jobclear_probe__"
 TOKEN_LIMIT_S = 480.0
+ALLOWED_PERSIST_SSID = ("CMCC-502", "TQ2026")
+
+RP_NA, RP_ATT, RP_CONF = "NOT_ATTEMPTED", "ATTEMPTED_OR_UNKNOWN", "REPOINT_CONFIRMED"
+RC_OK, RC_FAIL = "RECOVERY_CONFIRMED", "RECOVERY_FAILED"
 
 _log = None
 _token_origin = None
 _abort = None
-_repointed = False
-_recovered = None          # None=未执行 / True / False
+_session = None
+_repoint_state = RP_NA
+_recovery_state = None
+_origin_snapshot = None          # S0 实测核验的 (host, port)
+_broker = None
 
 
 def log(t):
@@ -82,32 +95,29 @@ async def guarded_login(sess):
         stop("auth.login 失败或 token 未更新")
         return False
     _token_origin = time.monotonic()
-    log("[token] 续签成功（age→0）")
+    log("[token] 续签成功（age→0，起点已重置）")
+    return True
+
+
+async def _token_gate(sess):
+    if token_age() >= TOKEN_LIMIT_S:
+        return await guarded_login(sess)
     return True
 
 
 async def prot(sess, coro_fn, *a, **kw):
-    """受保护命令守卫（采集命令：_abort 时拒绝）。"""
+    """普通采集入口：_abort 拦截 + 逐命令 token 守卫。"""
     if _abort:
         raise RuntimeError(f"aborted: {_abort}")
-    if token_age() >= TOKEN_LIMIT_S and not await guarded_login(sess):
+    if not await _token_gate(sess):
         raise RuntimeError("aborted: token renewal failed")
     return await coro_fn(*a, **kw)
 
 
-async def recover_cmd(sess, cmd, args=None, timeout=20):
-    """恢复 allowlist：_abort 非空时仍可执行；仅限恢复/验证命令。"""
-    if cmd not in ("config.set", "config.get", "network.status", "device.status",
-                   "device.info"):
-        raise RuntimeError(f"recover_cmd 拒绝非恢复命令 {cmd}")
-    req = {"id": f"rcv-{sess.next_seq()}", "version": "1.0", "cmd": cmd,
-           "args": args or {}, "token": sess.token}
-    res = await sess.send_request(req, timeout=timeout)
-    save(f"recover_{cmd.replace('.', '_')}", "ble", req, res.obj)
-    return res.obj
-
-
-async def ble(sess, cmd, args=None, timeout=20):
+async def gate_ble(sess, cmd, args=None, timeout=20):
+    """门禁/终态入口：token 守卫 + （非 allow_abort 时）abort 拦截。"""
+    if not await _token_gate(sess):
+        raise RuntimeError("token renewal failed")
     req = {"id": f"s6-{sess.next_seq()}", "version": "1.0", "cmd": cmd,
            "args": args or {}, "token": sess.token}
     res = await sess.send_request(req, timeout=timeout)
@@ -115,7 +125,22 @@ async def ble(sess, cmd, args=None, timeout=20):
     return res.obj
 
 
+async def recover_cmd(sess, cmd, args=None, timeout=20):
+    """恢复 allowlist：不受 _abort 阻断；逐命令 token 守卫；白名单命令。"""
+    if cmd not in ("config.set", "config.get", "network.status", "device.status",
+                   "device.info"):
+        raise RuntimeError(f"recover_cmd 拒绝非恢复命令 {cmd}")
+    if not await _token_gate(sess):
+        raise RuntimeError("token renewal failed")
+    req = {"id": f"rcv-{sess.next_seq()}", "version": "1.0", "cmd": cmd,
+           "args": args or {}, "token": sess.token}
+    res = await sess.send_request(req, timeout=timeout)
+    save(f"recover_{cmd.replace('.', '_')}", "ble", req, res.obj)
+    return res.obj
+
+
 async def ble_scan_full(sess):
+    """经 prot() 的受保护扫描（token 守卫由调用方 prot 承担）。"""
     req = {"id": f"s6-{sess.next_seq()}", "version": "1.0", "cmd": "network.scan",
            "args": {}, "token": sess.token}
     res = await sess.send_request(req, timeout=30)
@@ -124,8 +149,6 @@ async def ble_scan_full(sess):
 
 
 def scan_five_conditions(sc, frag_sizes):
-    """五条件：envelope ok + data.status==ok + 分片完整 + count==len(aps)
-    + aps 存在且为数组且不含 probe。返回 (ok, reasons)。"""
     d = sc.get("data") or {}
     aps = d.get("aps")
     reasons = []
@@ -173,14 +196,38 @@ def load_password():
     return m.group(1)
 
 
-async def identity_gate(sess, tag):
-    info = (await ble(sess, "device.info")).get("data", {})
-    st = (await ble(sess, "device.status")).get("data", {})
-    net = (await ble(sess, "network.status")).get("data", {})
-    cfg = (await ble(sess, "config.get")).get("data", {})
+def serial_anchor_check():
+    """门禁：两份 phaseA 串口日志各恰 1 处 POWERON（无新 boot）+ 偏移留证。"""
+    ev = {}
+    ok = True
+    for port in ("ttyUSB0", "ttyUSB1"):
+        f = OUT.parent / "phaseA" / f"serial_{port}.log"
+        data = f.read_bytes()
+        offs = [m.start() for m in re.finditer(rb"rst:0x1 \(POWERON_RESET\)", data)]
+        ev[port] = {"size_bytes": len(data), "poweron_offsets": offs}
+        if len(offs) != 1:
+            ok = False
+    (OUT / "000_gate_serial_anchor.json").write_text(
+        json.dumps(ev, indent=1), encoding="utf-8")
+    log(f"[gate] 串口锚点留证 {ev}")
+    if not ok:
+        stop("POWERON 锚点数异常（疑似新 boot）")
+
+
+async def identity_gate(sess, tag, allow_abort=False):
+    """六维身份。allow_abort=True 用恢复通道命令（终态采集，STOP 后可用）。"""
+    async def one(cmd):
+        if allow_abort:
+            return await recover_cmd(sess, cmd)
+        return await gate_ble(sess, cmd)
+    info = (await one("device.info")).get("data", {})
+    st = (await one("device.status")).get("data", {})
+    net = (await one("network.status")).get("data", {})
+    cfg = (await one("config.get")).get("data", {})
     d = {
         "tag": tag, "adv": TARGET, "device_id": info.get("device_id"),
-        "build_sha": info.get("build_sha"), "uptime_ms": st.get("uptime_ms"),
+        "build_sha": info.get("build_sha"),
+        "uptime_ms": st.get("uptime_ms"),
         "sta_ssid": net.get("connected_ssid"),
         "sta_connected": net.get("sta_connected"), "sta_ip": net.get("sta_ip"),
         "mqtt_host": (cfg.get("mqtt") or {}).get("mqtt_host"),
@@ -201,96 +248,161 @@ async def identity_gate(sess, tag):
 
 
 async def do_recovery(sess):
-    """专用恢复路径（STOP 后仍可执行；仅恢复/验证命令）。
-    成功判据 = mqtt_connected=true 且 config.get 回读 == 原值。"""
-    global _recovered
-    if not _repointed:
-        _recovered = True
+    """专用恢复路径：除 NOT_ATTEMPTED 外任何改指向状态都尝试恢复。
+    恢复目标 = S0 实测核验的 _origin_snapshot；成功 = mqtt_connected 且
+    回读 == 快照。"""
+    global _recovery_state
+    if _repoint_state == RP_NA:
+        _recovery_state = RC_OK
         log("[recover] 未改指向，无需恢复")
         return
     try:
-        if token_age() >= TOKEN_LIMIT_S:
-            if not await guarded_login(sess):
-                raise RuntimeError("token renewal failed")
-        await recover_cmd(sess, "config.set",
-                          {"patch": {"mqtt_host": CLOUD_HOST,
-                                     "mqtt_port": CLOUD_PORT}})
+        if _session is None or not _session.is_connected():
+            raise RuntimeError("BLE 不可达")
+        if not await _token_gate(_session):
+            raise RuntimeError("token renewal failed")
+        await recover_cmd(_session, "config.set",
+                          {"patch": {"mqtt_host": _origin_snapshot[0],
+                                     "mqtt_port": _origin_snapshot[1]}})
         ok = False
         for _ in range(10):
             await asyncio.sleep(8)
-            ns = await recover_cmd(sess, "network.status")
+            ns = await recover_cmd(_session, "network.status")
             if (ns.get("data") or {}).get("mqtt_connected") is True:
                 ok = True
                 break
-        back = await recover_cmd(sess, "config.get")
+        back = await recover_cmd(_session, "config.get")
         mq = (back.get("data") or {}).get("mqtt") or {}
         readback = (mq.get("mqtt_host"), mq.get("mqtt_port"))
-        if ok and readback == (CLOUD_HOST, CLOUD_PORT):
-            _recovered = True
+        if ok and readback == _origin_snapshot:
+            _recovery_state = RC_OK
             log(f"[recover] 成功：mqtt_connected=true 且回读={readback}")
         else:
-            _recovered = False
+            _recovery_state = RC_FAIL
             log(f"[recover] 失败：mqtt_connected={ok} 回读={readback}"
                 f"（不宣称恢复成功；保留 mini_broker 供只读观测/人工接管）")
     except Exception as exc:  # noqa: BLE001
-        _recovered = False
-        log(f"[recover] 异常 {type(exc).__name__}: {str(exc)[:120]}"
-            f"——BLE 不可达或恢复失败；保留 mini_broker，人工接管")
+        _recovery_state = RC_FAIL
+        log(f"[recover] 异常 {type(exc).__name__}: {str(exc)[:120]}——"
+            f"BLE 不可达或恢复失败；保留 mini_broker，人工接管")
 
 
 async def run_round(sess, pw):
-    global _repointed
+    global _repoint_state, _origin_snapshot
     # ---- 门禁 ----
+    serial_anchor_check()
     g1 = await identity_gate(sess, "S0-first")
     await asyncio.sleep(20)
     g2 = await identity_gate(sess, "S0-second")
+    # MQTT 原值核验：两次一致且等于授权云端基线 → 快照
+    o1 = (g1["mqtt_host"], g1["mqtt_port"])
+    o2 = (g2["mqtt_host"], g2["mqtt_port"])
+    if o1 != o2 or o1 != (CLOUD_HOST, CLOUD_PORT):
+        stop(f"MQTT 原值核验失败 first={o1} second={o2} 授权={CLOUD_HOST,CLOUD_PORT}")
+        return
+    _origin_snapshot = o1
+    log(f"[gate] MQTT 原值核验通过，恢复快照={_origin_snapshot}")
+    # uptime 数值校验
     u1, u2 = g1["uptime_ms"], g2["uptime_ms"]
+    if not isinstance(u1, (int, float)) or not isinstance(u2, (int, float)) \
+            or u1 <= 0 or u2 < u1:
+        stop(f"uptime 缺失/回退 u1={u1} u2={u2}")
+        return
     du, dw = (u2 - u1) / 1000.0, g2["mono"] - g1["mono"]
     boot_wall = time.strftime("%H:%M:%S", time.localtime(time.time() - u1 / 1000.0))
     log(f"[gate] uptime 连续性 Δu={du:.1f}s Δwall={dw:.1f}s boot≈{boot_wall}")
     if abs(du - dw) > 3:
         stop("uptime 不连续")
+        return
     t = time.strptime(boot_wall, "%H:%M:%S")
     if not (time.strptime("19:44:00", "%H:%M:%S") <= t <= time.strptime("19:46:00", "%H:%M:%S")):
         stop(f"boot {boot_wall} 偏离稳定窗口锚点")
+        return
     if _abort:
         return
-    log("[gate] 通过（本轮只执行：MQTT async expired + op-V；无 sync 分支）")
+    log("[gate] 通过（本轮：MQTT async expired[须 GOT_IP] + op-V）")
 
-    # ---- 改指向（finally 兜底恢复）----
+    # ---- 改指向（状态机：发送前置 ATTEMPTED）----
+    _repoint_state = RP_ATT
     await prot(sess, ble, sess, "config.set",
                {"patch": {"mqtt_host": PC_IP, "mqtt_port": 21883}})
-    _repointed = True
+    _repoint_state = RP_CONF
+    log(f"[S4] 改指向已确认（state={_repoint_state}）")
     m = MqttV1("127.0.0.1:21883")
     try:
         if not await wait_broker(m):
             stop("设备未接入 mini_broker（75s）")
             return
-        # ---- async expired ----
-        r = mqtt_req(m, "network.tryconnect", {"ssid": SSID, "password": pw})
-        opE = ((r or {}).get("data") or {}).get("operation_id")
-        log(f"[S4] async 受理 op-E={opE}")
-        if not opE:
-            stop("无 operation_id")
-            return
-        tG = time.monotonic()
-        expired, final = False, None
-        while time.monotonic() < tG + 420 and not _abort:
-            await asyncio.sleep(10)
-            og = await prot(sess, ble, sess, "operation.get", {"operation_id": opE})
-            cur = (og.get("data") or {}).get("state")
-            ns = await prot(sess, ble, sess, "network.status")
-            tb = ((ns.get("data") or {}).get("trial") or {}).get("state")
-            log(f"[S4] +{time.monotonic()-tG:.0f}s op={cur} trial={tb}")
-            if cur == "got_ip":
-                log("[S4] GOT_IP（若随后 trial idle：归档清理原因未判定）")
-            if cur in ("expired", "cancelled", "failed"):
-                final = (cur, (og.get("data") or {}).get("error"))
-                expired = cur == "expired"
+        # ---- async expired（须先 GOT_IP；ACCEPTED-TTL 过期单列，重试至多一次）----
+        target_hit, classification, opE = False, None, None
+        for attempt in (1, 2):
+            r = mqtt_req(m, "network.tryconnect", {"ssid": SSID, "password": pw})
+            opE = ((r or {}).get("data") or {}).get("operation_id")
+            log(f"[S4] attempt{attempt} async 受理 op-E={opE}")
+            if not opE:
+                stop("无 operation_id")
+                return
+            tG = time.monotonic()
+            seen_got_ip, terminal = False, None
+            while time.monotonic() < tG + 420 and not _abort:
+                await asyncio.sleep(10)
+                og = await prot(sess, gate_ble, sess, "operation.get",
+                                {"operation_id": opE})
+                cur = (og.get("data") or {}).get("state")
+                ns = await prot(sess, gate_ble, sess, "network.status")
+                tb = ((ns.get("data") or {}).get("trial") or {}).get("state")
+                log(f"[S4] +{time.monotonic()-tG:.0f}s op={cur} trial={tb}")
+                if cur == "got_ip":
+                    if not seen_got_ip:
+                        seen_got_ip = True
+                        log("[S4] GOT_IP 达成（后续 expired 才计目标分支）")
+                    if tb == "idle":
+                        log("[S4] 观察到 trial idle、operation 尚未发布终态；清理原因未判定")
+                if cur == "expired":
+                    terminal = "expired"
+                    break
+                if cur in ("cancelled", "failed"):
+                    terminal = cur
+                    break
+            if _abort:
+                return
+            if terminal == "expired" and seen_got_ip:
+                target_hit = True
+                log(f"[S4] attempt{attempt} = GOT_IP→expired（目标分支 PASS 候选）")
                 break
-        if not expired:
-            stop(f"op-E 非 expired 终态（final={final}）")
+            if terminal == "expired":
+                classification = "ACCEPTED_TTL_EXPIRED（未达 GOT_IP，不计目标验收）"
+                log(f"[S4] attempt{attempt} {classification}")
+            else:
+                classification = f"{terminal}（异常终止）"
+                log(f"[S4] attempt{attempt} {classification}")
+            if attempt == 1:
+                log("[S4] 重试至多一次……")
+                await asyncio.sleep(30)
+        if not target_hit:
+            stop(f"op-E 未达成 GOT_IP→expired（分类={classification}，两次机会已用）")
             return
+        # ---- cleanup 完成窗口（≤120s，未确认不进 op-V）----
+        cleanup_ok = False
+        polls = []
+        for _ in range(12):
+            await asyncio.sleep(10)
+            ns = await prot(sess, gate_ble, sess, "network.status")
+            dd = ns.get("data") or {}
+            polls.append({"t": time.strftime("%H:%M:%S"),
+                          "sta": dd.get("connected_ssid"),
+                          "connected": dd.get("sta_connected"),
+                          "trial": ((dd.get("trial") or {}).get("state"))})
+            if (dd.get("sta_connected") and dd.get("connected_ssid") in ALLOWED_PERSIST_SSID
+                    and ((dd.get("trial") or {}).get("state")) == "idle"):
+                cleanup_ok = True
+                break
+        (OUT / "000_cleanup_window.json").write_text(
+            json.dumps(polls, ensure_ascii=False, indent=1), encoding="utf-8")
+        if not cleanup_ok:
+            stop("cleanup 完成窗口 120s 未确认（STA/trial 未恢复）")
+            return
+        log(f"[S4] cleanup 确认（STA={polls[-1]['sta']} trial=idle）")
         # ---- op-V job-clear 验证 ----
         sc, frags = await prot(sess, ble_scan_full, sess)
         cond, reasons = scan_five_conditions(sc, frags)
@@ -308,7 +420,8 @@ async def run_round(sess, pw):
             opv_final, opv_err = None, None
             for _ in range(12):
                 await asyncio.sleep(5)
-                og = await prot(sess, ble, sess, "operation.get", {"operation_id": opV})
+                og = await prot(sess, gate_ble, sess, "operation.get",
+                                {"operation_id": opV})
                 opv_final = (og.get("data") or {}).get("state")
                 opv_err = (og.get("data") or {}).get("error")
                 if opv_final in ("failed", "expired", "cancelled"):
@@ -325,10 +438,10 @@ async def run_round(sess, pw):
 
 
 async def main():
-    global _log, _broker, _token_origin, _session_holder
+    global _log, _broker, _token_origin, _session
     OUT.mkdir(parents=True, exist_ok=True)
     _log = open(OUT / "capture_log.txt", "a", encoding="utf-8")
-    log("=== S6 round2 开始（窄授权：MQTT async expired + op-V）===")
+    log("=== S6 round2（v3 脚本）开始（窄授权：MQTT async expired[须 GOT_IP] + op-V）===")
     pw = load_password()
     code = 3
     _broker = subprocess.Popen(
@@ -342,7 +455,7 @@ async def main():
             return 2
         async with BleakClient(TARGET, timeout=25) as cli:
             sess = Session(cli, address=TARGET)
-            _session_holder["sess"] = sess
+            _session = sess
             await sess._connect_once()          # S0 无条件登录 = 计时起点
             _token_origin = time.monotonic()
             log("[S0] 无条件 auth.login（token 计时起点）")
@@ -350,35 +463,29 @@ async def main():
                 await run_round(sess, pw)
                 code = 0 if _abort is None else 3
             finally:
-                # 专用恢复路径：采集命令已停，恢复 allowlist 仍可执行
-                sess2 = _session_holder.get("sess")
-                if sess2 is not None and sess2.is_connected():
-                    try:
-                        await do_recovery(sess2)
-                    except Exception as exc:  # noqa: BLE001
-                        log(f"[recover] 兜底异常 {type(exc).__name__}: {str(exc)[:120]}")
-                else:
-                    log("[recover] BLE 不可达——保留 mini_broker 只读观测，人工接管")
+                # 专用恢复路径：除 NOT_ATTEMPTED 外都尝试（allowlist 命令）
+                await do_recovery(sess)
                 gEnd = None
-                sess3 = _session_holder.get("sess")
-                if sess3 is not None and sess3.is_connected():
-                    try:
-                        gEnd = await identity_gate(sess3, "end")
-                    except Exception as exc:  # noqa: BLE001
-                        log(f"[end] 终态身份采集失败 {type(exc).__name__}")
+                try:
+                    gEnd = await identity_gate(sess, "end", allow_abort=True)
+                except Exception as exc:  # noqa: BLE001
+                    log(f"[end] 终态身份采集失败 {type(exc).__name__}: {str(exc)[:120]}")
                 (OUT / "000_end_state.json").write_text(json.dumps(
-                    {"gate": gEnd, "abort": _abort, "recovered": _recovered},
+                    {"gate": gEnd, "abort": _abort, "recovery": _recovery_state,
+                     "repoint_state": _repoint_state},
                     ensure_ascii=False, indent=1), encoding="utf-8")
                 await cli.disconnect()
     finally:
-        # broker 收尾：恢复失败时保留（设备可能仍指向本地）并输出指引
-        if _recovered is False:
+        # broker 收尾：仅 NOT_ATTEMPTED 或 RECOVERY_CONFIRMED 才终止
+        if _repoint_state != RP_NA and _recovery_state != RC_OK:
             log(f"[finally] mini_broker 保留运行（pid={_broker.pid}）——"
+                f"改指向状态={_repoint_state} 恢复={_recovery_state}；"
                 f"人工接管后可 kill {_broker.pid}")
-        else:
+            _broker = None   # 不终止
+        elif _broker is not None:
             _broker.terminate()
             log("[finally] mini_broker 已终止")
-    log(f"[done] abort={_abort} recovered={_recovered}")
+    log(f"[done] abort={_abort} repoint={_repoint_state} recovery={_recovery_state}")
     return code
 
 
