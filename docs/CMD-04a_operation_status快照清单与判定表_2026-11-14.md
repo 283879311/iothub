@@ -9,7 +9,7 @@
 
 ```c
 typedef struct {
-    bool op_found;                       /* find+get_status 结果(同临界区) */
+    bool op_found;                       /* find/get_status 成功且 st.id 与请求 ID 二次比对一致 */
     app_op_state_t state;
     app_operation_error_t error;
     char operation_id[APP_OPERATION_ID_LEN];   /* 20B,来自 status.id */
