@@ -255,6 +255,17 @@ static void app_cmd_net_job_unlock(void)
     }
 }
 
+/* CMD-04c:敏感值擦除——volatile 逐字节写零，防优化构建消除
+ * （评审要求：栈副本不可被优化掉的显式擦除）。 */
+static void app_cmd_secure_wipe(char *buf, size_t len)
+{
+    volatile char *p = (volatile char *)(void *)buf;
+
+    while (len--) {
+        *p++ = 0;
+    }
+}
+
 static cJSON *app_cmd_net_operation_status(const app_cmd_context_t *ctx, const char *operation_id, const char **err_out);
 
 /* 直接版:调用方必须已持 s_net_job_lock(受理/apply 尾部在锁内调用)。 */
@@ -2687,12 +2698,18 @@ esp_err_t app_cmd_execute_method(const app_cmd_context_t *ctx, const char *metho
                         app_cmd_net_trial_clear();
                         err = "out_of_memory";
                     } else {
-                        /* R8:响应字段在锁内拷出,防中途断连清理撕读。 */
+                        /* R8:锁内值复制(防中途断连清理撕读)——
+                         * CMD-04c:构建移到锁外(锁内零 cJSON)。 */
+                        char trial_id[20];
+                        char trial_ssid[33];
+
                         app_cmd_net_job_lock();
-                        cJSON_AddStringToObject(resp, "trial_id", s_net_trial.id);
-                        cJSON_AddStringToObject(resp, "state", "got_ip");
-                        cJSON_AddStringToObject(resp, "ssid", s_net_trial.ssid);
+                        app_copy_string(trial_id, sizeof(trial_id), s_net_trial.id);
+                        app_copy_string(trial_ssid, sizeof(trial_ssid), s_net_trial.ssid);
                         app_cmd_net_job_unlock();
+                        cJSON_AddStringToObject(resp, "trial_id", trial_id);
+                        cJSON_AddStringToObject(resp, "state", "got_ip");
+                        cJSON_AddStringToObject(resp, "ssid", trial_ssid);
                     }
                     break;
                 case APP_WIFI_TRY_WRONG_PASSWORD:
@@ -2747,13 +2764,18 @@ esp_err_t app_cmd_execute_method(const app_cmd_context_t *ctx, const char *metho
                 cJSON *changed = NULL;
                 cfg_effect_t effect = CFG_EFFECT_NONE;
                 esp_err_t apply_err = ESP_FAIL;
+                /* CMD-04c:trial 字段栈副本——零初始化(评审检查点 1:
+                 * patch OOM 路径擦除时也有确定内容)。 */
+                char trial_ssid[33] = {0};
+                char trial_password[65] = {0};
 
                 if (patch != NULL) {
-                    /* R8:trial 字段读点入锁(同步 v0 apply 与断连清理跨任务;
-                     * 异步 apply 的内部再入本就持锁,此处递归通过)。 */
+                    /* R8:trial 字段读点入锁(...)。
+                     * CMD-04c:锁内值复制——patch 构建移到锁外(锁内零 cJSON)。 */
                     app_cmd_net_job_lock();
-                    cJSON_AddStringToObject(patch, "sta_ssid", s_net_trial.ssid);
-                    cJSON_AddStringToObject(patch, "sta_password", s_net_trial.password);
+                    app_copy_string(trial_ssid, sizeof(trial_ssid), s_net_trial.ssid);
+                    app_copy_string(trial_password, sizeof(trial_password),
+                                    s_net_trial.password);
                     app_cmd_net_job_unlock();
                     /* BLE-only 配网：提交必须是 STA，不能把 AP-only 旧配置推断成 APSTA。
                      * AP/Web 正在退出，apply 后不应继续保留 AP 的常驻内存开销。 */
@@ -2762,9 +2784,26 @@ esp_err_t app_cmd_execute_method(const app_cmd_context_t *ctx, const char *metho
                      * trial target matches. DHCP candidates already have
                      * sta_use_static=false, so no forced rewrite is needed. */
                     apply_err = config_apply_patch(patch, &changed, &effect);
+                    /* CMD-04c 擦除点(评审要求):config_apply_patch 返回后、
+                     * 删除前——擦除 patch 堆副本中的明文(空指针保护：
+                     * AddString 失败时节点/valuestring 可能为空)。
+                     * 成功/失败两路径共用本擦除点。 */
+                    {
+                        cJSON *pw_item =
+                            cJSON_GetObjectItemCaseSensitive(patch, "sta_password");
+
+                        if (pw_item != NULL && cJSON_IsString(pw_item) &&
+                            pw_item->valuestring != NULL) {
+                            app_cmd_secure_wipe(pw_item->valuestring,
+                                                strlen(pw_item->valuestring) + 1);
+                        }
+                    }
                     cJSON_Delete(patch);
                     cJSON_Delete(changed);
                 }
+                /* CMD-04c:栈副本擦除——成败/OOM 三路径汇合（评审检查点 1：
+                 * 局部缓冲零初始化，patch OOM 路径擦除内容确定）。 */
+                app_cmd_secure_wipe(trial_password, sizeof(trial_password));
                 if (apply_err != ESP_OK) {
                     app_config_snapshot_discard();
                     app_cmd_net_trial_clear();
