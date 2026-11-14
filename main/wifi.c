@@ -251,6 +251,34 @@ static void app_wifi_tryconnect_state_unlock(void)
 
 /* ---- WIFI-OP-RESOURCE-RACE owner 原语（纯迁移见 wifi_op_owner.c） ---- */
 
+/* S6-OWNER-STUCK 修复：把 handover 记账收进锁内统一出口。
+ * 背景（2026-11-15 现场缺陷）：原记账只在 app_wifi_owner_step_ev() 里做，
+ * 而 app_wifi_tryconnect_release() 直接调用本函数（step_locked）→ owner 已
+ * 迁到 CLEANUP，但 s_wifi_restart_kind 仍是 APPLY、s_wifi_cleanup_started_ms
+ * 仍为 0：restart 任务走 APPLY 分支、monitor 看门狗因时间戳为 0 失效，
+ * 结果是 owner 永久粘滞 CLEANUP（现场实测 3.5h 无任何转移）。
+ * 现在：所有调用者（含 step_ev）都自动获得记账，纯状态机 wifi_op_owner.c
+ * 仍然保持无副作用。 */
+static void app_wifi_cleanup_handover_account_locked(app_wifi_owner_act_t act)
+{
+    if (act == APP_WIFI_OWNER_ACT_NOTIFY || act == APP_WIFI_OWNER_ACT_HANDOVER) {
+        if (s_wifi_restart_kind != APP_WIFI_RESTART_CLEANUP) {
+            s_wifi_restart_kind = APP_WIFI_RESTART_CLEANUP;
+        }
+        if (s_wifi_cleanup_started_ms == 0) {
+            s_wifi_cleanup_started_ms = app_wifi_now_ms();
+        }
+        return;
+    }
+    /* 终态统一清理：DONE/FAIL 后不再保留 cleanup 记账（避免看门狗误触发） */
+    if (act == APP_WIFI_OWNER_ACT_NONE &&
+        s_wifi_owner.owner != APP_WIFI_OWNER_CLEANUP &&
+        s_wifi_restart_kind == APP_WIFI_RESTART_CLEANUP) {
+        s_wifi_restart_kind = APP_WIFI_RESTART_APPLY;
+        s_wifi_cleanup_started_ms = 0;
+    }
+}
+
 static app_wifi_owner_act_t app_wifi_owner_step_locked(app_wifi_owner_ev_t ev,
                                                        app_wifi_owner_t *from_out)
 {
@@ -258,6 +286,7 @@ static app_wifi_owner_act_t app_wifi_owner_step_locked(app_wifi_owner_ev_t ev,
     app_wifi_owner_step_t r = app_wifi_owner_step(&s_wifi_owner, ev);
 
     s_wifi_owner = r.state;
+    app_wifi_cleanup_handover_account_locked(r.action);
     if (from_out != NULL) {
         *from_out = from;
     }
@@ -337,13 +366,7 @@ static app_wifi_owner_act_t app_wifi_owner_step_ev(app_wifi_owner_ev_t ev, const
     to = s_wifi_owner.owner;
     waiter_snap = s_wifi_owner.tryx_waiting;
     requested_snap = s_wifi_owner.cleanup_requested;
-    if ((act == APP_WIFI_OWNER_ACT_NOTIFY || act == APP_WIFI_OWNER_ACT_HANDOVER) &&
-        s_wifi_restart_kind != APP_WIFI_RESTART_CLEANUP) {
-        s_wifi_restart_kind = APP_WIFI_RESTART_CLEANUP;
-    }
-    if (s_wifi_restart_kind == APP_WIFI_RESTART_CLEANUP && s_wifi_cleanup_started_ms == 0) {
-        s_wifi_cleanup_started_ms = app_wifi_now_ms();
-    }
+    /* handover 记账已收进 app_wifi_owner_step_locked() 统一处理（S6 修复） */
     app_wifi_tryconnect_state_unlock();
     app_wifi_owner_log_transition(from, to, caller, waiter_snap, requested_snap);
     /* B3:进入/离开 CLEANUP_FAILED 各一条带 op_id 的日志(离线现场唯一证据) */
@@ -407,14 +430,39 @@ static app_wifi_owner_act_t app_wifi_claim_auto(const char *caller)
     return act;
 }
 
+/* S6 修复：handover 已交接但有界唤醒失败时，进入可诊断的终态，
+ * **不得**把 owner 直接放回 NONE（那会出现"清理没跑、owner 却显示空闲"的
+ * 假恢复）。CLEANUP_FAILED 为粘性：拒绝后续 STA 操作，需 config.set+reboot
+ * 或断电恢复——与 B3/C2 既有语义一致。 */
+static void app_wifi_handover_wake_failed(const char *caller)
+{
+    char op_id[24];
+    bool fired = false;
+
+    app_wifi_tryconnect_state_lock();
+    if (s_wifi_owner.owner == APP_WIFI_OWNER_CLEANUP) {
+        (void)app_wifi_owner_step_locked(APP_WIFI_OWNER_EV_CLEANUP_FAIL, NULL);
+        app_copy_string(op_id, sizeof(op_id), s_wifi_restart_op_id);
+        fired = true;
+    }
+    app_wifi_tryconnect_state_unlock();
+    if (fired) {
+        ESP_LOGE(TAG, "cleanup handover: restart wake failed -> CLEANUP_FAILED "
+                      "op=%s by %s", op_id, caller);
+    } else {
+        ESP_LOGE(TAG, "cleanup handover: restart wake failed (owner=%s) by %s",
+                 app_wifi_owner_name(s_wifi_owner.owner), caller);
+    }
+}
+
 /* 释放(TRYX/AUTO/APPLY 统一出口);若存在 cleanup 请求,直接移交并唤醒 restart。 */
 static void app_wifi_owner_release(app_wifi_owner_ev_t ev, const char *caller)
 {
     app_wifi_owner_act_t act = app_wifi_owner_step_ev(ev, caller);
 
     if (act == APP_WIFI_OWNER_ACT_HANDOVER && !app_wifi_restart_wake()) {
-        /* 唤醒失败:owner 保持 CLEANUP,monitor 看门狗 12s 后重试 */
-        ESP_LOGE(TAG, "cleanup handover: restart wake failed caller=%s", caller);
+        /* S6 修复：不再只打日志留 CLEANUP；进入明确终态 */
+        app_wifi_handover_wake_failed(caller);
     }
 }
 
@@ -658,7 +706,8 @@ static void app_wifi_tryconnect_release(void)
     app_wifi_owner_log_transition(from, s_wifi_owner.owner, "tryconnect_release",
                                   waiter_snap, requested_snap);
     if (act == APP_WIFI_OWNER_ACT_HANDOVER && !app_wifi_restart_wake()) {
-        ESP_LOGE(TAG, "cleanup handover: restart wake failed caller=tryconnect_release");
+        /* S6 修复：此路径原先只打日志（且因绕过 step_ev 连记账都缺失）→ 粘滞 */
+        app_wifi_handover_wake_failed("tryconnect_release");
     }
 }
 
@@ -4416,6 +4465,17 @@ static void app_wifi_restart_task_fn(void *arg)
 
         app_wifi_tryconnect_state_lock();
         kind = s_wifi_restart_kind;
+        /* S6 兜底：owner 已在 CLEANUP 时，无论 kind 是什么都必须走 cleanup，
+         * 防止任何未来记账缺口再次把 owner 永久留在 CLEANUP。 */
+        if (s_wifi_owner.owner == APP_WIFI_OWNER_CLEANUP &&
+            kind != APP_WIFI_RESTART_CLEANUP) {
+            kind = APP_WIFI_RESTART_CLEANUP;
+            s_wifi_restart_kind = APP_WIFI_RESTART_CLEANUP;
+            if (s_wifi_cleanup_started_ms == 0) {
+                s_wifi_cleanup_started_ms = app_wifi_now_ms();
+            }
+            ESP_LOGW(TAG, "restart: kind corrected to CLEANUP (owner=CLEANUP)");
+        }
         app_copy_string(op_id, sizeof(op_id), s_wifi_restart_op_id);
         app_wifi_tryconnect_state_unlock();
 
