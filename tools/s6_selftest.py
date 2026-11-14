@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""S6 v11.3.6 离线自检（不连设备/不连 broker，全部替身对象）。
+"""S6 v11.3.7 离线自检（不连设备/不连 broker，全部替身对象）。
 
 覆盖评审要求的 7 类用例：
   1 连接失败（connect 抛异常）
@@ -683,20 +683,47 @@ async def case_stability_gate():
                                               3, 0.05)
     check("verified=False 清零", len(polls5) == 4, f"{kind5}/{len(polls5)}")
 
-    print("[28] 串口诊断分类：只读、不触发重试")
+    print("[28] 串口诊断分类：只读、不触发重试（append 模拟真实写入）")
     import tempfile as _tf
     d = Path(_tf.mkdtemp(prefix="s6_serial_"))
     f = d / "serial_ttyUSB1.log"
-    f.write_text("old line owner wait timeout\n", encoding="utf-8")
-    off = f.stat().st_size                      # 标记之后才写入
-    f.write_text("I (1) wifi: owner denied: caller=tryconnect_begin "
-                 "reason=wait_timeout owner=CLEANUP\n", encoding="utf-8")
+    with open(f, "w", encoding="utf-8") as fh:
+        fh.write("old line owner wait timeout\n")
+    off = f.stat().st_size                      # 标记：之后的才是诊断窗口
+    with open(f, "a", encoding="utf-8") as fh:  # 真实日志是追加写
+        fh.write("I (1) wifi: owner denied: caller=tryconnect_begin "
+                 "reason=wait_timeout owner=CLEANUP\n")
     hits = S.serial_hits_since((f, off), ("owner wait timeout",
                                           "tryconnect busy", "owner=CLEANUP"))
     check("只命中标记之后的内容", len(hits) == 1 and "owner=CLEANUP" in hits[0],
           str(hits))
     hits2 = S.serial_hits_since((None, 0), ("owner=CLEANUP",))
     check("无日志时不报错且无命中", hits2 == [], str(hits2))
+
+    print("[28b] 标记落在一行中间 → 丢弃半行，不把标记前日志算入")
+    f2 = d / "serial_ttyUSB1.log"
+    with open(f2, "w", encoding="utf-8") as fh:
+        fh.write("PRE owner=CLEANUP partial")   # 无换行：半行
+    off2 = f2.stat().st_size
+    with open(f2, "a", encoding="utf-8") as fh:
+        fh.write("ly-visible tail\nAFTER owner wait timeout\n")
+    hits3 = S.serial_hits_since((f2, off2), ("owner=CLEANUP",
+                                             "owner wait timeout"))
+    check("半行被丢弃、只保留新行", len(hits3) == 1
+          and "owner wait timeout" in hits3[0], str(hits3))
+
+    print("[29] 稳定性门禁：deadline 后返回的样本不计入（严格上限）")
+    good = {"sta_connected": True, "internet_verified": True,
+            "last_disconnect": "none", "trial": {"state": "idle"}}
+
+    async def slow_ok():
+        await asyncio.sleep(0.35)               # 跨过 0.2s 预算
+        return ("OK", good)
+
+    kind, det, polls = await S.stability_gate(slow_ok, budget_s=0.2,
+                                              interval_s=0.05, need=1)
+    check("超预算返回 → TIMEOUT 且不计入",
+          kind == "TIMEOUT" and len(polls) == 0, f"{kind}/{det}/{len(polls)}")
 
 
 async def main():

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""S6 现场预采集执行脚本 v11.3.6（MQTT 轮询 + 分阶段恢复；窄授权：仅 MQTT async expired
+"""S6 现场预采集执行脚本 v11.3.7（MQTT 轮询 + 分阶段恢复；窄授权：仅 MQTT async expired
 （须先观察到 GOT_IP）+ op-V job-clear 验证）。
 
 v4→v5（评审阻断项与缺口）：
@@ -1000,6 +1000,11 @@ async def stability_gate(status_fn, budget_s=120.0, interval_s=10.0, need=2):
         remain = deadline - time.monotonic()
         await asyncio.sleep(min(interval_s, max(0.5, remain)))
         kind, ns = await status_fn()
+        # P2（v11.3.7）：请求可能跨过 deadline 才返回——返回后复查，
+        # 超时不得把该样本计入有效采样。
+        if time.monotonic() > deadline:
+            return ("TIMEOUT", {"why": "deadline_exceeded_after_request",
+                                "streak": streak}, polls)
         if kind != "OK":
             return ("TRANSPORT", {"why": str(ns)}, polls)
         polls.append({"t": time.strftime("%H:%M:%S"),
@@ -1019,7 +1024,9 @@ SERIAL_CONSOLE = "ttyUSB1"      # C8E4 console（第一轮实证映射）
 
 
 def serial_mark():
-    """记录 console 日志当前长度，用于事后只读取"op 创建之后"的日志段。"""
+    """记录 console 日志当前字节偏移（在 op-E **创建请求发起之前**调用）。
+    诊断窗口 = 该偏移之后的日志，**包含"请求发起→设备确认受理"之间的日志**；
+    因此命中只能作为"疑似"分类，不构成 op 生命周期内的确定归因。"""
     try:
         f = SERIAL_DIR / f"serial_{SERIAL_CONSOLE}.log"
         return (f, f.stat().st_size)
@@ -1034,10 +1041,18 @@ def serial_hits_since(mark, patterns):
         return []
     try:
         with open(f, "rb") as fh:
+            at_boundary = True
+            if off > 0:                       # 偏移前一字节是否为换行 = 行边界
+                fh.seek(off - 1)
+                at_boundary = fh.read(1) == b"\n"
             fh.seek(off)
             data = fh.read().decode("utf-8", "replace")
     except OSError:
         return []
+    if off > 0 and not at_boundary and data:
+        # 偏移落在一行中间：丢弃首个半行（其前半段在标记之前，不属诊断窗口）
+        nl = data.find("\n")
+        data = data[nl + 1:] if nl >= 0 else ""
     pats = [x.lower() for x in patterns]
     return [ln.strip()[:160] for ln in data.splitlines()
             if any(p in ln.lower() for p in pats)]
@@ -1419,7 +1434,7 @@ async def main():
     trace_f = open(OUT / "session_trace.log", "a", encoding="utf-8")
     prev_stdout = sys.stdout
     sys.stdout = _Tee(prev_stdout, trace_f)   # session_trace：脱敏截断 TX/RX 跟踪流
-    log(f"=== S6 round4（v11.3.6 脚本/EMQX {EMQX_HOST}:{EMQX_PORT}）开始（窄授权：MQTT async expired[须 GOT_IP] + op-V）===")
+    log(f"=== S6 round5（v11.3.7 脚本/EMQX {EMQX_HOST}:{EMQX_PORT}）开始（窄授权：MQTT async expired[须 GOT_IP] + op-V）===")
     code = 3
     cli = None
     try:                                   # 启动与运行全部纳入统一收尾
