@@ -38,9 +38,10 @@
 - [BLE功能现状与目标.md](BLE功能现状与目标.md)——现状描述过时，目标已演进
 - [soak_test_plan.md](soak_test_plan.md)——HTTP/Web 章节描述已删除功能；T5 BLE/soak 章节历史有效
 
-## PLANNED（1）
+## PLANNED（2）
 
 - [T5_V2_EN硬复位测试计划_r2.2.md](T5_V2_EN硬复位测试计划_r2.2.md)——硬复位轮未执行
+- [wifi分层重构_设计草案_2026-11-13.md](wifi分层重构_设计草案_2026-11-13.md)——wifi.c 四层重构（前置：RACE 补丁真机验证 + T4 签收）
 
 ## ARCHIVED（47）
 
