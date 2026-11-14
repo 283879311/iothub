@@ -25,7 +25,7 @@
 - [CMD-04c_execute_method内联快照清单与判定表_2026-11-14.md](CMD-04c_execute_method内联快照清单与判定表_2026-11-14.md)——execute_method 两段内联快照设计（已签收；段 A wire 验收重定界为不可达（v1 分发死代码），段 B 经 async apply 保持有效）
 - [S6预采集解冻申请_2026-11-14.md](S6预采集解冻申请_2026-11-14.md)——密码分支四项补采解冻申请 v11（设计过审 2415983；执行口径唯一锁定）
 - [S6执行授权与窗口申请_2026-11-14.md](S6执行授权与窗口申请_2026-11-14.md)——S6 现场执行操作授权申请 v2（§4 正常/异常双结束状态；uptime 证据链+双 console 单入口两项强制核验），待批
-- [S6第二轮窄范围执行授权申请_2026-11-14.md](S6第二轮窄范围执行授权申请_2026-11-14.md)——仅 MQTT async expired[须 GOT_IP]+op-V（脚本 v4：重试收窄/cleanup 硬deadline/退出码语义/快照确认/token 收权/证据口径——待最终复审）
+- [S6第二轮窄范围执行授权申请_2026-11-14.md](S6第二轮窄范围执行授权申请_2026-11-14.md)——仅 MQTT async expired[须 GOT_IP]+op-V（脚本 v5：统一命令入口/未确认即 STOP/真总预算 cleanup/结果全归档+恢复纳入退出码/trace 实生成+SHA 后置——待最终复审）
 - [CMD-04系列_合并烧录窗口申请_2026-11-14.md](CMD-04系列_合并烧录窗口申请_2026-11-14.md)——fencing+04a/b/c 四项合并烧录申请（pre-golden 预采集→烧录→diff）
 - [R_数据路由层架构_2026-10-26.md](R_数据路由层架构_2026-10-26.md)——data_pipe 架构现状
 - [WIFI-OP-RESOURCE-RACE-fencing实现记录_2026-11-13.md](WIFI-OP-RESOURCE-RACE-fencing实现记录_2026-11-13.md)——fencing 已签收（终审通过+裁决(b)修正 ae8a3abb5）
