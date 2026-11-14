@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""S6 现场预采集执行脚本 v11.3.4（MQTT 轮询 + 分阶段恢复；窄授权：仅 MQTT async expired
+"""S6 现场预采集执行脚本 v11.3.5（MQTT 轮询 + 分阶段恢复；窄授权：仅 MQTT async expired
 （须先观察到 GOT_IP）+ op-V job-clear 验证）。
 
 v4→v5（评审阻断项与缺口）：
@@ -1167,36 +1167,43 @@ async def run_round(sess, pw):
         log(f"[S4] broker 侧确认设备接入（首条 {pres.seen[-1][1]}；"
             f"证据={pres.evidence_class()}）")
 
-        # ---- v11.3.4：改指向会触发 MQTT 重启 → 可能引发 netcheck teardown /
-        # WiFi owner=CLEANUP。等"连续两次安静轮询"再创建 op-E，避免 tryconnect
-        # 抢 owner 超时（第四轮 attempt2 实测 owner=wait_timeout CLEANUP）。
-        quiet_ok = False
-        quiet_deadline = time.monotonic() + 90
-        quiet_streak = 0
-        while time.monotonic() < quiet_deadline and not _abort:
+        # ---- v11.3.5 网络稳定性门禁（**不是**资源释放确认）
+        # 源码核实（dc254d5）：wifi.h 无 owner getter，network.status/device.status
+        # 均不暴露 owner / cleanup 阶段——协议层无法观测 CLEANUP 是否释放。
+        # 因此本门禁只能证明"网络表面连续稳定"，不能证明 tryconnect_begin 可取
+        # 到 owner；仅为降低撞上 owner=CLEANUP 概率的等待措施。
+        stable_ok = False
+        stable_deadline = time.monotonic() + 120
+        stable_streak = 0
+        while time.monotonic() < stable_deadline and not _abort:
             await asyncio.sleep(10)
             k, ns = await rpc.status()
             if k != "OK":
-                log(f"[S4] 静默窗轮询传输失败（{ns}）——停止等待")
+                log(f"[S4] 稳定性门禁轮询传输失败（{ns}）——停止等待")
                 break
             d = ns or {}
             good = (d.get("sta_connected") is True
                     and d.get("internet_verified") is True
+                    and d.get("last_disconnect") == "none"
                     and ((d.get("trial") or {}).get("state")) == "idle")
-            quiet_streak = quiet_streak + 1 if good else 0
-            log(f"[S4] 静默窗 streak={quiet_streak} "
+            stable_streak = stable_streak + 1 if good else 0
+            log(f"[S4] 稳定性 streak={stable_streak} "
                 f"sta={d.get('sta_connected')} verified={d.get('internet_verified')} "
+                f"last_disc={d.get('last_disconnect')} "
                 f"trial={(d.get('trial') or {}).get('state')}")
-            if quiet_streak >= 2:
-                quiet_ok = True
+            if stable_streak >= 2:
+                stable_ok = True
                 break
-        (OUT / "000_quiet_window.json").write_text(json.dumps(
-            {"ok": quiet_ok, "streak": quiet_streak}, indent=1), encoding="utf-8")
-        if not quiet_ok:
-            stop("改指向后 90s 内未取得安静窗（设备仍在校验/清理）——不创建 op-E")
+        (OUT / "000_stability_gate.json").write_text(json.dumps(
+            {"ok": stable_ok, "streak": stable_streak,
+             "proves": "网络表面连续稳定（sta+verified+last_disconnect=none+trial idle）",
+             "does_not_prove": "Wi-Fi owner 已释放 / CLEANUP 已结束（协议层不可观测）"},
+            ensure_ascii=False, indent=1), encoding="utf-8")
+        if not stable_ok:
+            stop("改指向后 120s 内未取得连续稳定状态——不创建 op-E")
             _results["op_e"] = _results["op_v"] = "NOT_RUN"
             return
-        log("[S4] 安静窗确认（连续两次 sta+verified+trial idle）")
+        log("[S4] 稳定性门禁通过（连续两次；注意：不证明 owner 已释放）")
 
         # ---- op-E：MQTT 创建 + MQTT 轮询 ----
         kind, resp = await rpc.call("network.tryconnect",
@@ -1347,7 +1354,7 @@ async def main():
     trace_f = open(OUT / "session_trace.log", "a", encoding="utf-8")
     prev_stdout = sys.stdout
     sys.stdout = _Tee(prev_stdout, trace_f)   # session_trace：脱敏截断 TX/RX 跟踪流
-    log(f"=== S6 round4（v11.3.4 脚本/EMQX {EMQX_HOST}:{EMQX_PORT}）开始（窄授权：MQTT async expired[须 GOT_IP] + op-V）===")
+    log(f"=== S6 round4（v11.3.5 脚本/EMQX {EMQX_HOST}:{EMQX_PORT}）开始（窄授权：MQTT async expired[须 GOT_IP] + op-V）===")
     code = 3
     cli = None
     try:                                   # 启动与运行全部纳入统一收尾
