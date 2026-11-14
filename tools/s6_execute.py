@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""S6 现场预采集执行脚本 v11.3.2（MQTT 轮询 + 分阶段恢复；窄授权：仅 MQTT async expired
+"""S6 现场预采集执行脚本 v11.3.3（MQTT 轮询 + 分阶段恢复；窄授权：仅 MQTT async expired
 （须先观察到 GOT_IP）+ op-V job-clear 验证）。
 
 v4→v5（评审阻断项与缺口）：
@@ -56,6 +56,8 @@ from bleak import BleakClient  # noqa: E402
 from p0_acceptance import Session, scan_filtered, sanitize  # noqa: E402
 
 OUT = Path("artifacts/cmd04_flash_20261115/s6_round4")
+# 串口 console 日志所在目录（阶段 A 起持续录制的固定位置；不随轮次目录变化）
+SERIAL_DIR = Path("artifacts/cmd04_flash_20261114/phaseA")
 TARGET = "B0:A7:32:28:C8:E6"
 EMQX_HOST, EMQX_PORT = "139.9.93.245", 1883   # 临时指向与 harness 接入点（外部 EMQX，匿名）
 TB_HOST, TB_PORT = "139.9.93.245", 21883        # 恢复目标（1 号 ThingsBoard）
@@ -671,7 +673,10 @@ def serial_anchor_check():
     ev = {}
     ok = True
     for port in ("ttyUSB0", "ttyUSB1"):
-        f = OUT.parent / "phaseA" / f"serial_{port}.log"
+        f = SERIAL_DIR / f"serial_{port}.log"
+        if not f.is_file():
+            stop(f"串口日志缺失：{f}（双 console 在录是外部门禁）")
+            return
         data = f.read_bytes()
         offs = [m.start() for m in re.finditer(rb"rst:0x1 \(POWERON_RESET\)", data)]
         ev[port] = {"size_bytes": len(data), "poweron_offsets": offs}
@@ -1042,6 +1047,8 @@ async def run_round(sess, pw):
     """v11：门禁 → EMQX ACL 预检 → 改指向 → 在场 → MQTT 轮询（op-E/cleanup/op-V）。"""
     global _repoint_state, _origin_snapshot
     serial_anchor_check()
+    if _abort:                      # 门禁失败（如串口日志缺失）立即返回，不进入身份采集
+        return
     g1 = await identity_gate(sess, "S0-first")
     await asyncio.sleep(20)
     g2 = await identity_gate(sess, "S0-second")
@@ -1294,7 +1301,7 @@ async def main():
     trace_f = open(OUT / "session_trace.log", "a", encoding="utf-8")
     prev_stdout = sys.stdout
     sys.stdout = _Tee(prev_stdout, trace_f)   # session_trace：脱敏截断 TX/RX 跟踪流
-    log(f"=== S6 round4（v11.3.2 脚本/EMQX {EMQX_HOST}:{EMQX_PORT}）开始（窄授权：MQTT async expired[须 GOT_IP] + op-V）===")
+    log(f"=== S6 round4（v11.3.3 脚本/EMQX {EMQX_HOST}:{EMQX_PORT}）开始（窄授权：MQTT async expired[须 GOT_IP] + op-V）===")
     code = 3
     cli = None
     try:                                   # 启动与运行全部纳入统一收尾
