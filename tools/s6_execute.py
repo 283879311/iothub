@@ -285,25 +285,44 @@ class Rpc:
         self.disconnected = True
         self._connected = False
 
+    def _is_ready(self):
+        """当前连接代次的完整就绪判据（v11.3）：wait_ready/call/acl_preflight
+        共用同一口径。返回 (bool, 原因)。"""
+        if self.connect_error:
+            return (False, self.connect_error)
+        if self.disconnected or not self._connected \
+                or not self.cli.is_connected():
+            return (False, "emqx_disconnected")
+        if self._subscribe_rc != 0:
+            return (False, f"subscribe_rc={self._subscribe_rc}")
+        if self._subscribe_mid is None:
+            return (False, "no_subscribe_mid")
+        if self._suback is None:
+            return (False, "suback_pending")
+        if self._suback_mid != self._subscribe_mid:
+            return (False, "suback_stale_generation")
+        if not self._suback:
+            return (False, "suback_empty")
+        bad = [str(rc) for rc in self._suback
+               if int(getattr(rc, "value", rc)) == 128]
+        if bad:
+            return (False, f"suback_rejected={bad}")
+        return (True, "ready")
+
     async def wait_ready(self, timeout=12.0):
         """连接 → 订阅 → SUBACK 授权 全部确认后才允许使用。"""
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
-            if self.connect_error:
-                return (False, self.connect_error)
-            if self._subscribe_rc not in (None, 0):
-                return (False, f"subscribe_rc={self._subscribe_rc}")
-            if self._connected and self._suback is not None \
-                    and self._suback_mid == self._subscribe_mid:
-                if not self._suback:
-                    return (False, "suback_empty")
-                bad = [str(rc) for rc in self._suback
-                       if int(getattr(rc, "value", rc)) == 128]
-                if bad:
-                    return (False, f"suback_rejected={bad}")
+            ok, why = self._is_ready()
+            if ok:
                 return (True, "ready")
+            # 终态类原因不必等：连接被拒/订阅被拒/授权被拒
+            if why.startswith(("connack_rc", "subscribe_exc", "subscribe_rc=",
+                               "suback_rejected", "suback_empty")):
+                return (False, why)
             await asyncio.sleep(0.1)
-        return (False, "ready_timeout")
+        ok, why = self._is_ready()
+        return (ok, "ready" if ok else f"ready_timeout:{why}")
 
     def _on_msg(self, _c, _u, msg):
         try:
@@ -329,12 +348,12 @@ class Rpc:
         self.cli.loop_start()
 
     def acl_preflight(self):
-        """发布侧预检（改指向前执行）：依赖 wait_ready() 已确认订阅就绪。
+        """发布侧预检（改指向前执行）：先过同一 _is_ready() 判据，再验发布。
         **注意**：这验证的是 harness 自身客户端身份的主题权限，不代表设备
         身份的连接/订阅权限；且预检发布的 device.info 是真实请求（共享主题
         结构，若有其他设备订阅同主题它们也会收到）——证据口径如实标注。"""
-        sub_ok = bool(self._suback) and all(
-            (int(getattr(rc, "value", rc)) != 128) for rc in self._suback)
+        r_ok, r_why = self._is_ready()
+        sub_ok = r_ok
         topic = f"v1/devices/me/rpc/request/preflight-{uuid.uuid4().hex[:6]}"
         info = self.cli.publish(topic, b'{"id":"preflight","version":"1.0",'
                                        b'"cmd":"device.info","args":{}}', qos=1)
@@ -343,15 +362,17 @@ class Rpc:
         except Exception:  # noqa: BLE001
             pass
         pub_ok = info.is_published() and info.rc == self._mqtt.MQTT_ERR_SUCCESS
-        return (sub_ok, pub_ok, {"suback": [str(r) for r in (self._suback or [])],
+        return (sub_ok, pub_ok, {"ready": r_ok, "ready_why": r_why,
+                                 "suback": [str(r) for r in (self._suback or [])],
                                  "pub_rc": info.rc, "client_id": self.client_id})
 
     async def call(self, cmd, args=None, timeout=12.0):
         """串行 RPC。返回 ("OK", data) 或 ("TRANSPORT", 原因)。"""
         async with self._lock:
-            if self.disconnected or not self._connected \
-                    or not self.cli.is_connected():
-                return ("TRANSPORT", "emqx_disconnected")
+            ok, why = self._is_ready()
+            if not ok:
+                # v11.3 P0：未就绪绝不发布（新代 SUBACK 未到时禁止发命令）
+                return ("TRANSPORT", f"not_ready:{why}")
             self.seq += 1
             rid = f"hp-{self.seq}-{uuid.uuid4().hex[:4]}"
             ev = asyncio.Event()
@@ -485,11 +506,21 @@ class Presence:
         return (False, "ready_timeout")
 
     def is_alive(self):
-        """当前连接是否仍有效（v11.2：R4 开始/结束都要校验）。"""
+        """当前连接是否仍有效（R4 开始/结束都要校验）。"""
         try:
             return bool(self._connected and self.cli.is_connected())
         except Exception:  # noqa: BLE001
             return False
+
+    def is_ready(self):
+        """当前代次的订阅是否已确认生效（v11.3：R4 用同一口径，不只 is_alive）。"""
+        if not self.is_alive() or self._subscribe_rc != 0:
+            return False
+        if self._subscribe_mid is None or self._suback is None:
+            return False
+        if self._suback_mid != self._subscribe_mid or not self._suback:
+            return False
+        return all(int(getattr(rc, "value", rc)) != 128 for rc in self._suback)
 
     def _on_msg(self, _c, _u, msg):
         self.seen.append((time.monotonic(), getattr(msg, "topic", "?")))
@@ -821,13 +852,21 @@ async def r4_silence_check(pres, window_s=30.0):
     ready, why = await pres.wait_ready(12.0)
     if not ready:
         return (False, {"stage": "LISTENER_NOT_READY", "why": why})
-    if pres.disconnect_count != dc_start or pres.generation != gen_start:
+    if pres.disconnect_count != dc_start:
         return (False, {"stage": "LISTENER_RESET_DURING_INIT",
-                        "disconnects": pres.disconnect_count - dc_start,
+                        "disconnects": pres.disconnect_count - dc_start})
+    # v11.3：允许"首次 CONNACK"把代次 0→1（异步首连不是重连）；
+    #        若进入时已有代次（gen_start>0），初始化期间代次变化即为重连 → 判负。
+    gen_ok = (pres.generation == gen_start) or \
+             (gen_start == 0 and pres.generation == 1)
+    if not gen_ok:
+        return (False, {"stage": "LISTENER_RESET_DURING_INIT",
                         "generation_delta": pres.generation - gen_start})
-    if not pres.is_alive():
-        return (False, {"stage": "LISTENER_NOT_CONNECTED_AT_START"})
+    if not pres.is_ready():
+        return (False, {"stage": "LISTENER_NOT_READY_AT_START",
+                        "ready": False})
     t0 = time.monotonic()
+    gen0 = pres.generation
     await asyncio.sleep(window_s)
     dc = pres.disconnect_count - dc_start
     gen = pres.generation - gen_start
@@ -838,10 +877,12 @@ async def r4_silence_check(pres, window_s=30.0):
               "generation_delta": gen, "alive_at_end": alive}
     if dc > 0:
         return (False, {"stage": "LISTENER_DISCONNECTED", **detail})
-    if gen > 0:
+    if pres.generation != gen0:
         return (False, {"stage": "LISTENER_GENERATION_CHANGED", **detail})
     if not alive:
         return (False, {"stage": "LISTENER_LOST_AT_END", **detail})
+    if not pres.is_ready():
+        return (False, {"stage": "LISTENER_NOT_READY_AT_END", **detail})
     if recent:
         return (False, {"stage": "STILL_ON_EMQX", **detail})
     return (True, detail)

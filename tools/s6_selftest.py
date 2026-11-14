@@ -71,6 +71,7 @@ class FakeCli:
         self.on_subscribe = None
         self.on_disconnect = None
         self.last_pub = None
+        self.publish_count = 0
         self._mid = 0
 
     def _fire_conn(self):
@@ -124,6 +125,7 @@ class FakeCli:
         return self.connected
 
     def publish(self, topic, payload, qos=0):
+        self.publish_count += 1
         self.last_pub = (topic, payload)
         return FakeInfo()
 
@@ -367,6 +369,68 @@ async def case_v112():
           f"gate@{i_gate} repoint@{i_repoint}")
 
 
+async def case_v113():
+    print("[18] P0：Rpc 重连后新 SUBACK 未到 → call 必须拒发（不 publish）")
+    cli = FakeCli(suback=(1,))
+    r = S.Rpc("h", 1, cli=cli)
+    r.start(asyncio.get_running_loop())
+    ok, why = await r.wait_ready(2.0)
+    check("首次就绪", ok, why)
+    # 断链 → 重连，但新代 SUBACK 故意不送达
+    cli.auto_suback = False
+    cli.simulate_disconnect()
+    cli.simulate_reconnect()
+    n_before = cli.publish_count
+    kind, why2 = await r.call("network.tryconnect",
+                              {"ssid": "x", "password": "y"}, timeout=1.0)
+    check("未就绪 → TRANSPORT", kind == "TRANSPORT", f"{kind}/{why2}")
+    check("未就绪 → 零 publish（命令未发出）",
+          cli.publish_count == n_before, f"{n_before}->{cli.publish_count}")
+    check("原因为 not_ready", "not_ready" in str(why2), str(why2))
+    # 本代 SUBACK 到达后可发
+    cli.auto_suback = True
+    cli._fire_suback(cli._mid)
+    ok2, why3 = await r.wait_ready(1.5)
+    check("本代 SUBACK → 恢复可发", ok2, why3)
+    kind2, _ = await r.call("network.status", {}, timeout=0.6)
+    check("恢复后 call 已发布", cli.publish_count == n_before + 1,
+          f"{cli.publish_count}")
+
+    print("[19] P1：Presence 首次 CONNACK 在 R4 启动后异步到达（应允许通过）")
+    cli2 = FakeCli(auto_conn=False)     # 先不连：模拟真实 Paho 异步首连
+    p2 = S.Presence("h", 1, cli=cli2)
+    gen_after_construct = p2.generation
+
+    async def first_conn_later():
+        await asyncio.sleep(0.3)        # R4 已开始、gen_start 已记 0
+        cli2._fire_conn()
+        cli2._fire_suback(cli2._mid)
+
+    asyncio.ensure_future(first_conn_later())
+    ok4, det4 = await S.r4_silence_check(p2, 0.6)
+    check("首次异步连接不误判断链", ok4, json.dumps(det4, ensure_ascii=False))
+    check("构造时 generation=0（确为首次）", gen_after_construct == 0,
+          str(gen_after_construct))
+
+    print("[19b] Presence 初始化期间真实断链（gen_start>0）仍判负")
+    cli3 = FakeCli(suback=(1,))
+    p3 = S.Presence("h", 1, cli=cli3)
+    await p3.wait_ready(2.0)            # 现在 generation=1
+
+    class _ReconnectDuringReady(S.Presence):
+        async def wait_ready(self, timeout=12.0):
+            self.disconnect_count += 1
+            self.generation += 1        # 模拟初始化期间重连
+            return (True, "ready")
+
+    p4 = _ReconnectDuringReady("h", 1, cli=FakeCli(suback=(1,)))
+    p4.generation = 1                   # 已非首次
+    ok4b, det4b = await S.r4_silence_check(p4, 0.2)
+    check("初始化期间重连 → 判负",
+          (not ok4b) and det4b["stage"] == "LISTENER_RESET_DURING_INIT",
+          json.dumps(det4b, ensure_ascii=False))
+
+
 async def main():
     await case_lifecycle()
     await case_presence()
@@ -374,6 +438,7 @@ async def main():
     case_r2()
     case_tcp()
     await case_v112()
+    await case_v113()
     print(f"\nselftest: {PASS} passed, {FAIL} failed")
     return 0 if FAIL == 0 else 1
 
