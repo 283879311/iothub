@@ -1198,49 +1198,11 @@ typedef struct {
     bool trial_ready;
     char trial_id[20];             /* app_cmd_net_trial_t.id 同宽 */
     char trial_ssid[33];
-    /* F-1 计数字段（netcheck API 输出，设计 §2 不变段；入快照跨段传递） */
-    uint32_t nc_tcp_fails_last;
-    int nc_tcp_last_errno;
 } app_cmd_network_status_snap_t;
 
 /* 栈预算守卫：目标编译器实测 312B(kaboom 探针 2026-11-14)；上限 400B。 */
 _Static_assert(sizeof(app_cmd_network_status_snap_t) <= 400,
                "network status snapshot exceeds stack budget");
-
-/* 捕获段：分域单锁拷贝，零 cJSON。调用任务 = ble_cmd / mqtt 事件任务。 */
-static void app_cmd_network_status_capture(app_cmd_network_status_snap_t *snap)
-{
-    app_wifi_runtime_lock();
-    snap->sta_connected = s_wifi.sta_connected;
-    snap->sta_has_ip = s_wifi.sta_has_ip;
-    app_copy_string(snap->sta_ip, sizeof(snap->sta_ip), s_wifi.sta_ip);
-    app_copy_string(snap->last_disconnect, sizeof(snap->last_disconnect),
-                    s_wifi.last_disconnect);
-    app_copy_string(snap->connected_ssid, sizeof(snap->connected_ssid),
-                    s_wifi.connected_ssid);
-    snap->connected_profile = s_wifi.connected_profile;
-    snap->internet_verified = s_wifi.net_verified;
-    app_copy_string(snap->net_verify_stage, sizeof(snap->net_verify_stage),
-                    s_wifi.net_verify_stage);
-    snap->cfg_state = s_wifi.cfg_state;   /* 收编（skew 变化见设计 §4） */
-    app_wifi_runtime_unlock();
-
-
-    app_config_lock();
-    app_copy_string(snap->sta_ssid, sizeof(snap->sta_ssid), s_config.sta_ssid);
-    snap->password_set = (s_config.sta_password[0] != '\0');
-    snap->net_mode = s_config.net_mode;
-    snap->persistent_use_static = (s_config.sta_use_static != 0);
-    app_copy_string(snap->persistent_static_ip, sizeof(snap->persistent_static_ip),
-                    s_config.sta_static_ip);
-    app_config_unlock();
-
-    app_mqtt_lock();
-    snap->mqtt_connected = s_mqtt.connected;
-    app_copy_string(snap->mqtt_last_error, sizeof(snap->mqtt_last_error),
-                    s_mqtt.last_error);
-    app_mqtt_unlock();
-}
 
 static cJSON *app_cmd_build_network_status(void)
 {
@@ -1255,16 +1217,30 @@ static cJSON *app_cmd_build_network_status(void)
     cJSON *root;
     cJSON *trial;
 
-    /* ---- 捕获段（分域单锁，零 cJSON；nc_tcp 为不变段走 API） ---- */
-    app_cmd_network_status_capture(&snap);
+    /* ---- 捕获段（分域单锁，零 cJSON；nc_tcp/rssi 为不变段） ---- */
+    app_wifi_runtime_lock();
+    snap.sta_connected = s_wifi.sta_connected;
+    snap.sta_has_ip = s_wifi.sta_has_ip;
+    app_copy_string(snap.sta_ip, sizeof(snap.sta_ip), s_wifi.sta_ip);
+    app_copy_string(snap.last_disconnect, sizeof(snap.last_disconnect),
+                    s_wifi.last_disconnect);
+    app_copy_string(snap.connected_ssid, sizeof(snap.connected_ssid),
+                    s_wifi.connected_ssid);
+    snap.connected_profile = s_wifi.connected_profile;
+    snap.internet_verified = s_wifi.net_verified;
+    app_copy_string(snap.net_verify_stage, sizeof(snap.net_verify_stage),
+                    s_wifi.net_verify_stage);
+    snap.cfg_state = s_wifi.cfg_state;   /* 收编（skew 变化见设计 §4） */
+    app_wifi_runtime_unlock();
 
     app_netcheck_tcp_stats(&nc_tcp_fails_last, &nc_tcp_last_errno);
 
     {
         wifi_ap_record_t ap;
 
-        app_wifi_runtime_lock();
-        if (s_wifi.sta_connected && esp_wifi_sta_get_ap_info(&ap) == ESP_OK) {
+        /* P1(评审):判定用快照值，get_ap_info 与格式化全在锁外——
+         * Wi-Fi 驱动查询不进 runtime 临界区（设计 §3 rssi 段口径） */
+        if (snap.sta_connected && esp_wifi_sta_get_ap_info(&ap) == ESP_OK) {
             snprintf(bssid, sizeof(bssid), "%02x:%02x:%02x:%02x:%02x:%02x",
                      ap.bssid[0], ap.bssid[1], ap.bssid[2],
                      ap.bssid[3], ap.bssid[4], ap.bssid[5]);
@@ -1272,7 +1248,6 @@ static cJSON *app_cmd_build_network_status(void)
             channel = (int)ap.primary;
             rssi_valid = true;
         }
-        app_wifi_runtime_unlock();
     }
 
     app_config_lock();
@@ -1307,13 +1282,14 @@ static cJSON *app_cmd_build_network_status(void)
     cJSON_AddBoolToObject(root, "internet_verified", snap.internet_verified);
     cJSON_AddStringToObject(root, "net_verify_stage", snap.net_verify_stage);
     /* F-1:最近一次 netcheck 的 TCP 探测失败计数与 errno(双向证据)。 */
-    cJSON_AddNumberToObject(root, "nc_tcp_fails_last", (double)snap.nc_tcp_fails_last);
-    cJSON_AddNumberToObject(root, "nc_tcp_last_errno", (double)snap.nc_tcp_last_errno);
+    cJSON_AddNumberToObject(root, "nc_tcp_fails_last", (double)nc_tcp_fails_last);
+    cJSON_AddNumberToObject(root, "nc_tcp_last_errno", (double)nc_tcp_last_errno);
     /* 当前 AP 的 RSSI/信道/BSSID(加法字段)。断连时 rssi=-128, rssi_valid=false。 */
     cJSON_AddNumberToObject(root, "rssi", rssi);
     cJSON_AddNumberToObject(root, "channel", (double)channel);
     cJSON_AddStringToObject(root, "bssid", bssid);
     cJSON_AddBoolToObject(root, "rssi_valid", rssi_valid);
+    cJSON_AddStringToObject(root, "sta_ssid", snap.sta_ssid);
     cJSON_AddBoolToObject(root, "password_set", snap.password_set);
     cJSON_AddStringToObject(root, "mode", app_network_mode_to_string(snap.net_mode));
     /* 持久静态规划 + 运行期配置状态:救援降级时客户端可提示。 */
@@ -1336,10 +1312,15 @@ static cJSON *app_cmd_build_network_status(void)
             app_copy_string(snap.trial_ssid, sizeof(snap.trial_ssid), s_net_trial.ssid);
         }
         app_cmd_net_job_unlock();
-        cJSON_AddStringToObject(trial, "trial_id", snap.trial_id);
-        cJSON_AddStringToObject(trial, "state",
-                                snap.trial_ready ? "got_ip" : "idle");
-        cJSON_AddStringToObject(trial, "ssid", snap.trial_ssid);
+        if (snap.trial_ready) {
+            cJSON_AddStringToObject(trial, "trial_id", snap.trial_id);
+            cJSON_AddStringToObject(trial, "state", "got_ip");
+            cJSON_AddStringToObject(trial, "ssid", snap.trial_ssid);
+        } else {
+            /* 原 idle 分支：只有 state，不输出 trial_id/ssid（P0 修正：
+             * 未 ready 时快照字符串未赋值，不得读取） */
+            cJSON_AddStringToObject(trial, "state", "idle");
+        }
     }
     return root;
 }
