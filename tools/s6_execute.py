@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""S6 现场预采集执行脚本 v5（v4 复审收口；窄授权：仅 MQTT async expired
+"""S6 现场预采集执行脚本 v6（v5 复审五项收口；窄授权：仅 MQTT async expired
 （须先观察到 GOT_IP）+ op-V job-clear 验证）。
 
 v4→v5（评审阻断项与缺口）：
@@ -14,6 +14,12 @@ P1 全部退出路径显式设置 _results；000_end_state 写入 results；退�
    两项 PASS **且** 设备恢复完成（改指向已尝试时必须 RECOVERY_CONFIRMED）；
 P2 session_trace 实际生成（stdout Tee：脱敏截断 TX/RX 跟踪流，非原始字节流，
    口径见 docstring）；结束日志全部落盘并关闭后再生成 SHA256SUMS。
+v5→v6：① guarded_login 修正 sess.login() 接口（无 timeout 形参——原
+   timeout=15 会 TypeError）；② 扫描经统一 ble()（full=True 返回 Response），
+   不再保留第二套直接发送路径；③ cleanup_confirm 内 token gate 与 BLE 请求
+   全部 asyncio.wait_for(剩余预算) 封顶（含登录耗时）；睡眠不设超预算下限；
+   ④ 000_end_state 覆盖全部启动/退出路径（统一外层 finally；未进会话时
+   gate=None、结果 NOT_RUN）；⑤ 授权申请版本标记同步。
 """
 
 import asyncio
@@ -94,7 +100,7 @@ def token_age():
 async def guarded_login(sess):
     """三件套同一成功条件：登录成功 + token 更新 + 起点重置。"""
     global _token_origin
-    r = await sess.login(timeout=15)
+    r = await sess.login()   # Session.login(username,password) 无 timeout 形参（v5 TypeError 修正）；内部自带 timeout=10/retries=1
     if r.obj.get("ok") is not True or not sess.token:
         stop("auth.login 失败或 token 未更新")
         return False
@@ -109,9 +115,11 @@ async def _token_gate(sess):
     return True
 
 
-async def ble(sess, cmd, args=None, timeout=20, retries=3):
+async def ble(sess, cmd, args=None, timeout=20, retries=3, full=False):
     """统一受保护命令入口：_abort 拦截 + 逐命令 token 守卫 +
-    allow_relogin/reconnect=False（token 生命周期由脚本独占）。"""
+    allow_relogin/reconnect=False（token 生命周期由脚本独占）。
+    full=True 返回完整 Response（扫描需要 frag_sizes）——不保留第二套
+    直接发送路径。"""
     if _abort:
         raise RuntimeError(f"aborted: {_abort}")
     if not await _token_gate(sess):
@@ -121,7 +129,7 @@ async def ble(sess, cmd, args=None, timeout=20, retries=3):
     res = await sess.send_request(req, timeout=timeout, retries=retries,
                                   allow_relogin=False, allow_reconnect=False)
     save(f"{cmd.replace('.', '_')}_ble", "ble", req, res.obj)
-    return res.obj
+    return res if full else res.obj
 
 
 async def recover_cmd(sess, cmd, args=None, timeout=20):
@@ -140,12 +148,8 @@ async def recover_cmd(sess, cmd, args=None, timeout=20):
 
 
 async def ble_scan_full(sess):
-    """受保护扫描（prot 承担 abort+token；flags 同 ble()）。"""
-    req = {"id": f"s6-{sess.next_seq()}", "version": "1.0", "cmd": "network.scan",
-           "args": {}, "token": sess.token}
-    res = await sess.send_request(req, timeout=30, retries=0,
-                                  allow_relogin=False, allow_reconnect=False)
-    save("network_scan_ble", "ble", req, res.obj)
+    """受保护扫描：经统一 ble() 发送（v6——不保留第二套直接发送路径）。"""
+    res = await ble(sess, "network.scan", timeout=30, retries=0, full=True)
     return res.obj, res.frag_sizes
 
 
@@ -274,20 +278,30 @@ async def cleanup_confirm(sess, budget_s=120.0, need_consecutive=2, tag=""):
         if remain <= 0:
             flush("TIMEOUT")
             return False
-        await asyncio.sleep(min(10.0, max(0.5, remain / 2)))
+        await asyncio.sleep(min(10.0, remain / 2))   # 无超预算下限
         remain = deadline - time.monotonic()
         if remain <= 2.0:                      # 剩余不足以完成一次完整请求
             flush("TIMEOUT")
             return False
-        if not await _token_gate(sess):        # 续签耗时计入同一预算
-            flush("TOKEN_FAIL")
+        try:                                    # token gate（含登录）受同一剩余预算封顶
+            if not await asyncio.wait_for(_token_gate(sess), timeout=remain):
+                flush("TOKEN_FAIL")
+                return False
+        except (asyncio.TimeoutError, TimeoutError):
+            flush("TIMEOUT")
             return False
         remain = deadline - time.monotonic()
         if remain <= 2.0:
             flush("TIMEOUT")
             return False
-        ns = await ble(sess, "network.status", timeout=min(15.0, remain - 1),
-                       retries=0)
+        try:                                    # 整个 BLE 调用（写+等响应）受同一剩余预算封顶
+            ns = await asyncio.wait_for(
+                ble(sess, "network.status", timeout=min(15.0, remain - 1),
+                    retries=0),
+                timeout=remain)
+        except (asyncio.TimeoutError, TimeoutError):
+            flush("TIMEOUT")
+            return False
         remain = deadline - time.monotonic()   # 请求返回后复查
         if remain <= 0:
             flush("TIMEOUT")
@@ -306,18 +320,6 @@ async def cleanup_confirm(sess, budget_s=120.0, need_consecutive=2, tag=""):
             flush("CONFIRMED")
             log(f"[cleanup:{tag}] 确认（连续{streak}次满足，STA={poll['sta']}）")
             return True
-
-
-def write_end_state(gEnd):
-    tests_pass = (_results.get("op_e") == "PASS" and _results.get("op_v") == "PASS"
-                  and _abort is None)
-    device_ok = (_repoint_state == RP_NA) or (_recovery_state == RC_OK)
-    (OUT / "000_end_state.json").write_text(json.dumps({
-        "results": _results, "tests_pass": tests_pass, "device_ok": device_ok,
-        "abort": _abort, "recovery": _recovery_state,
-        "repoint_state": _repoint_state, "gate": gEnd,
-    }, ensure_ascii=False, indent=1), encoding="utf-8")
-    return tests_pass, device_ok
 
 
 async def do_recovery(sess):
@@ -550,14 +552,14 @@ async def main():
     trace_f = open(OUT / "session_trace.log", "a", encoding="utf-8")
     prev_stdout = sys.stdout
     sys.stdout = _Tee(prev_stdout, trace_f)   # session_trace：脱敏截断 TX/RX 跟踪流
-    log("=== S6 round2（v5 脚本）开始（窄授权：MQTT async expired[须 GOT_IP] + op-V）===")
-    pw = load_password()
+    log("=== S6 round2（v6 脚本）开始（窄授权：MQTT async expired[须 GOT_IP] + op-V）===")
     code = 3
-    _broker = subprocess.Popen(
-        [sys.executable, "tools/broker_local/mini_broker.py", "--port", "21883"],
-        stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
-    sess = None
-    try:
+    cli = None
+    try:                                   # 启动与运行全部纳入统一收尾
+        pw = load_password()
+        _broker = subprocess.Popen(
+            [sys.executable, "tools/broker_local/mini_broker.py", "--port", "21883"],
+            stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
         recs = await scan_filtered(10.0)
         hit = [r for r in recs if r["address"].lower() == TARGET.lower()]
         if not hit:
@@ -571,29 +573,42 @@ async def main():
             await sess._connect_once()          # S0 无条件登录 = 计时起点
             _token_origin = time.monotonic()
             log("[S0] 无条件 auth.login（token 计时起点）")
+            await run_round(sess, pw)
+    except Exception as exc:  # noqa: BLE001
+        log(f"[fatal] {type(exc).__name__}: {str(exc)[:160]}")
+        code = 3
+    finally:
+        # 统一收尾：恢复 → 终态身份（会话可用时）→ end_state（全路径必有）
+        # → 会话关闭 → broker 处置 → 日志关闭 → SHA256SUMS
+        if _session is not None:
             try:
-                await run_round(sess, pw)
-            finally:
-                # 专用恢复路径（allowlist，_abort 不阻断）
-                try:
-                    await do_recovery(sess)
-                except Exception as exc:  # noqa: BLE001
-                    log(f"[recover] 兜底异常 {type(exc).__name__}: {str(exc)[:120]}")
-                gEnd = None
-                try:
-                    gEnd = await identity_gate(sess, "end", allow_abort=True)
-                except Exception as exc:  # noqa: BLE001
-                    log(f"[end] 终态身份采集失败 {type(exc).__name__}: {str(exc)[:120]}")
-                tests_pass, device_ok = write_end_state(gEnd)
-                closer = getattr(sess, "close", None)
+                await do_recovery(_session)
+            except Exception as exc:  # noqa: BLE001
+                log(f"[recover] 兜底异常 {type(exc).__name__}: {str(exc)[:120]}")
+            gEnd = None
+            try:
+                gEnd = await identity_gate(_session, "end", allow_abort=True)
+            except Exception as exc:  # noqa: BLE001
+                log(f"[end] 终态身份采集失败 {type(exc).__name__}: {str(exc)[:120]}")
+            try:
+                closer = getattr(_session, "close", None)
                 if closer is not None:
                     await closer()
-                else:
+                elif cli is not None:
                     await cli.disconnect()
-                code = 0 if (tests_pass and device_ok) else 3
-                log(f"[result] {_results} tests_pass={tests_pass} "
-                    f"device_ok={device_ok} → exit={code}")
-    finally:
+            except Exception:  # noqa: BLE001
+                pass
+        tests_pass = (_results.get("op_e") == "PASS"
+                      and _results.get("op_v") == "PASS" and _abort is None)
+        device_ok = (_repoint_state == RP_NA) or (_recovery_state == RC_OK)
+        (OUT / "000_end_state.json").write_text(json.dumps({
+            "results": _results, "tests_pass": tests_pass, "device_ok": device_ok,
+            "abort": _abort, "recovery": _recovery_state,
+            "repoint_state": _repoint_state, "gate": None,
+        }, ensure_ascii=False, indent=1), encoding="utf-8")
+        code = 0 if (tests_pass and device_ok) else (code if code else 3)
+        log(f"[result] {_results} tests_pass={tests_pass} "
+            f"device_ok={device_ok} → exit={code}")
         # broker：恢复失败或改指向未确认时保留（设备可能仍指向本地）
         keep = (_repoint_state != RP_NA) and (_recovery_state != RC_OK)
         if keep:
