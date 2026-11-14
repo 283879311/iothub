@@ -85,16 +85,21 @@ def classify_topic(topic):
     uncorrelated_rpc_response / other。只有 device 计入在场证据。"""
     if topic.startswith(RPC_REQUEST_PREFIX):
         return "harness_request"
-    if topic == TELEMETRY_PREFIX or topic.startswith(TELEMETRY_PREFIX + "/"):
+    if topic == TELEMETRY_PREFIX:          # 设备端就是精确主题
         return "device"
     if topic.startswith(ATTR_REQUEST_PREFIX):
-        return "device"
+        rid = topic[len(ATTR_REQUEST_PREFIX):]
+        if rid and "/" not in rid:         # 仅单段非空 ID，排除非标准嵌套
+            return "device"
+        return "other"
     if topic.startswith(ATTR_RESPONSE_PREFIX):
         return "server_response"
     if topic == ATTR_ROOT:
         return "ambiguous"
     if topic.startswith(RPC_RESPONSE_PREFIX):
         rid = topic[len(RPC_RESPONSE_PREFIX):]
+        if not rid or "/" in rid:
+            return "other"                 # 非标准嵌套
         return "device" if rid in _harness_rids else "uncorrelated_rpc_response"
     return "other"
 TOKEN_LIMIT_S = 480.0
@@ -469,7 +474,11 @@ class Rpc:
 
 
 class Presence:
-    """broker 侧在场检测：订阅 v1/devices/me/#，任一条消息即证明设备已接入。"""
+    """broker 侧在场检测（v11.3.2）：
+    订阅 v1/devices/me/# 仅用于收集，**只有经主题方向分类为 device 且非
+    retained 的消息**才计入 seen / wait() / R4 证据；harness 自身 rpc/request
+    （含 ACL 预检）、服务器侧 attributes/response、根 attributes、未关联的
+    rpc/response、retained 重放均只进 all_seen 日志。"""
 
     def __init__(self, host, port, cli=None):
         import paho.mqtt.client as mqtt
