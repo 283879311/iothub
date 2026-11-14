@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""S6 现场预采集执行脚本 v6（v5 复审五项收口；窄授权：仅 MQTT async expired
+"""S6 现场预采集执行脚本 v9（评审逐版收口后终版；窄授权：仅 MQTT async expired
 （须先观察到 GOT_IP）+ op-V job-clear 验证）。
 
 v4→v5（评审阻断项与缺口）：
@@ -14,6 +14,10 @@ P1 全部退出路径显式设置 _results；000_end_state 写入 results；退�
    两项 PASS **且** 设备恢复完成（改指向已尝试时必须 RECOVERY_CONFIRMED）；
 P2 session_trace 实际生成（stdout Tee：脱敏截断 TX/RX 跟踪流，非原始字节流，
    口径见 docstring）；结束日志全部落盘并关闭后再生成 SHA256SUMS。
+v6→v9（收尾加固）：gEnd 初始化移出会话分支（无会话不 UnboundLocalError）；
+   _broker 模块级 None 初始化；口令缺失 SystemExit→RuntimeError；broker
+   terminate/kill 后 wait 确认并逐一兜底（含 kill 后 TimeoutExpired）；经
+   评审 v7/v8/v9 逐版签收。
 v5→v6：① guarded_login 修正 sess.login() 接口（无 timeout 形参——原
    timeout=15 会 TypeError）；② 扫描经统一 ble()（full=True 返回 Response），
    不再保留第二套直接发送路径；③ cleanup_confirm 内 token gate 与 BLE 请求
@@ -556,7 +560,7 @@ async def main():
     trace_f = open(OUT / "session_trace.log", "a", encoding="utf-8")
     prev_stdout = sys.stdout
     sys.stdout = _Tee(prev_stdout, trace_f)   # session_trace：脱敏截断 TX/RX 跟踪流
-    log("=== S6 round2（v6 脚本）开始（窄授权：MQTT async expired[须 GOT_IP] + op-V）===")
+    log("=== S6 round2（v9 脚本）开始（窄授权：MQTT async expired[须 GOT_IP] + op-V）===")
     code = 3
     cli = None
     try:                                   # 启动与运行全部纳入统一收尾
@@ -625,8 +629,12 @@ async def main():
                 log("[finally] mini_broker 已终止（wait 确认退出）")
             except subprocess.TimeoutExpired:
                 _broker.kill()
-                _broker.wait(timeout=5)
-                log("[finally] mini_broker terminate 超时 → kill 后确认退出")
+                try:
+                    _broker.wait(timeout=5)
+                    log("[finally] mini_broker terminate 超时 → kill 后确认退出")
+                except subprocess.TimeoutExpired:
+                    log(f"[finally] mini_broker kill 后仍未退出（pid={_broker.pid}）"
+                        f"——残留进程需人工清理；不中断收尾")
         # 结束日志全部落盘并关闭后，再生成 SHA256SUMS（哈希后不再改文件）
         log(f"[done] abort={_abort} repoint={_repoint_state} "
             f"recovery={_recovery_state} results={_results}")
