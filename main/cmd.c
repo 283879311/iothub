@@ -18,6 +18,7 @@
 #include "cmd_cfg_txn.h"
 #include "cmd_net_adapter.h"
 #include "cmd_policy.h"
+#include "diag.h"
 #include "common.h"
 #include "config.h"
 #include "config_apply.h"
@@ -1370,6 +1371,25 @@ static cJSON *app_cmd_build_device_status(void)
         cJSON_AddNumberToObject(heap, "internal_largest",
                                 (double)heap_caps_get_largest_free_block(
                                     MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));
+    }
+
+    /* 任务栈水位（2026-11-14）：min_free = 表内任务历史最低剩余的最小值；
+     * low = <2KB 的任务列表，空则省略。加法字段，旧客户端忽略。 */
+    {
+        cJSON *stack = cJSON_AddObjectToObject(root, "stack");
+        if (stack != NULL) {
+            size_t min_bytes = 0;
+            const char *min_task = "?";
+            char low[160] = "";
+
+            if (app_diag_stack_snapshot(&min_bytes, &min_task, low, sizeof(low))) {
+                cJSON_AddNumberToObject(stack, "min_free", (double)min_bytes);
+                cJSON_AddStringToObject(stack, "min_task", min_task);
+                if (low[0] != '\0') {
+                    cJSON_AddStringToObject(stack, "low", low);
+                }
+            }
+        }
     }
 
     app_bt_get_status(&bt_mode, bt_error, sizeof(bt_error));

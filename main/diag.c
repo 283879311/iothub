@@ -231,14 +231,22 @@ static const char *const s_stack_watch[] = {
 
 static char s_stack_line[384];
 
-static void app_diag_dump_stack_water(void)
+/* 任务栈水位快照（device.status.stack 与 diag 日志共用同一口径）。
+ * min_bytes/min_task 输出表内任务的**历史最低剩余**；low 为 <2KB 任务列表，
+ * 由调用方提供缓冲，避免命令任务与 diag 任务共享 static。
+ * 单位：uxTaskGetStackHighWaterMark 返回 StackType_t 字数，× sizeof(StackType_t) 还原字节。
+ * 返回 false = 表内任务一个都没找到（全部未创建）。 */
+bool app_diag_stack_snapshot(size_t *min_bytes, const char **min_task,
+                             char *low, size_t low_len)
 {
-    size_t min_bytes = (size_t)-1;
-    const char *min_name = "?";
+    size_t min_b = (size_t)-1;
+    const char *min_n = "?";
     size_t used = 0;
     size_t i;
 
-    s_stack_line[0] = '\0';
+    if (low != NULL && low_len > 0) {
+        low[0] = '\0';
+    }
     for (i = 0; i < sizeof(s_stack_watch) / sizeof(s_stack_watch[0]); i++) {
         TaskHandle_t h;
         size_t bytes;
@@ -253,27 +261,45 @@ static void app_diag_dump_stack_water(void)
             continue;   /* 任务不存在(该模式未启用/未创建) */
         }
         bytes = (size_t)uxTaskGetStackHighWaterMark(h) * sizeof(StackType_t);
-        if (bytes < min_bytes) {
-            min_bytes = bytes;
-            min_name = s_stack_watch[i];
+        if (bytes < min_b) {
+            min_b = bytes;
+            min_n = s_stack_watch[i];
         }
-        if (bytes >= 2048) {
+        if (bytes >= 2048 || low == NULL || low_len == 0) {
             continue;   /* 只列"贴线"的(历史余量 <2KB;1.3-48 从 1KB 放宽,给 MQTT 任务取证) */
         }
-        n = snprintf(s_stack_line + used, sizeof(s_stack_line) - used, "%s%s=%uB",
+        n = snprintf(low + used, low_len - used, "%s%s=%uB",
                      (used > 0) ? " " : "", s_stack_watch[i], (unsigned)bytes);
-        if (n < 0 || (size_t)n >= sizeof(s_stack_line) - used) {
+        if (n < 0 || (size_t)n >= low_len - used) {
             break;
         }
         used += (size_t)n;
     }
-    if (min_bytes == (size_t)-1) {
+    if (min_b == (size_t)-1) {
+        return false;
+    }
+    if (min_bytes != NULL) {
+        *min_bytes = min_b;
+    }
+    if (min_task != NULL) {
+        *min_task = min_n;
+    }
+    return true;
+}
+
+static void app_diag_dump_stack_water(void)
+{
+    size_t min_bytes = 0;
+    const char *min_name = "?";
+
+    s_stack_line[0] = '\0';
+    if (!app_diag_stack_snapshot(&min_bytes, &min_name, s_stack_line, sizeof(s_stack_line))) {
         ESP_LOGW(TAG, "stack water: no watch tasks found");
         return;
     }
     ESP_LOGI(TAG, "stack water: min=%s:%uB%s%s",
              min_name, (unsigned)min_bytes,
-             (used > 0) ? " low:" : "", s_stack_line);
+             (s_stack_line[0] != '\0') ? " low:" : "", s_stack_line);
 }
 
 static void app_diag_task(void *arg)
@@ -302,8 +328,30 @@ static void app_diag_task(void *arg)
     }
 }
 
+/* 启动校验（评审 2026-11-14）：xTaskGetHandle 对 >= configMAX_TASK_NAME_LEN(16)
+ * 的名字直接 assert 崩溃。宁可整个栈监控不启动，也不带着已知坏表跑半监控——
+ * 半监控比无监控更容易误导诊断。 */
+static bool app_diag_watch_names_valid(void)
+{
+    bool ok = true;
+    size_t i;
+
+    for (i = 0; i < sizeof(s_stack_watch) / sizeof(s_stack_watch[0]); i++) {
+        if (strlen(s_stack_watch[i]) >= 16) {
+            ESP_LOGE(TAG, "stack watch name too long (>=%d): %s",
+                     (int)16, s_stack_watch[i]);
+            ok = false;
+        }
+    }
+    return ok;
+}
+
 esp_err_t app_diag_start(void)
 {
+    if (!app_diag_watch_names_valid()) {
+        ESP_LOGE(TAG, "stack watch table invalid, diag disabled");
+        return ESP_ERR_INVALID_STATE;
+    }
     if (xTaskCreate(app_diag_task, "app_diag", APP_DIAG_TASK_STACK, NULL,
                     APP_DIAG_TASK_PRIO, NULL) != pdPASS) {
         ESP_LOGE(TAG, "task create failed");
