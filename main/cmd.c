@@ -2040,6 +2040,8 @@ esp_err_t app_cmd_execute_method(const app_cmd_context_t *ctx, const char *metho
             }
         } else if (strcmp(m, "io.get") == 0) {
             uint8_t net_mode;
+            bool sta_has_ip;
+            char sta_ip[sizeof(s_wifi.sta_ip)];
             app_io_state_t io;
 
             resp = cJSON_CreateObject();
@@ -2049,6 +2051,10 @@ esp_err_t app_cmd_execute_method(const app_cmd_context_t *ctx, const char *metho
                 app_config_lock();
                 net_mode = s_config.net_mode;
                 app_config_unlock();
+                app_wifi_runtime_lock();
+                sta_has_ip = s_wifi.sta_has_ip;
+                memcpy(sta_ip, s_wifi.sta_ip, sizeof(sta_ip));
+                app_wifi_runtime_unlock();
                 app_io_get_state(&io);
                 cJSON_AddBoolToObject(resp, "relay_on", io.relay_on);
                 cJSON_AddBoolToObject(resp, "led_on", io.led_on);
@@ -2056,8 +2062,8 @@ esp_err_t app_cmd_execute_method(const app_cmd_context_t *ctx, const char *metho
                 cJSON_AddNumberToObject(resp, "io_seq", io.seq);
                 cJSON_AddStringToObject(resp, "io_source", app_io_source_name(io.last_source));
                 cJSON_AddStringToObject(resp, "net_mode", app_network_mode_to_string(net_mode));
-                cJSON_AddBoolToObject(resp, "sta_has_ip", s_wifi.sta_has_ip);
-                cJSON_AddStringToObject(resp, "sta_ip", s_wifi.sta_ip);
+                cJSON_AddBoolToObject(resp, "sta_has_ip", sta_has_ip);
+                cJSON_AddStringToObject(resp, "sta_ip", sta_ip);
             }
         } else if (strcmp(m, "gpio.status") == 0) {
             resp = app_cmd_build_gpio_status();
