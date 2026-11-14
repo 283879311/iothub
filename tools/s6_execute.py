@@ -55,7 +55,7 @@ from bleak import BleakClient  # noqa: E402
 
 from p0_acceptance import Session, scan_filtered, sanitize  # noqa: E402
 
-OUT = Path("artifacts/cmd04_flash_20261114/s6_round3")
+OUT = Path("artifacts/cmd04_flash_20261115/s6_round4")
 TARGET = "B0:A7:32:28:C8:E6"
 EMQX_HOST, EMQX_PORT = "139.9.93.245", 1883   # 临时指向与 harness 接入点（外部 EMQX，匿名）
 TB_HOST, TB_PORT = "139.9.93.245", 21883        # 恢复目标（1 号 ThingsBoard）
@@ -223,29 +223,69 @@ class Rpc:
     """MQTT RPC 轮询通道（v11）：独立 client_id、唯一请求 ID、串行、严格匹配。
     传输层失败一律返回 ("TRANSPORT", 原因)——绝不与设备语义终态混淆。"""
 
-    def __init__(self, host, port):
+    def __init__(self, host, port, cli=None):
         import paho.mqtt.client as mqtt
         self._mqtt = mqtt
         self.host, self.port = host, port
         self.client_id = f"iothub-harness-{uuid.uuid4().hex[:8]}"
-        self.cli = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2,
-                               client_id=self.client_id,
-                               protocol=mqtt.MQTTv311)
+        self.cli = cli if cli is not None else mqtt.Client(
+            mqtt.CallbackAPIVersion.VERSION2, client_id=self.client_id,
+            protocol=mqtt.MQTTv311)
         self._waiters = {}         # rid -> (asyncio.Event, holder)
         self._suback = None
+        self._connack = None
+        self._subscribe_rc = None
+        self._connected = False
+        self.connect_error = None
         self._loop = None
         self._lock = asyncio.Lock()
         self.seq = 0
+        self.cli.on_connect = self._on_conn
         self.cli.on_message = self._on_msg
         self.cli.on_subscribe = self._on_suback
         self.cli.on_disconnect = self._on_disc
         self.disconnected = False
+
+    def _on_conn(self, _c, _u, _flags, rc, _props=None):
+        """CONNACK 之后才订阅——修复 v11 的 connect/subscribe 时序缺陷。"""
+        self._connack = rc
+        if int(getattr(rc, "value", rc)) != 0:
+            self.connect_error = f"connack_rc={rc}"
+            return
+        self._connected = True
+        try:
+            result, _mid = self.cli.subscribe(
+                "v1/devices/me/rpc/response/+", 1)
+            self._subscribe_rc = int(result)
+        except Exception as exc:  # noqa: BLE001
+            self._subscribe_rc = -1
+            self.connect_error = f"subscribe_exc:{type(exc).__name__}"
 
     def _on_suback(self, _c, _u, mid, reason_codes, _props=None):
         self._suback = list(reason_codes or [])
 
     def _on_disc(self, _c, _u, _flags, _rc, _props=None):
         self.disconnected = True
+        self._connected = False
+
+    async def wait_ready(self, timeout=12.0):
+        """连接 → 订阅 → SUBACK 授权 全部确认后才允许使用。"""
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            if self.connect_error:
+                return (False, self.connect_error)
+            if self._subscribe_rc not in (None, 0):
+                return (False, f"subscribe_rc={self._subscribe_rc}")
+            if self._connected and self._suback is not None:
+                if not self._suback:
+                    return (False, "suback_empty")
+                bad = [str(rc) for rc in self._suback
+                       if int(getattr(rc, "value", rc)) == 128]
+                if bad:
+                    return (False, f"suback_rejected={bad}")
+                return (True, "ready")
+            await asyncio.sleep(0.1)
+        return (False, "ready_timeout")
 
     def _on_msg(self, _c, _u, msg):
         try:
@@ -264,16 +304,17 @@ class Rpc:
 
     def start(self, loop):
         self._loop = loop
-        self.cli.connect(self.host, self.port, keepalive=20)
-        self.cli.subscribe("v1/devices/me/rpc/response/+", 1)
+        try:
+            self.cli.connect(self.host, self.port, keepalive=20)
+        except Exception as exc:  # noqa: BLE001
+            self.connect_error = f"connect_exc:{type(exc).__name__}"
         self.cli.loop_start()
 
     def acl_preflight(self):
-        """ACL/通路预检（改指向前执行）：订阅授权 + 发布 PUBACK。
-        匿名回环成功 ≠ 设备主题权限；此两项是可得的最强代理证据。"""
-        deadline = time.monotonic() + 10
-        while time.monotonic() < deadline and self._suback is None:
-            time.sleep(0.2)
+        """发布侧预检（改指向前执行）：依赖 wait_ready() 已确认订阅就绪。
+        **注意**：这验证的是 harness 自身客户端身份的主题权限，不代表设备
+        身份的连接/订阅权限；且预检发布的 device.info 是真实请求（共享主题
+        结构，若有其他设备订阅同主题它们也会收到）——证据口径如实标注。"""
         sub_ok = bool(self._suback) and all(
             (int(getattr(rc, "value", rc)) != 128) for rc in self._suback)
         topic = f"v1/devices/me/rpc/request/preflight-{uuid.uuid4().hex[:6]}"
@@ -290,7 +331,8 @@ class Rpc:
     async def call(self, cmd, args=None, timeout=12.0):
         """串行 RPC。返回 ("OK", data) 或 ("TRANSPORT", 原因)。"""
         async with self._lock:
-            if self.disconnected or not self.cli.is_connected():
+            if self.disconnected or not self._connected \
+                    or not self.cli.is_connected():
                 return ("TRANSPORT", "emqx_disconnected")
             self.seq += 1
             rid = f"hp-{self.seq}-{uuid.uuid4().hex[:4]}"
@@ -347,24 +389,76 @@ class Rpc:
 class Presence:
     """broker 侧在场检测：订阅 v1/devices/me/#，任一条消息即证明设备已接入。"""
 
-    def __init__(self, host, port):
+    def __init__(self, host, port, cli=None):
         import paho.mqtt.client as mqtt
         self.seen = []
-        self.cli = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2,
-                               protocol=mqtt.MQTTv311)
+        self._mqtt = mqtt
+        self._connack = None
+        self._suback = None
+        self._subscribe_rc = None
+        self._connected = False
+        self.connect_error = None
+        self.disconnect_count = 0
+        self.cli = cli if cli is not None else mqtt.Client(
+            mqtt.CallbackAPIVersion.VERSION2, protocol=mqtt.MQTTv311)
+        self.cli.on_connect = self._on_conn
+        self.cli.on_subscribe = self._on_suback
+        self.cli.on_disconnect = self._on_disc
         self.cli.on_message = self._on_msg
-        self.cli.connect(host, port, keepalive=20)
-        self.cli.subscribe("v1/devices/me/#", 1)
+        try:
+            self.cli.connect(host, port, keepalive=20)
+        except Exception as exc:  # noqa: BLE001
+            self.connect_error = f"connect_exc:{type(exc).__name__}"
         self.cli.loop_start()
 
+    def _on_conn(self, _c, _u, _flags, rc, _props=None):
+        self._connack = rc
+        if int(getattr(rc, "value", rc)) != 0:
+            self.connect_error = f"connack_rc={rc}"
+            return
+        self._connected = True
+        try:
+            result, _mid = self.cli.subscribe("v1/devices/me/#", 1)
+            self._subscribe_rc = int(result)
+        except Exception as exc:  # noqa: BLE001
+            self._subscribe_rc = -1
+            self.connect_error = f"subscribe_exc:{type(exc).__name__}"
+
+    def _on_suback(self, _c, _u, mid, reason_codes, _props=None):
+        self._suback = list(reason_codes or [])
+
+    def _on_disc(self, _c, _u, _flags, _rc, _props=None):
+        self._connected = False
+        self.disconnect_count += 1
+
+    async def wait_ready(self, timeout=12.0):
+        """订阅就绪判据：CONNACK 成功 + subscribe rc 正常 + SUBACK 授权。
+        未就绪时不得把"没收到消息"当作任何证据。"""
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            if self.connect_error:
+                return (False, self.connect_error)
+            if self._subscribe_rc not in (None, 0):
+                return (False, f"subscribe_rc={self._subscribe_rc}")
+            if self._connected and self._suback is not None:
+                if not self._suback:
+                    return (False, "suback_empty")
+                bad = [str(rc) for rc in self._suback
+                       if int(getattr(rc, "value", rc)) == 128]
+                if bad:
+                    return (False, f"suback_rejected={bad}")
+                return (True, "ready")
+            await asyncio.sleep(0.1)
+        return (False, "ready_timeout")
+
     def _on_msg(self, _c, _u, msg):
-        self.seen.append((time.monotonic(), msg.topic))
+        self.seen.append((time.monotonic(), getattr(msg, "topic", "?")))
 
     def last_mono(self):
         return self.seen[-1][0] if self.seen else None
 
     async def wait(self, seconds=240.0, since=None):
-        """等到 since（默认启动时刻）之后的首条消息；返回 True/False。"""
+        """等到 since 之后的首条消息。调用前必须 wait_ready() 成功。"""
         base = since if since is not None else 0.0
         deadline = time.monotonic() + seconds
         while time.monotonic() < deadline:
@@ -616,6 +710,47 @@ async def cleanup_confirm_mqtt(rpc, budget_s=120.0, need_consecutive=2):
             return True
 
 
+def tcp_precheck(host, port, timeout=5.0):
+    """PC 侧 TCP 可达性预检（改指向之前）。**限制**：只证明 broker 从 PC 可达，
+    不证明目标 AP 的出网条件；设备侧真实证据是它能否在 EMQX 上出现。"""
+    import socket
+    t0 = time.monotonic()
+    try:
+        with socket.create_connection((host, port), timeout=timeout):
+            return (True, f"ok {time.monotonic()-t0:.2f}s")
+    except Exception as exc:  # noqa: BLE001
+        return (False, f"{type(exc).__name__}: {exc}")
+
+
+def r2_write_ok(resp, keys=("mqtt_host", "mqtt_port")):
+    """R2：写回必须 ok:true 且 changed 同时包含两个目标键。返回 (ok, 明细)。"""
+    d = (resp or {}).get("data") or {}
+    ok = (resp or {}).get("ok") is True
+    changed = d.get("changed") or []
+    missing = [k for k in keys if k not in changed]
+    return (ok and not missing, {"ok": ok, "changed": changed, "missing": missing})
+
+
+async def r4_silence_check(pres, window_s=30.0):
+    """R4：监听必须先就绪，再完整观察 window_s；期间断链或收到设备消息都
+    不能记通过。返回 (ok, 明细)。"""
+    ready, why = await pres.wait_ready(12.0)
+    if not ready:
+        return (False, {"stage": "LISTENER_NOT_READY", "why": why})
+    t0 = time.monotonic()
+    dc0 = pres.disconnect_count
+    await asyncio.sleep(window_s)
+    recent = [(round(t - t0, 1), topic) for t, topic in pres.seen if t >= t0]
+    dc = pres.disconnect_count - dc0
+    detail = {"window_s": window_s, "msgs_in_window": len(recent),
+              "sample": recent[:3], "disconnects_in_window": dc}
+    if dc > 0:
+        return (False, {"stage": "LISTENER_DISCONNECTED", **detail})
+    if recent:
+        return (False, {"stage": "STILL_ON_EMQX", **detail})
+    return (True, detail)
+
+
 async def do_recovery(sess=None):
     """分阶段恢复（评审要求 R1–R5）：只有全部确认才 RECOVERY_CONFIRMED。
     R1 会话获取（可否重连）/ R2 写回并确认响应 / R3 独立回读 /
@@ -650,12 +785,14 @@ async def do_recovery(sess=None):
         r = await recover_cmd(s, "config.set",
                               {"patch": {"mqtt_host": _origin_snapshot[0],
                                          "mqtt_port": _origin_snapshot[1]}})
-        changed = ((r or {}).get("data") or {}).get("changed") or []
-        if (r or {}).get("ok") is not True:
-            stages["R2_write"] = f"REJECTED:{json.dumps(r)[:120]}"
-            finish(RC_FAIL, "设备拒绝写回")
+        w_ok, w_det = r2_write_ok(r)
+        stages["R2_write"] = json.dumps(w_det, ensure_ascii=False)
+        if not w_ok:
+            if (r or {}).get("ok") is not True:
+                finish(RC_FAIL, "设备拒绝写回")
+            else:
+                finish(RC_UNCONF, f"写回回包缺少目标键 changed（missing={w_det['missing']}）")
             return
-        stages["R2_write"] = f"OK changed={changed}"
         # R3 独立回读
         back = await recover_cmd(s, "config.get")
         mq = ((back or {}).get("data") or {}).get("mqtt") or {}
@@ -664,14 +801,13 @@ async def do_recovery(sess=None):
         if readback != _origin_snapshot:
             finish(RC_UNCONF, f"回读不符 {readback} != {_origin_snapshot}")
             return
-        # R4 broker 侧：EMQX 上设备静默 ≥30s
+        # R4 broker 侧：监听就绪后完整静默 30s（未就绪/断链/有消息都不通过）
         pres = Presence(EMQX_HOST, EMQX_PORT)
         try:
-            await asyncio.sleep(30)
-            recent = [t for t, _ in pres.seen if t >= time.monotonic() - 30]
-            stages["R4_emqx_silence"] = f"msgs_last_30s={len(recent)}"
-            if recent:
-                finish(RC_UNCONF, "EMQX 仍有设备消息（可能未真正切回 TB）")
+            ok4, det4 = await r4_silence_check(pres, 30.0)
+            stages["R4_emqx_silence"] = json.dumps(det4, ensure_ascii=False)
+            if not ok4:
+                finish(RC_UNCONF, f"R4 未通过（{det4.get('stage')}）")
                 return
         finally:
             pres.stop()
@@ -736,11 +872,24 @@ async def run_round(sess, pw):
         stop(f"无法连接 EMQX {EMQX_HOST}:{EMQX_PORT} —— {type(exc).__name__}")
         _results["op_e"] = _results["op_v"] = "NOT_RUN"
         return
+    ready, why = await rpc.wait_ready(12.0)
+    if not ready:
+        rpc.stop()
+        stop(f"EMQX RPC 通道未就绪（{why}）——不进入测试")
+        _results["op_e"] = _results["op_v"] = "NOT_RUN"
+        return
     try:
         pres = Presence(EMQX_HOST, EMQX_PORT)
     except Exception as exc:  # noqa: BLE001
         rpc.stop()
         stop(f"无法建立 EMQX 在场监听 —— {type(exc).__name__}")
+        _results["op_e"] = _results["op_v"] = "NOT_RUN"
+        return
+    pres_ready, pres_why = await pres.wait_ready(12.0)
+    if not pres_ready:
+        rpc.stop()
+        pres.stop()
+        stop(f"EMQX 在场监听未就绪（{pres_why}）——不进入测试")
         _results["op_e"] = _results["op_v"] = "NOT_RUN"
         return
     try:
@@ -927,7 +1076,7 @@ async def main():
     trace_f = open(OUT / "session_trace.log", "a", encoding="utf-8")
     prev_stdout = sys.stdout
     sys.stdout = _Tee(prev_stdout, trace_f)   # session_trace：脱敏截断 TX/RX 跟踪流
-    log(f"=== S6 round3（v10 脚本/EMQX {EMQX_HOST}:{EMQX_PORT}）开始（窄授权：MQTT async expired[须 GOT_IP] + op-V）===")
+    log(f"=== S6 round4（v11 脚本/EMQX {EMQX_HOST}:{EMQX_PORT}）开始（窄授权：MQTT async expired[须 GOT_IP] + op-V）===")
     code = 3
     cli = None
     try:                                   # 启动与运行全部纳入统一收尾
