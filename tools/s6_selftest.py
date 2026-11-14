@@ -571,6 +571,45 @@ async def case_v1132():
           str(ev3))
 
 
+async def case_v1132b():
+    print("[25] P2-b：路径严格性（精确 telemetry / 单段非空 ID）")
+    # 非精确 telemetry（嵌套）不得计入
+    check("telemetry 嵌套 → other",
+          S.classify_topic("v1/devices/me/telemetry/extra") == "other",
+          S.classify_topic("v1/devices/me/telemetry/extra"))
+    check("telemetry 精确 → device",
+          S.classify_topic("v1/devices/me/telemetry") == "device")
+    # attributes/request 必须单段非空 ID
+    check("attributes/request 空 ID → other",
+          S.classify_topic("v1/devices/me/attributes/request/") == "other",
+          S.classify_topic("v1/devices/me/attributes/request/"))
+    check("attributes/request 嵌套 → other",
+          S.classify_topic("v1/devices/me/attributes/request/1/2") == "other",
+          S.classify_topic("v1/devices/me/attributes/request/1/2"))
+    check("attributes/request 单段 → device",
+          S.classify_topic("v1/devices/me/attributes/request/2588") == "device")
+    # rpc/response 必须单段且已登记
+    S._harness_rids.add("hp-x-1")
+    check("rpc/response 单段已登记 → device",
+          S.classify_topic("v1/devices/me/rpc/response/hp-x-1") == "device")
+    check("rpc/response 嵌套 → other",
+          S.classify_topic("v1/devices/me/rpc/response/hp-x-1/x") == "other",
+          S.classify_topic("v1/devices/me/rpc/response/hp-x-1/x"))
+    # 嵌套路径消息进 Presence 也不计入 seen
+    cli = FakeCli(suback=(1,))
+    p = S.Presence("h", 1, cli=cli)
+    await p.wait_ready(2.0)
+    t0 = __import__("time").monotonic()
+    for tp in ("v1/devices/me/telemetry/extra",
+               "v1/devices/me/attributes/request/1/2",
+               "v1/devices/me/rpc/response/hp-x-1/x"):
+        p._on_msg(None, None, types.SimpleNamespace(
+            topic=tp, payload=b"{}", retain=False))
+    check("嵌套路径不进 seen", p.seen == [], str(p.all_seen))
+    got = await p.wait(0.4, since=t0 - 1)
+    check("嵌套路径不判接入", got is False, str(p.seen))
+
+
 async def main():
     await case_lifecycle()
     await case_presence()
@@ -581,6 +620,7 @@ async def main():
     await case_v113()
     await case_v1131()
     await case_v1132()
+    await case_v1132b()
     print(f"\nselftest: {PASS} passed, {FAIL} failed")
     return 0 if FAIL == 0 else 1
 
