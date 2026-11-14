@@ -21,6 +21,7 @@
 - [BLE常态化韧性验收_T5_2026-10-24.md](BLE常态化韧性验收_T5_2026-10-24.md)——T5 方案冻结版；soak 执行证据见 soak_6h 报告
 - [BLE微信小程序交互协议_T4_2026-10-24.md](BLE微信小程序交互协议_T4_2026-10-24.md)——T4 交互协议；Web/HTTP 章节为 LEGACY
 - [R-NET设备验收报告_2026-11-07.md](R-NET设备验收报告_2026-11-07.md)——在续写的总证据文档；§1-§17 按节归档
+- [CMD-04b_network_status快照清单与判定表_2026-11-14.md](CMD-04b_network_status快照清单与判定表_2026-11-14.md)——network_status 四段快照化设计（评审中）
 - [R_数据路由层架构_2026-10-26.md](R_数据路由层架构_2026-10-26.md)——data_pipe 架构现状
 - [WIFI-OP-RESOURCE-RACE-fencing实现记录_2026-11-13.md](WIFI-OP-RESOURCE-RACE-fencing实现记录_2026-11-13.md)——fencing 差量待复审
 - [WIFI-OP-RESOURCE-RACE-修订设计_B1-B5_2026-11-12.md](WIFI-OP-RESOURCE-RACE-修订设计_B1-B5_2026-11-12.md)——设计已签收；§14/§15.1 为唯一口径
