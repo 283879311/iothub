@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""S6 现场预采集执行脚本 v11.3.5（MQTT 轮询 + 分阶段恢复；窄授权：仅 MQTT async expired
+"""S6 现场预采集执行脚本 v11.3.6（MQTT 轮询 + 分阶段恢复；窄授权：仅 MQTT async expired
 （须先观察到 GOT_IP）+ op-V job-clear 验证）。
 
 v4→v5（评审阻断项与缺口）：
@@ -979,6 +979,70 @@ async def r4_silence_check(pres, window_s=30.0):
     return (True, detail)
 
 
+def stable_sample(d):
+    """单次采样是否满足稳定条件（网络表面）。"""
+    d = d or {}
+    return (d.get("sta_connected") is True
+            and d.get("internet_verified") is True
+            and d.get("last_disconnect") == "none"
+            and ((d.get("trial") or {}).get("state")) == "idle")
+
+
+async def stability_gate(status_fn, budget_s=120.0, interval_s=10.0, need=2):
+    """网络稳定性门禁（**非**资源释放确认）。
+    返回 ("OK"|"TIMEOUT"|"TRANSPORT", detail, polls)。
+    注意：两次离散采样无法检测采样间隔内发生的断连—重连（last_disconnect
+    在 STA 重连成功时被重置为 none），因此本门禁只证明"采样时刻稳定"。"""
+    deadline = time.monotonic() + budget_s
+    streak = 0
+    polls = []
+    while time.monotonic() < deadline:
+        remain = deadline - time.monotonic()
+        await asyncio.sleep(min(interval_s, max(0.5, remain)))
+        kind, ns = await status_fn()
+        if kind != "OK":
+            return ("TRANSPORT", {"why": str(ns)}, polls)
+        polls.append({"t": time.strftime("%H:%M:%S"),
+                      "mono": round(time.monotonic(), 3),
+                      "sta": ns.get("connected_ssid"),
+                      "connected": ns.get("sta_connected"),
+                      "verified": ns.get("internet_verified"),
+                      "last_disconnect": ns.get("last_disconnect"),
+                      "trial": ((ns.get("trial") or {}).get("state"))})
+        streak = streak + 1 if stable_sample(ns) else 0
+        if streak >= need:
+            return ("OK", {"streak": streak}, polls)
+    return ("TIMEOUT", {"streak": streak}, polls)
+
+
+SERIAL_CONSOLE = "ttyUSB1"      # C8E4 console（第一轮实证映射）
+
+
+def serial_mark():
+    """记录 console 日志当前长度，用于事后只读取"op 创建之后"的日志段。"""
+    try:
+        f = SERIAL_DIR / f"serial_{SERIAL_CONSOLE}.log"
+        return (f, f.stat().st_size)
+    except OSError:
+        return (None, 0)
+
+
+def serial_hits_since(mark, patterns):
+    """只读：截取 mark 之后的日志，返回含任一模样的行（诊断用，不触发任何动作）。"""
+    f, off = mark
+    if f is None:
+        return []
+    try:
+        with open(f, "rb") as fh:
+            fh.seek(off)
+            data = fh.read().decode("utf-8", "replace")
+    except OSError:
+        return []
+    pats = [x.lower() for x in patterns]
+    return [ln.strip()[:160] for ln in data.splitlines()
+            if any(p in ln.lower() for p in pats)]
+
+
 async def do_recovery(sess=None):
     """分阶段恢复（评审要求 R1–R5）：只有全部确认才 RECOVERY_CONFIRMED。
     R1 会话获取（可否重连）/ R2 写回并确认响应 / R3 独立回读 /
@@ -1167,45 +1231,32 @@ async def run_round(sess, pw):
         log(f"[S4] broker 侧确认设备接入（首条 {pres.seen[-1][1]}；"
             f"证据={pres.evidence_class()}）")
 
-        # ---- v11.3.5 网络稳定性门禁（**不是**资源释放确认）
+        # ---- v11.3.5 网络稳定性门禁（**非**资源释放确认）----
         # 源码核实（dc254d5）：wifi.h 无 owner getter，network.status/device.status
-        # 均不暴露 owner / cleanup 阶段——协议层无法观测 CLEANUP 是否释放。
-        # 因此本门禁只能证明"网络表面连续稳定"，不能证明 tryconnect_begin 可取
-        # 到 owner；仅为降低撞上 owner=CLEANUP 概率的等待措施。
-        stable_ok = False
-        stable_deadline = time.monotonic() + 120
-        stable_streak = 0
-        while time.monotonic() < stable_deadline and not _abort:
-            await asyncio.sleep(10)
-            k, ns = await rpc.status()
-            if k != "OK":
-                log(f"[S4] 稳定性门禁轮询传输失败（{ns}）——停止等待")
-                break
-            d = ns or {}
-            good = (d.get("sta_connected") is True
-                    and d.get("internet_verified") is True
-                    and d.get("last_disconnect") == "none"
-                    and ((d.get("trial") or {}).get("state")) == "idle")
-            stable_streak = stable_streak + 1 if good else 0
-            log(f"[S4] 稳定性 streak={stable_streak} "
-                f"sta={d.get('sta_connected')} verified={d.get('internet_verified')} "
-                f"last_disc={d.get('last_disconnect')} "
-                f"trial={(d.get('trial') or {}).get('state')}")
-            if stable_streak >= 2:
-                stable_ok = True
-                break
+        # 均不暴露 owner / cleanup 阶段 → 协议层无法观测 CLEANUP 是否释放。
+        # 另：last_disconnect 在 STA 重连成功时被重置为 none，故两次离散采样
+        # 无法检测采样间隔内的断连—重连；本门禁只证明"采样时刻稳定"。
+        g_kind, g_det, g_polls = await stability_gate(rpc.status)
         (OUT / "000_stability_gate.json").write_text(json.dumps(
-            {"ok": stable_ok, "streak": stable_streak,
-             "proves": "网络表面连续稳定（sta+verified+last_disconnect=none+trial idle）",
-             "does_not_prove": "Wi-Fi owner 已释放 / CLEANUP 已结束（协议层不可观测）"},
+            {"result": g_kind, "detail": g_det, "polls": g_polls,
+             "proves": "至少两次间隔约10秒的状态采样均满足网络稳定条件",
+             "does_not_prove": ["采样间隔内没有发生短暂断连",
+                                "Wi-Fi owner 已释放",
+                                "CLEANUP 已结束"],
+             "note": "owner/cleanup 在协议层不可观测；不得据本门禁推断资源已释放"},
             ensure_ascii=False, indent=1), encoding="utf-8")
-        if not stable_ok:
-            stop("改指向后 120s 内未取得连续稳定状态——不创建 op-E")
+        if g_kind == "TRANSPORT":
+            stop(f"稳定性门禁轮询传输失败（{g_det.get('why')}）——不创建 op-E")
             _results["op_e"] = _results["op_v"] = "NOT_RUN"
             return
-        log("[S4] 稳定性门禁通过（连续两次；注意：不证明 owner 已释放）")
+        if g_kind != "OK":
+            stop("改指向后 120s 内未取得连续稳定采样——不创建 op-E")
+            _results["op_e"] = _results["op_v"] = "NOT_RUN"
+            return
+        log("[S4] 稳定性门禁通过（连续两次采样；不证明 owner 已释放）")
 
         # ---- op-E：MQTT 创建 + MQTT 轮询 ----
+        op_mark = serial_mark()            # 只读诊断基线（op 创建时刻）
         kind, resp = await rpc.call("network.tryconnect",
                                     {"ssid": _ssid, "password": pw})
         if kind != "OK":
@@ -1255,6 +1306,20 @@ async def run_round(sess, pw):
             return
         if terminal in ("cancelled", "failed"):
             err = (st.get("error") if isinstance(st, dict) else None)
+            # 纯诊断（不触发重试）：若 console 出现 owner 竞争文本，仅记录分类
+            if err == "connect_failed":
+                hits = serial_hits_since(op_mark, ("owner wait timeout",
+                                                   "tryconnect busy",
+                                                   "owner=CLEANUP"))
+                if hits:
+                    _results["diagnosis"] = "SUSPECTED_OWNER_CONTENTION"
+                    (OUT / "000_diagnosis.json").write_text(json.dumps(
+                        {"diagnosis": "SUSPECTED_OWNER_CONTENTION",
+                         "retry": False,
+                         "note": "仅诊断分类；按裁决不自动重试",
+                         "evidence": hits[:5]}, ensure_ascii=False, indent=1),
+                        encoding="utf-8")
+                    log(f"[S4] 诊断：{_results['diagnosis']}（仅记录，不重试）")
             stop(f"op-E 异常终态 {terminal}/{err}——立即 STOP，不重试")
             _results["op_e"] = "FAILED"
             return
@@ -1354,7 +1419,7 @@ async def main():
     trace_f = open(OUT / "session_trace.log", "a", encoding="utf-8")
     prev_stdout = sys.stdout
     sys.stdout = _Tee(prev_stdout, trace_f)   # session_trace：脱敏截断 TX/RX 跟踪流
-    log(f"=== S6 round4（v11.3.5 脚本/EMQX {EMQX_HOST}:{EMQX_PORT}）开始（窄授权：MQTT async expired[须 GOT_IP] + op-V）===")
+    log(f"=== S6 round4（v11.3.6 脚本/EMQX {EMQX_HOST}:{EMQX_PORT}）开始（窄授权：MQTT async expired[须 GOT_IP] + op-V）===")
     code = 3
     cli = None
     try:                                   # 启动与运行全部纳入统一收尾

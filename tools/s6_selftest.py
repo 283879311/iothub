@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""S6 v11.3.2 离线自检（不连设备/不连 broker，全部替身对象）。
+"""S6 v11.3.6 离线自检（不连设备/不连 broker，全部替身对象）。
 
 覆盖评审要求的 7 类用例：
   1 连接失败（connect 抛异常）
@@ -638,6 +638,67 @@ async def case_v1134():
     check("无预期变更 + 空 changed → OK", st5 == "OK" and exp3 == [], f"{st5}/{exp3}")
 
 
+async def case_stability_gate():
+    print("[27] 稳定性门禁：连续两次采样（离散采样局限已注明）")
+    good = {"sta_connected": True, "internet_verified": True,
+            "last_disconnect": "none", "trial": {"state": "idle"},
+            "connected_ssid": "302"}
+
+    def mk(seq):
+        it = list(seq)
+
+        async def fn():
+            if not it:
+                return ("OK", {})
+            v = it.pop(0)
+            return v if isinstance(v, tuple) else ("OK", v)
+        return fn
+
+    # 1) 两次都满足 → OK
+    kind, det, polls = await S.stability_gate(mk([good, good]), 3, 0.05)
+    check("两次满足 → OK", kind == "OK" and len(polls) == 2, f"{kind}/{det}")
+
+    # 2) 中间一次不满足 → streak 清零，需再来两次
+    bad = dict(good, last_disconnect="reason(200)")
+    kind2, det2, polls2 = await S.stability_gate(
+        mk([good, bad, good, good]), 3, 0.05)
+    check("中途 last_disconnect≠none → 需重新累计",
+          kind2 == "OK" and len(polls2) == 4, f"{kind2}/{len(polls2)}")
+    check("不满足样本计入 polls（可复核）",
+          polls2[1]["last_disconnect"] == "reason(200)", str(polls2[1]))
+
+    # 3) 传输失败 → TRANSPORT，调用方据此不创建 op-E
+    kind3, det3, _ = await S.stability_gate(
+        mk([("TRANSPORT", "timeout:network.status")]), 2, 0.05)
+    check("传输失败 → TRANSPORT", kind3 == "TRANSPORT", f"{kind3}/{det3}")
+
+    # 4) 预算耗尽 → TIMEOUT
+    kind4, det4, _ = await S.stability_gate(
+        mk([bad, bad, bad, bad, bad]), 0.3, 0.05)
+    check("始终不稳定 → TIMEOUT", kind4 == "TIMEOUT", f"{kind4}/{det4}")
+
+    # 5) verified=False 不算稳定
+    nov = dict(good, internet_verified=False)
+    kind5, _, polls5 = await S.stability_gate(mk([good, nov, good, good]),
+                                              3, 0.05)
+    check("verified=False 清零", len(polls5) == 4, f"{kind5}/{len(polls5)}")
+
+    print("[28] 串口诊断分类：只读、不触发重试")
+    import tempfile as _tf
+    d = Path(_tf.mkdtemp(prefix="s6_serial_"))
+    f = d / "serial_ttyUSB1.log"
+    f.write_text("old line owner wait timeout\n", encoding="utf-8")
+    off = f.stat().st_size                      # 标记之后才写入
+    f.write_text("I (1) wifi: owner denied: caller=tryconnect_begin "
+                 "reason=wait_timeout owner=CLEANUP\n", encoding="utf-8")
+    hits = S.serial_hits_since((f, off), ("owner wait timeout",
+                                          "tryconnect busy", "owner=CLEANUP"))
+    check("只命中标记之后的内容", len(hits) == 1 and "owner=CLEANUP" in hits[0],
+          str(hits))
+    hits2 = S.serial_hits_since((None, 0), ("owner=CLEANUP",))
+    check("无日志时不报错且无命中", hits2 == [], str(hits2))
+
+
 async def main():
     await case_lifecycle()
     await case_presence()
@@ -650,6 +711,7 @@ async def main():
     await case_v1132()
     await case_v1132b()
     await case_v1134()
+    await case_stability_gate()
     print(f"\nselftest: {PASS} passed, {FAIL} failed")
     return 0 if FAIL == 0 else 1
 
