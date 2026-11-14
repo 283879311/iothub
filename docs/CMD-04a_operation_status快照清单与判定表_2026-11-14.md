@@ -2,7 +2,7 @@
 
 # CMD-04a · `app_cmd_net_operation_status` 快照清单与分支判定表（2026-11-14）
 
-> 基线：`e1d2058`+（含 49707a9/dc254d5）。评审约束逐条对应：
+> 基线：**`dc254d5`**（评审唯一基线；49707a9/dc254d5 已在 origin/main，e1d2058 仅文档变更不影响 cmd.c——改造前对照以 dc254d5 的函数行为为准）。评审约束逐条对应：
 > 值快照（约束 1）/ 判定完整迁移（约束 2）/ 协议语义（约束 3）/ 栈堆预算（约束 4）/ skew 边界（约束 5）。
 
 ## 1. 快照结构（值快照，零悬空指针）
@@ -26,8 +26,8 @@ typedef struct {
 } app_cmd_net_op_status_snap_t;
 ```
 
-- **sizeof ≈ 148B**（含对齐；编译实测为准）；调用方 = ble_cmd(8192B)/mqtt 任务
-  ——栈增量 <2%（栈水位基线见 §5）；
+- **sizeof = 112B（目标编译器 xtensa esp32 实测，探针法 2026-11-14）**；
+  代码内置 `_Static_assert(sizeof <= 160)` 守卫防字段膨胀；
 - **全部值为拷贝**：operation_id/trial_id/trial_ssid 按字节复制，不含指向
   `s_net_async`/`s_net_trial`/`s_config`/runtime 内部成员的任何指针（约束 1）；
 - 无全局快照对象（约束：不新增全局状态）；`stage_snap_get` 为既有独立锁 API，
@@ -54,7 +54,7 @@ app_cmd_net_job_unlock();
 
 | # | 现锁内判定（dc254d5 行号） | 快照字段 | 锁外判定 | 响应/语义 |
 | --- | --- | --- | --- | --- |
-| 1 | find 失败/get_status 失败（:815） | `op_found=false` | 同 | `not_found`，NULL |
+| 1 | find 失败/get_status 失败/**身份复核失败**（:815 + **P1**：get_status 后复核 `st.id == 请求 id`——find 与 get_status 之间槽位可能被回收复用） | `op_found=false`（含复核失败） | 同 | `not_found`，NULL |
 | 2 | MQTT owner 校验（:820-824） | `ctx->source`（调用方参数）+ `snap.owner` | 同 | `not_found`，NULL |
 | 3 | HTTP owner 校验（:826-830） | 同上 | 同 | `not_found`，NULL |
 | 4 | finished_uptime_ms 条件（terminal && terminal_ms>0） | `snap.state` + `snap.terminal_ms` | 同 | 加法字段 |
@@ -87,14 +87,20 @@ id 幂等重试 → 同一 op 同一 generation。快照携带 owner 供校验�
 
 ## 5. 栈/堆预算（约束 4）
 
-| 项 | 基线（改版前实测 `stack_baseline_pre_04a.json`，1.3-2ef2a38 设备） |
+| 项 | 基线（改版前实测 `stack_baseline_pre_04a.json`，1.3-2ef2a38 设备，2026-11-14） |
 | --- | --- |
-| 任务栈最低剩余 | min_free=976B（IDLE1）；low 列表：tcpip=1960 mqtt_telemetry=1636 mqtt_boost=1304 mqtt_restart=1788 app_diag=1716 TmrSvc=1660 IDLE0=980 IDLE1=976 |
-| 快照结构 | sizeof ≈ 148B（ble_cmd 8192B / mqtt 任务栈增量 <2%；IDLE 不受影响——快照仅在命令任务栈上） |
+| **调用任务 1：ble_cmd**（8192B 栈，operation_status 的 BLE 调用方） | **未出现在 <2KB low 列表** ⇒ 栈余量 >2KB；net 增量 ≈ +36B（快照 112B − 被替换的 status 局部 ~72B + bool×4） |
+| **调用任务 2：mqtt 事件任务**（esp-mqtt 内建栈，operation_status 的 MQTT 查询调用方） | 同上：未出现在 low 列表 ⇒ 余量 >2KB |
+| 全局最低（IDLE1=976B） | 与本改造无关——快照不在 IDLE 栈上分配；不作为本项验收口径 |
 | 堆 | 改造前后 job 锁内均无堆分配；cJSON 分配总量不变（同字段集） |
 
-烧录窗口复测项：同任务栈 HWM 对照（≥基线 -148B 预算内）、heap largest 无回退、
-锁内复制/锁外构建耗时实测（替换"设计预期 <10µs"）。
+**验收口径修正（P2，评审指出）**：全局 min_free(IDLE1) 不能证明调用任务栈安全；
+改为——①烧录窗口按 `device.status.stack.low` 列表对照：ble_cmd / mqtt 事件任务
+**不得新出现在 low 列表**（即保持 >2KB）；②如固件后续暴露 per-task HWM，
+按任务逐一对照改造前后值。
+
+烧录窗口复测项：锁内复制/锁外构建耗时实测（替换"设计预期 <10µs"）、heap
+largest 无回退。
 
 ## 6. 失败路径与资源释放（约束 3）
 
@@ -105,6 +111,10 @@ id 幂等重试 → 同一 op 同一 generation。快照携带 owner 供校验�
 - 无敏感字段（04a 无 password；04c 的 sta_password 生命周期在 04c 清单单独定义）。
 
 ## 7. skew 边界（约束 5）
+
+> **更正记录（第二轮评审后）**：本清单初稿的基线口径（e1d2058+）、sizeof 估算
+> （≈148B）、栈基线（全局 IDLE1）已按第二轮评审意见更正为 dc254d5 口径 /
+> 目标编译器实测 112B / 按调用任务口径——见 §0/§1/§5。
 
 - runtime 域 8 字段：单锁一致 ✓；
 - trial 域 2 字段 + 匹配判定：单锁一致 ✓；

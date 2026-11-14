@@ -820,6 +820,12 @@ typedef struct {
     char trial_ssid[33]; /* 与 app_cmd_net_trial_t.ssid 同宽 */
 } app_cmd_net_op_status_snap_t;
 
+/* 栈预算守卫(评审约束 4):目标编译器实测 sizeof=112B(xtensa esp32 探针，
+ * 2026-11-14)；断言上限 160B 防字段膨胀。调用任务 ble_cmd(8192B)/mqtt 事件
+ * 任务均 >2KB 余量(low 列表未含)，net 增量约 +36B。 */
+_Static_assert(sizeof(app_cmd_net_op_status_snap_t) <= 160,
+               "op status snapshot exceeds stack budget");
+
 /* 唯一 job_lock 临界区:find/get_status/job 域/trial 域一次捕获,零 cJSON。
  * 字符串全部按值复制——不含指向共享状态的指针(评审约束 1)。 */
 static void app_cmd_net_op_status_capture(const char *operation_id,
@@ -832,7 +838,13 @@ static void app_cmd_net_op_status_capture(const char *operation_id,
 
     app_cmd_net_job_lock();
     op = app_operation_find(operation_id);
-    snap->op_found = (op != NULL && app_operation_get_status(op, &st));
+    /* P1(评审):find 与 get_status 之间,终态槽位可能被其他任务的
+     * operation_start 回收复用(满表覆盖/600s 到期)——get_status 读到的可能是
+     * 新 operation 的状态。必须复核 st.id == 请求 id,否则本次捕获判
+     * not_found:不得用新 op 的状态构造响应(否则响应 operation_id 与请求
+     * 错配,且 trial/stages 与状态来自不同 op——逻辑不可能组合)。 */
+    snap->op_found = (op != NULL && app_operation_get_status(op, &st) &&
+                      strcmp(st.id, operation_id) == 0);
     if (snap->op_found) {
         snap->state = st.state;
         snap->error = st.error;
