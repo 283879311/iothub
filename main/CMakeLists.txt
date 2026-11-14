@@ -25,6 +25,7 @@ idf_component_register(
         mbedtls
         mqtt
         nvs_flash
+        spi_flash
 )
 if(APP_BLE_PEER_TEST)
     target_compile_definitions(${COMPONENT_LIB} PRIVATE APP_BLE_PEER_TEST=1)

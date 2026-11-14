@@ -3,7 +3,9 @@
 #include <string.h>
 
 #include "cJSON.h"
+#include "esp_flash.h"
 #include "esp_heap_caps.h"
+#include "esp_image_format.h"
 #include "esp_log.h"
 #include "esp_ota_ops.h"
 #include "esp_partition.h"
@@ -1321,6 +1323,32 @@ static cJSON *app_cmd_build_uart_runtime(void)
     return root;
 }
 
+/* 运行镜像长度（device.status.partition.used/free 用）。
+ * esp_image_get_metadata 只解析分段头、不做 SHA 校验，比 esp_image_verify 便宜；
+ * 结果进程内缓存，避免每次 status 都读 flash。返回 0 = 取不到（字段省略）。 */
+static size_t app_cmd_running_image_len(void)
+{
+    static size_t cached = 0;
+    const esp_partition_t *p;
+    esp_partition_pos_t pos;
+    esp_image_metadata_t meta;
+
+    if (cached != 0) {
+        return cached;
+    }
+    p = esp_ota_get_running_partition();
+    if (p == NULL) {
+        return 0;
+    }
+    pos.offset = p->address;
+    pos.size = p->size;
+    if (esp_image_get_metadata(&pos, &meta) != ESP_OK || meta.image_len == 0) {
+        return 0;
+    }
+    cached = (size_t)meta.image_len;
+    return cached;
+}
+
 static cJSON *app_cmd_build_device_status(void)
 {
     const esp_app_desc_t *desc = esp_app_get_description();
@@ -1425,9 +1453,23 @@ static cJSON *app_cmd_build_device_status(void)
     running = esp_ota_get_running_partition();
     partition = cJSON_AddObjectToObject(root, "partition");
     if (partition != NULL && running != NULL) {
+        uint32_t flash_size = 0;
+        size_t image_len = app_cmd_running_image_len();
+
         cJSON_AddStringToObject(partition, "label", running->label);
         cJSON_AddNumberToObject(partition, "address", (double)running->address);
         cJSON_AddNumberToObject(partition, "size", (double)running->size);
+        if (image_len > 0) {
+            cJSON_AddNumberToObject(partition, "used", (double)image_len);
+            if (running->size > image_len) {
+                cJSON_AddNumberToObject(partition, "free", (double)(running->size - image_len));
+            }
+        }
+        /* 整片 flash 容量（4MB 等）；分区 size 之外还有 bootloader/分区表/otadata。
+         * 加法字段，旧客户端忽略。 */
+        if (esp_flash_get_size(NULL, &flash_size) == ESP_OK && flash_size > 0) {
+            cJSON_AddNumberToObject(partition, "flash_total", (double)flash_size);
+        }
         if (esp_ota_get_state_partition(running, &ota_state) == ESP_OK) {
             cJSON_AddStringToObject(partition, "ota_state",
                                     app_cmd_ota_state_name(ota_state));
