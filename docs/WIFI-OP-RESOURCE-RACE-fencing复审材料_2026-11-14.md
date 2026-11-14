@@ -102,7 +102,33 @@
 
 | # | 发现 | 评级 |
 | --- | --- | --- |
-| 1 | run 入口早退路径残留 active_op_id（log-only） | 提请裁决（补 2 行或接受） |
+| 1 | run 入口早退路径残留 active_op_id（log-only） | 提请裁决——补丁提案见 §5（补 2 行或接受现状） |
+
+## 5. 自查项 1 的裁决就绪提案（run 入口早退残留）
+
+现状（patch 行 27-31，wifi.c 无涉）：
+
+```c
+app_wifi_set_active_operation(app_operation_id(op));
+if (!app_operation_get_status(op, &st0)) {
+    return ESP_ERR_INVALID_ARG;          /* ← 此路径不清登记，id 残留 */
+}
+```
+
+补丁提案（+2 行，clear 与 set 对偶，按 id 匹配语义一致）：
+
+```c
+app_wifi_set_active_operation(app_operation_id(op));
+if (!app_operation_get_status(op, &st0)) {
+    app_wifi_clear_active_operation(app_operation_id(op));
+    return ESP_ERR_INVALID_ARG;
+}
+```
+
+影响面：仅该早退路径的日志 op 字段；无 owner/cleanup/generation 行为变化。
+**评审可选**：(a) 接受现状（log-only，下一 op set 覆盖）；(b) 采纳提案
+（+2 行，build_sha 变化需重新出镜像与 -fstack-usage 对照）。任一裁决均
+不阻塞其余 hunks 的签收。
 | 2 | `s_wifi_auto_task_arg` 单实例竞态沿用既有单飞栅栏，本差量未放宽 | 既有机制，无新增风险 |
 | 3 | 提交信息基线（185e029）与实际父提交（ebba25c）不一致（中间仅 docs） | 已澄清，无代码影响 |
 | 4 | 主机测试计数此前表述为"19 检"，实为新增 19/总数 59 | 已更正 |
