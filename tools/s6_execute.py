@@ -59,6 +59,7 @@ _repoint_state = RP_NA
 _recovery_state = None
 _origin_snapshot = None
 _results = {"op_e": "NOT_RUN", "op_v": "NOT_RUN"}
+_broker = None                   # P0：口令/broker 启动失败时 finally 也能安全判断
 
 # Session 日志脱敏口径（评审 P2）：本 harness 的 TX/RX 记录为 JSON 脱敏截断流
 # （token/password 字段掩码、单帧截断 800/1200 字符），**不是原始字节流**；
@@ -197,7 +198,7 @@ def load_password():
     txt = Path(".local/test-env.md").read_text(encoding="utf-8")
     m = re.search(r"CMCC-502\s+PASSWORD:(\S+)", txt)
     if not m:
-        raise SystemExit("[fatal] test-env.md 无 CMCC-502 口令行")
+        raise RuntimeError("test-env.md 无 CMCC-502 口令行")   # P1：由外层 except 记 fatal 并进 finally
     return m.group(1)
 
 
@@ -619,7 +620,13 @@ async def main():
                 f"人工接管后可 kill {_broker.pid}")
         elif _broker is not None:
             _broker.terminate()
-            log("[finally] mini_broker 已终止")
+            try:
+                _broker.wait(timeout=5)
+                log("[finally] mini_broker 已终止（wait 确认退出）")
+            except subprocess.TimeoutExpired:
+                _broker.kill()
+                _broker.wait(timeout=5)
+                log("[finally] mini_broker terminate 超时 → kill 后确认退出")
         # 结束日志全部落盘并关闭后，再生成 SHA256SUMS（哈希后不再改文件）
         log(f"[done] abort={_abort} repoint={_repoint_state} "
             f"recovery={_recovery_state} results={_results}")
