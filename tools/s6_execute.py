@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""S6 现场预采集执行脚本 v10（改用外部 EMQX，不自建 broker；窄授权：仅 MQTT async expired
+"""S6 现场预采集执行脚本 v11（MQTT 轮询 + 分阶段恢复；窄授权：仅 MQTT async expired
 （须先观察到 GOT_IP）+ op-V job-clear 验证）。
 
 v4→v5（评审阻断项与缺口）：
@@ -14,6 +14,12 @@ P1 全部退出路径显式设置 _results；000_end_state 写入 results；退�
    两项 PASS **且** 设备恢复完成（改指向已尝试时必须 RECOVERY_CONFIRMED）；
 P2 session_trace 实际生成（stdout Tee：脱敏截断 TX/RX 跟踪流，非原始字节流，
    口径见 docstring）；结束日志全部落盘并关闭后再生成 SHA256SUMS。
+v10→v11（2026-11-15 评审裁决）：① WiFi 切换期轮询改走 **MQTT RPC**（EMQX，
+   独立 client_id/唯一请求 ID 严格匹配/串行/ACL 预检/仅查本轮 op/传输失败记
+   POLL_TRANSPORT_FAILED 绝不重发 tryconnect）；② 恢复分阶段 R1–R5，仅全部
+   通过才 RECOVERY_CONFIRMED，无法确认记 RECOVERY_UNCONFIRMED；③ 零自动重试
+   （connect_failed 维持立即 STOP，ACCEPTED_TTL 例外默认关闭）；④ 目标 SSID
+   必须显式传入且不得等于持久/当前 SSID。
 v9→v10（2026-11-14 现场裁决）：**删除本地 mini_broker**（无自建服务、无残留
    进程风险）；临时指向与 harness 接入点改为 **EMQX 139.9.93.245:1883**
    （匿名已实测）；设备在场检测改 **broker 侧遥测订阅**（v1/devices/me/#，
@@ -36,16 +42,17 @@ import asyncio
 import hashlib
 import json
 import math
+import os
 import re
 import sys
 import time
+import uuid
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "ble_p0"))
 
 from bleak import BleakClient  # noqa: E402
 
-from mqtt_v1_r41 import MqttV1  # noqa: E402
 from p0_acceptance import Session, scan_filtered, sanitize  # noqa: E402
 
 OUT = Path("artifacts/cmd04_flash_20261114/s6_round3")
@@ -59,7 +66,9 @@ TOKEN_LIMIT_S = 480.0
 ALLOWED_PERSIST_SSID = ("CMCC-502", "TQ2026")
 
 RP_NA, RP_ATT, RP_CONF = "NOT_ATTEMPTED", "ATTEMPTED_OR_UNKNOWN", "REPOINT_CONFIRMED"
-RC_OK, RC_FAIL = "RECOVERY_CONFIRMED", "RECOVERY_FAILED"
+RC_OK = "RECOVERY_CONFIRMED"
+RC_FAIL = "RECOVERY_FAILED"
+RC_UNCONF = "RECOVERY_UNCONFIRMED"
 
 _log = None
 _token_origin = None
@@ -69,6 +78,8 @@ _repoint_state = RP_NA
 _recovery_state = None
 _origin_snapshot = None
 _results = {"op_e": "NOT_RUN", "op_v": "NOT_RUN"}
+_op_registry = set()    # 仅本轮创建的 op-ID（operation.get 只查这些）
+_ssid = None            # 目标测试 SSID（必须显式传入且不等于持久/当前）
 
 # Session 日志脱敏口径（评审 P2）：本 harness 的 TX/RX 记录为 JSON 脱敏截断流
 # （token/password 字段掩码、单帧截断 800/1200 字符），**不是原始字节流**；
@@ -208,13 +219,129 @@ def scan_five_conditions(sc, frag_sizes):
     return (not reasons), reasons
 
 
-def mqtt_req(m, cmd, args=None, wait=10.0):
-    req = {"id": f"mq-{m._next_rid()}", "version": "1.0", "cmd": cmd,
-           "args": args or {}}
-    resp, _ = m.send(req, wait=wait)
-    save(f"{cmd.replace('.', '_')}_mqtt", "mqtt", req,
-         resp or {"_note": "no response"})
-    return resp
+class Rpc:
+    """MQTT RPC 轮询通道（v11）：独立 client_id、唯一请求 ID、串行、严格匹配。
+    传输层失败一律返回 ("TRANSPORT", 原因)——绝不与设备语义终态混淆。"""
+
+    def __init__(self, host, port):
+        import paho.mqtt.client as mqtt
+        self._mqtt = mqtt
+        self.host, self.port = host, port
+        self.client_id = f"iothub-harness-{uuid.uuid4().hex[:8]}"
+        self.cli = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2,
+                               client_id=self.client_id,
+                               protocol=mqtt.MQTTv311)
+        self._waiters = {}         # rid -> (asyncio.Event, holder)
+        self._suback = None
+        self._loop = None
+        self._lock = asyncio.Lock()
+        self.seq = 0
+        self.cli.on_message = self._on_msg
+        self.cli.on_subscribe = self._on_suback
+        self.cli.on_disconnect = self._on_disc
+        self.disconnected = False
+
+    def _on_suback(self, _c, _u, mid, reason_codes, _props=None):
+        self._suback = list(reason_codes or [])
+
+    def _on_disc(self, _c, _u, _flags, _rc, _props=None):
+        self.disconnected = True
+
+    def _on_msg(self, _c, _u, msg):
+        try:
+            obj = json.loads(msg.payload.decode("utf-8", "replace"))
+        except Exception:  # noqa: BLE001
+            return
+        rid = obj.get("id")
+        topic_rid = msg.topic.rsplit("/", 1)[-1]
+        # 严格匹配：body.id 必须等于在飞 rid，且 topic 尾段一致（防串台）
+        if rid not in self._waiters or topic_rid != str(rid):
+            return
+        ev, holder = self._waiters[rid]
+        holder["resp"] = obj
+        if self._loop is not None:
+            self._loop.call_soon_threadsafe(ev.set)
+
+    def start(self, loop):
+        self._loop = loop
+        self.cli.connect(self.host, self.port, keepalive=20)
+        self.cli.subscribe("v1/devices/me/rpc/response/+", 1)
+        self.cli.loop_start()
+
+    def acl_preflight(self):
+        """ACL/通路预检（改指向前执行）：订阅授权 + 发布 PUBACK。
+        匿名回环成功 ≠ 设备主题权限；此两项是可得的最强代理证据。"""
+        deadline = time.monotonic() + 10
+        while time.monotonic() < deadline and self._suback is None:
+            time.sleep(0.2)
+        sub_ok = bool(self._suback) and all(
+            (int(getattr(rc, "value", rc)) != 128) for rc in self._suback)
+        topic = f"v1/devices/me/rpc/request/preflight-{uuid.uuid4().hex[:6]}"
+        info = self.cli.publish(topic, b'{"id":"preflight","version":"1.0",'
+                                       b'"cmd":"device.info","args":{}}', qos=1)
+        try:
+            info.wait_for_publish(timeout=8)
+        except Exception:  # noqa: BLE001
+            pass
+        pub_ok = info.is_published() and info.rc == self._mqtt.MQTT_ERR_SUCCESS
+        return (sub_ok, pub_ok, {"suback": [str(r) for r in (self._suback or [])],
+                                 "pub_rc": info.rc, "client_id": self.client_id})
+
+    async def call(self, cmd, args=None, timeout=12.0):
+        """串行 RPC。返回 ("OK", data) 或 ("TRANSPORT", 原因)。"""
+        async with self._lock:
+            if self.disconnected or not self.cli.is_connected():
+                return ("TRANSPORT", "emqx_disconnected")
+            self.seq += 1
+            rid = f"hp-{self.seq}-{uuid.uuid4().hex[:4]}"
+            ev = asyncio.Event()
+            self._waiters[rid] = (ev, {})
+            try:
+                payload = json.dumps({"id": rid, "version": "1.0", "cmd": cmd,
+                                      "args": args or {}},
+                                     separators=(",", ":")).encode()
+                info = self.cli.publish(
+                    f"v1/devices/me/rpc/request/{rid}", payload, qos=1)
+                try:
+                    info.wait_for_publish(timeout=5)
+                except Exception:  # noqa: BLE001
+                    pass
+                save(f"{cmd.replace('.', '_')}_mqtt", "mqtt",
+                     {"id": rid, "cmd": cmd, "args": args or {},
+                      "client_id": self.client_id},
+                     {"_note": "pending"})
+                try:
+                    await asyncio.wait_for(ev.wait(), timeout=timeout)
+                except (asyncio.TimeoutError, TimeoutError):
+                    return ("TRANSPORT", f"timeout:{cmd}")
+                resp = self._waiters[rid][1].get("resp") or {}
+                if resp.get("ok") is not True and "error" not in resp:
+                    return ("TRANSPORT", f"malformed:{cmd}")
+                return ("OK", resp)
+            finally:
+                self._waiters.pop(rid, None)
+
+    async def op_state(self, op_id):
+        """仅查询本轮创建的 op（评审条件 5）。"""
+        if op_id not in _op_registry:
+            return ("TRANSPORT", f"op_not_in_registry:{op_id}")
+        kind, resp = await self.call("operation.get", {"operation_id": op_id})
+        if kind != "OK":
+            return (kind, resp)
+        return ("OK", (resp.get("data") or {}))
+
+    async def status(self):
+        kind, resp = await self.call("network.status", {})
+        if kind != "OK":
+            return (kind, resp)
+        return ("OK", (resp.get("data") or {}))
+
+    def stop(self):
+        try:
+            self.cli.loop_stop()
+            self.cli.disconnect()
+        except Exception:  # noqa: BLE001
+            pass
 
 
 class Presence:
@@ -255,22 +382,32 @@ class Presence:
             pass
 
 
-async def rpc_ready(m, tries=3):
-    """接入后再做 RPC 探测，确认收/发通路可用（不当作在场判据）。"""
-    for _ in range(tries):
-        r = mqtt_req(m, "device.info", wait=6.0)
-        if r is not None:
-            return True
-        await asyncio.sleep(3)
-    return False
-
-
-def load_password():
+def load_password(ssid):
+    """按目标 SSID 从 test-env.md 取口令（大小写不敏感，兼容 Password:）。"""
     txt = Path(".local/test-env.md").read_text(encoding="utf-8")
-    m = re.search(r"CMCC-502\s+PASSWORD:(\S+)", txt)
+    m = re.search(re.escape(ssid) + r"\s+PASSWORD:\s*(\S+)", txt, re.IGNORECASE)
     if not m:
-        raise RuntimeError("test-env.md 无 CMCC-502 口令行")   # P1：由外层 except 记 fatal 并进 finally
+        raise RuntimeError(f"test-env.md 无 {ssid} 口令行")
     return m.group(1)
+
+
+async def ssid_precheck(sess, ssid):
+    """评审裁决：目标 SSID 必须 ≠ 持久 SSID 且 ≠ 当前已连 SSID；否则拒绝运行。"""
+    cfg = (await ble(sess, "config.get")).get("data", {})
+    net = (await ble(sess, "network.status")).get("data", {})
+    persist = ((cfg.get("network") or {}).get("sta_ssid") or "")
+    cur = (net.get("connected_ssid") or "")
+    (OUT / "000_ssid_precheck.json").write_text(json.dumps(
+        {"target": ssid, "persistent_ssid": persist, "connected_ssid": cur},
+        ensure_ascii=False, indent=1), encoding="utf-8")
+    if ssid == persist:
+        stop(f"目标 SSID 等于持久 SSID（{persist}）——拒绝运行")
+        return False
+    if ssid == cur:
+        stop(f"目标 SSID 等于当前已连 SSID（{cur}）——拒绝运行")
+        return False
+    log(f"[gate] SSID 前置通过：目标={ssid} 持久={persist} 当前={cur}")
+    return True
 
 
 def serial_anchor_check():
@@ -441,50 +578,119 @@ async def ensure_session(tries=3):
     return None
 
 
+async def cleanup_confirm_mqtt(rpc, budget_s=120.0, need_consecutive=2):
+    """cleanup 完成窗口（MQTT 轮询）：硬 deadline，连续两次满足 STA+trial，
+    逐轮落盘；传输失败记 POLL_TRANSPORT_FAILED 并返回 None（区别于未达成）。"""
+    deadline = time.monotonic() + budget_s
+    polls, streak = [], 0
+    path = OUT / "000_cleanup_window.json"
+    def flush(result):
+        path.write_text(json.dumps({"result": result, "polls": polls},
+                                   ensure_ascii=False, indent=1), encoding="utf-8")
+    flush("RUNNING")
+    while True:
+        remain = deadline - time.monotonic()
+        if remain <= 3.0:
+            flush("CLEANUP_UNCONFIRMED")
+            return False
+        await asyncio.sleep(min(10.0, max(1.0, remain / 3)))
+        kind, ns = await rpc.status()
+        if kind != "OK":
+            flush(f"POLL_TRANSPORT_FAILED:{ns}")
+            log(f"[cleanup] POLL_TRANSPORT_FAILED（{ns}）——不判为 cleanup 失败")
+            return None
+        d = ns or {}
+        poll = {"t": time.strftime("%H:%M:%S"), "mono": round(time.monotonic(), 3),
+                "sta": d.get("connected_ssid"),
+                "connected": d.get("sta_connected"),
+                "trial": ((d.get("trial") or {}).get("state"))}
+        polls.append(poll)
+        flush("RUNNING")
+        good = (poll["connected"] is True
+                and poll["sta"] in ALLOWED_PERSIST_SSID
+                and poll["trial"] == "idle")
+        streak = streak + 1 if good else 0
+        if streak >= need_consecutive:
+            flush("CONFIRMED")
+            log(f"[cleanup] 确认（连续{streak}次，STA={poll['sta']}）")
+            return True
+
+
 async def do_recovery(sess=None):
-    """专用恢复路径：除 NOT_ATTEMPTED 外都尝试；目标 = S0 实测核验快照。
-    v10：会话断链时先 ensure_session() 重连（≤3 次）再写回。"""
+    """分阶段恢复（评审要求 R1–R5）：只有全部确认才 RECOVERY_CONFIRMED。
+    R1 会话获取（可否重连）/ R2 写回并确认响应 / R3 独立回读 /
+    R4 broker 侧确认（EMQX 静默）/ R5 设备侧 mqtt_connected 二次确认。
+    任何一项无法确认 → RECOVERY_UNCONFIRMED（区别于写入被拒 RECOVERY_FAILED）。"""
     global _recovery_state
     if _repoint_state == RP_NA:
         _recovery_state = RC_OK
         log("[recover] 未改指向，无需恢复")
         return
+    stages = {}
+    def finish(state, why):
+        global _recovery_state
+        _recovery_state = state
+        (OUT / "000_recovery_stages.json").write_text(json.dumps(
+            {"stages": stages, "final": state, "reason": why},
+            ensure_ascii=False, indent=1), encoding="utf-8")
+        log(f"[recover] {state}：{why}")
     try:
+        # R1 会话获取
         s = await ensure_session()
         if s is None:
-            raise RuntimeError("BLE 重连 3 次失败")
+            stages["R1_session"] = "FAIL"
+            finish(RC_UNCONF, "BLE 重连 3 次失败")
+            return
+        stages["R1_session"] = "OK"
         if not await _token_gate(s):
-            raise RuntimeError("token renewal failed")
-        await recover_cmd(s, "config.set",
-                          {"patch": {"mqtt_host": _origin_snapshot[0],
-                                     "mqtt_port": _origin_snapshot[1]}})
-        ok = False
-        for _ in range(10):
-            await asyncio.sleep(8)
-            ns = await recover_cmd(s, "network.status")
-            if (ns.get("data") or {}).get("mqtt_connected") is True:
-                ok = True
-                break
+            stages["R1_session"] = "TOKEN_FAIL"
+            finish(RC_UNCONF, "token 续签失败")
+            return
+        # R2 写回并确认响应（要求 changed 含目标键）
+        r = await recover_cmd(s, "config.set",
+                              {"patch": {"mqtt_host": _origin_snapshot[0],
+                                         "mqtt_port": _origin_snapshot[1]}})
+        changed = ((r or {}).get("data") or {}).get("changed") or []
+        if (r or {}).get("ok") is not True:
+            stages["R2_write"] = f"REJECTED:{json.dumps(r)[:120]}"
+            finish(RC_FAIL, "设备拒绝写回")
+            return
+        stages["R2_write"] = f"OK changed={changed}"
+        # R3 独立回读
         back = await recover_cmd(s, "config.get")
-        mq = (back.get("data") or {}).get("mqtt") or {}
+        mq = ((back or {}).get("data") or {}).get("mqtt") or {}
         readback = (mq.get("mqtt_host"), mq.get("mqtt_port"))
-        ns2 = await recover_cmd(s, "network.status")   # 回读邻近重采
-        ok2 = (ns2.get("data") or {}).get("mqtt_connected") is True
-        if ok and ok2 and readback == _origin_snapshot:
-            _recovery_state = RC_OK
-            log(f"[recover] 成功：mqtt_connected=true(×2) 且回读={readback}")
-        else:
-            _recovery_state = RC_FAIL
-            log(f"[recover] 失败：mqtt_connected={ok}/{ok2} 回读={readback}"
-                f"（不宣称恢复成功；设备仍指向 EMQX {EMQX_HOST}:{EMQX_PORT}，"
-                f"人工接管写回 TB）")
+        stages["R3_readback"] = f"{readback}"
+        if readback != _origin_snapshot:
+            finish(RC_UNCONF, f"回读不符 {readback} != {_origin_snapshot}")
+            return
+        # R4 broker 侧：EMQX 上设备静默 ≥30s
+        pres = Presence(EMQX_HOST, EMQX_PORT)
+        try:
+            await asyncio.sleep(30)
+            recent = [t for t, _ in pres.seen if t >= time.monotonic() - 30]
+            stages["R4_emqx_silence"] = f"msgs_last_30s={len(recent)}"
+            if recent:
+                finish(RC_UNCONF, "EMQX 仍有设备消息（可能未真正切回 TB）")
+                return
+        finally:
+            pres.stop()
+        # R5 设备侧二次确认（与 R3 间隔 ≥5s）
+        await asyncio.sleep(5)
+        ns = await recover_cmd(s, "network.status")
+        conn = (ns.get("data") or {}).get("mqtt_connected")
+        stages["R5_mqtt_connected"] = str(conn)
+        if conn is not True:
+            finish(RC_UNCONF, f"设备侧 mqtt_connected={conn}")
+            return
+        finish(RC_OK, "R1–R5 全部通过")
     except Exception as exc:  # noqa: BLE001
-        _recovery_state = RC_FAIL
-        log(f"[recover] 异常 {type(exc).__name__}: {str(exc)[:120]}——"
-            f"BLE 重连/恢复失败；设备可能仍指向 EMQX，需人工接管")
+        stages["exception"] = f"{type(exc).__name__}: {str(exc)[:120]}"
+        finish(RC_UNCONF, f"恢复过程异常 {type(exc).__name__}")
 
 
 async def run_round(sess, pw):
+    """v11：门禁 → EMQX ACL 预检 → 改指向 → 在场 → MQTT 轮询（op-E/cleanup/op-V）。"""
     global _repoint_state, _origin_snapshot
     serial_anchor_check()
     g1 = await identity_gate(sess, "S0-first")
@@ -516,154 +722,178 @@ async def run_round(sess, pw):
         return
     if _abort:
         return
-    log("[gate] 通过（本轮：MQTT async expired[须 GOT_IP] + op-V）")
+    # ---- SSID 前置（评审裁决 §5）：目标 ≠ 持久 ≠ 当前 ----
+    if not await ssid_precheck(sess, _ssid):
+        _results["op_e"] = _results["op_v"] = "NOT_RUN"
+        return
+    log("[gate] 通过（本轮：MQTT async expired[须 GOT_IP] + op-V；轮询走 MQTT）")
 
-    # ---- 在场监听先起（broker 侧证据），再改指向 ----
-    pres = None
-    m = None
+    # ---- EMQX ACL/通路预检（改指向之前；此时设备仍在 TB，不会被误触发）----
+    rpc = Rpc(EMQX_HOST, EMQX_PORT)
     try:
-        pres = Presence(EMQX_HOST, EMQX_PORT)
+        rpc.start(asyncio.get_running_loop())
     except Exception as exc:  # noqa: BLE001
         stop(f"无法连接 EMQX {EMQX_HOST}:{EMQX_PORT} —— {type(exc).__name__}")
         _results["op_e"] = _results["op_v"] = "NOT_RUN"
         return
-    repoint_mono = time.monotonic()
-    # ---- 改指向 EMQX：ATTEMPTED 前置 → 成功回包+回读双重确认，否则立即 STOP ----
-    _repoint_state = RP_ATT
-    r = await ble(sess, "config.set",
-                  {"patch": {"mqtt_host": EMQX_HOST, "mqtt_port": EMQX_PORT}})
-    conf = False
-    if (r or {}).get("ok") is True:
-        back = await ble(sess, "config.get")
-        mq = ((back or {}).get("data") or {}).get("mqtt") or {}
-        if (mq.get("mqtt_host"), mq.get("mqtt_port")) == (EMQX_HOST, EMQX_PORT):
-            conf = True
-    _repoint_state = RP_CONF if conf else RP_ATT
-    if not conf:
-        pres.stop()
-        stop("改指向未获成功回包及配置回读双重确认——不进入 op-E")
+    try:
+        pres = Presence(EMQX_HOST, EMQX_PORT)
+    except Exception as exc:  # noqa: BLE001
+        rpc.stop()
+        stop(f"无法建立 EMQX 在场监听 —— {type(exc).__name__}")
         _results["op_e"] = _results["op_v"] = "NOT_RUN"
         return
-    log(f"[S4] 改指向已确认 → {EMQX_HOST}:{EMQX_PORT}（state={_repoint_state}）")
     try:
-        m = MqttV1(f"{EMQX_HOST}:{EMQX_PORT}")
-        # 在场判据 = broker 侧收到设备任何 v1/devices/me/# 消息（240s 覆盖 6 级 backoff）
+        sub_ok, pub_ok, acl_ev = rpc.acl_preflight()
+        (OUT / "000_acl_preflight.json").write_text(json.dumps(
+            {"subscribe_ok": sub_ok, "publish_ok": pub_ok, **acl_ev},
+            ensure_ascii=False, indent=1), encoding="utf-8")
+        log(f"[gate] EMQX ACL 预检 sub={sub_ok} pub={pub_ok} client_id={rpc.client_id}")
+        if not (sub_ok and pub_ok):
+            stop("EMQX ACL/通路预检失败（设备主题权限未证实）——不进入测试")
+            _results["op_e"] = _results["op_v"] = "NOT_RUN"
+            return
+
+        # ---- 改指向 EMQX ----
+        repoint_mono = time.monotonic()
+        _repoint_state = RP_ATT
+        r = await ble(sess, "config.set",
+                      {"patch": {"mqtt_host": EMQX_HOST, "mqtt_port": EMQX_PORT}})
+        conf = False
+        if (r or {}).get("ok") is True:
+            back = await ble(sess, "config.get")
+            mq = ((back or {}).get("data") or {}).get("mqtt") or {}
+            if (mq.get("mqtt_host"), mq.get("mqtt_port")) == (EMQX_HOST, EMQX_PORT):
+                conf = True
+        _repoint_state = RP_CONF if conf else RP_ATT
+        if not conf:
+            stop("改指向未获成功回包及配置回读双重确认——不进入 op-E")
+            _results["op_e"] = _results["op_v"] = "NOT_RUN"
+            return
+        log(f"[S4] 改指向已确认 → {EMQX_HOST}:{EMQX_PORT}")
+
         if not await pres.wait(240.0, since=repoint_mono):
             stop("设备未在 240s 内接入 EMQX（broker 侧无遥测）")
             _results["op_e"] = _results["op_v"] = "NOT_RUN"
             return
         log(f"[S4] broker 侧确认设备接入（首条 {pres.seen[-1][1]}）")
-        if not await rpc_ready(m):
-            stop("设备已接入但 RPC 通路无响应")
-            _results["op_e"] = _results["op_v"] = "NOT_RUN"
+
+        # ---- op-E：MQTT 创建 + MQTT 轮询 ----
+        kind, resp = await rpc.call("network.tryconnect",
+                                    {"ssid": _ssid, "password": pw})
+        if kind != "OK":
+            stop(f"POLL_TRANSPORT_FAILED: 创建 op-E 传输失败（{resp}）")
+            _results["op_e"] = "INCONCLUSIVE_TRANSPORT"
+            _results["op_v"] = "NOT_RUN"
             return
-        # ---- async expired（须先 GOT_IP；仅 ACCEPTED_TTL_EXPIRED 可重试一次）----
-        target_hit, classification = False, None
-        opE = None
-        for attempt in (1, 2):
-            r = mqtt_req(m, "network.tryconnect", {"ssid": SSID, "password": pw})
-            opE = ((r or {}).get("data") or {}).get("operation_id")
-            log(f"[S4] attempt{attempt} async 受理 op-E={opE}")
-            if not opE:
-                stop("无 operation_id")
-                _results["op_e"] = "FAILED"
+        opE = ((resp.get("data") or {}) or {}).get("operation_id")
+        if not opE:
+            stop("op-E 受理无 operation_id（设备语义失败）")
+            _results["op_e"] = "FAILED"
+            _results["op_v"] = "NOT_RUN"
+            return
+        _op_registry.add(opE)
+        log(f"[S4] op-E 受理 {opE}（MQTT 源）")
+
+        # ---- 轮询（MQTT）：accepted → GOT_IP → 自然 expired ----
+        tG = time.monotonic()
+        seen_got_ip, terminal, got_ip_mono = False, None, None
+        while time.monotonic() < tG + 600 and not _abort:
+            await asyncio.sleep(10)
+            kind, st = await rpc.op_state(opE)
+            if kind != "OK":
+                stop(f"POLL_TRANSPORT_FAILED: operation.get 传输失败（{st}）")
+                _results["op_e"] = "INCONCLUSIVE_TRANSPORT"
                 return
-            tG = time.monotonic()
-            seen_got_ip, terminal = False, None
-            while time.monotonic() < tG + 420 and not _abort:
-                await asyncio.sleep(10)
-                og = await ble(sess, "operation.get", {"operation_id": opE})
-                cur = (og.get("data") or {}).get("state")
-                ns = await ble(sess, "network.status")
-                tb = ((ns.get("data") or {}).get("trial") or {}).get("state")
-                log(f"[S4] +{time.monotonic()-tG:.0f}s op={cur} trial={tb}")
-                if cur == "got_ip":
-                    if not seen_got_ip:
-                        seen_got_ip = True
-                        log("[S4] GOT_IP 达成（后续 expired 才计目标分支）")
-                    if tb == "idle":
-                        log("[S4] 观察到 trial idle、operation 尚未发布终态；清理原因未判定")
-                if cur == "expired":
-                    terminal = "expired"
-                    break
-                if cur in ("cancelled", "failed"):
-                    terminal = cur
-                    break
-            if _abort:
-                _results["op_e"] = "FAILED"
-                return
-            if terminal is None:
-                stop(f"attempt{attempt} 轮询 420s 无终态（unknown）——不重试")
-                _results["op_e"] = "FAILED"
-                return
-            if terminal in ("cancelled", "failed"):
-                stop(f"attempt{attempt} 异常终态 {terminal}——立即 STOP，不重试")
-                _results["op_e"] = "FAILED"
-                return
-            if terminal == "expired" and seen_got_ip:
-                target_hit = True
-                _results["op_e"] = "PASS"
-                log(f"[S4] attempt{attempt} = GOT_IP→expired（目标分支 PASS）")
+            cur = st.get("state")
+            kind2, ns = await rpc.status()
+            trial = ((ns or {}).get("trial") or {}).get("state") if kind2 == "OK" else "?"
+            log(f"[S4] +{time.monotonic()-tG:.0f}s op={cur} trial={trial}"
+                f"{'' if kind2 == 'OK' else ' (status TRANSPORT)'}")
+            if cur == "got_ip":
+                if not seen_got_ip:
+                    seen_got_ip = True
+                    got_ip_mono = time.monotonic()
+                    log("[S4] GOT_IP 达成（后续 expired 才计目标分支）")
+                if trial == "idle":
+                    log("[S4] 观察到 trial idle、operation 未发布终态；清理原因未判定")
+            if cur in ("expired", "cancelled", "failed"):
+                terminal = cur
                 break
-            classification = "ACCEPTED_TTL_EXPIRED（未达 GOT_IP，不计目标验收）"
-            log(f"[S4] attempt{attempt} {classification}")
-            if attempt == 1:
-                log("[S4] 分类重试（至多一次）；先确认前一次 cleanup 已结束")
-                if not await cleanup_confirm(sess, 120.0, tag="retry-pre"):
-                    stop("重试前 cleanup 确认失败")
-                    _results["op_e"] = "FAILED"
-                    return
-        if not target_hit:
-            stop(f"op-E 未达成 GOT_IP→expired（分类={classification}，重试已用）")
+        if _abort:
+            return
+        if terminal is None:
+            stop("op-E 轮询 600s 无终态（unknown）——不重试")
             _results["op_e"] = "FAILED"
             return
-        # ---- cleanup 完成窗口（真总预算 120s，未确认不进 op-V）----
-        if not await cleanup_confirm(sess, 120.0, tag="post-expired"):
-            stop("cleanup 完成窗口 120s 未确认（STA/trial 未恢复）")
+        if terminal in ("cancelled", "failed"):
+            err = (st.get("error") if isinstance(st, dict) else None)
+            stop(f"op-E 异常终态 {terminal}/{err}——立即 STOP，不重试")
+            _results["op_e"] = "FAILED"
+            return
+        if not seen_got_ip:
+            stop("op-E expired 但未达 GOT_IP（ACCEPTED_TTL_EXPIRED；按裁决不重试）")
+            _results["op_e"] = "ACCEPTED_TTL_EXPIRED"
+            return
+        _results["op_e"] = "PASS"
+        log(f"[S4] op-E GOT_IP→expired（PASS；GOT_IP 至过期 "
+            f"{time.monotonic()-got_ip_mono:.0f}s）")
+
+        # ---- cleanup 确认（MQTT 轮询，硬 deadline 120s，连续两次）----
+        cl = await cleanup_confirm_mqtt(rpc, 120.0)
+        if cl is None:
+            stop("POLL_TRANSPORT_FAILED: cleanup 窗口传输层失败")
+            _results["op_v"] = "INCONCLUSIVE_TRANSPORT"
+            return
+        if cl is False:
+            stop("cleanup 窗口 120s 未确认（STA/trial）——CLEANUP_UNCONFIRMED")
             _results["op_v"] = "SKIPPED"
             return
-        # ---- op-V job-clear 验证 ----
-        sc, frags = await ble_scan_full(sess)
+
+        # ---- op-V（MQTT）----
+        sc, frags = await ble_scan_full(sess)   # 扫描仅 BLE 提供
         cond, reasons = scan_five_conditions(sc, frags)
         if not cond:
             log(f"[S4] 首扫未满足五条件 {reasons}，重扫一次")
             sc, frags = await ble_scan_full(sess)
             cond, reasons = scan_five_conditions(sc, frags)
-        if cond:
-            r = mqtt_req(m, "network.tryconnect", {"ssid": PROBE}, wait=10)
-            opV = ((r or {}).get("data") or {}).get("operation_id")
-            if not opV or opV == opE:
-                stop(f"op-V 受理异常 id={opV}（job 未清或拒绝）")
-                _results["op_v"] = "FAILED"
-                return
-            log(f"[S4] op-V 受理新 id={opV}（≠op-E，job 已清确证）")
-            opv_final, opv_err = None, None
-            for _ in range(12):
-                await asyncio.sleep(5)
-                og = await ble(sess, "operation.get", {"operation_id": opV})
-                opv_final = (og.get("data") or {}).get("state")
-                opv_err = (og.get("data") or {}).get("error")
-                if opv_final in ("failed", "expired", "cancelled"):
-                    break
-            if opv_final == "failed" and opv_err == "ap_not_found":
-                _results["op_v"] = "PASS"
-                log("[S4] op-V PASS：failed/ap_not_found（run 内 clear_job_sync 路径）")
-            else:
-                _results["op_v"] = "FAILED"
-                stop(f"op-V 终态断言失败 {opv_final}/{opv_err}")
-                return
-        else:
+        if not cond:
             _results["op_v"] = "SKIPPED"
-            log(f"[S4] 降级：{reasons}——op-V 放弃，该项记证据降级/未完成"
-                f"（整轮非成功退出）")
+            log(f"[S4] 降级：{reasons}——op-V 放弃（整轮非成功退出）")
+            return
+        kind, resp = await rpc.call("network.tryconnect", {"ssid": PROBE})
+        if kind != "OK":
+            stop(f"POLL_TRANSPORT_FAILED: 创建 op-V 传输失败（{resp}）")
+            _results["op_v"] = "INCONCLUSIVE_TRANSPORT"
+            return
+        opV = ((resp.get("data") or {}) or {}).get("operation_id")
+        if not opV or opV == opE:
+            stop(f"op-V 受理异常 id={opV}（job 未清或拒绝）")
+            _results["op_v"] = "FAILED"
+            return
+        _op_registry.add(opV)
+        log(f"[S4] op-V 受理新 id={opV}（≠op-E，job 已清确证）")
+        opv_final, opv_err = None, None
+        for _ in range(14):
+            await asyncio.sleep(5)
+            kind, st = await rpc.op_state(opV)
+            if kind != "OK":
+                stop(f"POLL_TRANSPORT_FAILED: op-V 轮询传输失败（{st}）")
+                _results["op_v"] = "INCONCLUSIVE_TRANSPORT"
+                return
+            opv_final = st.get("state")
+            opv_err = st.get("error")
+            if opv_final in ("failed", "expired", "cancelled"):
+                break
+        if opv_final == "failed" and opv_err == "ap_not_found":
+            _results["op_v"] = "PASS"
+            log("[S4] op-V PASS：failed/ap_not_found（run 内 clear_job_sync 路径）")
+        else:
+            _results["op_v"] = "FAILED"
+            stop(f"op-V 终态断言失败 {opv_final}/{opv_err}")
     finally:
-        if m is not None:
-            try:
-                m.cli.loop_stop()
-            except Exception:  # noqa: BLE001
-                pass
-        if pres is not None:
-            pres.stop()
+        rpc.stop()
+        pres.stop()
 
 
 class _Tee:
@@ -701,7 +931,12 @@ async def main():
     code = 3
     cli = None
     try:                                   # 启动与运行全部纳入统一收尾
-        pw = load_password()
+        global _ssid
+        _ssid = os.environ.get("IOTHUB_TEST_SSID", "").strip()
+        if not _ssid:
+            raise RuntimeError("未指定目标测试 SSID（环境变量 IOTHUB_TEST_SSID）——"
+                               "评审裁决：必须显式指定且 ≠ 持久/当前 SSID")
+        log(f"[cfg] 目标测试 SSID = {_ssid}（口令从 .local/test-env.md 读取，不落盘）")
         recs = await scan_filtered(10.0)
         hit = [r for r in recs if r["address"].lower() == TARGET.lower()]
         if not hit:
@@ -715,6 +950,7 @@ async def main():
             await sess._connect_once()          # S0 无条件登录 = 计时起点
             _token_origin = time.monotonic()
             log("[S0] 无条件 auth.login（token 计时起点）")
+            pw = load_password(_ssid)          # 口令按目标 SSID 取（失败→外层 except）
             await run_round(sess, pw)
     except Exception as exc:  # noqa: BLE001
         log(f"[fatal] {type(exc).__name__}: {str(exc)[:160]}")
@@ -750,6 +986,7 @@ async def main():
         tests_pass = (_results.get("op_e") == "PASS"
                       and _results.get("op_v") == "PASS" and _abort is None)
         device_ok = (_repoint_state == RP_NA) or (_recovery_state == RC_OK)
+        # device_ok=False 可能是 RECOVERY_FAILED / RECOVERY_UNCONFIRMED——两者都非 0
         (OUT / "000_end_state.json").write_text(json.dumps({
             "results": _results, "tests_pass": tests_pass, "device_ok": device_ok,
             "abort": _abort, "recovery": _recovery_state,
