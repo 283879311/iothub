@@ -302,6 +302,9 @@ async def cleanup_confirm(sess, budget_s=120.0, need_consecutive=2, tag=""):
         except (asyncio.TimeoutError, TimeoutError):
             flush("TIMEOUT")
             return False
+        except Exception as exc:  # noqa: BLE001   # ConnectionLost 等：补记失败原因再抛
+            flush(f"ERROR:{type(exc).__name__}:{str(exc)[:120]}")
+            raise
         remain = deadline - time.monotonic()   # 请求返回后复查
         if remain <= 0:
             flush("TIMEOUT")
@@ -604,7 +607,7 @@ async def main():
         (OUT / "000_end_state.json").write_text(json.dumps({
             "results": _results, "tests_pass": tests_pass, "device_ok": device_ok,
             "abort": _abort, "recovery": _recovery_state,
-            "repoint_state": _repoint_state, "gate": None,
+            "repoint_state": _repoint_state, "gate": gEnd,
         }, ensure_ascii=False, indent=1), encoding="utf-8")
         code = 0 if (tests_pass and device_ok) else (code if code else 3)
         log(f"[result] {_results} tests_pass={tests_pass} "
