@@ -114,13 +114,17 @@ main/            固件源码(模块划分见各 .h 接口)
 tools/           宿主侧脚本与单测(协议/JSON 转义单测、BLE NUS/角色互换验收;**不进固件**)
 问题与版本优化.md  唯一主记录:v1.0–v1.2.1 历史 + v1.3 增量/清单 + 附录 A–E
 docs/soak_test_plan.md  全链路 soak 方案(独立)
+docs/cmd.c_review_2026-11-14.md  cmd.c 第一轮逐函数审查
+docs/cmd_refactor_plan.md  cmd.c 优化跟进与验收计划
 docs/archive/     原始日志/历史归档(只读留证)
 ```
 
 ## 文档导航
 
 - **唯一主记录**:`问题与版本优化.md` —— v1.0–v1.2.1 历史、v1.3 增量与当前推进清单、附录 A NimBLE 评估、B 串口抓包、C 已解决索引、D UART 调试、E 手机验收测试卡。
-- **独立方案**:`docs/soak_test_plan.md`(全链路 soak;`tools/soak/` 尚未实现)。
+- **独立方案**:`docs/soak_test_plan.md`(全链路 soak;具体执行状态以该文档为准)。
+- **cmd.c 审查**:[`docs/cmd.c_review_2026-11-14.md`](docs/cmd.c_review_2026-11-14.md)(函数职责、调用关系、锁、重复逻辑和拆分方案)。
+- **cmd.c 优化跟进**:[`docs/cmd_refactor_plan.md`](docs/cmd_refactor_plan.md)(任务状态、阶段计划和验收门槛)。
 - **原始归档**:`docs/archive/`(日志/代码,只读留证)。
 
 ## 已知问题与安全提示
