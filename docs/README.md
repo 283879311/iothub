@@ -23,7 +23,7 @@
 - [R-NET设备验收报告_2026-11-07.md](R-NET设备验收报告_2026-11-07.md)——在续写的总证据文档；§1-§17 按节归档
 - [CMD-04b_network_status快照清单与判定表_2026-11-14.md](CMD-04b_network_status快照清单与判定表_2026-11-14.md)——network_status 四段快照化设计（已签收）
 - [CMD-04c_execute_method内联快照清单与判定表_2026-11-14.md](CMD-04c_execute_method内联快照清单与判定表_2026-11-14.md)——execute_method 两段内联快照设计（已签收，含 7f86720 P0 修正）
-- [S6预采集解冻申请_2026-11-14.md](S6预采集解冻申请_2026-11-14.md)——密码分支四项补采解冻申请 v6（P0 BLE token 600s 绝对 TTL 三节点续签；Δ 区间取证不伪称 T0/T1；S5d 归因未判定；③改 not_found 负向对照；op 总数 2/槽位 2/4；IP 基准证据化+80s 恢复上限），待复审
+- [S6预采集解冻申请_2026-11-14.md](S6预采集解冻申请_2026-11-14.md)——密码分支四项补采解冻申请 v7（续签③移到恢复 config.set 前+S0 显式登录立计时起点；S5d 移至 GOT_IP→EXPIRED 窗口内；op-V 勘误 clear_job_sync 不经 cleanup_fn+probe 扫描前置；回收=worker≈1s 周期+start 检查，2/4 附历史前提），待复审
 - [CMD-04系列_合并烧录窗口申请_2026-11-14.md](CMD-04系列_合并烧录窗口申请_2026-11-14.md)——fencing+04a/b/c 四项合并烧录申请（pre-golden 预采集→烧录→diff）
 - [R_数据路由层架构_2026-10-26.md](R_数据路由层架构_2026-10-26.md)——data_pipe 架构现状
 - [WIFI-OP-RESOURCE-RACE-fencing实现记录_2026-11-13.md](WIFI-OP-RESOURCE-RACE-fencing实现记录_2026-11-13.md)——fencing 已签收（终审通过+裁决(b)修正 ae8a3abb5）
