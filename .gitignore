@@ -42,3 +42,14 @@ Thumbs.db
 # 未评审的数据路由层架构讨论稿：评审通过前不随 git add -A 入库
 docs/R_数据路由层架构_2026-10-26.md
 tests/wifi_owner/wifi_owner_test
+# Local test environment and credentials
+.local/
+
+#构建目录和测试运行产物
+build-*/
+artifacts/
+tests/cmd_*/
+tests/netcheck/netcheck_policy_test
+*.heartbeat
+*.pid
+*.stdout
