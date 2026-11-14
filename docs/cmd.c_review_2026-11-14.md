@@ -66,7 +66,7 @@
 | `app_cmd_save_profile_from_params` | 按配置变更情况保存当前 Wi-Fi profile | 保留但需澄清命名和调用前提 |
 | `app_cmd_m1hook` | 故障注入测试入口 | 仅测试构建保留 |
 
-### 2.4 统一命令分发入口
+### 2.4 对外适配入口\n\n| 函数 | 职责 | 处理建议 |\n|---|---|---|\n| \`app_cmd_net_tryconnect_adapter\` | 将外部 tryconnect 请求适配到网络异步事务实现 | 保留为稳定窄接口；迁移后核对全仓调用方 |\n| \`app_cmd_net_apply_adapter\` | 将外部 apply 请求适配到事务实现 | 同上 |\n| \`app_cmd_net_cancel_adapter\` | 将外部 cancel 请求适配到事务实现 | 同上 |\n\n这些 adapter 不应被误认为重复业务实现。它们是模块边界的一部分；只有确认所有调用方已迁移后，才可评估删除。\n\n### 2.5 统一命令分发入口
 
 `app_cmd_execute_method()` 是主要入口，约 886 行。它当前负责：
 
