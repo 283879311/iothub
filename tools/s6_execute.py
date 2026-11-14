@@ -55,7 +55,7 @@ from bleak import BleakClient  # noqa: E402
 
 from p0_acceptance import Session, scan_filtered, sanitize  # noqa: E402
 
-OUT = Path("artifacts/cmd04_flash_20261115/s6_round4")
+OUT = Path("artifacts/cmd04_flash_20261115/s6_round5")
 # 串口 console 日志所在目录（阶段 A 起持续录制的固定位置；不随轮次目录变化）
 SERIAL_DIR = Path("artifacts/cmd04_flash_20261114/phaseA")
 TARGET = "B0:A7:32:28:C8:E6"
