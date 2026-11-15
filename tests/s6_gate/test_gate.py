@@ -40,13 +40,21 @@ def fake_proc(root, holders=(), pidfile_pid=None, unreadable=False):
     """构造假 /proc：holders 里的 pid 持有目标端口。"""
     root = Path(root)
     root.mkdir(parents=True, exist_ok=True)
+
+    def mkproc(pid, hold=False):
+        base = root / str(pid)
+        d = base / "fd"
+        d.mkdir(parents=True, exist_ok=True)
+        # 扫描按 UID 过滤：桩进程必须是当前用户
+        (base / "status").write_text(f"Name:\ttest\nUid:\t{os.getuid()}\t0\t0\t0\n")
+        (base / "cmdline").write_bytes(b"python3\x00tools/capture_serial.py\x00")
+        if hold:
+            os.symlink("/dev/ttyUSB1", d / "3")
+
     for pid in holders:
-        d = root / str(pid) / "fd"
-        d.mkdir(parents=True, exist_ok=True)
-        os.symlink("/dev/ttyUSB1", d / "3")
+        mkproc(pid, hold=True)
     if pidfile_pid is not None:
-        d = root / str(pidfile_pid) / "fd"
-        d.mkdir(parents=True, exist_ok=True)
+        mkproc(pidfile_pid, hold=False)
     return str(root)
 
 
@@ -74,6 +82,39 @@ def test_capture_state(tmp):
     # A4 proc_root 不可用 → UNKNOWN
     st, inf = PI.capture_state("/dev/ttyUSB1", None, proc_root=str(tmp / "no_such"))
     ck("A4 /proc 不可用 → UNKNOWN", st == PI.UNKNOWN, st)
+
+    # A5 fd 目录 EACCES → UNKNOWN（不能 fail-open 成 STOPPED）
+    st, inf = PI.capture_state("/dev/ttyUSB1", None, proc_root=p,
+                               scanner=lambda r, pt: ([], "eacces_fd_dir:pid=5"))
+    ck("A5 fd 目录不可读 → UNKNOWN", st == PI.UNKNOWN, st)
+
+    # A6 readlink EPERM → UNKNOWN
+    st, inf = PI.capture_state("/dev/ttyUSB1", None, proc_root=p,
+                               scanner=lambda r, pt: ([], "eperm_readlink:pid=6"))
+    ck("A6 readlink 不可读 → UNKNOWN", st == PI.UNKNOWN, st)
+
+    # A7 扫描完整、无 holder → STOPPED（进程消失属可确认）
+    st, inf = PI.capture_state("/dev/ttyUSB1", None, proc_root=p,
+                               scanner=lambda r, pt: ([], None))
+    ck("A7 扫描完整无 holder → STOPPED", st == PI.STOPPED, st)
+
+    # A8 scanner 抛异常 → UNKNOWN
+    st, inf = PI.capture_state("/dev/ttyUSB1", None, proc_root=p,
+                               scanner=lambda r, pt: (_ for _ in ()).throw(RuntimeError("x")))
+    ck("A8 scanner 异常 → UNKNOWN", st == PI.UNKNOWN, st)
+
+    # A9 PID 文件存在但内容不可解析 → UNKNOWN（不能当作没有 PID）
+    p9 = fake_proc(tmp / "a9")
+    log9 = Path(tmp / "a9.log"); log9.write_text("x")
+    Path(str(log9) + ".pid").write_text("not-a-pid")
+    st, inf = PI.capture_state("/dev/ttyUSB1", str(log9), proc_root=p9,
+                               scanner=lambda r, pt: ([], None))
+    ck("A9 pidfile 不可解析 → UNKNOWN", st == PI.UNKNOWN, st)
+
+    # A10 holder 存在 → RUNNING
+    st, inf = PI.capture_state("/dev/ttyUSB1", None, proc_root=p,
+                               scanner=lambda r, pt: ([123], None))
+    ck("A10 有 holder → RUNNING", st == PI.RUNNING, st)
 
 
 def test_read_mac_flow(tmp):
@@ -149,6 +190,33 @@ def test_read_mac_flow(tmp):
                               strict_restore=False, chain_check=chain,
                               state_fn=States([PI.STOPPED, PI.RUNNING]))
     ck("B4 MAC 不符 → 恢复但 ok=False", (not ok) and ev["mac_ok"] is False, str(ok))
+
+    # B7 state=UNKNOWN → read_mac 调用次数必须为 0
+    calls = {"n": 0}
+    def mac_count(port):
+        calls["n"] += 1
+        return (True, "10:97:bd:d3:65:d8")
+    ctl = ctl_writer(tmp / "b7.sh")
+    ok, ev = PI.read_mac_flow("/dev/ttyUSB1", L, str(tmp / "b7.json"),
+                              capture_ctl=ctl, evidence_dir=str(tmp / "ev7"),
+                              read_mac=mac_count, run_app=run_ok,
+                              strict_restore=False, chain_check=chain,
+                              state_fn=States([PI.UNKNOWN]))
+    ck("B7 UNKNOWN → read_mac 0 次且 ok=False",
+       (not ok) and calls["n"] == 0, f"calls={calls['n']} ok={ok}")
+
+    # B8 state=RUNNING（stop 未生效）→ read_mac 0 次
+    calls2 = {"n": 0}
+    def mac_count2(port):
+        calls2["n"] += 1
+        return (True, "10:97:bd:d3:65:d8")
+    ok, ev = PI.read_mac_flow("/dev/ttyUSB1", L, str(tmp / "b8.json"),
+                              capture_ctl=ctl, evidence_dir=str(tmp / "ev8"),
+                              read_mac=mac_count2, run_app=run_ok,
+                              strict_restore=False, chain_check=chain,
+                              state_fn=States([PI.RUNNING]))
+    ck("B8 RUNNING → read_mac 0 次且 ok=False",
+       (not ok) and calls2["n"] == 0, f"calls={calls2['n']} ok={ok}")
 
     # B5 evidence_dir 缺失 → 拒绝
     ok, ev = PI.read_mac_flow("/dev/ttyUSB1", L, str(tmp / "b5.json"),

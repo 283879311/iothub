@@ -214,58 +214,132 @@ def anchor_validate(anchor, port, log_dir, max_age_min=240):
 STOPPED, RUNNING, UNKNOWN = "STOPPED", "RUNNING", "UNKNOWN"
 
 
-def capture_state(port, log_path=None, proc_root="/proc"):
-    """返回 (state, info)。
 
-    STOPPED : 无任何进程持有该串口，且 PID 文件（若有）指向的进程不存在/非采集进程
-    RUNNING : 有进程持有该串口，或 PID 文件指向的进程仍存活
-    UNKNOWN : 无法读取进程/FD 信息（权限、/proc 不可用等）——**必须按不可读 MAC 处理**
+def _is_capture_proc(ent):
+    """cmdline 是否属于采集进程；不可读 → None（无法判定）。"""
+    try:
+        cmd = (ent / "cmdline").read_bytes().replace(b"\x00", b" ").decode(
+            "utf-8", "replace")
+    except FileNotFoundError:
+        return False
+        # 进程已退出：不是需要担心的采集进程
+    except OSError:
+        return None
+    return "capture_serial" in cmd
+
+def _scan_holders(proc_root, port):
+    """默认扫描：返回 (holders, unknown_reason)。
+
+    fail-closed 口径：
+      - 进程在扫描期间消失（FileNotFoundError/ENOENT）→ 跳过（可确认不存在）；
+      - EACCES/EPERM 或其它 OSError 无法检查 → 记录 unknown_reason（→ UNKNOWN）；
+      - 其余错误（列表失败）→ unknown_reason。
     """
     import os
-    inf = {"port": port, "holders": [], "pidfile_pid": None, "reason": None}
+    holders = []
+    unknown = None
     root = Path(proc_root)
-    if not root.is_dir():
-        inf["reason"] = f"proc_root 不可用：{root}"
-        return (UNKNOWN, inf)
-
-    scan_error = False
     try:
         entries = list(root.iterdir())
     except OSError as exc:
-        inf["reason"] = f"无法列出 {root}：{exc}"
-        return (UNKNOWN, inf)
+        return ([], f"list_proc:{type(exc).__name__}")
+    my_uid = os.getuid()
     for ent in entries:
         if not ent.name.isdigit():
             continue
+        # 只对本用户进程严格：其它用户的进程不可能是我们的采集进程，
+        # 对其 fd 的 EACCES 属正常，不应把整体判成 UNKNOWN。
         try:
-            fds = list((ent / "fd").iterdir())
-        except OSError:
-            # 无权限读取其它进程的 fd 是常态；但我们也无法确认它是否占用端口
+            uid_line = (ent / "status").read_text(errors="replace")
+            m = re.search(r"^Uid:\s*(\d+)", uid_line, re.M)
+            if m is None:
+                unknown = unknown or f"uid_unparsable:pid={ent.name}"
+                continue
+            if int(m.group(1)) != my_uid:
+                continue
+        except FileNotFoundError:
+            continue
+        except OSError as exc:
+            unknown = unknown or f"uid_unreadable:pid={ent.name}:{type(exc).__name__}"
+            continue
+        fd_dir = ent / "fd"
+        try:
+            fds = list(fd_dir.iterdir())
+        except FileNotFoundError:
+            continue                      # 进程已退出，可确认不存在
+        except PermissionError:
+            rel = _is_capture_proc(ent)
+            if rel is None:
+                unknown = unknown or f"eacces_fd_dir:pid={ent.name}:cmdline_unreadable"
+            elif rel:
+                unknown = unknown or f"eacces_fd_dir:pid={ent.name}:capture"
+            # 非采集进程 → 跳过（不影响判定）
+            continue
+        except OSError as exc:
+            unknown = unknown or f"err_fd_dir:pid={ent.name}:{type(exc).__name__}"
             continue
         for fd in fds:
             try:
-                if os.readlink(fd) == port:
-                    inf["holders"].append(int(ent.name))
-                    break
-            except OSError:
-                continue
+                target = os.readlink(fd)
+            except FileNotFoundError:
+                continue                  # 该 fd 已关闭
+            except PermissionError:
+                rel = _is_capture_proc(ent)
+                if rel is None:
+                    unknown = unknown or f"eperm_readlink:pid={ent.name}:cmdline_unreadable"
+                elif rel:
+                    unknown = unknown or f"eperm_readlink:pid={ent.name}:capture"
+                break        # 该进程不可判定 → 放弃该进程（非采集则不关心）
 
-    pidfile = None
+            except OSError as exc:
+                unknown = unknown or f"err_readlink:pid={ent.name}:{type(exc).__name__}"
+                continue
+            if target == port:
+                holders.append(int(ent.name))
+                break
+    return (holders, unknown)
+
+
+def capture_state(port, log_path=None, proc_root="/proc", scanner=None):
+    """三态：STOPPED / RUNNING / UNKNOWN（独立于完整链校验）。
+
+    STOPPED 仅在"扫描完整完成、无任何 holder、PID 文件进程不存在"时给出；
+    扫描不完整（权限/异常）或 PID 文件存在但不可解析 → UNKNOWN（不得读 MAC）。
+    """
+    inf = {"port": port, "holders": [], "pidfile_pid": None,
+           "unknown_reason": None}
+    if not Path(proc_root).is_dir():
+        inf["unknown_reason"] = f"proc_root 不可用：{proc_root}"
+        return (UNKNOWN, inf)
+
+    scan = scanner or _scan_holders
+    try:
+        holders, unknown = scan(proc_root, port)
+    except Exception as exc:  # noqa: BLE001
+        inf["unknown_reason"] = f"scanner_exc:{type(exc).__name__}"
+        return (UNKNOWN, inf)
+    inf["holders"] = holders
+    inf["unknown_reason"] = unknown
+
+    # PID 文件：存在但不可解析 → UNKNOWN（不能当成"没有 PID"）
+    pidfile_state = "absent"
     if log_path:
         pidfile = Path(str(log_path) + ".pid")
         if pidfile.is_file():
             try:
                 inf["pidfile_pid"] = int(pidfile.read_text(encoding="utf-8").strip())
+                pidfile_state = "parsed"
             except Exception:  # noqa: BLE001
-                inf["pidfile_pid"] = None
+                pidfile_state = "unparsable"
+                inf["unknown_reason"] = inf["unknown_reason"] or "pidfile_unparsable"
+    inf["pidfile_state"] = pidfile_state
 
-    if inf["holders"]:
+    if holders:
         return (RUNNING, inf)
-    if inf["pidfile_pid"] and (root / str(inf["pidfile_pid"])).is_dir():
-        return (RUNNING, inf)      # 进程存活但此刻未持端口（可能正在 reopen）
-    if scan_error:
+    if inf["unknown_reason"]:          # 含 scanner 的 unknown 与 pidfile 不可解析
         return (UNKNOWN, inf)
-    # 无 holder、pidfile 进程不存在 → 视为已停止
+    if inf["pidfile_pid"] and (Path(proc_root) / str(inf["pidfile_pid"])).is_dir():
+        return (RUNNING, inf)
     return (STOPPED, inf)
 
 

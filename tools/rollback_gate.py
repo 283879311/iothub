@@ -133,6 +133,15 @@ def main():
             strict_restore=not args.skip_restore)
         restore_info = ev
         check(ok_flow, "MAC 读取 + 恢复流程（stop→mac→run→start→new boot）")
+        # 强制消费端门禁：最终证据必须存在且结论为 ok（不以首份快照为准）
+        fin = Path(args.evidence_dir) / "mac_read_flow.final.json"
+        fin_ok = False
+        try:
+            fj = json.loads(fin.read_text(encoding="utf-8"))
+            fin_ok = (fj.get("evidence_write_result") == "ok")
+        except Exception as exc:  # noqa: BLE001
+            print(f"  [info] 最终证据不可读（{type(exc).__name__}）")
+        check(fin_ok, f"最终证据存在且结论 ok（{fin.name}）")
         if ev.get("mac"):
             check(str(ev["mac"]).lower() == EXPECT_MAC, f"MAC==65D8（{ev['mac']}）")
             if anchor and anchor.get("mac"):
