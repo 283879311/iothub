@@ -1,3 +1,4 @@
+#include <stdatomic.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
@@ -189,18 +190,66 @@ static bool app_mqtt_connected_safe(void)
     return ok;
 }
 
-static void app_mqtt_build_uri(void)
+/* CMD-15 R1/R2：配置快照——在 C 内复制，锁外使用。
+ * 覆盖 mqtt.c 当前实际读取的全部配置项；新增 s_config 读取点时必须同步扩展本结构。
+ * 严禁把本结构的地址交给可能异步持有它的接口（esp-mqtt 用 s_token_snap 静态副本）。 */
+typedef struct {
+    char host[sizeof(((app_config_t *)0)->mqtt_host)];
+    char token[sizeof(((app_config_t *)0)->mqtt_token)];
+    char backend[sizeof(((app_config_t *)0)->mqtt_backend)];
+    char sta_ssid[sizeof(((app_config_t *)0)->sta_ssid)];
+    uint16_t port;
+    uint32_t uart_baudrate;
+    uint8_t use_tls;
+    uint8_t net_mode;
+    uint8_t bt_role;
+    uint8_t uart_parity_mode;
+    uint8_t uart_data_bits;
+    uint8_t uart_stop_bits;
+    uint8_t relay_power_policy;
+    uint8_t led_power_policy;
+} app_mqtt_cfg_snap_t;
+
+static void app_mqtt_cfg_snapshot(app_mqtt_cfg_snap_t *snap)
+{
+    app_config_lock();
+    app_copy_string(snap->host, sizeof(snap->host), s_config.mqtt_host);
+    app_copy_string(snap->token, sizeof(snap->token), s_config.mqtt_token);
+    app_copy_string(snap->backend, sizeof(snap->backend), s_config.mqtt_backend);
+    app_copy_string(snap->sta_ssid, sizeof(snap->sta_ssid), s_config.sta_ssid);
+    snap->port = s_config.mqtt_port;
+    snap->uart_baudrate = s_config.uart_baudrate;
+    snap->use_tls = s_config.mqtt_use_tls;
+    snap->net_mode = s_config.net_mode;
+    snap->bt_role = s_config.bt_role;
+    snap->uart_parity_mode = s_config.uart_parity_mode;
+    snap->uart_data_bits = s_config.uart_data_bits;
+    snap->uart_stop_bits = s_config.uart_stop_bits;
+    snap->relay_power_policy = s_config.relay_power_policy;
+    snap->led_power_policy = s_config.led_power_policy;
+    app_config_unlock();
+}
+
+/* 后端类型缓存：仅在 apply_config（C 内快照之后）更新；bool 读无撕裂。
+ * 供 topic 选择等热路径使用，避免每次取 C。 */
+static _Atomic bool s_backend_is_tb;
+
+/* esp-mqtt 可能持有 credentials.username 指针（R5 未验证）。用模块静态副本：
+ * 不把局部地址交给异步接口，也不指向会被 config.set memcpy 改写的 s_config.token。
+ * 仅在 stop_clients 之后、client init 之前刷新。 */
+static char s_token_snap[sizeof(((app_config_t *)0)->mqtt_token)];
+
+static void app_mqtt_build_uri(const app_mqtt_cfg_snap_t *cfg)
 {
     snprintf(s_mqtt.uri, sizeof(s_mqtt.uri), "%s://%s:%u",
-             s_config.mqtt_use_tls ? "mqtts" : "mqtt",
-             s_config.mqtt_host,
-             s_config.mqtt_port);
+             cfg->use_tls ? "mqtts" : "mqtt",
+             cfg->host,
+             (unsigned)cfg->port);
 }
 
 static bool app_mqtt_is_thingsboard_backend(void)
 {
-    return strcmp(s_config.mqtt_backend, "tb_cloud") == 0 ||
-           strcmp(s_config.mqtt_backend, "tb_selfhost") == 0;
+    return atomic_load(&s_backend_is_tb);
 }
 
 static const char *app_mqtt_telemetry_topic(void)
@@ -282,16 +331,17 @@ static void app_mqtt_add_common_active_online(cJSON *root)
     cJSON_AddBoolToObject(root, "online", true);
 }
 
-static void app_mqtt_build_uart_frame_str(char *out, size_t out_size)
+static void app_mqtt_build_uart_frame_str(char *out, size_t out_size,
+                                        const app_mqtt_cfg_snap_t *cfg)
 {
-    if (out == NULL || out_size == 0) {
+    if (out == NULL || out_size == 0 || cfg == NULL) {
         return;
     }
     char frame[8];
     app_uart_build_frame(frame, sizeof(frame),
-                         s_config.uart_data_bits,
-                         (uart_parity_t)s_config.uart_parity_mode,
-                         s_config.uart_stop_bits);
+                         cfg->uart_data_bits,
+                         (uart_parity_t)cfg->uart_parity_mode,
+                         cfg->uart_stop_bits);
     app_copy_string(out, out_size, frame);
 }
 
@@ -584,7 +634,10 @@ static void app_mqtt_publish_attributes(void)
         app_mqtt_on_io_change();
         return;
     }
-    app_mqtt_build_uart_frame_str(uart_frame, sizeof(uart_frame));
+    /* CMD-15 R2：一次 C 内快照，锁外构造 payload */
+    app_mqtt_cfg_snap_t cfg;
+    app_mqtt_cfg_snapshot(&cfg);
+    app_mqtt_build_uart_frame_str(uart_frame, sizeof(uart_frame), &cfg);
 
     app_desc = esp_app_get_description();
     fw_version = (app_desc != NULL && app_desc->version[0] != '\0')
@@ -595,12 +648,12 @@ static void app_mqtt_publish_attributes(void)
         return;
     }
     cJSON_AddStringToObject(root, "fw_version",  fw_version);
-    cJSON_AddStringToObject(root, "net_mode",    app_network_mode_to_string(s_config.net_mode));
-    cJSON_AddStringToObject(root, "sta_ssid",    s_config.sta_ssid);
+    cJSON_AddStringToObject(root, "net_mode",    app_network_mode_to_string(cfg.net_mode));
+    cJSON_AddStringToObject(root, "sta_ssid",    cfg.sta_ssid);
     cJSON_AddStringToObject(root, "sta_ip",      s_wifi.sta_ip);
-    cJSON_AddStringToObject(root, "bt_mode",     app_bt_mode_to_string(s_config.bt_role));
+    cJSON_AddStringToObject(root, "bt_mode",     app_bt_mode_to_string(cfg.bt_role));
     cJSON_AddStringToObject(root, "uart_frame",  uart_frame);
-    cJSON_AddNumberToObject(root, "uart_baudrate", (double)s_config.uart_baudrate);
+    cJSON_AddNumberToObject(root, "uart_baudrate", (double)cfg.uart_baudrate);
     {
         app_io_state_t io;
 
@@ -611,8 +664,8 @@ static void app_mqtt_publish_attributes(void)
         cJSON_AddBoolToObject(root, "input_state", io.input_active);
         cJSON_AddNumberToObject(root, "io_seq", io.seq);
         cJSON_AddStringToObject(root, "io_source", app_io_source_name(io.last_source));
-        cJSON_AddNumberToObject(root, "relay_power_policy", s_config.relay_power_policy);
-        cJSON_AddNumberToObject(root, "led_power_policy", s_config.led_power_policy);
+        cJSON_AddNumberToObject(root, "relay_power_policy", cfg.relay_power_policy);
+        cJSON_AddNumberToObject(root, "led_power_policy", cfg.led_power_policy);
     }
     app_mqtt_add_common_active_online(root);
 
@@ -632,7 +685,10 @@ static void app_mqtt_publish_state(void)
         app_mqtt_on_io_change();
         return;
     }
-    app_mqtt_build_uart_frame_str(uart_frame, sizeof(uart_frame));
+    /* CMD-15 R2：一次 C 内快照，锁外构造 payload */
+    app_mqtt_cfg_snap_t cfg;
+    app_mqtt_cfg_snapshot(&cfg);
+    app_mqtt_build_uart_frame_str(uart_frame, sizeof(uart_frame), &cfg);
 
     root = cJSON_CreateObject();
     if (root == NULL) {
@@ -648,11 +704,11 @@ static void app_mqtt_publish_state(void)
         cJSON_AddNumberToObject(root, "io_seq",        io.seq);
         cJSON_AddStringToObject(root, "io_source",     app_io_source_name(io.last_source));
     }
-    cJSON_AddStringToObject(root, "bt_mode",       app_bt_mode_to_string(s_config.bt_role));
-    cJSON_AddStringToObject(root, "net_mode",      app_network_mode_to_string(s_config.net_mode));
+    cJSON_AddStringToObject(root, "bt_mode",       app_bt_mode_to_string(cfg.bt_role));
+    cJSON_AddStringToObject(root, "net_mode",      app_network_mode_to_string(cfg.net_mode));
     cJSON_AddBoolToObject  (root, "sta_has_ip",    s_wifi.sta_has_ip);
     cJSON_AddNumberToObject(root, "free_heap",     (double)esp_get_free_heap_size());
-    cJSON_AddNumberToObject(root, "uart_baudrate", (double)s_config.uart_baudrate);
+    cJSON_AddNumberToObject(root, "uart_baudrate", (double)cfg.uart_baudrate);
     cJSON_AddStringToObject(root, "uart_frame",    uart_frame);
     app_mqtt_add_common_active_online(root);
 
@@ -1634,28 +1690,33 @@ esp_err_t app_mqtt_apply_config(void)
     esp_mqtt_client_handle_t new_client = NULL;
     bool is_tb_backend;
     esp_err_t err;
+    app_mqtt_cfg_snap_t cfg;
 
     app_mqtt_ensure_runtime_init();
     app_mqtt_stop_clients();
 
-    if (strlen(s_config.mqtt_host) == 0 || s_config.mqtt_port == 0) {
+    /* CMD-15 R1：停旧客户端之后、使用之前取配置快照；C 仅覆盖字段复制，
+     * 不含 stop/init/JSON 等阻塞操作。 */
+    app_mqtt_cfg_snapshot(&cfg);
+    is_tb_backend = strcmp(cfg.backend, "tb_cloud") == 0 ||
+                    strcmp(cfg.backend, "tb_selfhost") == 0;
+    atomic_store(&s_backend_is_tb, is_tb_backend);
+
+    if (strlen(cfg.host) == 0 || cfg.port == 0) {
         app_copy_string(s_mqtt.last_error, sizeof(s_mqtt.last_error), "mqtt_not_configured");
         return ESP_OK;
     }
-    if (!app_network_mode_has_sta(s_config.net_mode) || !s_wifi.sta_has_ip) {
+    if (!app_network_mode_has_sta(cfg.net_mode) || !s_wifi.sta_has_ip) {
         app_copy_string(s_mqtt.last_error, sizeof(s_mqtt.last_error), "waiting_sta_ip");
         return ESP_OK;
     }
 
-    app_mqtt_build_uri();
+    app_mqtt_build_uri(&cfg);
     app_mqtt_build_client_id();
     app_mqtt_build_data_topics();
     /* 数据面 MQTT 端口(1.3-07):出站 = enqueue 到 up 主题;下行由订阅回调喂入 */
     data_pipe_register_port(DATA_PORT_MQTT, app_mqtt_dataplane_write, NULL);
     app_mqtt_ensure_dp_flush_task();   /* 1.3-76:256B 聚合的定时兜底 flush */
-
-    is_tb_backend = strcmp(s_config.mqtt_backend, "tb_cloud") == 0 ||
-                    strcmp(s_config.mqtt_backend, "tb_selfhost") == 0;
 
     mqtt_cfg.broker.address.uri = s_mqtt.uri;
     /* 问题与版本优化.md 1.3-10:keepalive 15→45s(减少 PINGREQ 与"无响应断连"概率,
@@ -1676,17 +1737,19 @@ esp_err_t app_mqtt_apply_config(void)
     /* 1.3-43:非 TLS 任务栈 6144→4096,省 2KB 常驻堆(文章建议 4096;
      * TLS 保持 6144,mbedtls 握手栈需求)。此前曾随快路径实验一并回退,
      * 现按官方建议单独恢复。 */
-    mqtt_cfg.task.stack_size = s_config.mqtt_use_tls ? 6144 : 4096;
+    mqtt_cfg.task.stack_size = cfg.use_tls ? 6144 : 4096;
     mqtt_cfg.session.disable_clean_session = false;
     mqtt_cfg.network.timeout_ms = 5000;
     mqtt_cfg.network.reconnect_timeout_ms = 5000;   /* 已由 disable_auto_reconnect 接管,保留仅为兼容 */
     mqtt_cfg.network.disable_auto_reconnect = true;
     mqtt_cfg.credentials.client_id = s_mqtt.client_id;
-    if (s_config.mqtt_use_tls) {
+    if (cfg.use_tls) {
         mqtt_cfg.broker.verification.crt_bundle_attach = esp_crt_bundle_attach;
     }
-    if (strlen(s_config.mqtt_token) > 0) {
-        mqtt_cfg.credentials.username = s_config.mqtt_token;
+    /* 静态副本：不把 s_config.token 的地址交给 esp-mqtt（R5 未验证其拷贝语义） */
+    app_copy_string(s_token_snap, sizeof(s_token_snap), cfg.token);
+    if (s_token_snap[0] != '\0') {
+        mqtt_cfg.credentials.username = s_token_snap;
     }
 
     if (is_tb_backend) {
@@ -1698,8 +1761,8 @@ esp_err_t app_mqtt_apply_config(void)
     }
 
     ESP_LOGI(TAG, "Starting MQTT: uri=%s, client_id=%s, token_len=%u, tls=%s, will=%s",
-             s_mqtt.uri, s_mqtt.client_id, (unsigned)strlen(s_config.mqtt_token),
-             s_config.mqtt_use_tls ? "yes" : "no",
+             s_mqtt.uri, s_mqtt.client_id, (unsigned)strlen(cfg.token),
+             cfg.use_tls ? "yes" : "no",
              is_tb_backend ? "v1/devices/me/attributes" : "none");
 
     s_mqtt_connecting = true;
