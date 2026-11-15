@@ -69,6 +69,7 @@ def main():
     args = ap.parse_args()
 
     fails = []
+    restore_info = {"attempted": False, "result": None}
     # 阈值固定：不接受放宽（只允许更严）
     if args.max_anchor_age_min > 240 or args.usb_events_min > 240:
         print("[FAIL] 门禁阈值不得放宽（max-anchor-age-min / usb-events-min ≤ 240）")
@@ -117,6 +118,7 @@ def main():
 
     # 4. 板卡身份（主证据）：统一恢复流程（停录制→read_mac→run→重启录制→新 boot 证据）
     if not fails:
+        restore_info["attempted"] = True
         ok_flow, ev = PI.read_mac_flow(
             args.port, args.log_dir, str(Path(args.evidence_dir) / "mac_record_gate.json"),
             capture_ctl=args.capture_ctl, evidence_dir=args.evidence_dir,
@@ -152,8 +154,7 @@ def main():
         return 1
     print("[OK] 回滚门禁通过（MAC+锚点+录制链+日志+BIN）")
     if args.skip_restore:
-        print("     --skip-restore：芯片在下载模式、录制停止——可立即烧录（烧录自带复位），")
-        print("     烧录后必须 serial_capture_ctl.sh start <port> <log> 重启录制")
+        print("     --skip-restore：已执行 run_app + 重启录制，仅跳过新 boot 证据等待；")
     else:
         print("     已恢复：芯片回到 app、录制已重启（restore 结果见 gate 证据 JSON）")
         print("     若随后要烧录：再停录制（记计划内 gap）→ flash_frozen.sh → 重启录制")

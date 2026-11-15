@@ -190,6 +190,8 @@ def anchor_validate(anchor, port, log_dir, max_age_min=240):
         r.append(f"port 不符（{anchor.get('port')!r}）")
     if str(anchor.get("log_dir")) != str(log_dir):
         r.append(f"log_dir 不符（{anchor.get('log_dir')!r}）")
+    if anchor.get("mac_ok") is not True:
+        r.append(f"mac_ok 非 True（{anchor.get('mac_ok')!r}）")
     mac = anchor.get("mac")
     if not isinstance(mac, str) or mac.lower() != EXPECT_MAC_65D8:
         r.append(f"mac 非 65D8 字符串（{mac!r}）")
@@ -245,12 +247,16 @@ def wait_new_boot(log_path, from_size, timeout_s=15.0):
 def read_mac_flow(port, log_dir, out_record, capture_ctl="tools/serial_capture_ctl.sh",
                   evidence_dir=None, expect_mac=EXPECT_MAC_65D8,
                   read_mac=None, run_app=None, strict_restore=True):
-    """步骤 0 的唯一实现（CLI 与测试共用）。
+    """步骤 0 / 回滚门禁共用的唯一实现。
 
     状态流程：检查录制链 → 停录制 → read_mac → **无论结果都恢复**
-    （run_app + 重启录制 + 等待新 boot 证据）→ 判定。
-    成功条件：MAC 正确 **且** run_app 成功 **且** 录制重启成功
-    （strict_restore 时还要求新 boot 证据）。
+    （run_app + 重启录制 + 等新 boot 证据）→ 判定 → 写记录与证据。
+
+    每一步都独立异常保护：read/run/start/boot 任一抛出或失败都不会阻断
+    后续恢复步骤；最终统一计算 state_confirmed 与 ok。
+    成功条件：MAC 正确 **且** run 成功 **且** 录制重启成功 **且**
+    （strict_restore 时）新 boot 证据出现 **且** 记录/证据写入成功。
+    `evidence_dir` 为**必填**（恢复证据是成功条件的一部分）。
     """
     read_mac = read_mac or esptool_read_mac
     run_app = run_app or esptool_run_app
@@ -258,73 +264,121 @@ def read_mac_flow(port, log_dir, out_record, capture_ctl="tools/serial_capture_c
     from preflight_flash import inspect_capture  # noqa: E402
 
     log_path = str(Path(log_dir) / f"serial_{Path(port).name}.log")
-    ev = {"port": port, "log_path": log_path,
-          "chain_before": None, "capture_stopped": None, "mac": None,
-          "mac_ok": None, "run_app_ok": None, "capture_restarted": None,
-          "new_boot": None, "state_confirmed": False,
-          "at": time.strftime("%Y-%m-%dT%H:%M:%S")}
+    ev = {"port": port, "log_path": log_path, "evidence_dir": str(evidence_dir),
+          "chain_before": None, "capture_stopped": False, "mac": None,
+          "mac_ok": False, "run_app_ok": False, "capture_restarted": False,
+          "new_boot": False, "record_written": False,
+          "evidence_written": False, "state_confirmed": False,
+          "errors": [], "at": time.strftime("%Y-%m-%dT%H:%M:%S")}
 
-    cap = inspect_capture(log_dir, Path(port).name)
-    ev["chain_before"] = {k: cap.get(k) for k in
-                          ("running", "script_ok", "port_arg_ok", "log_arg_ok",
-                           "fd_holds_port", "fd_holds_log")}
-    chain_ok = all(v is True for v in ev["chain_before"].values())
+    def note_error(stage, exc):
+        msg = f"{stage}:{type(exc).__name__}:{str(exc)[:80]}"
+        ev["errors"].append(msg)
+        print(f"  [ERR] {msg}")
 
-    stopped = start_ok = new_boot_ok = False
-    mac = None
+    if not evidence_dir:
+        print("  [FAIL] evidence_dir 必填（恢复证据是成功条件）")
+        ev["errors"].append("evidence_dir_missing")
+        return (False, ev)
+
+    # ---- 1. 录制链 ----
+    try:
+        cap = inspect_capture(log_dir, Path(port).name)
+        ev["chain_before"] = {k: cap.get(k) for k in
+                              ("running", "script_ok", "port_arg_ok", "log_arg_ok",
+                               "fd_holds_port", "fd_holds_log")}
+    except Exception as exc:  # noqa: BLE001
+        note_error("chain_check", exc)
+        ev["chain_before"] = {}
+    chain_ok = bool(ev["chain_before"]) and all(
+        v is True for v in ev["chain_before"].values())
+    if not chain_ok:
+        print("  [FAIL] 录制链不完整——不停录制、不读 MAC")
+
+    # ---- 2. 停录制 ----
     if chain_ok:
-        stopped, msg = _ctl("stop", port, log_path, capture_ctl)
+        try:
+            stopped, msg = _ctl("stop", port, log_path, capture_ctl)
+        except Exception as exc:  # noqa: BLE001
+            note_error("capture_stop", exc)
+            stopped, msg = False, "exception"
         ev["capture_stopped"] = stopped
         print(f"  [{'ok' if stopped else 'FAIL'}] 停录制：{msg}")
-    else:
-        ev["capture_stopped"] = False
-        print("  [FAIL] 录制链不完整——不停录制、不读 MAC（先修复录制）")
 
-    if stopped:
+    # ---- 3. 读 MAC（异常也继续到恢复）----
+    mac_read_attempted = False
+    if ev["capture_stopped"]:
+        mac_read_attempted = True
         try:
             ok_mac, mac_or_err = read_mac(port)
             if ok_mac:
-                mac = mac_or_err
-                ev["mac"] = mac
-                ev["mac_ok"] = (mac.lower() == expect_mac)
-                print(f"  [{'ok' if ev['mac_ok'] else 'FAIL'}] read_mac={mac}"
+                ev["mac"] = mac_or_err
+                ev["mac_ok"] = (str(mac_or_err).lower() == expect_mac)
+                print(f"  [{'ok' if ev['mac_ok'] else 'FAIL'}] read_mac={mac_or_err}"
                       f"{'' if ev['mac_ok'] else f'（期望 {expect_mac}）'}")
             else:
-                ev["mac_ok"] = False
                 print(f"  [FAIL] read_mac 失败：{str(mac_or_err)[:100]}")
-        finally:
-            # 无论读取成功/失败/MAC 不符，都恢复
-            size_before = _log_size(log_path)
-            run_ok, rmsg = run_app(port)
-            ev["run_app_ok"] = run_ok
-            print(f"  [{'ok' if run_ok else 'FAIL'}] 恢复 app：{str(rmsg)[:70]}")
-            start_ok, smsg = _ctl("start", port, log_path, capture_ctl)
-            ev["capture_restarted"] = start_ok
-            print(f"  [{'ok' if start_ok else 'FAIL'}] 重启录制：{smsg}")
-            if start_ok:
-                new_boot_ok, bmsg = wait_new_boot(log_path, size_before)
-                ev["new_boot"] = new_boot_ok
-                print(f"  [{'ok' if new_boot_ok else 'FAIL'}] 新 boot 证据：{bmsg}")
-
-    mac_ok = ev.get("mac_ok") is True
-    ev["state_confirmed"] = bool(mac_ok and ev.get("run_app_ok")
-                                 and ev.get("capture_restarted")
-                                 and (new_boot_ok or not strict_restore))
-    ok = bool(chain_ok and stopped and ev["state_confirmed"])
-
-    if evidence_dir:
-        try:
-            Path(evidence_dir).mkdir(parents=True, exist_ok=True)
-            Path(evidence_dir, "mac_read_flow.json").write_text(
-                json.dumps(ev, ensure_ascii=False, indent=1), encoding="utf-8")
         except Exception as exc:  # noqa: BLE001
-            print(f"  [FAIL] 恢复证据写入失败（{type(exc).__name__}）——按失败处理")
+            note_error("read_mac", exc)
+
+    # ---- 4. 恢复：run_app 与 重启录制 各自独立 ----
+    if mac_read_attempted:
+        size_before = _log_size(log_path)
+        try:
+            run_ok, rmsg = run_app(port)
+        except Exception as exc:  # noqa: BLE001
+            note_error("run_app", exc)
+            run_ok, rmsg = False, "exception"
+        ev["run_app_ok"] = bool(run_ok)
+        print(f"  [{'ok' if run_ok else 'FAIL'}] 恢复 app：{str(rmsg)[:70]}")
+
+        try:
+            start_ok, smsg = _ctl("start", port, log_path, capture_ctl)
+        except Exception as exc:  # noqa: BLE001
+            note_error("capture_start", exc)
+            start_ok, smsg = False, "exception"
+        ev["capture_restarted"] = bool(start_ok)
+        print(f"  [{'ok' if start_ok else 'FAIL'}] 重启录制：{smsg}")
+
+        if start_ok and strict_restore:
+            try:
+                boot_ok, bmsg = wait_new_boot(log_path, size_before)
+            except Exception as exc:  # noqa: BLE001
+                note_error("wait_new_boot", exc)
+                boot_ok, bmsg = False, "exception"
+            ev["new_boot"] = bool(boot_ok)
+            print(f"  [{'ok' if boot_ok else 'FAIL'}] 新 boot 证据：{bmsg}")
+        elif not strict_restore:
+            ev["new_boot"] = None
+            print("  [info] strict_restore=False：跳过新 boot 证据等待")
+
+    # ---- 5. 判定 ----
+    mac_ok = ev["mac_ok"] is True
+    ev["state_confirmed"] = bool(
+        mac_ok and ev["run_app_ok"] and ev["capture_restarted"]
+        and (ev["new_boot"] is True or not strict_restore))
+    ok = bool(chain_ok and ev["capture_stopped"] and ev["state_confirmed"])
+
+    # ---- 6. 记录与证据（失败也尽力写；写入失败计入 ok）----
+    if ok and ev["mac"]:
+        try:
+            write_mac_record(out_record, port, ev["mac"], log_dir)
+            ev["record_written"] = True
+            print(f"  [ok] MAC 记录已写出：{out_record}")
+        except Exception as exc:  # noqa: BLE001
+            note_error("write_mac_record", exc)
             ok = False
 
-    if ok and mac:
-        write_mac_record(out_record, port, mac, log_dir)
-        print(f"  [ok] MAC 记录已写出：{out_record}")
-    elif not ok:
+    try:
+        Path(evidence_dir).mkdir(parents=True, exist_ok=True)
+        Path(evidence_dir, "mac_read_flow.json").write_text(
+            json.dumps(ev, ensure_ascii=False, indent=1), encoding="utf-8")
+        ev["evidence_written"] = True
+    except Exception as exc:  # noqa: BLE001
+        print(f"  [FAIL] 恢复证据写入失败（{type(exc).__name__}）——按失败处理")
+        ok = False
+
+    if not ok:
         print("  [STOP] 设备/录制状态不可确认（见 mac_read_flow.json），不得继续")
     return (ok, ev)
 
