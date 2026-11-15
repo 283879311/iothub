@@ -166,11 +166,14 @@ docs/             架构审查、测试方案、验收报告和证据索引
 ```
 
 - **版本/问题主记录**：`问题与版本优化.md`。
-- **全链路 soak 计划**：[`docs/soak_test_plan.md`](docs/soak_test_plan.md)。
+- **BLE 专题总览**：[`docs/BLE_架构与验收总览.md`](docs/BLE_架构与验收总览.md)，解释需求、v1 协议、T3/T4/T5 验收边界。
+- **MQTT 专题总览**：[`docs/MQTT_架构与验收总览.md`](docs/MQTT_架构与验收总览.md)，说明 ThingsBoard MQTT 职责、权限和 CMD-15 状态。
+- **Wi-Fi owner fencing**：[`docs/WIFI-OP-RESOURCE-RACE_主文档.md`](docs/WIFI-OP-RESOURCE-RACE_主文档.md)，当前 owner/cleanup 并发专项入口。
+- **S6 现场验收总览**：[`docs/S6_现场验收总览.md`](docs/S6_现场验收总览.md)，当前轮次、设备身份、事故和待批准事项。
 - **命令层审查**：[`docs/cmd.c_review_2026-11-14.md`](docs/cmd.c_review_2026-11-14.md)。
 - **项目执行台账**：[`docs/cmd_refactor_plan.md`](docs/cmd_refactor_plan.md)，CMD 任务、当前授权与下一步的唯一入口。
 - **近期变更（2026-11-14~15）**：[`docs/近期变更记录_2026-11-14至11-15.md`](docs/近期变更记录_2026-11-14至11-15.md)（CMD-04 合并窗口 / S6 固件缺陷 / 阶段 A / 阶段 B 门禁工具链 / 身份采集）。
-- **项目文档导航**：[`docs/README.md`](docs/README.md)，按 CMD、S6、协议、测试和历史证据分类；当前执行状态以各专项主台账为准。
+- **项目文档导航**：[`docs/README.md`](docs/README.md)，按 CMD、BLE、MQTT、Wi-Fi fencing、S6 和历史证据分类；归档规则见 [`docs/archive/README.md`](docs/archive/README.md)。
 - 原始日志和历史证据见 `docs/archive/` 与 `docs/evidence/`；计划状态和硬件实测状态以各专项文档为准。
 
 ## 已知限制与安全提示
