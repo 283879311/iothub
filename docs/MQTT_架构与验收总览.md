@@ -1,0 +1,58 @@
+# MQTT 架构与验收总览
+
+> **状态：ACTIVE（MQTT 专题唯一导航与状态总览）**  
+> 更新：2026-11-16。当前实现以 `main/mqtt.c`、`main/cmd_v1.c`、`contract/v1/` 和本文件关联的最新专项复核为准。
+
+## 1. 当前职责与边界
+
+- 设备云端链路使用 ThingsBoard MQTT；负责遥测、属性/状态同步和受限 RPC。
+- 命令协议采用 v1；旧 v0 `method/params` 入口已删除。历史报告中 v0 报文仅作为拒绝路径证据。
+- MQTT 命令受 source policy 限制。MQTT 不获得 BLE 专属的本地网络配置/管理权限；`config.set` 对 NET/MQTT/BT/UART/WEB_AUTH 等受限域有明确禁止规则（以当前 command contract 和实现为准）。
+- MQTT 连接状态、Wi-Fi STA/IP 状态、配置持久化状态必须分开表达；配置保存成功不代表 MQTT 已切换或已连接。
+- MQTT 的运行态配置读取通过配置快照（C 锁）和 Wi-Fi 状态快照（W 锁）隔离；不得把两个快照误写成原子跨域事务。
+
+## 2. 当前权威文档
+
+| 文档 | 用途 | 状态 |
+|---|---|---|
+| [MQTT 运行态与 config 同步复核](MQTT运行态与config同步复核_2026-11-15.md) | CMD-15 R1/R2/R4 实施、锁序、未完成项 | 当前专项主审查 |
+| [CMD 重构主台账](cmd_refactor_plan.md) | CMD-15 的任务状态和后续依赖 | 唯一任务状态入口 |
+| `contract/v1/` | MQTT/BLE 共用 v1 命令字段、状态、错误码和来源权限契约 | wire 语义权威来源 |
+| [本总览](MQTT_架构与验收总览.md) | MQTT 职责、历史缺陷和验收状态导航 | 专题入口 |
+
+## 3. 当前代码状态（CMD-15）
+
+| 项 | 结果 | 不能宣称的内容 |
+|---|---|---|
+| R1 config snapshot | CODE_DONE | 未构建/未真机回归，不能 PASS |
+| R2 telemetry/state snapshot | CODE_DONE | 同上 |
+| R4 Wi-Fi status snapshot | CODE_DONE | C/W 快照先后独立取得，不构成跨域原子快照 |
+| R3 pending/deferred 可观测字段 | 未授权/未实施 | 不得认为已有新字段 |
+| R5 esp-mqtt 凭据复制语义验证 | 未授权/未实施 | 不得声称已通过构建/源码/运行时验证 |
+
+截至本总览更新，CMD-15 R1/R2/R4 为 **CODE_DONE，验证待执行**。具体当前任务状态只在 [cmd_refactor_plan.md](cmd_refactor_plan.md) 维护；如与历史专项文档标题状态冲突，以主台账最新状态及后续证据为准。
+
+## 4. 已闭环历史缺陷（证据保留）
+
+以下是历史专项，不是当前 MQTT 配置同步问题的替代实现：
+
+- DEF-MQTT-001/002：受理回包与 operation 过期任务问题，历史状态追踪及 E1/E3 报告已归档。
+- DEF-MQTT-003：孤儿 cleanup 后恢复持久配置问题，设备报告记录 R1–R4 PASS。
+- MQTT v1 真机回归：旧测试镜像下 38/40 PASS、0 FAIL、2 SKIP（N03/N07 为静态 IP 锁预期跳过）；此结果只代表当时测试范围和镜像，不等于当前 CMD-15 回归。
+- MQTT 网络配置控制阶段 0：接口治理、owner/cancel、配置互斥和 profile 不变量历史实现记录；不得把早期阶段 0 设计稿中的“未实现/待实现”描述当作当前代码事实。
+
+原始设计、实现、测试与报告已移入 `docs/archive/2026-11/`，保留其完整内容与历史基线。
+
+## 5. 当前验收缺口
+
+1. CMD-15 R1/R2/R4 尚未完成批准的 ESP-IDF 构建与 host regression；状态仍 CODE_DONE，不是 PASS。
+2. R3/R5 不在当前授权范围内；需要重新审查和申请。
+3. 旧 38/40 MQTT 真机报告不能替代新版本的构建/回归。
+4. MQTT broker 地址、端口、设备 token 等部署参数应从实际部署配置核验，不从历史报告复制。
+
+## 6. 维护规则
+
+- MQTT 协议字段与权限只在 `contract/v1/` 维护。
+- 当前代码/测试状态只在 CMD 主台账和最新专项审查中更新。
+- 缺陷关闭后归档原始立案、实现与验收记录；保留镜像 SHA、设备身份、原始证据和失败/回滚事实。
+- 不因文档整理授权任何 MQTT 配置写入、设备操作或 broker 变更。
