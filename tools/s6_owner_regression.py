@@ -61,11 +61,17 @@ def mark():
     if not SERIAL.is_file():
         raise SerialUnavailable(f"串口日志不存在：{SERIAL}")
     try:
-        size = SERIAL.stat().st_size
+        with open(SERIAL, "rb") as f:
+            f.seek(0, 2)
+            size = f.tell()
+            if size <= 0:
+                raise SerialUnavailable(f"串口日志为空：{SERIAL}")
+            f.seek(size - 1)
+            f.read(1)                      # 真实读取，验证可读性（stat 成功≠可读）
+    except SerialUnavailable:
+        raise
     except OSError as exc:
         raise SerialUnavailable(f"串口日志不可读：{exc}") from exc
-    if size <= 0:
-        raise SerialUnavailable(f"串口日志为空：{SERIAL}")
     return size
 
 
@@ -218,7 +224,9 @@ async def main():
         if not await wait_idle(s):
             log("[STOP] 基线门禁未满足（sta_connected+trial idle）——本轮中止")
             (OUT / "results.json").write_text(json.dumps(
-                {"abort": "baseline_not_ready"}, ensure_ascii=False, indent=1),
+                {"run_id": RUN_ID, "abort": "baseline_not_ready",
+                 "results": {"op_e": "NOT_RUN", "op_v": "NOT_RUN"}},
+                ensure_ascii=False, indent=1),
                 encoding="utf-8")
             return 3
         for c in order:
