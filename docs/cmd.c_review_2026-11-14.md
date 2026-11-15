@@ -245,7 +245,7 @@ cmd_internal.h    最少量内部类型/函数声明（避免暴露事务全局�
 
 ---
 
-# 附录 A · 2026-11-16 复核（基线 `d09f355`）
+# 附录 A · 2026-11-15 复核（基线 `d09f355`）
 
 > 状态：ACTIVE。审查对象仍是 `main/cmd.c`（3043 行）。本轮**未改代码**；只补充行号锚点、锁清单与首次审查未覆盖的 5 项发现。
 > 方法：静态阅读。未编译、未运行、未上机；"风险"不等于已复现缺陷。
@@ -264,60 +264,60 @@ cmd_internal.h    最少量内部类型/函数声明（避免暴露事务全局�
 | 1916–2117 | success/effect 响应、配置 patch、profile 保存、io source、适配器、m1hook |
 | 2118–3043 | `app_cmd_execute_method`（26 个方法的 if/else 链 + 统一收尾） |
 
-## A.2 逐函数清单（48 项）
+## A.2 逐函数清单（49 项）
 
-锁列：`J`=`s_net_job_lock`（递归 mutex）；`C`=`portMUX` 临界区；`W`=`app_wifi_runtime_lock`；`M`=`app_mqtt_lock`；`F`=`app_config_lock`；`—`=无。
+**锁口径分两层**：机制只有 **三种**——任务互斥锁、临界区（`portMUX`）、模块分域锁；清单里的字母是 **五个锁实例**：`J`=`s_net_job_lock`（递归 mutex）、`C`=`s_stage_snap_mux`/`s_scan_gate_mux`（临界区）、`W`=`app_wifi_runtime_lock`、`M`=`app_mqtt_lock`、`F`=`app_config_lock`（分域锁）；`—`=无。
 
 | 行段 | 函数 | 锁 | 处置建议 |
 | --- | --- | --- | --- |
-| 43–125 | `app_cmd_operation_owner` | — | **合并**（与 `cmd_policy.c:13` 重复且语义分叉，见 A.3-①） |
-| 126–164 | `app_cmd_net_stage_snap_put` | C | 保留（迁 `cmd_net_txn.c`） |
-| 165–211 | `app_cmd_net_stage_snap_get` | C | 保留（同上） |
-| 212–240 | `app_cmd_take_accepted_ttl` | — | 保留 |
-| 241–250 | `app_cmd_net_job_lock` | J | 保留（递归属性是硬约束） |
-| 251–259 | `app_cmd_net_job_unlock` | J | 保留 |
-| 260–271 | `app_cmd_secure_wipe` | — | 保留（`volatile` 写法不得改） |
-| 272–281 | `app_cmd_net_async_clear_job` | 须持 J | 保留；迁移后仍需"调用方已持锁"的显式契约 |
-| 282–290 | `app_cmd_net_async_clear_job_sync` | J | 保留（与上一项成对，不合并） |
-| 291–332 | `app_cmd_static_switch_blocked` | F | 保留（策略归网络配置域） |
-| 333–362 | `app_cmd_net_store_trial` | J | 保留 |
-| 363–374 | `app_cmd_net_trial_clear` | J | 保留（原语内建锁） |
-| 375–423 | `app_cmd_net_on_ble_disconnect` | J（分段） | 保留；"锁内快照→锁外 cancel→锁内清 trial"顺序不得改 |
-| 424–435 | `app_cmd_scan_gate_check` | C | 保留 |
-| 436–444 | `app_cmd_scan_gate_stamp` | C | 保留 |
-| 445–454 | `app_cmd_net_op_active` | J | 保留（对外窄接口） |
-| 455–473 | `app_cmd_net_trial_ready` | J | 保留 |
-| 474–524 | `app_cmd_net_async_cleanup` | J | 核心保护逻辑，禁止为拆文件改写 |
-| 525–543 | `app_cmd_net_wifi_error` | — | 保留 |
-| 544–680 | `app_cmd_net_async_run` | J（分段） | 核心逻辑，整体迁移 |
-| 681–839 | `app_cmd_net_tryconnect_async` | J（分段） | 保留（迁 `cmd_net_txn.c`） |
-| 845–885 | `app_cmd_net_op_status_capture` | W/M 短暂 | 保留 |
-| 886–981 | `app_cmd_net_operation_status` | J/W/M | 保留（快照优先、live 回落语义冻结） |
-| 982–1131 | `app_cmd_net_apply_async` | **J 跨再入** | 保留；见 A.3-② 持锁预算问题 |
-| 1132–1217 | `app_cmd_net_cancel_async` | — | 保留 |
-| 1221–1344 | `app_cmd_build_network_status` | W/M 分域 | 迁 `cmd_status.c` |
-| 1345–1361 | `app_cmd_reset_reason_name` | — | 迁状态模块 |
-| 1362–1373 | `app_cmd_ota_state_name` | — | 迁状态模块 |
-| 1374–1417 | `app_cmd_build_gpio_status` | — | 迁状态模块 |
-| 1418–1465 | `app_cmd_build_uart_runtime` | — | 迁状态模块 |
-| 1466–1488 | `app_cmd_running_image_len` | — | 迁状态模块 |
-| 1489–1628 | `app_cmd_build_device_status` | W/M（内嵌 network 段） | 迁状态模块；见 A.3-④ |
-| 1629–1663 | `app_cmd_patch_allowed` | — | 迁配置命令模块 |
-| 1664–1685 | `app_cmd_verify_web_password` | — | 保留语义；**改名**（见 A.3-③） |
-| 1686–1706 | `app_cmd_parse_bool_param` | — | 保留 |
-| 1707–1719 | `app_cmd_domain_known` | — | 与 `k_config_domains` 合并（A.3-⑤） |
-| 1720–1736 | `app_cmd_domain_wanted` | — | 保留 |
-| 1737–1876 | `app_cmd_build_get_config` | — | 迁配置/状态模块（边界待定） |
-| 1877–1915 | `app_cmd_build_device_info` | — | 迁状态模块 |
-| 1916–1953 | `app_cmd_build_success` | — | 保留（响应组装） |
-| 1954–1968 | `app_cmd_add_txn_fields` | — | 保留 |
-| 1969–1997 | `app_cmd_run_patch` | — | 迁配置命令模块 |
-| 1998–2014 | `app_cmd_save_profile_from_params` | — | 保留；命名/前提需澄清 |
-| 2015–2033 | `app_cmd_io_source` | — | 保留（HTTP 分支标 LEGACY） |
-| 2034–2040 | `app_cmd_net_tryconnect_adapter` | — | 稳定窄接口，不删 |
-| 2041–2047 | `app_cmd_net_apply_adapter` | — | 同上 |
-| 2048–2057 | `app_cmd_net_cancel_adapter` | — | 同上 |
-| 2058–2117 | `app_cmd_m1hook` | — | 仅 FI 构建保留 |
+| 43–51 | `app_cmd_operation_owner` | — | **合并**（与 `cmd_policy.c:13` 重复且语义分叉，见 A.3-①） |
+| 126–163 | `app_cmd_net_stage_snap_put` | C | 保留（迁 `cmd_net_txn.c`） |
+| 165–201 | `app_cmd_net_stage_snap_get` | C | 保留（同上） |
+| 212–222 | `app_cmd_take_accepted_ttl` | — | 保留 |
+| 241–249 | `app_cmd_net_job_lock` | J | 保留（递归属性是硬约束） |
+| 251–256 | `app_cmd_net_job_unlock` | J | 保留 |
+| 260–267 | `app_cmd_secure_wipe` | — | 保留（`volatile` 写法不得改） |
+| 272–278 | `app_cmd_net_async_clear_job` | 须持 J | 保留；迁移后仍需"调用方已持锁"的显式契约 |
+| 282–287 | `app_cmd_net_async_clear_job_sync` | J | 保留（与上一项成对，不合并） |
+| 291–331 | `app_cmd_static_switch_blocked` | F | 保留（策略归网络配置域） |
+| 333–361 | `app_cmd_net_store_trial` | J | 保留 |
+| 363–373 | `app_cmd_net_trial_clear` | J | 保留（原语内建锁） |
+| 375–416 | `app_cmd_net_on_ble_disconnect` | J（分段） | 保留；"锁内快照→锁外 cancel→锁内清 trial"顺序不得改 |
+| 424–434 | `app_cmd_scan_gate_check` | C | 保留 |
+| 436–443 | `app_cmd_scan_gate_stamp` | C | 保留 |
+| 445–453 | `app_cmd_net_op_active` | J | 保留（对外窄接口） |
+| 455–471 | `app_cmd_net_trial_ready` | J | 保留 |
+| 474–523 | `app_cmd_net_async_cleanup` | J | 核心保护逻辑，禁止为拆文件改写 |
+| 525–542 | `app_cmd_net_wifi_error` | — | 保留 |
+| 544–677 | `app_cmd_net_async_run` | J（分段） | 核心逻辑，整体迁移 |
+| 681–816 | `app_cmd_net_tryconnect_async` | J（分段） | 保留（迁 `cmd_net_txn.c`） |
+| 845–884 | `app_cmd_net_op_status_capture` | W/M 短暂 | 保留 |
+| 886–980 | `app_cmd_net_operation_status` | J/W/M | 保留（快照优先、live 回落语义冻结） |
+| 982–1130 | `app_cmd_net_apply_async` | **J 跨再入** | 保留；见 A.3-② 持锁预算问题 |
+| 1132–1186 | `app_cmd_net_cancel_async` | — | 保留 |
+| 1221–1343 | `app_cmd_build_network_status` | W/M 分域 | 迁 `cmd_status.c` |
+| 1345–1360 | `app_cmd_reset_reason_name` | — | 迁状态模块 |
+| 1362–1372 | `app_cmd_ota_state_name` | — | 迁状态模块 |
+| 1374–1416 | `app_cmd_build_gpio_status` | — | 迁状态模块 |
+| 1418–1461 | `app_cmd_build_uart_runtime` | — | 迁状态模块 |
+| 1466–1487 | `app_cmd_running_image_len` | — | 迁状态模块 |
+| 1489–1621 | `app_cmd_build_device_status` | W/M（内嵌 network 段） | 迁状态模块；见 A.3-④ |
+| 1629–1662 | `app_cmd_patch_allowed` | — | 迁配置命令模块 |
+| 1664–1684 | `app_cmd_verify_web_password` | — | 保留语义；**改名**（见 A.3-③） |
+| 1686–1705 | `app_cmd_parse_bool_param` | — | 保留 |
+| 1707–1717 | `app_cmd_domain_known` | — | 与 `k_config_domains` 合并（A.3-⑤） |
+| 1720–1734 | `app_cmd_domain_wanted` | — | 保留 |
+| 1737–1874 | `app_cmd_build_get_config` | — | 迁配置/状态模块（边界待定） |
+| 1877–1913 | `app_cmd_build_device_info` | — | 迁状态模块 |
+| 1916–1951 | `app_cmd_build_success` | — | 保留（响应组装） |
+| 1954–1966 | `app_cmd_add_txn_fields` | — | 保留 |
+| 1969–1994 | `app_cmd_run_patch` | — | 迁配置命令模块 |
+| 1998–2013 | `app_cmd_save_profile_from_params` | — | 保留；命名/前提需澄清 |
+| 2015–2032 | `app_cmd_io_source` | — | 保留（HTTP 分支标 LEGACY） |
+| 2034–2039 | `app_cmd_net_tryconnect_adapter` | — | 稳定窄接口，不删 |
+| 2041–2046 | `app_cmd_net_apply_adapter` | — | 同上 |
+| 2048–2053 | `app_cmd_net_cancel_adapter` | — | 同上 |
+| 2058–2115 | `app_cmd_m1hook` | — | 仅 FI 构建保留 |
 | 2118–3043 | `app_cmd_execute_method` | 间接 | 迁 `cmd_dispatch.c` 时保持逐字语义 |
 
 ## A.3 首次审查未覆盖的 5 项发现

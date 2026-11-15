@@ -169,7 +169,7 @@ docs/             架构审查、测试方案、验收报告和证据索引
 - **全链路 soak 计划**：[`docs/soak_test_plan.md`](docs/soak_test_plan.md)。
 - **命令层审查**：[`docs/cmd.c_review_2026-11-14.md`](docs/cmd.c_review_2026-11-14.md)。
 - **命令层跟进计划**：[`docs/cmd_refactor_plan.md`](docs/cmd_refactor_plan.md)。
-- **近期变更（2026-11-14~16）**：[`docs/近期变更记录_2026-11-14至11-16.md`](docs/近期变更记录_2026-11-14至11-16.md)（CMD-04 合并窗口 / S6 固件缺陷 / 阶段 A / 阶段 B 门禁工具链 / 身份采集）。
+- **近期变更（2026-11-14~15）**：[`docs/近期变更记录_2026-11-14至11-15.md`](docs/近期变更记录_2026-11-14至11-15.md)（CMD-04 合并窗口 / S6 固件缺陷 / 阶段 A / 阶段 B 门禁工具链 / 身份采集）。
 - **docs 索引**：[`docs/README.md`](docs/README.md)（ACTIVE/LEGACY/ARCHIVED/PLANNED 状态标定；详细审查与持续跟进统一入口）。
 - 原始日志和历史证据见 `docs/archive/` 与 `docs/evidence/`；计划状态和硬件实测状态以各专项文档为准。
 
