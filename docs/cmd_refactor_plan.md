@@ -18,7 +18,7 @@
 | ID | 优先级 | 项目 | 状态 | 验收要求 |
 |---|---|---|---|---|
 | CMD-01 | P0 | `io.get` Wi-Fi runtime 状态读取加锁快照 | TEST_PENDING | 最小代码修改已在 `add93e7`；待 ESP-IDF 构建及 BLE/MQTT 入口回归，未通过前不标 PASS |
-| CMD-02 | P0 | `s_net_async` 逐字段所有权与读点收口 | DESIGN_READY | §1.3 补丁设计 + C1–C3 语义/验收边界已写入 `CMD-02_03_并发静态审查_2026-11-15.md`；含"数据竞争≠原子"、worker 早退顺序、`CODE_DONE`/`PASS` 分级；`main/cmd.c` 尚未修改，**待实施授权** |
+| CMD-02 | P0 | `s_net_async` 逐字段所有权与读点收口 | CODE_DONE | 七处读点已按 §1.3 实施（`28f9090`）；`git diff --check` 与 `syntax_check --strict` 通过，全量读写点复核无新增无锁读。**PASS 待 ESP-IDF 构建 + 受理/重复幂等/apply/cancel/expire 回归**（未授权） |
 | CMD-03 | P0 | operation/job 锁序、callback 时序及 expiring 窄窗口 | IN_PROGRESS | Phase A host 测试已实施：S1–S5 ×50 ×10 轮全过（A1 100/100、A2 100/100、A3 100/100、A4/A5/A7 50/50），变异体在 A1 失败（可证伪）；见 `CMD-03_窄窗口竞态_测试设计_2026-11-15.md` 附录 A。Phase B（cmd 层 store_trial 守卫）需代码授权；Phase C 需设备授权 |
 | CMD-04 | P1 | network/device status 改为快照后构造 JSON | TODO | 锁持有期间无 cJSON 分配；字段兼容 |
 | CMD-05 | P1 | 复核 config lock 与 Wi-Fi profile lock 全局锁序 | TODO | 覆盖 profile 保存、删除、Wi-Fi 事件回写路径 |
@@ -135,7 +135,7 @@
 按依赖顺序推进，不并行混改：
 
 1. **CMD-03 Phase A：已完成**（`tests/operation_host/`；A1–A7 + 可证伪性检查；产品代码未改、无设备操作）。
-2. **CMD-02：设计已完成（含 C1–C3 边界），待实施授权。**7 处读点补丁方案见专项审查 §1.3；实施后最多 `CODE_DONE`，`PASS` 需 ESP-IDF 构建与受理/幂等/apply/cancel/expire 回归（当前未授权）。不得顺手重构网络事务。
+2. **CMD-02：已实施（`28f9090`），状态 `CODE_DONE`。**七处读点按 §1.3 收口；`PASS` 需 ESP-IDF 构建与受理/幂等/apply/cancel/expire 回归（当前未授权）。不得顺手重构网络事务。
 3. **CMD-03 Phase B 决策：**根据 Phase A 结果评估 Phase B；是否抽取 `cmd_net_guard`、是否增加 `active && op` 守卫，必须单独设计评审和代码授权。若未修复基线无法稳定复现，记录风险，不得仅凭机制推测直接改代码。
 4. **CMD-05：**完成 config/profile 锁序静态审查。
 5. **CMD-01：**安排构建与 BLE/MQTT 入口回归，形成可追溯证据。
@@ -207,3 +207,18 @@
 - 未完成项 / 风险：C1 所述"快照后仍非原子"需在实现注释中保留；C3 的 `PASS` 依赖构建与回归
 - 授权边界：已授权=文档补写；未授权=`main/cmd.c` 修改、构建、设备操作
 - 下一唯一动作：用户明确批准后实施 §1.3 七处最小修改（不含 `cmd_net_guard`/`store_trial`/迁移）
+
+
+### 7.7 交接记录 · 2026-11-15 · CMD-02 七处读点实施
+
+- 日期：2026-11-15
+- main HEAD / 源码基线：`28f9090`（父 `e741b1f`）
+- 本轮 CMD：CMD-02
+- 本轮变更：`main/cmd.c` 七处读点（+89/−33）；专项审查 §1.3 追加实施记录；本计划状态同步
+- 状态变化：CMD-02 `DESIGN_READY -> CODE_DONE`
+- 验证：`git diff --check` 通过；`tests/syntax_check.py --strict main/cmd.c` OK；
+  `grep s_net_async` 全量复核（剩余访问均在 J 内或 dispatcher 单任务）；未执行构建/回归
+- 未完成项 / 风险：`PASS` 依赖 ESP-IDF 构建 + 四类回归；C1 的非原子边界仍成立；
+  CMD-03 `store_trial` 窄窗口未修复
+- 授权边界：已授权=七处源码修改；未授权=构建、设备回归、Phase B、模块迁移
+- 下一唯一动作：等待构建/回归授权后执行 CMD-02 验证；或按队列进入 CMD-05 静态审查
