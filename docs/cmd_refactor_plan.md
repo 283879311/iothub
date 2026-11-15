@@ -19,7 +19,7 @@
 |---|---|---|---|---|
 | CMD-01 | P0 | `io.get` Wi-Fi runtime 状态读取加锁快照 | TEST_PENDING | 最小代码修改已在 `add93e7`；待 ESP-IDF 构建及 BLE/MQTT 入口回归，未通过前不标 PASS |
 | CMD-02 | P0 | `s_net_async` 逐字段所有权与读点收口 | REVIEWED | 静态盘点见 `CMD-02_03_并发静态审查_2026-11-15.md` §1；7 处读点已定位，代码尚未修改；需窄函数/锁内局部副本方案与静态回归 |
-| CMD-03 | P0 | operation/job 锁序、callback 时序及 expiring 窄窗口 | DESIGN_READY | 锁序与回调静态审查完成；测试设计见 `CMD-03_窄窗口竞态_测试设计_2026-11-15.md`；Phase A host 测试尚未实施，Phase B 需代码授权，Phase C 需独立设备授权 |
+| CMD-03 | P0 | operation/job 锁序、callback 时序及 expiring 窄窗口 | IN_PROGRESS | Phase A host 测试已实施：S1–S5 ×50 ×10 轮全过（A1 100/100、A2 100/100、A3 100/100、A4/A5/A7 50/50），变异体在 A1 失败（可证伪）；见 `CMD-03_窄窗口竞态_测试设计_2026-11-15.md` 附录 A。Phase B（cmd 层 store_trial 守卫）需代码授权；Phase C 需设备授权 |
 | CMD-04 | P1 | network/device status 改为快照后构造 JSON | TODO | 锁持有期间无 cJSON 分配；字段兼容 |
 | CMD-05 | P1 | 复核 config lock 与 Wi-Fi profile lock 全局锁序 | TODO | 覆盖 profile 保存、删除、Wi-Fi 事件回写路径 |
 | CMD-06 | P1 | 将网络异步事务整体迁移到 `cmd_net_txn.c` | TODO | 阶段 A 关闭后再实施；事务语义不变；接口不暴露可写全局状态 |
@@ -38,7 +38,7 @@
 
 - [x] CMD-01：已修复 `io.get` 对 `s_wifi.sta_has_ip` / `s_wifi.sta_ip` 的读取边界；锁内复制快照，锁外构造 JSON。代码提交：`add93e7`。静态检查通过；构建与 BLE/MQTT 入口回归尚未执行。
 - [x] CMD-02：静态盘点完成（`CMD-02_03_并发静态审查_2026-11-15.md` §1）；7 处读点待代码修复，不能将盘点勾选解释为问题关闭。
-- [x] CMD-03：锁序/回调静态审查完成（同上 §2）；窄窗口测试设计已完成（`CMD-03_窄窗口竞态_测试设计_2026-11-15.md`），Phase A host 测试待实施。
+- [x] CMD-03：锁序/回调静态审查完成（同上 §2）；测试设计完成；**Phase A host 测试已实施并通过**（`tests/operation_host/`，附录 A：A1 100/100、可证伪性检查 OK）。Phase B 未授权。
 - [ ] CMD-05：审查 config/profile 锁序。
 - [ ] 更新本计划和审查报告中的结论、证据及未决项。
 
@@ -126,7 +126,7 @@
 - 当前 CMD 源码审查基线：`d0dbf714e138499209cce43fdce92f35ba71a598`。本轮仅更新本计划文档（提交历史以 `main` 当前 HEAD 为准）；CMD-02/03 专项审查没有修改产品源码。Agent 每轮开工必须重新读取当前 `main` HEAD，不得依赖此处的历史快照。
 - CMD-01：代码改动已存在（`add93e7`），构建和 BLE/MQTT 入口回归未完成。
 - CMD-02：静态证据完成；7 处读点尚未修复，不能标 PASS。
-- CMD-03：静态审查和测试设计完成；测试尚未执行。测试设计明确分为 Phase A（operation 层 host，无产品代码改动）、Phase B（cmd 层 guard 抽取，需代码修改授权）、Phase C（设备端到端，需独立设备授权）。
+- CMD-03：静态审查、测试设计、**Phase A host 测试**均完成（5 场景 ×50 ×10 轮全过；变异体检查通过）。产品代码未改动；Phase B（cmd 层 guard）与 Phase C（设备）未授权。
 - CMD-05、CMD-04～CMD-14：除上述已有审查/设计材料外，均按总表状态推进；目标文件名是计划，不代表文件已经创建。
 - 当前没有 CMD 模块重构已完成的最终构建/协议/设备验收证据。
 
@@ -134,7 +134,7 @@
 
 按依赖顺序推进，不并行混改：
 
-1. **CMD-03 Phase A：**实施 `tests/operation_host/` host 测试；先确认基线测试可重复，并验证 A1–A6。该阶段不改产品代码、不操作设备。
+1. **CMD-03 Phase A：已完成**（`tests/operation_host/`；A1–A7 + 可证伪性检查；产品代码未改、无设备操作）。
 2. **CMD-02：**形成 7 处读点的最小补丁设计，逐项标注读写者、锁、局部副本和行为影响；经用户批准后实施，并做静态回归。不得顺手重构网络事务。
 3. **CMD-03 Phase B 决策：**根据 Phase A 结果评估 Phase B；是否抽取 `cmd_net_guard`、是否增加 `active && op` 守卫，必须单独设计评审和代码授权。若未修复基线无法稳定复现，记录风险，不得仅凭机制推测直接改代码。
 4. **CMD-05：**完成 config/profile 锁序静态审查。
@@ -168,3 +168,16 @@
 - 授权边界（已授权 / 未授权）：
 - 下一唯一动作：
 ```
+
+
+### 7.5 交接记录 · 2026-11-15 · CMD-03 Phase A
+
+- 日期：2026-11-15
+- main HEAD / 源码基线：写入时 `31d19f6`（源码 `d0dbf71` 起未变）
+- 本轮 CMD：CMD-03 Phase A
+- 本轮变更：新增 `tests/operation_host/`（stub/shim/S1–S5/Makefile/check_falsifiable.sh）；更新本计划与 `CMD-03_窄窗口竞态_测试设计_2026-11-15.md` 附录 A；**未改 `main/`**
+- 状态变化：CMD-03 `DESIGN_READY -> IN_PROGRESS`
+- 验证：`make -C tests/operation_host`（0 warning）；`run` 5 场景 ×50 ×10 轮 = 10/10 `RESULT: PASS`；A1 100/100、A2 100/100、A3 100/100、A4/A5/A5h/A7 各 50/50；`falsify` 变异体（expiring 闸 2 处置空）在 A1 失败
+- 未完成项 / 风险：Phase B（cmd 层 `store_trial` 未覆盖）；host 语义不等于真机；`app_operation_status_t` 不暴露 `expiring`（测试以 A3 间接验证）
+- 授权边界：已授权=host 测试新增/编译/运行；未授权=产品代码、构建固件、设备/串口/BLE/NVS/烧录
+- 下一唯一动作：CMD-02 七处读点的最小补丁设计（逐项读写者/锁/局部副本/行为影响），待批准后实施
