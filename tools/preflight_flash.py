@@ -226,6 +226,11 @@ def main():
     observed_id = dev_id_from_wifi_mac(observed_wifi)
     other_id = dev_id_from_wifi_mac(other_wifi)
 
+    # P2：--elf 与 --expect-build-sha 必须成对，禁止"只给一半"导致检查被静默跳过
+    if bool(args.elf) != bool(args.expect_build_sha):
+        print("[FAIL] --elf 与 --expect-build-sha 必须同时提供或同时省略")
+        return 2
+
     binp = Path(args.bin)
     if not binp.is_file():
         print(f"[FAIL] 冻结 BIN 不存在: {binp}")
