@@ -326,3 +326,26 @@
   烧录/设备/串口/BLE、Phase B、CMD-06、R3/R5
 - 授权边界：已授权=无（等待批准）；未授权=构建、host 测试、设备
 - 下一唯一动作：用户批准阶段 1+2 后执行并回写证据；批准前不执行任何构建
+
+
+### 7.15 交接记录 · 2026-11-15 · 联合验证申请 v2 修订（退回后）
+
+- 日期：2026-11-15
+- main HEAD / 源码基线：`b323ce8`（源码基线 `5104a3b`；差异仅文档）
+- 本轮 CMD：CMD-02 + CMD-15（申请修订，仅文档）
+- 退回原因与修订：
+  1. v1 列出的 `tests/cmd_policy`、`tests/cmd_cfg_txn`、`tests/cmd_error` 在本机存在但被
+     `.gitignore:51`（`tests/cmd_*/`）忽略，**从未进入仓库**；`main` 上不存在。v2 改为只运行
+     仓库内实际存在的 5 个 Makefile 入口（token_store/netcheck/wifi_owner/cmd_context/operation_host），
+     并注明 `tests/README.md` 的对应条目属已知陈旧文本、不作执行依据。
+  2. 构建命令补 `set -euo pipefail`（防 tee 掩盖失败）、`mkdir -p` 日志目录、
+     执行前记录 HEAD/`git status --short`/`idf.py --version`；`fullclean` 也落日志。
+  3. 明确区分"构建 HEAD `b323ce8`"与"产品源码基线 `5104a3b`"，并设工作区干净/HEAD 校验，
+     不符先 STOP。
+  4. 边界保持：阶段 3、烧录/设备、Phase B、CMD-06、R3/R5 均不申请。
+- 状态变化：无（CMD-02/CMD-15 保持 `CODE_DONE`；窗口仍 `PLANNED`）
+- 验证：未执行构建/测试
+- 新发现（记录，不处理）：`tests/cmd_*/` 被 gitignore 的三套测试无法从仓库复现；
+  是否提交这些测试需单独立项，不得在本窗口顺手加入。
+- 授权边界：已授权=文档修订；未授权=构建、host 测试、设备
+- 下一唯一动作：用户按 v2 申请重新审查；批准后执行阶段 1+2
