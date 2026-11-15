@@ -18,8 +18,8 @@
 | ID | 优先级 | 项目 | 状态 | 验收要求 |
 |---|---|---|---|---|
 | CMD-01 | P0 | `io.get` Wi-Fi runtime 状态读取加锁快照 | IN_PROGRESS | 静态检查通过；待 ESP-IDF 构建与入口回归 |
-| CMD-02 | P0 | 全面盘点 `s_net_async` 读写点并统一快照接口 | TODO | 每个字段有明确锁保护/单任务所有权说明 |
-| CMD-03 | P0 | 复核 operation/job 锁序及 callback 时序 | TODO | operation 临界区不回调 cmd；cleanup/run/cancel 时序有证据 |
+| CMD-02 | P0 | 全面盘点 `s_net_async` 读写点并统一快照接口 | IN_PROGRESS | 每个字段有明确锁保护/单任务所有权说明；静态盘点见 `CMD-02_03_并发静态审查_2026-11-15.md` §1（7 处读点待收口） |
+| CMD-03 | P0 | 复核 operation/job 锁序及 callback 时序 | IN_PROGRESS | operation 临界区不回调 cmd；cleanup/run/cancel 时序有证据；静态结论见同上 §2（锁序 J→O 成立，1 个窄窗口待动态验证） |
 | CMD-04 | P1 | network/device status 改为快照后构造 JSON | TODO | 锁持有期间无 cJSON 分配；字段兼容 |
 | CMD-05 | P1 | 复核 config lock 与 Wi-Fi profile lock 全局锁序 | TODO | 覆盖 profile 保存、删除、Wi-Fi 事件回写路径 |
 | CMD-06 | P1 | 将网络异步事务整体迁移到 `cmd_net_txn.c` | TODO | 事务语义不变；接口不暴露可写全局状态 |
@@ -37,8 +37,8 @@
 ### 阶段 A：锁与快照，不移动业务代码
 
 - [x] CMD-01：已修复 `io.get` 对 `s_wifi.sta_has_ip` / `s_wifi.sta_ip` 的读取边界；锁内复制快照，锁外构造 JSON。代码提交：`add93e7`。静态检查通过；构建与 BLE/MQTT 入口回归尚未执行。
-- [ ] CMD-02：列出 `s_net_async` 每个字段的全部读写点，标记任务上下文、锁状态、生命周期。
-- [ ] CMD-03：审查 `operation.c` 的锁、回调、cancel、expire 和槽位复用。
+- [x] CMD-02：静态盘点完成（`CMD-02_03_并发静态审查_2026-11-15.md` §1）；7 处读点的收口修复待排期。
+- [x] CMD-03：静态审查完成（同上 §2）；`expiring` 窄窗口待动态验证。
 - [ ] CMD-05：审查 config/profile 锁序。
 - [ ] 更新本计划和审查报告中的结论、证据及未决项。
 
@@ -102,7 +102,7 @@
 - [x] 第一轮 `cmd.c` 静态审查完成。
 - [x] 形成函数职责、调用关系、锁关系、重复逻辑和拆分建议文档。
 - [ ] 建立代码级并发专项审查证据。
-- [ ] 阶段 A 尚未整体完成（CMD-01 已实施，CMD-02/03/05 未开始）。
+- [ ] 阶段 A 尚未整体完成（CMD-01 已实施；CMD-02/03 静态审查完成、修复待排期；CMD-05 未开始）。
 - [x] `cmd.c` 已有 CMD-01 最小代码修改（`add93e7`）；尚未执行 ESP-IDF 编译或真机验收。
 
 ---
@@ -113,3 +113,5 @@
 - 新增 CMD-14：`apply_async` 持 `s_net_job_lock` 跨内层 `execute_method`（含 NVS 写），属 R2-P0 的刻意设计；先测持锁时长，再讨论是否缩短。
 - 新增待办（未编号，随 CMD-12 一并处理）：`app_cmd_verify_web_password` 改名；`k_config_domains` 与 `app_cmd_domain_known` 合并；`cmd.c:43` 与 `cmd_policy.c:13` 的 owner 映射合并。
 - 本文档中的阶段 A/B/C 划分不变；本轮未移动任何代码。
+
+- 2026-11-15：CMD-02/CMD-03 静态审查完成（`CMD-02_03_并发静态审查_2026-11-15.md`）；未改代码，修复项待排期。
