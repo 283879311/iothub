@@ -2,7 +2,7 @@
 
 基于 ESP-IDF 6.0.x、面向经典 ESP32（4 MB Flash、无 PSRAM）的物联网控制与现场数据网关。当前产品以 **BLE NUS 本地管理 + ThingsBoard MQTT 远程管理/上报 + UART1 工业数据接入** 为核心；控制命令与原始字节数据分属两个平面。
 
-> 当前源码核对基线：`8d7d768e46b46f9c2ff5574dcdfe53d26c72ed7a`（CMD-15 R4 源码提交；其后 `main` 的相关提交为文档维护）。每轮执行前仍须核对实际 `main` HEAD 与源码差异。固件版本由构建时 Git 描述串生成：`1.3-<git短SHA>[-dirty]`；无 Git 元数据时为 `1.3-unknown`。
+> 当前源码核对基线：`5104a3b0b3266f6afe22404d24ca89d41253cb63`（CMD-15 R4 一致性修订后的源码基线；其后 `main` 仅有文档维护）。每轮执行前仍须核对实际 `main` HEAD 与源码差异。固件版本由构建时 Git 描述串生成：`1.3-<git短SHA>[-dirty]`；无 Git 元数据时为 `1.3-unknown`。
 
 ## 当前产品边界
 
