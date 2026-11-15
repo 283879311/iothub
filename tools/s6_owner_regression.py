@@ -213,7 +213,7 @@ async def main():
     want = [c.strip().upper() for c in args.cases.split(",") if c.strip()]
 
     for _ in range(3):                     # 严格唯一：mkdir 原子创建，碰撞换新 ID 重试
-        RUN_ID = time.strftime("%Y%m%d_%H%M%S") + "_" + uuid.uuid4().hex[:8]
+        RUN_ID = time.strftime("%Y%m%d_%H%M%S") + "_" + _uuid.uuid4().hex[:8]
         candidate = OUT_BASE / f"run_{RUN_ID}"
         try:
             candidate.mkdir(parents=True, exist_ok=False)
