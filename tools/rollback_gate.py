@@ -88,12 +88,11 @@ def main():
         print("[FAIL] 门禁阈值不得放宽（max-anchor-age-min / usb-events-min ≤ 240）")
         return 2
 
-    # 0a. 证据目录必须为本轮专用：拒绝复用任何已有产物（防旧 final 冒充本轮）
-    stale = [n for n in ("mac_read_flow.final.json", "mac_read_flow.json",
-                         "mac_record_gate.json", "rollback_gate_last.json")
-             if (Path(args.evidence_dir) / n).exists()]
-    if stale:
-        print(f"[FAIL] 证据目录已有旧产物 {stale}——每轮必须使用全新目录")
+    # 0a. 证据目录必须为本轮全新：与 port_identity read 共用同一原子创建函数
+    ok_dir, dir_why = PI.prepare_fresh_evidence_dir(args.evidence_dir)
+    if not ok_dir:
+        for w in dir_why:
+            print(f"[FAIL] {w}")
         return 2
     if not args.attest_no_external_holder.strip():
         print("[FAIL] --attest-no-external-holder 不能为空")
@@ -160,7 +159,8 @@ def main():
             capture_ctl=args.capture_ctl, evidence_dir=args.evidence_dir,
             strict_restore=not args.skip_restore, run_id=run_id,
             external_holder_attested=True,
-            attestation_note=args.attest_no_external_holder.strip())
+            attestation_note=args.attest_no_external_holder.strip(),
+            evidence_dir_prepared=True)
         restore_info = ev
         check(ok_flow, "MAC 读取 + 恢复流程（stop→lock→mac→run→start→new boot）")
         # 强制消费端门禁：最终证据必须唯一属于本轮且结论 ok（不以首份快照为准）

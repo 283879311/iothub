@@ -216,7 +216,8 @@ def test_read_mac_flow(tmp):
        and ev["port_free_proven"] is False,
        f"{ok} {ev.get('errors')} {ev.get('port_lock')}")
     fin_ok, fin_why, _ = PI.validate_final_evidence(
-        str(tmp / "ev_b1"), ev["run_id"], "/dev/ttyUSB1", require_restore=False)
+        str(tmp / "ev_b1"), ev["run_id"], "/dev/ttyUSB1", require_restore=False,
+        expected_lock_path=str(tmp / "lk_b1"))
     ck("B1 证据可被消费端校验通过", fin_ok, str(fin_why))
 
     # B11 记录与证据同落在**尚不存在**的证据目录（门禁默认形态）→ 仍成功
@@ -231,6 +232,63 @@ def test_read_mac_flow(tmp):
     ck("B11 证据目录尚不存在 → 记录与证据均写出且 ok",
        ok and ev["record_written"] and ev["evidence_written"],
        str(ev.get("errors")))
+
+    # B12 同一证据目录二次调用 → 拒绝，且不读 MAC（目录防复用对 read 入口同样生效）
+    calls = {"n": 0}
+    def mac_count12(port):
+        calls["n"] += 1
+        return (True, "10:97:bd:d3:65:d8")
+    evdir12 = str(tmp / "ev_b12")
+    ok1, ev1 = PI.read_mac_flow("/dev/ttyUSB1", L, str(Path(evdir12) / "r.json"),
+                                capture_ctl=ctl_writer(tmp / "b12.sh"),
+                                evidence_dir=evdir12, lock_path=str(tmp / "lk_b12a"),
+                                read_mac=mac_ok, run_app=run_ok, strict_restore=False,
+                                chain_check=chain,
+                                state_fn=States([PI.COOPERATING_STOPPED, PI.RUNNING]),
+                                external_holder_attested=True,
+                                attestation_note="test")
+    ok2, ev2 = PI.read_mac_flow("/dev/ttyUSB1", L, str(Path(evdir12) / "r2.json"),
+                                capture_ctl=ctl_writer(tmp / "b12b.sh"),
+                                evidence_dir=evdir12, lock_path=str(tmp / "lk_b12b"),
+                                read_mac=mac_count12, run_app=run_ok, strict_restore=False,
+                                chain_check=chain,
+                                state_fn=States([PI.COOPERATING_STOPPED, PI.RUNNING]),
+                                external_holder_attested=True,
+                                attestation_note="test")
+    ck("B12 同一证据目录二次调用 → 拒绝且 read_mac 0 次",
+       ok1 and (not ok2) and calls["n"] == 0
+       and any("evidence_dir" in e for e in ev2["errors"]), str(ev2.get("errors")))
+
+    # B13 prepared=True（rollback_gate 路径）+ 已建空目录 → 正常
+    evdir13 = str(tmp / "ev_b13"); Path(evdir13).mkdir()
+    ok, ev = PI.read_mac_flow("/dev/ttyUSB1", L, str(Path(evdir13) / "r.json"),
+                              capture_ctl=ctl_writer(tmp / "b13.sh"),
+                              evidence_dir=evdir13, lock_path=str(tmp / "lk_b13"),
+                              read_mac=mac_ok, run_app=run_ok, strict_restore=False,
+                              chain_check=chain,
+                              state_fn=States([PI.COOPERATING_STOPPED, PI.RUNNING]),
+                              external_holder_attested=True, attestation_note="test",
+                              evidence_dir_prepared=True)
+    ck("B13 prepared=True + 空目录 → 正常", ok and ev["evidence_written"],
+       str(ev.get("errors")))
+
+    # B14 prepared=True 但目录已有旧产物 → 拒绝，read_mac 0 次
+    calls = {"n": 0}
+    def mac_count14(port):
+        calls["n"] += 1
+        return (True, "10:97:bd:d3:65:d8")
+    evdir14 = str(tmp / "ev_b14"); Path(evdir14).mkdir()
+    (Path(evdir14) / PI.FINAL_EVIDENCE_NAME).write_text("{}")
+    ok, ev = PI.read_mac_flow("/dev/ttyUSB1", L, str(Path(evdir14) / "r.json"),
+                              capture_ctl=ctl_writer(tmp / "b14.sh"),
+                              evidence_dir=evdir14, lock_path=str(tmp / "lk_b14"),
+                              read_mac=mac_count14, run_app=run_ok, strict_restore=False,
+                              chain_check=chain, state_fn=States([PI.COOPERATING_STOPPED]),
+                              external_holder_attested=True,
+                              evidence_dir_prepared=True)
+    ck("B14 prepared=True 但已有旧产物 → 拒绝且 read_mac 0 次",
+       (not ok) and calls["n"] == 0
+       and "evidence_dir_prepared_invalid" in ev["errors"], str(ev.get("errors")))
 
     # B2 read_mac 抛异常 → 仍恢复，ok=False，证据落盘，端口锁已释放
     ok, ev = run_case("b2", [PI.COOPERATING_STOPPED, PI.RUNNING], read_mac=mac_raise,
@@ -375,9 +433,11 @@ def test_final_evidence(tmp):
         "port_lock": {"path": "/run/lock/iothub_serial_ttyUSB1.lock",
                       "acquired": True, "reason": "acquired"},
         "external_holder_attested": True,
+        "attestation_note": "测试声明：无外部工具占用",
         "port_free_proven": False,
         "errors": [],
         "at": time.strftime("%Y-%m-%dT%H:%M:%S"),
+        "at_unix": int(time.time()),
     }
 
     def write_case(name, body):
@@ -407,6 +467,7 @@ def test_final_evidence(tmp):
 
     # D5 旧 final 文件（上一轮遗留）不得冒充本轮
     d = write_case("stale", {**good, "run_id": "20261114_090000_0000aaaa",
+                             "at_unix": int(time.time()) - 3 * 86400,
                              "at": time.strftime(
                                  "%Y-%m-%dT%H:%M:%S",
                                  time.localtime(time.time() - 3 * 86400))})
@@ -445,6 +506,51 @@ def test_final_evidence(tmp):
     ok, rs, _ = PI.validate_final_evidence(str(d), good["run_id"], "/dev/ttyUSB1")
     ck("D8 最终证据不可解析 → 拒绝", (not ok) and reason_has(rs, "不可解析"), str(rs))
 
+    # D9 声明说明 / 锁路径 / Unix 时间戳
+    for tag, mut in [
+        ("note_empty", {**good, "attestation_note": "   "}),
+        ("note_missing", {k: v for k, v in good.items() if k != "attestation_note"}),
+        ("lock_path", {**good, "port_lock": {**good["port_lock"],
+                                            "path": "/tmp/evil.lock"}}),
+        ("no_at_unix", {k: v for k, v in good.items() if k != "at_unix"}),
+        ("bad_at_unix", {**good, "at_unix": "abc"}),
+        ("stale_at_unix", {**good, "at_unix": int(time.time()) - 3 * 86400}),
+    ]:
+        d = write_case(tag, mut)
+        ok, rs, _ = PI.validate_final_evidence(d, good["run_id"], "/dev/ttyUSB1")
+        ck(f"D9 声明/锁路径/时间异常 {tag} → 拒绝", not ok, str(rs))
+
+    # D10 显式给出本轮实际锁路径时不匹配 → 拒绝
+    d = write_case("lock_expect", good)
+    ok, rs, _ = PI.validate_final_evidence(
+        d, good["run_id"], "/dev/ttyUSB1",
+        expected_lock_path="/run/lock/iothub_serial_ttyUSB9.lock")
+    ck("D10 expected_lock_path 不符 → 拒绝",
+       (not ok) and reason_has(rs, "端口锁路径不符"), str(rs))
+
+
+def test_evidence_dir(tmp):
+    print("[E] 证据目录全新性（read / rollback_gate 共用同一函数）")
+    d = str(tmp / "e_new" / "nested")
+    ok, why = PI.prepare_fresh_evidence_dir(d)
+    ck("E1 全新目录 → 原子创建成功", ok and Path(d).is_dir(), str(why))
+    ok2, why2 = PI.prepare_fresh_evidence_dir(d)
+    ck("E2 同一目录再次准备 → 拒绝（防复用与并发竞争）",
+       (not ok2) and bool(why2), str(why2))
+
+    d2 = tmp / "e_stale"; Path(d2).mkdir()
+    (Path(d2) / "mac_read_flow.final.json").write_text("{}")
+    ok3, why3 = PI.prepare_fresh_evidence_dir(str(d2))
+    ck("E3 含旧产物目录 → 拒绝并列出产物",
+       (not ok3) and "mac_read_flow.final.json" in " ".join(why3), str(why3))
+
+    d3 = tmp / "e_empty"; Path(d3).mkdir()
+    ok4, why4 = PI.prepare_fresh_evidence_dir(str(d3))
+    ck("E4 预先存在的空目录 → 仍拒绝（目录必须由工具创建）", not ok4, str(why4))
+
+    ok5, why5 = PI.prepare_fresh_evidence_dir("")
+    ck("E5 空路径 → 拒绝", (not ok5) and "为空" in " ".join(why5), str(why5))
+
 
 def main():
     tmp = Path(tempfile.mkdtemp(prefix="s6_gate_test_"))
@@ -453,6 +559,7 @@ def main():
         test_read_mac_flow(tmp)
         test_anchor_and_record(tmp)
         test_final_evidence(tmp)
+        test_evidence_dir(tmp)
     finally:
         for p in FAKE_PORTS:
             for suffix in ("", ".lock"):

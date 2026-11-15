@@ -418,16 +418,47 @@ def capture_state(port, log_path=None, lock_path=None, scanner=None):
 
 FINAL_EVIDENCE_NAME = "mac_read_flow.final.json"
 EVIDENCE_MAX_AGE_MIN = 240        # 固定阈值，不接受放宽
+EVIDENCE_PRODUCTS = ("mac_read_flow.final.json", "mac_read_flow.json",
+                     "mac_record_gate.json", "rollback_gate_last.json")
+
+
+def evidence_dir_stale(evidence_dir):
+    """列出证据目录里已有的本轮产物（空列表 = 干净）。"""
+    d = Path(evidence_dir)
+    return [n for n in EVIDENCE_PRODUCTS if (d / n).exists()]
+
+
+def prepare_fresh_evidence_dir(evidence_dir):
+    """为**本轮**原子地准备全新证据目录（`read` 与 `rollback_gate` 共用）。
+
+    返回 (ok, reasons[])。用 `mkdir(exist_ok=False)` 创建，消除"检查—创建"
+    竞争：目录已存在即拒绝（无论是否含旧产物），两个进程不可能同时进入同一
+    目录。目录由本函数创建，调用方**不要**预先 `mkdir`。
+    """
+    if not evidence_dir:
+        return (False, ["evidence_dir 为空"])
+    try:
+        Path(evidence_dir).mkdir(parents=True, exist_ok=False)
+        return (True, [])
+    except FileExistsError:
+        stale = evidence_dir_stale(evidence_dir)
+        if stale:
+            return (False, [f"证据目录已存在且含旧产物 {stale}"])
+        return (False, ["证据目录已存在（必须为本轮全新目录，由工具创建）"])
+    except OSError as exc:  # noqa: BLE001
+        return (False, [f"证据目录创建失败（{type(exc).__name__}）"])
 
 
 def validate_final_evidence(evidence_dir, run_id, port, mac=EXPECT_MAC_65D8,
                             max_age_min=EVIDENCE_MAX_AGE_MIN,
-                            require_restore=True):
+                            require_restore=True, expected_lock_path=None):
     """校验最终证据是否**唯一属于本轮**；返回 (ok, reasons[], data)。
 
-    覆盖：run_id / 端口 / MAC / 证据写入结果 / 协作停止态 / 端口锁持有 /
-    操作者声明 / 恢复字段完整性 / 时间新鲜度。
+    覆盖：run_id / 端口 / MAC / 证据写入结果 / 协作停止态 / 端口锁持有与**路径** /
+    操作者声明（含非空说明）/ 恢复字段完整性 / Unix 时间戳新鲜度。
     旧目录里残留的 final 文件会因 run_id 不同而被拒绝。
+    `expected_lock_path` 默认由 `port_lock_path(port)` 计算（门禁即如此），
+    测试可显式传入本轮实际使用的锁路径。
     """
     if not evidence_dir:
         return (False, ["evidence_dir 为空"], None)
@@ -461,7 +492,13 @@ def validate_final_evidence(evidence_dir, run_id, port, mac=EXPECT_MAC_65D8,
          f"（{data.get('state_after_stop')!r}）")
     pl = data.get("port_lock") or {}
     need(pl.get("acquired") is True, "端口锁未成功持有（port_lock.acquired != True）")
+    lock_expect = expected_lock_path or port_lock_path(port)
+    need(pl.get("path") == lock_expect,
+         f"端口锁路径不符（{pl.get('path')!r} vs {lock_expect!r}）")
     need(data.get("external_holder_attested") is True, "缺少操作者外部占用声明")
+    note = data.get("attestation_note")
+    need(isinstance(note, str) and bool(note.strip()),
+         f"操作者声明说明为空或非字符串（{note!r}）")
     need(data.get("port_free_proven") is False,
          "port_free_proven 必须为 False（不得伪装端口已空闲）")
     errs = data.get("errors")
@@ -474,17 +511,21 @@ def validate_final_evidence(evidence_dir, run_id, port, mac=EXPECT_MAC_65D8,
         need(data.get("capture_restarted") is True, "capture_restarted 非 True")
         need(data.get("new_boot") is True, "new_boot 非 True")
         need(data.get("record_written") is True, "record_written 非 True")
-    at = data.get("at")
-    try:
-        ts = time.mktime(time.strptime(str(at), "%Y-%m-%dT%H:%M:%S"))
-    except Exception:  # noqa: BLE001
-        r.append(f"时间戳不可解析（{at!r}）")
+    # 机器校验以 Unix 时间戳为准；`at` 仅作人读，仍需可解析
+    ts = data.get("at_unix")
+    if not is_strict_number(ts):
+        r.append(f"at_unix 缺失或类型非数值（{ts!r}）")
     else:
-        age = time.time() - ts
+        age = time.time() - float(ts)
         if age < -300:
-            r.append(f"时间戳在未来（age={age:.0f}s）")
+            r.append(f"at_unix 在未来（age={age:.0f}s）")
         elif age > max_age_min * 60:
             r.append(f"证据过期 age={age/60:.1f}min > {max_age_min}min")
+    at = data.get("at")
+    try:
+        time.strptime(str(at), "%Y-%m-%dT%H:%M:%S")
+    except Exception:  # noqa: BLE001
+        r.append(f"at 时间戳不可解析（{at!r}）")
     return (not r, r, data)
 
 
@@ -532,7 +573,8 @@ def read_mac_flow(port, log_dir, out_record, capture_ctl="tools/serial_capture_c
                   read_mac=None, run_app=None, strict_restore=True,
                   chain_check=None, state_fn=None, run_id=None,
                   external_holder_attested=False, attestation_note=None,
-                  lock_path=None, lock_timeout_s=5.0):
+                  lock_path=None, lock_timeout_s=5.0,
+                  evidence_dir_prepared=False):
     """步骤 0 / 回滚门禁共用的唯一实现。
 
     状态流程：检查录制链 → 停录制 → **持端口锁** → read_mac → 无论结果都恢复
@@ -569,7 +611,8 @@ def read_mac_flow(port, log_dir, out_record, capture_ctl="tools/serial_capture_c
           "attestation_note": attestation_note,
           "port_lock": {"path": lock_path or port_lock_path(port),
                         "acquired": False, "reason": None},
-          "errors": [], "at": time.strftime("%Y-%m-%dT%H:%M:%S")}
+          "errors": [], "at": time.strftime("%Y-%m-%dT%H:%M:%S"),
+          "at_unix": int(time.time())}
 
     def note_error(stage, exc):
         msg = f"{stage}:{type(exc).__name__}:{str(exc)[:80]}"
@@ -581,14 +624,23 @@ def read_mac_flow(port, log_dir, out_record, capture_ctl="tools/serial_capture_c
         ev["errors"].append("evidence_dir_missing")
         return (False, ev)
 
-    # 证据目录必须尽早可用：后面的 MAC 记录与两阶段证据都写在这里
-    try:
-        Path(evidence_dir).mkdir(parents=True, exist_ok=True)
-    except Exception as exc:  # noqa: BLE001
-        note_error("evidence_dir_mkdir", exc)
-        ev["evidence_write_attempted"] = True
-        ev["evidence_write_result"] = f"fail:{type(exc).__name__}"
-        return (False, ev)
+    # 证据目录必须为**本轮全新**（与 rollback_gate 共用同一判定）
+    if evidence_dir_prepared:
+        if not Path(evidence_dir).is_dir() or evidence_dir_stale(evidence_dir):
+            print("  [FAIL] evidence_dir_prepared=True 但目录不存在或已有旧产物")
+            ev["errors"].append("evidence_dir_prepared_invalid")
+            ev["evidence_write_attempted"] = True
+            ev["evidence_write_result"] = "fail:evidence_dir_invalid"
+            return (False, ev)
+    else:
+        ok_dir, dir_why = prepare_fresh_evidence_dir(evidence_dir)
+        if not ok_dir:
+            for w in dir_why:
+                print(f"  [FAIL] {w}")
+                ev["errors"].append(f"evidence_dir:{w}")
+            ev["evidence_write_attempted"] = True
+            ev["evidence_write_result"] = "fail:evidence_dir_not_fresh"
+            return (False, ev)
 
     # ---- 1. 录制链 ----
     try:
@@ -790,10 +842,16 @@ def _cli():
             return 2
         print("[info] 边界：本流程只能证明**协作采集已停**，"
               "不证明串口无外部持有者（port_free_proven=false）")
+        ok_dir, dir_why = prepare_fresh_evidence_dir(a.evidence_dir)
+        if not ok_dir:
+            for w in dir_why:
+                print(f"[FAIL] {w}")
+            return 2
         ok, ev = read_mac_flow(a.port, a.log_dir, a.out,
                                evidence_dir=a.evidence_dir,
                                external_holder_attested=True,
-                               attestation_note=a.attest_no_external_holder.strip())
+                               attestation_note=a.attest_no_external_holder.strip(),
+                               evidence_dir_prepared=True)
         return 0 if ok else 1
     return 2
 
