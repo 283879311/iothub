@@ -1,7 +1,7 @@
 # WIFI-OP-RESOURCE-RACE · fencing `0eb30ce` 最终复审材料（2026-11-14）
 
 > **状态**：ACTIVE（阶段 B 提交物；签收后同步 docs/README.md 索引）
-> 完整差量文件：[artifacts/cmd04_flash_20261114/fencing_review.patch](../artifacts/cmd04_flash_20261114/fencing_review.patch)
+> 差量复核依据：以代码提交 `0eb30ce47795cff5201388793f926cc4302b5dd8` 相对父提交 `ebba25c` 的 Git diff 为准；申请中提及的 `artifacts/cmd04_flash_20261114/fencing_review.patch` 当前不在仓库跟踪树内，不能作为可点击证据链接。
 > （417 行，`git diff ebba25c 0eb30ce` 原样导出）。本文给出基线澄清、逐 hunk
 > ↔ 复审点映射、主机测试实测对应。**签收人请以 patch 文件为准逐行核对。**
 
