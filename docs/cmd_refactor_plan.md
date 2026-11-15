@@ -130,7 +130,7 @@
 - CMD-03：静态审查、测试设计、**Phase A host 测试**均完成（5 场景 ×50 ×10 轮全过；变异体检查通过）。Phase B（cmd 层 store_trial 守卫）与 Phase C（设备）未授权。
 - CMD-05：config/profile 锁序静态审查完成，状态 `REVIEWED`。
 - CMD-15：R1/R2（`999db00`）与 R4（`8d7d768`）已实施，状态 `CODE_DONE`；R3/R5 未授权。
-- CMD-02 + CMD-15 联合验证申请已修订至 v4，阶段 1（ESP-IDF fullclean/build）和阶段 2（host tests）已通过本轮审查并获批，但截至本次同步尚未执行；阶段 3 设备回归不在批准范围。
+- CMD-02 + CMD-15 联合验证申请已修订至 v5 并获批阶段 1（ESP-IDF fullclean/build）+ 阶段 2（host tests）；两阶段截至本次同步尚未执行。阶段 3 设备回归不在批准范围。
 - 当前仍没有 CMD-02/CMD-15 联合构建与 host 验证证据，也没有对应设备验收证据；不得标 `PASS`。
 
 ### 7.2 唯一推进队列
