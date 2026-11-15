@@ -206,26 +206,21 @@ async def case_r5(s, results):
 
 
 async def main():
-    global _log
+    global _log, RUN_ID, OUT
     ap = argparse.ArgumentParser()
     ap.add_argument("--cases", default="R1,R2,R3,R5")
     args = ap.parse_args()
     want = [c.strip().upper() for c in args.cases.split(",") if c.strip()]
 
-    for _ in range(3):                     # 严格唯一：已存在则换新 run id，绝不复用
+    for _ in range(3):                     # 严格唯一：mkdir 原子创建，碰撞换新 ID 重试
+        RUN_ID = time.strftime("%Y%m%d_%H%M%S") + "_" + uuid.uuid4().hex[:8]
+        candidate = OUT_BASE / f"run_{RUN_ID}"
         try:
-            OUT.mkdir(parents=True, exist_ok=False)
-            break
+            candidate.mkdir(parents=True, exist_ok=False)
         except FileExistsError:
-            global RUN_ID
-            RUN_ID = time.strftime("%Y%m%d_%H%M%S") + "_" + uuid.uuid4().hex[:8]
-            new_out = OUT_BASE / f"run_{RUN_ID}"
-            if new_out.exists():
-                continue
-            # 重新指向新目录（模块级常量替换）
-            globals()["OUT"] = new_out
-            OUT = new_out
-            break
+            continue
+        OUT = candidate
+        break
     else:
         print("[fatal] 3 次尝试均无法创建唯一运行目录", flush=True)
         return 2
