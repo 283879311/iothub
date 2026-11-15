@@ -962,16 +962,23 @@ def test_capture_guard(tmp):
            and d.get("state_before") == PI.COOPERATING_STOPPED
            and not marker10.exists(), f"{r.returncode} {d}")
 
-        # I13 前置失败且证据目录不可写 → 仍 92，但必须报告证据写入失败
+        # I13 前置失败且**已存在但不可写**的证据目录 → 仍 92，但必须报告证据写入失败
         holder_stop()
-        roev = tmp / "i13_ro"; roev.mkdir()
+        roev = tmp / "i13_ro"
+        target = roev / "sub"
+        target.mkdir(parents=True)              # 目录本身存在且**不可写** → 真权限拒绝
+        os.chmod(target, 0o555)
         os.chmod(roev, 0o555)
-        r = guard(["true"], str(roev / "sub" / "e.json"))
+        if os.geteuid() == 0:
+            print("  SKIP  I13（root 会绕过目录权限）")
+        else:
+            r = guard(["true"], str(target / "e.json"))
+            out13 = r.stdout + r.stderr
+            ck("I13 前置失败且证据写入被权限拒绝 → rc=92 且报告 EVIDENCE FAILED",
+               r.returncode == 92 and "EVIDENCE FAILED" in out13,
+               f"rc={r.returncode} out={out13[-160:]}")
+        os.chmod(target, 0o755)
         os.chmod(roev, 0o755)
-        out13 = r.stdout + r.stderr
-        ck("I13 前置失败且证据写入失败 → rc=92 且报告 EVIDENCE FAILED",
-           r.returncode == 92 and "EVIDENCE FAILED" in out13,
-           f"rc={r.returncode} out={out13[-160:]}")
 
         # I11 锁路径不可用（目录不可写）→ UNKNOWN，不能因"文件不存在"判 STOPPED
         ro = tmp / "ro_lock"; ro.mkdir()
@@ -1218,6 +1225,24 @@ def test_identity_tool(tmp):
     ck("J12 登录失败 → connect=1/disconnect=1",
        failed12 and rs12.connect_count == 1 and rs12.disconnect_count == 1,
        f"{rs12.connect_count}/{rs12.disconnect_count}")
+
+    # J14 disconnect_count 必须在 close() **之后**回写证据（run_capture 时尚未断开）
+    IC.SNAPSHOT_SUPPORTED_BUILDS = frozenset({"a7e04b6a9"})
+    try:
+        fake14 = Fake(handler_good)
+        rs14 = IC.ReadOnlySession(fake14)
+        aio.run(rs14.open())
+        ev14, _ = aio.run(IC.run_capture(rs14, log, 20, sleep_fn=_no_sleep))
+        before14 = ev14["session_side_effects"]["disconnect_count"]
+        aio.run(rs14.close())
+        IC.finalize_counts(ev14, rs14)
+        after14 = ev14["session_side_effects"]["disconnect_count"]
+    finally:
+        IC.SNAPSHOT_SUPPORTED_BUILDS = orig_allow
+    ck("J14 证据计数在 close() 后回写（0→1）且带语义说明",
+       before14 == 0 and after14 == 1
+       and "counts_semantics" in ev14["session_side_effects"],
+       f"{before14}->{after14}")
 
     # J8 固件无快照命令 → 工具在连接前拒绝（rc=6）
     r8 = subprocess.run([sys.executable, str(ROOT / "tools" / "s6_identity_capture.py"),

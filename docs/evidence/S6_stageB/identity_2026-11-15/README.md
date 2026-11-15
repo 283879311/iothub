@@ -19,8 +19,10 @@
    采集前未检查 `trial.state == idle`，因此**不能排除**读取瞬间发生了过期清理。
 
 **本轮之后（工具 v3，`87b62e4` 之后）**：
-- 只建立一次连接、一次断开，`connect_count/disconnect_count` 由实际调用点递增
-  （**物理连接成功即计数**，`auth.login` 失败也记 connect=1、close 后 disconnect=1）；
+- 只建立一次连接、一次断开；计数在 `close()` **之后**写回证据（否则 JSON 里
+  `disconnect_count` 恒为 0）。语义：`connect_count` = 物理连接成功次数；
+  `disconnect_count` = `close()` 调用次数（底层吞 `cli.disconnect()` 异常，
+  **不代表物理断开已确认**），证据中带 `counts_semantics` 说明；
 - 所有命令 `retries=0`、`allow_reconnect=False`、`allow_relogin=False`；
   **`auth.login` 也走零重试入口**（`_connect_once(login_retries=0)`；其它工具默认仍为 1，行为不变）；
 - 连接后先用 `device.info.build_sha` 校验**必须属于快照白名单**，

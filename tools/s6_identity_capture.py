@@ -99,6 +99,22 @@ class ReadOnlySession:
                                         allow_reconnect=False)
 
 
+def finalize_counts(ev, rs):
+    """在 `close()` **之后**把真实计数写回证据。
+
+    `run_capture()` 返回时尚未断开，若不回写，JSON 里的 disconnect_count 恒为 0。
+    语义：connect_count = 物理连接成功次数；disconnect_count = `close()` 调用次数
+    （底层 `Session.close()` 吞掉 `cli.disconnect()` 异常，**不证明物理断开成功**）。
+    """
+    side = ev.setdefault("session_side_effects", {})
+    side["connect_count"] = rs.connect_count
+    side["disconnect_count"] = rs.disconnect_count
+    side["counts_semantics"] = (
+        "connect_count=物理连接成功次数；disconnect_count=close() 调用次数"
+        "（底层吞异常，不代表物理断开成功）")
+    return ev
+
+
 def console_snapshot(log_path):
     """只读快照：不打开串口，不触碰采集进程。"""
     p = Path(log_path)
@@ -318,6 +334,8 @@ async def main():
         return 3
 
     rs = ReadOnlySession(Session(None, address=ADDR))
+    ev = None
+    ok = False
     try:
         await rs.open()
         ev, ok = await run_capture(rs, args.console_log, args.gap_s)
@@ -329,6 +347,9 @@ async def main():
         return 5
     finally:
         await rs.close()
+        # 计数必须在 close() **之后**写回证据：run_capture 返回时尚未断开
+        if ev is not None:
+            finalize_counts(ev, rs)
         print(f"[identity] connect_count={rs.connect_count} "
               f"disconnect_count={rs.disconnect_count}")
 
