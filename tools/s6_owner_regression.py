@@ -27,7 +27,9 @@ from bleak import BleakClient  # noqa: E402
 
 from p0_acceptance import Session, scan_filtered  # noqa: E402
 
-OUT = Path("artifacts/cmd04_flash_20261115/s6_owner_regression")
+OUT_BASE = Path("artifacts/cmd04_flash_20261115/s6_owner_regression")
+RUN_ID = time.strftime("%Y%m%d_%H%M%S")
+OUT = OUT_BASE / f"run_{RUN_ID}"      # 每次运行独立目录：R3 只聚合本轮
 SERIAL = Path("artifacts/cmd04_flash_20261114/phaseA/serial_ttyUSB1.log")
 ADDR = "10:97:BD:D3:65:DA"
 BAD_SSID = "302"          # 可见但口令错误 → 连接耗时可被中途取消
@@ -73,6 +75,19 @@ def wait_for(off, patterns, timeout_s, label):
     return False, hits, round(time.time() - t0, 1)
 
 
+def aggregate_r3(results):
+    """R3 聚合：仅看**本轮** R1/R2，且两者都必须 ok 且各自有 cleanup 终态。
+    绝不读取历史日志（旧轮次的 cleanup 不能补足本轮证据）。"""
+    missing = [k for k in ("R1", "R2") if k not in results]
+    if missing:
+        return False, f"缺少本轮结果 {missing}（R3 不得以历史日志替代）"
+    bad = [k for k in ("R1", "R2")
+           if not results[k].get("ok") or not results[k].get("cleanup_terminal")]
+    if bad:
+        return False, f"{bad} 未通过或本轮无 cleanup 终态"
+    return True, "R1/R2 本轮均 PASS 且各有 cleanup 终态"
+
+
 async def connect():
     recs = await scan_filtered(10.0)
     if not [r for r in recs if r["address"].lower() == ADDR.lower()]:
@@ -106,7 +121,9 @@ async def case_r1(s, results):
     ok, hits, dt = wait_for(
         off, [r"op_owner: TRYX -> CLEANUP by tryconnect_release",
               r"cleanup (complete|failed)"], 45, "R1")
-    results["R1"] = {"ok": ok, "hits": hits, "wait_s": dt, "op": op}
+    term = bool(re.search(r"cleanup (complete|failed)", since(off)))
+    results["R1"] = {"ok": ok, "hits": hits, "wait_s": dt, "op": op,
+                     "cleanup_terminal": term}
     log(f"[R1] {'PASS' if ok else 'FAIL'} {json.dumps(hits, ensure_ascii=False)}")
     return ok
 
@@ -128,7 +145,9 @@ async def case_r2(cli, s, results):
         off, [r"op_owner: TRYX -> CLEANUP by tryconnect_release",
               r"async network operation cancelled on BLE disconnect",
               r"cleanup (complete|failed)"], 60, "R2")
-    results["R2"] = {"ok": ok, "hits": hits, "wait_s": dt, "op": op}
+    term = bool(re.search(r"cleanup (complete|failed)", since(off)))
+    results["R2"] = {"ok": ok, "hits": hits, "wait_s": dt, "op": op,
+                     "cleanup_terminal": term}
     log(f"[R2] {'PASS' if ok else 'FAIL'} {json.dumps(hits, ensure_ascii=False)}")
     return ok
 
@@ -169,7 +188,7 @@ async def main():
 
     OUT.mkdir(parents=True, exist_ok=True)
     _log = open(OUT / "regression.log", "a", encoding="utf-8")
-    log(f"=== owner 回归开始 cases={want} ===")
+    log(f"=== owner 回归开始 run={RUN_ID} cases={want} ===")
     results = {}
 
     # R5 先做（不产生 cleanup 请求，从干净状态开始），再做 R1，最后 R2（会断链）
@@ -177,7 +196,12 @@ async def main():
 
     cli, s = await connect()
     try:
-        await wait_idle(s)
+        if not await wait_idle(s):
+            log("[STOP] 基线门禁未满足（sta_connected+trial idle）——本轮中止")
+            (OUT / "results.json").write_text(json.dumps(
+                {"abort": "baseline_not_ready"}, ensure_ascii=False, indent=1),
+                encoding="utf-8")
+            return 3
         for c in order:
             if c == "R5":
                 await case_r5(s, results)
@@ -187,14 +211,9 @@ async def main():
                 await case_r2(cli, s, results)
                 cli, s = await connect()      # R2 主动断链，重连供后续使用
         if "R3" in want:
-            off = mark()
-            # R3 为聚合判据：R1/R2 已各自要求 cleanup 终态；此处再确认全流程有终态
-            txt = ""
-            for p in (OUT / "regression.log").read_text(encoding="utf-8").splitlines():
-                txt += p + "\n"
-            agg = bool(re.search(r"cleanup (complete|failed)", txt))
-            results["R3"] = {"ok": agg, "basis": "R1/R2 日志均含 cleanup 终态"}
-            log(f"[R3] {'PASS' if agg else 'FAIL'}")
+            agg, why = aggregate_r3(results)
+            results["R3"] = {"ok": agg, "basis": why}
+            log(f"[R3] {'PASS' if agg else 'FAIL'} 依据：{why}")
         # 收尾：确认设备回到 idle 且 MQTT 在线（失败不丢弃已完成的用例结果）
         try:
             st = (await s.v1("network.status", timeout=15)).obj.get("data", {})
