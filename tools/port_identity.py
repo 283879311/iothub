@@ -205,6 +205,70 @@ def anchor_validate(anchor, port, log_dir, max_age_min=240):
     return (not r, r)
 
 
+
+
+# ---------------- 录制进程三态（STOPPED / RUNNING / UNKNOWN） ----------------
+# 注意：不能用 inspect_capture().running 代替——那是"完整链校验通过"，
+# 进程可能仍存活但 argv/fd 校验失败；此处只看**进程存活与端口占用**。
+
+STOPPED, RUNNING, UNKNOWN = "STOPPED", "RUNNING", "UNKNOWN"
+
+
+def capture_state(port, log_path=None, proc_root="/proc"):
+    """返回 (state, info)。
+
+    STOPPED : 无任何进程持有该串口，且 PID 文件（若有）指向的进程不存在/非采集进程
+    RUNNING : 有进程持有该串口，或 PID 文件指向的进程仍存活
+    UNKNOWN : 无法读取进程/FD 信息（权限、/proc 不可用等）——**必须按不可读 MAC 处理**
+    """
+    import os
+    inf = {"port": port, "holders": [], "pidfile_pid": None, "reason": None}
+    root = Path(proc_root)
+    if not root.is_dir():
+        inf["reason"] = f"proc_root 不可用：{root}"
+        return (UNKNOWN, inf)
+
+    scan_error = False
+    try:
+        entries = list(root.iterdir())
+    except OSError as exc:
+        inf["reason"] = f"无法列出 {root}：{exc}"
+        return (UNKNOWN, inf)
+    for ent in entries:
+        if not ent.name.isdigit():
+            continue
+        try:
+            fds = list((ent / "fd").iterdir())
+        except OSError:
+            # 无权限读取其它进程的 fd 是常态；但我们也无法确认它是否占用端口
+            continue
+        for fd in fds:
+            try:
+                if os.readlink(fd) == port:
+                    inf["holders"].append(int(ent.name))
+                    break
+            except OSError:
+                continue
+
+    pidfile = None
+    if log_path:
+        pidfile = Path(str(log_path) + ".pid")
+        if pidfile.is_file():
+            try:
+                inf["pidfile_pid"] = int(pidfile.read_text(encoding="utf-8").strip())
+            except Exception:  # noqa: BLE001
+                inf["pidfile_pid"] = None
+
+    if inf["holders"]:
+        return (RUNNING, inf)
+    if inf["pidfile_pid"] and (root / str(inf["pidfile_pid"])).is_dir():
+        return (RUNNING, inf)      # 进程存活但此刻未持端口（可能正在 reopen）
+    if scan_error:
+        return (UNKNOWN, inf)
+    # 无 holder、pidfile 进程不存在 → 视为已停止
+    return (STOPPED, inf)
+
+
 # ---------------- 统一"停录制→读 MAC→恢复→重启录制" ----------------
 
 def _ctl(cmd, port, log_path, capture_ctl):
@@ -246,7 +310,8 @@ def wait_new_boot(log_path, from_size, timeout_s=15.0):
 
 def read_mac_flow(port, log_dir, out_record, capture_ctl="tools/serial_capture_ctl.sh",
                   evidence_dir=None, expect_mac=EXPECT_MAC_65D8,
-                  read_mac=None, run_app=None, strict_restore=True):
+                  read_mac=None, run_app=None, strict_restore=True,
+                  chain_check=None, state_fn=None):
     """步骤 0 / 回滚门禁共用的唯一实现。
 
     状态流程：检查录制链 → 停录制 → read_mac → **无论结果都恢复**
@@ -260,6 +325,7 @@ def read_mac_flow(port, log_dir, out_record, capture_ctl="tools/serial_capture_c
     """
     read_mac = read_mac or esptool_read_mac
     run_app = run_app or esptool_run_app
+    state_fn = state_fn or (lambda: capture_state(port, log_path))
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     from preflight_flash import inspect_capture  # noqa: E402
 
@@ -283,7 +349,8 @@ def read_mac_flow(port, log_dir, out_record, capture_ctl="tools/serial_capture_c
 
     # ---- 1. 录制链 ----
     try:
-        cap = inspect_capture(log_dir, Path(port).name)
+        cap = (chain_check or inspect_capture)(log_dir, Path(port).name) \
+            if chain_check else inspect_capture(log_dir, Path(port).name)
         ev["chain_before"] = {k: cap.get(k) for k in
                               ("running", "script_ok", "port_arg_ok", "log_arg_ok",
                                "fd_holds_port", "fd_holds_log")}
@@ -304,20 +371,20 @@ def read_mac_flow(port, log_dir, out_record, capture_ctl="tools/serial_capture_c
         except Exception as exc:  # noqa: BLE001
             note_error("capture_stop", exc)
             stopped_ok, msg = False, "exception"
-        # 以**实际状态**为准：停止命令非零/异常时也可能已退出
+        # 以**三态**为准（不看 inspect_capture.running，那是完整链校验）
         try:
-            cap2 = inspect_capture(log_dir, Path(port).name)
-            running_now = cap2.get("running") is True
+            st, stinfo = state_fn()
         except Exception as exc:  # noqa: BLE001
-            note_error("post_stop_inspect", exc)
-            running_now = None
-        ev["capture_stopped"] = (running_now is False)
+            note_error("post_stop_state", exc)
+            st, stinfo = UNKNOWN, {"reason": "exception"}
         ev["stop_cmd_ok"] = stopped_ok
-        ev["running_after_stop"] = running_now
-        print(f"  [{'ok' if ev['capture_stopped'] else 'FAIL'}] 停录制：cmd={stopped_ok} "
-              f"实际运行={running_now}  msg={msg[:60]}")
-        if running_now is None:
-            print("  [STOP] 停录制后无法确认录制状态——不得继续读 MAC")
+        ev["state_after_stop"] = st
+        ev["state_after_stop_info"] = stinfo
+        ev["capture_stopped"] = (st == STOPPED)
+        print(f"  [{'ok' if st == STOPPED else 'FAIL'}] 停录制后状态={st} "
+              f"cmd={stopped_ok} holders={stinfo.get('holders')} msg={msg[:50]}")
+        if st == UNKNOWN:
+            print("  [STOP] 无法确认录制进程/端口占用——不得读 MAC")
 
     # ---- 3. 读 MAC（异常也继续到恢复）----
     mac_read_attempted = False
@@ -337,8 +404,8 @@ def read_mac_flow(port, log_dir, out_record, capture_ctl="tools/serial_capture_c
 
     # ---- 4. 恢复：run_app 与 重启录制 各自独立 ----
     # 触发条件：读 MAC（进程确实停了）**或** 曾发起停止且当前未运行
-    restore_needed = mac_read_attempted or (
-        stop_issued and ev.get("running_after_stop") is False)
+    restore_needed = bool(mac_read_attempted or
+                          (stop_issued and ev.get("state_after_stop") == STOPPED))
     if restore_needed:
         size_before = _log_size(log_path)
         try:
@@ -364,6 +431,17 @@ def read_mac_flow(port, log_dir, out_record, capture_ctl="tools/serial_capture_c
                 start_ok, smsg = False, "exception"
         ev["capture_restarted"] = bool(start_ok)
         print(f"  [{'ok' if start_ok else 'FAIL'}] 重启录制：{smsg}")
+
+        try:
+            st2, st2info = state_fn()
+        except Exception:  # noqa: BLE001
+            st2, st2info = UNKNOWN, {}
+        ev["state_after_restore"] = st2
+        if st2 != RUNNING:
+            ev["errors"].append(f"state_after_restore={st2}")
+            print(f"  [FAIL] 恢复后录制状态={st2}（期望 RUNNING）")
+            start_ok = False
+            ev["capture_restarted"] = False
 
         if start_ok and strict_restore:
             try:
@@ -413,6 +491,12 @@ def read_mac_flow(port, log_dir, out_record, capture_ctl="tools/serial_capture_c
         ev["evidence_write_result"] = f"fail:{type(exc).__name__}"
         ev["evidence_written"] = False
         ok = False
+        # 尽力把失败结论回写到首份证据，避免磁盘上留 null 的"无结论"状态
+        try:
+            Path(evidence_dir, "mac_read_flow.json").write_text(
+                json.dumps(ev, ensure_ascii=False, indent=1), encoding="utf-8")
+        except Exception:  # noqa: BLE001
+            print("  [WARN] 失败状态回写首份证据亦失败（磁盘可能残留 attempted 快照）")
 
     if not ok:
         print("  [STOP] 设备/录制状态不可确认（见 mac_read_flow.json），不得继续")
