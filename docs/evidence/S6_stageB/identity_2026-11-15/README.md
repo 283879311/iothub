@@ -18,11 +18,16 @@
    若 trial 恰好过期会触发 trial 清理（必要时结束配置事务）。
    采集前未检查 `trial.state == idle`，因此**不能排除**读取瞬间发生了过期清理。
 
-**本轮之后（工具 v3，`b92e710` 之后）**：
-- 只建立一次连接、一次断开，`connect_count/disconnect_count` 由实际调用点递增；
-- 所有命令 `retries=0`、`allow_reconnect=False`、`allow_relogin=False`（**无自动重连**）；
+**本轮之后（工具 v3，`87b62e4` 之后）**：
+- 只建立一次连接、一次断开，`connect_count/disconnect_count` 由实际调用点递增
+  （**物理连接成功即计数**，`auth.login` 失败也记 connect=1、close 后 disconnect=1）；
+- 所有命令 `retries=0`、`allow_reconnect=False`、`allow_relogin=False`；
+  **`auth.login` 也走零重试入口**（`_connect_once(login_retries=0)`；其它工具默认仍为 1，行为不变）；
+- 连接后先用 `device.info.build_sha` 校验**必须属于快照白名单**，
+  校验通过后才允许把 `diag.snapshot` 结果当安全依据；
 - 采集前后各读一次 `diag.snapshot`，要求 `trial.state==idle` 且
-  `ble_owned_active_operation` 为空；任一不满足 → 停止；
+  `ble_owned_active_operation` **字段存在且严格为 `false`**——缺失/null/`{}`/空串/"none"/其它类型
+  一律判快照无效（fail-closed）；
 - **当前固件（`a7e04b6a9`）没有 `diag.snapshot`**，工具白名单为空，
   在连接设备前即拒绝运行（rc=6）。重采必须先由固件实现该命令并另行授权窗口。
 

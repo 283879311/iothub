@@ -67,7 +67,7 @@ class SnapshotError(RuntimeError):
 
 
 class ReadOnlySession:
-    """单次会话：禁用自动重连/重试，真实计数连接与断开。"""
+    """单次会话：禁用自动重连/重试（含 auth.login），真实计数连接与断开。"""
 
     def __init__(self, session):
         self.s = session
@@ -75,8 +75,13 @@ class ReadOnlySession:
         self.disconnect_count = 0
 
     async def open(self):
-        await self.s._connect_once()          # 单次 connect + 一次 auth.login
-        self.connect_count += 1
+        # login_retries=0：auth.login 也不得重试（仅本工具使用该入口）
+        try:
+            await self.s._connect_once(login_retries=0)
+        finally:
+            # 物理连接成功即计数（即使随后的 login 失败也已建立过连接）
+            if getattr(self.s, "cli", None) is not None:
+                self.connect_count += 1
 
     async def close(self):
         if getattr(self.s, "cli", None) is not None:
@@ -156,13 +161,21 @@ async def read_snapshot(rs):
 
 
 def snapshot_clean(data):
-    """断开前安全条件：trial 为 idle 且无 BLE 所属活动异步操作。返回 (ok, why)。"""
-    trial = (data.get("trial") or {}).get("state")
-    if trial != "idle":
+    """断开前安全条件（**fail-closed**）：trial 为 idle 且字段明确为 false。
+
+    契约要求 `ble_owned_active_operation` **必须存在且严格为 false**：
+    缺失 / null / {} / "" / "none" / 其它类型 一律视为快照无效，不得当作"无活动操作"。
+    """
+    if not isinstance(data, dict):
+        return (False, "快照 data 不是对象")
+    trial = data.get("trial")
+    if not isinstance(trial, dict) or trial.get("state") != "idle":
         return (False, f"trial.state={trial!r} != idle")
+    if "ble_owned_active_operation" not in data:
+        return (False, "缺少 ble_owned_active_operation 字段")
     active = data.get("ble_owned_active_operation")
-    if active not in (None, False, "", "none", {}):
-        return (False, f"存在 BLE 所属活动操作：{active!r}")
+    if active is not False:
+        return (False, f"ble_owned_active_operation 非 false：{active!r}")
     return (True, "clean")
 
 
@@ -175,6 +188,15 @@ async def run_capture(rs, console_log, gap_s, expect_build=EXPECT_BUILD_SHA,
     sleep_fn = sleep_fn or asyncio.sleep
     if not math.isfinite(gap_s) or gap_s < 20.0:
         raise ValueError("gap_s 必须为有限数值且 ≥20s")
+
+    # 白名单成员校验：必须在使用快照结果作为安全依据**之前**完成
+    info = await rs.read("device.info")
+    if info.obj.get("ok") is not True:
+        raise RuntimeError("device.info 返回 ok!=true")
+    build = (info.obj.get("data") or {}).get("build_sha")
+    if build not in SNAPSHOT_SUPPORTED_BUILDS:
+        raise SnapshotError(
+            f"build_sha={build!r} 不在快照白名单 {sorted(SNAPSHOT_SUPPORTED_BUILDS)}")
 
     pre = await read_snapshot(rs)          # 前置：断开安全条件
     clean, why = snapshot_clean(pre)

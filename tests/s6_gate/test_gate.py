@@ -962,6 +962,17 @@ def test_capture_guard(tmp):
            and d.get("state_before") == PI.COOPERATING_STOPPED
            and not marker10.exists(), f"{r.returncode} {d}")
 
+        # I13 前置失败且证据目录不可写 → 仍 92，但必须报告证据写入失败
+        holder_stop()
+        roev = tmp / "i13_ro"; roev.mkdir()
+        os.chmod(roev, 0o555)
+        r = guard(["true"], str(roev / "sub" / "e.json"))
+        os.chmod(roev, 0o755)
+        out13 = r.stdout + r.stderr
+        ck("I13 前置失败且证据写入失败 → rc=92 且报告 EVIDENCE FAILED",
+           r.returncode == 92 and "EVIDENCE FAILED" in out13,
+           f"rc={r.returncode} out={out13[-160:]}")
+
         # I11 锁路径不可用（目录不可写）→ UNKNOWN，不能因"文件不存在"判 STOPPED
         ro = tmp / "ro_lock"; ro.mkdir()
         os.chmod(ro, 0o555)
@@ -1007,17 +1018,22 @@ def test_identity_tool(tmp):
 
     class Fake:
         token = "tok"
-        def __init__(self, handler):
+        def __init__(self, handler, login_fail=False):
             self.handler = handler
             self.calls = []
             self._n = 0
             self.connect_ok = 0
+            self.login_fail = login_fail
+            self.login_retries = []
         def next_seq(self):
             self._n += 1
             return self._n
-        async def _connect_once(self):
+        async def _connect_once(self, login_retries=1):
+            self.login_retries.append(login_retries)
             self.cli = object()
             self.connect_ok += 1
+            if self.login_fail:
+                raise RuntimeError("login failed")
         async def close(self):
             self.cli = None
         async def send_request(self, req, timeout=20, retries=3,
@@ -1080,68 +1096,128 @@ def test_identity_tool(tmp):
         return ok_resp(GOOD.get(cmd, {}))
 
     # J4 正常路径：六维全过；gap 因测试未真等 20s 而单独判 False（防造假设计如此）
-    fake4 = Fake(handler_good)
-    rs4 = IC.ReadOnlySession(fake4)
-    aio.run(rs4.open())
-    ev, ok = aio.run(IC.run_capture(rs4, log, 20, sleep_fn=_no_sleep))
-    dims = {d["dim"]: d["ok"] for d in ev["dims"]}
-    ck("J4 六维全过、gap 维度因未真等而 False、总判 False",
-       all(v for k, v in dims.items() if k != "0_gap")
-       and dims["0_gap"] is False and ok is False, str(dims))
-    ck("J4 证据含快照前后与真实计数",
-       ev["precheck_snapshot"] == CLEAN and ev["postcheck_snapshot"] == CLEAN
-       and ev["session_side_effects"]["connect_count"] == 1, str(ev.get("session_side_effects")))
-
-    # J5 前置快照 trial 非 idle → 不进入采集
-    def handler_dirty(req):
-        if req["cmd"] == IC.SNAPSHOT_CMD:
-            return ok_resp({"trial": {"state": "accepted"},
-                            "ble_owned_active_operation": False})
-        return ok_resp(GOOD.get(req["cmd"], {}))
-    rs5 = IC.ReadOnlySession(Fake(handler_dirty))
-    aio.run(rs5.open())
+    orig_allow = IC.SNAPSHOT_SUPPORTED_BUILDS
+    IC.SNAPSHOT_SUPPORTED_BUILDS = frozenset({"a7e04b6a9"})
     try:
-        aio.run(IC.run_capture(rs5, log, 20, sleep_fn=_no_sleep))
-        got5 = ""
-    except IC.SnapshotError as exc:
-        got5 = str(exc)
-    ck("J5 前置快照非 idle → SnapshotError（不采集）", "trial.state" in got5, got5)
+        fake4 = Fake(handler_good)
+        rs4 = IC.ReadOnlySession(fake4)
+        aio.run(rs4.open())
+        ev, ok = aio.run(IC.run_capture(rs4, log, 20, sleep_fn=_no_sleep))
+        dims = {d["dim"]: d["ok"] for d in ev["dims"]}
+        ck("J4 六维全过、gap 维度因未真等而 False、总判 False",
+           all(v for k, v in dims.items() if k != "0_gap")
+           and dims["0_gap"] is False and ok is False, str(dims))
+        ck("J4 证据含快照前后与真实计数",
+           ev["precheck_snapshot"] == CLEAN and ev["postcheck_snapshot"] == CLEAN
+           and ev["session_side_effects"]["connect_count"] == 1,
+           str(ev.get("session_side_effects")))
+        ck("J4 login 以 login_retries=0 建立会话", fake4.login_retries == [0],
+           str(fake4.login_retries))
 
-    # J6 后置快照出现 BLE 活动操作 → SnapshotError（断开前拒绝成功）
-    state = {"n": 0}
-    def handler_post(req):
-        if req["cmd"] == IC.SNAPSHOT_CMD:
-            state["n"] += 1
-            if state["n"] == 1:
+        # J5 前置快照 trial 非 idle → 不进入采集
+        def handler_dirty(req):
+            if req["cmd"] == IC.SNAPSHOT_CMD:
+                return ok_resp({"trial": {"state": "accepted"},
+                                "ble_owned_active_operation": False})
+            return ok_resp(GOOD.get(req["cmd"], {}))
+        rs5 = IC.ReadOnlySession(Fake(handler_dirty))
+        aio.run(rs5.open())
+        try:
+            aio.run(IC.run_capture(rs5, log, 20, sleep_fn=_no_sleep))
+            got5 = ""
+        except IC.SnapshotError as exc:
+            got5 = str(exc)
+        ck("J5 前置快照非 idle → SnapshotError（不采集）", "trial.state" in got5, got5)
+
+        # J6 后置快照出现 BLE 活动操作 → SnapshotError（断开前拒绝成功）
+        state = {"n": 0}
+        def handler_post(req):
+            if req["cmd"] == IC.SNAPSHOT_CMD:
+                state["n"] += 1
+                if state["n"] == 1:
+                    return ok_resp(CLEAN)
+                return ok_resp({"trial": {"state": "idle"},
+                                "ble_owned_active_operation": {"id": "op-1",
+                                                               "state": "connecting"}})
+            return ok_resp(GOOD.get(req["cmd"], {}))
+        rs6 = IC.ReadOnlySession(Fake(handler_post))
+        aio.run(rs6.open())
+        try:
+            aio.run(IC.run_capture(rs6, log, 20, sleep_fn=_no_sleep))
+            got6 = ""
+        except IC.SnapshotError as exc:
+            got6 = str(exc)
+        ck("J6 后置快照有活动操作 → SnapshotError", "ble_owned_active_operation" in got6, got6)
+
+        # J7 任一命令 ok!=true → 立即失败
+        def handler_bad(req):
+            if req["cmd"] == IC.SNAPSHOT_CMD:
                 return ok_resp(CLEAN)
-            return ok_resp({"trial": {"state": "idle"},
-                            "ble_owned_active_operation": {"id": "op-1",
-                                                           "state": "connecting"}})
-        return ok_resp(GOOD.get(req["cmd"], {}))
-    rs6 = IC.ReadOnlySession(Fake(handler_post))
-    aio.run(rs6.open())
-    try:
-        aio.run(IC.run_capture(rs6, log, 20, sleep_fn=_no_sleep))
-        got6 = ""
-    except IC.SnapshotError as exc:
-        got6 = str(exc)
-    ck("J6 后置快照有活动操作 → SnapshotError", "活动操作" in got6, got6)
+            if req["cmd"] == "config.get":
+                return Resp({"ok": False, "error": {"code": "x"}})
+            return ok_resp(GOOD.get(req["cmd"], {}))
+        rs7 = IC.ReadOnlySession(Fake(handler_bad))
+        aio.run(rs7.open())
+        try:
+            aio.run(IC.run_capture(rs7, log, 20, sleep_fn=_no_sleep))
+            got7 = ""
+        except RuntimeError as exc:
+            got7 = str(exc)
+        ck("J7 响应 ok!=true → 立即失败", "ok!=true" in got7, got7)
 
-    # J7 任一命令 ok!=true → 立即失败
-    def handler_bad(req):
-        if req["cmd"] == IC.SNAPSHOT_CMD:
-            return ok_resp(CLEAN)
-        if req["cmd"] == "config.get":
-            return Resp({"ok": False, "error": {"code": "x"}})
-        return ok_resp(GOOD.get(req["cmd"], {}))
-    rs7 = IC.ReadOnlySession(Fake(handler_bad))
-    aio.run(rs7.open())
+        # J10 快照字段 fail-closed：缺失/null/{}/""/"none"/True 一律无效
+        for tag, snap in [
+            ("缺字段", {"trial": {"state": "idle"}}),
+            ("null", {"trial": {"state": "idle"},
+                      "ble_owned_active_operation": None}),
+            ("空对象", {"trial": {"state": "idle"},
+                        "ble_owned_active_operation": {}}),
+            ("空字符串", {"trial": {"state": "idle"},
+                          "ble_owned_active_operation": ""}),
+            ("none 字符串", {"trial": {"state": "idle"},
+                             "ble_owned_active_operation": "none"}),
+            ("true", {"trial": {"state": "idle"},
+                      "ble_owned_active_operation": True}),
+            ("活动对象", {"trial": {"state": "idle"},
+                          "ble_owned_active_operation": {"id": "op"}}),
+        ]:
+            okc, why = IC.snapshot_clean(snap)
+            ck(f"J10 快照 {tag} → 判脏", not okc, why)
+        okc, why = IC.snapshot_clean({"trial": {"state": "idle"},
+                                      "ble_owned_active_operation": False})
+        ck("J10 严格 false → 判干净", okc, why)
+
+        # J11 build_sha 不在白名单 → SnapshotError（即使快照可用）
+        def handler_other_build(req):
+            if req["cmd"] == "device.info":
+                return ok_resp({"device_id": "IotHub-65D8",
+                                "build_sha": "deadbeef0"})
+            if req["cmd"] == IC.SNAPSHOT_CMD:
+                return ok_resp(CLEAN)
+            return ok_resp(GOOD.get(req["cmd"], {}))
+        rs11 = IC.ReadOnlySession(Fake(handler_other_build))
+        aio.run(rs11.open())
+        try:
+            aio.run(IC.run_capture(rs11, log, 20, sleep_fn=_no_sleep))
+            got11 = ""
+        except IC.SnapshotError as exc:
+            got11 = str(exc)
+        ck("J11 build_sha 不在快照白名单 → SnapshotError", "白名单" in got11, got11)
+    finally:
+        IC.SNAPSHOT_SUPPORTED_BUILDS = orig_allow
+
+    # J12 登录失败：物理连接已建立 → 计数 connect=1 / disconnect=1
+    fake12 = Fake(handler_good, login_fail=True)
+    rs12 = IC.ReadOnlySession(fake12)
     try:
-        aio.run(IC.run_capture(rs7, log, 20, sleep_fn=_no_sleep))
-        got7 = ""
-    except RuntimeError as exc:
-        got7 = str(exc)
-    ck("J7 响应 ok!=true → 立即失败", "ok!=true" in got7, got7)
+        aio.run(rs12.open())
+        failed12 = False
+    except RuntimeError:
+        failed12 = True
+    aio.run(rs12.close())
+    ck("J12 登录失败 → connect=1/disconnect=1",
+       failed12 and rs12.connect_count == 1 and rs12.disconnect_count == 1,
+       f"{rs12.connect_count}/{rs12.disconnect_count}")
 
     # J8 固件无快照命令 → 工具在连接前拒绝（rc=6）
     r8 = subprocess.run([sys.executable, str(ROOT / "tools" / "s6_identity_capture.py"),

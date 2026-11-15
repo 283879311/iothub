@@ -5,8 +5,9 @@
 # 采集可能停在"已停"，设备却处于部分写入或无法启动。把恢复采集从"正常路径的一步"
 # 变成"退出路径的保证"。
 #
-# 采集状态：**调用 port_identity.py state**（与门禁/采集同一实现：PID+端口锁双验，
-# 锁文件不存在时尝试创建并取得，无法判定即 UNKNOWN）。
+# 采集状态：**调用 port_identity.py liveness**（严格存活：PID 进程 cmdline 含
+# capture_serial **且** 端口锁被持有；锁文件不存在时尝试创建并取得；不一致即 UNKNOWN）。
+# 注意与门禁的 `state` 区分：`state` 是"串口是否可能被占用"（锁被持有即保守 RUNNING）。
 #
 # **执行前置条件**：进入时状态必须为 RUNNING（R2 前提：门禁已恢复采集）。
 #   STOPPED / UNKNOWN → rc=92，**不执行被包裹命令、不触碰采集**。
@@ -80,6 +81,10 @@ guard_exit() {
   set +e
   if [ "$PRECOND_FAIL" = "1" ]; then
     write_evidence "precondition_failed" 0 "$rc" ""
+    local w=$?
+    if [ "$w" -ne 0 ]; then
+      echo "[guard][EVIDENCE FAILED] 前置失败证据写入失败（$EVID）——失败原因未经记录" >&2
+    fi
     exit 92
   fi
   STATE_AFTER=$(capture_state)

@@ -506,7 +506,7 @@ class Session:
             return res
         raise RuntimeError(f"request id={rid} failed after retries")
 
-    async def _connect_once(self) -> None:
+    async def _connect_once(self, login_retries: int = 1) -> None:
         if self.cli is not None:
             try:
                 await self.cli.disconnect()
@@ -524,7 +524,7 @@ class Session:
         self.mtu = getattr(cli, "mtu_size", None)
         await cli.start_notify(CMD_TX, self.on_notify)
         await asyncio.sleep(0.2)
-        await self.login(self.username, self.password)
+        await self.login(self.username, self.password, retries=login_retries)
 
     async def _rescan_address(self) -> None:
         try:
@@ -588,8 +588,11 @@ class Session:
         return await self.send_request(req, timeout=timeout)
 
     async def login(
-        self, username: str | None = None, password: str | None = None
+        self, username: str | None = None, password: str | None = None,
+        retries: int = 1,
     ) -> Response:
+        """鉴权并取 token。`retries` 默认 1（既有工具行为不变）；
+        身份采集等零副作用场景传 0。"""
         self.username = username or self.username
         self.password = password or self.password
         rid = f"login-{self.next_seq()}"
@@ -600,7 +603,8 @@ class Session:
             "args": {"username": self.username, "password": self.password},
         }
         res = await self.send_request(
-            req, timeout=10, retries=1, allow_relogin=False, allow_reconnect=False
+            req, timeout=10, retries=retries, allow_relogin=False,
+            allow_reconnect=False
         )
         token = find_token(res.obj)
         if not token:
