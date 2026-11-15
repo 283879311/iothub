@@ -14,8 +14,10 @@
 用法（全部参数必填）：
   tools/preflight_flash.py --port /dev/ttyUSB1 \
       --log-dir artifacts/cmd04_flash_20261114/phaseA \
-      --expect-device-id IotHub-65D8 --expect-build-sha 7e9b8520d \
-      --elf build-release/iothub.elf
+      --expect-device-id IotHub-65D8 \
+      --bin artifacts/.../iothub_a7e04b6a9.bin \
+      --expect-bin-sha256 047e4726...ea41 \
+      [--elf artifacts/.../iothub_a7e04b6a9.elf --expect-build-sha a7e04b6a9]
 
 校验项（任一不符 → 非零退出，禁止烧录）：
   1) 该端口日志的 **最近一次 boot 之后** 有 client_id=iothub-<WiFiMAC>（证明映射属于当前上电会话）；
@@ -23,7 +25,8 @@
      指向 /dev/ttyUSBx）——这是"当前会话正在采集"的主证据；
   2b) 两份日志 mtime 在 --max-age-sec 内（**辅助**新鲜度条件，不单独证明录制在运行）；
   3) 端口对应 device_id 与 --expect-device-id 一致；
-  4) ELF 的 build_sha（sha256 前 9 位）与 --expect-build-sha 一致。
+  4) **冻结 BIN 的完整 SHA-256** 与 --expect-bin-sha256 一致（授权对象是字节，
+     不是易漂移的 ELF build_sha）；若另给 --elf/--expect-build-sha，则额外核对内嵌身份。
 注意：本门禁放行只证明"设备身份 + 镜像身份"，**不替代**烧录后 `device.info.build_sha` 反证。
 """
 
@@ -198,9 +201,14 @@ def main():
                     help="本次会话的 console 日志目录（必填，不使用历史默认值）")
     ap.add_argument("--expect-device-id", required=True,
                     help="目标 device_id，如 IotHub-65D8（由 WiFi MAC 末 4 位推出）")
-    ap.add_argument("--expect-build-sha", required=True,
-                    help="期望 build_sha（ELF sha256 前 9 位），如 7e9b8520d")
-    ap.add_argument("--elf", required=True)
+    ap.add_argument("--bin", required=True,
+                    help="**冻结**的烧录产物（将交给 esptool 的同一个文件）")
+    ap.add_argument("--expect-bin-sha256", required=True,
+                    help="冻结 BIN 的完整 SHA-256（授权对象）")
+    ap.add_argument("--elf", required=False,
+                    help="可选：配套 ELF，用于额外核对内嵌 build_sha")
+    ap.add_argument("--expect-build-sha", required=False,
+                    help="可选：期望 build_sha（需同时给 --elf）")
     ap.add_argument("--max-age-sec", type=int, default=120,
                     help="日志新鲜度上限（秒），超龄视为映射证据过期")
     args = ap.parse_args()
@@ -218,12 +226,23 @@ def main():
     observed_id = dev_id_from_wifi_mac(observed_wifi)
     other_id = dev_id_from_wifi_mac(other_wifi)
 
-    elf = Path(args.elf)
-    if not elf.is_file():
-        print(f"[FAIL] 镜像不存在: {elf}")
+    binp = Path(args.bin)
+    if not binp.is_file():
+        print(f"[FAIL] 冻结 BIN 不存在: {binp}")
         return 2
-    elf_sha = hashlib.sha256(elf.read_bytes()).hexdigest()
-    build_sha = elf_sha[:9]
+    bin_sha = hashlib.sha256(binp.read_bytes()).hexdigest()
+    expect_bin = args.expect_bin_sha256.strip().lower()
+    bin_ok = (bin_sha == expect_bin)
+
+    build_sha = None
+    elf_sha = None
+    if args.elf:
+        elf = Path(args.elf)
+        if not elf.is_file():
+            print(f"[FAIL] 配套 ELF 不存在: {elf}")
+            return 2
+        elf_sha = hashlib.sha256(elf.read_bytes()).hexdigest()
+        build_sha = elf_sha[:9]
 
     print("=== 烧录前四元组 ===")
     print(f"  端口          : {args.port}  (日志名 {name})")
@@ -249,8 +268,13 @@ def main():
     print(f"  端口观测 WiFi MAC : {observed_wifi or '未知'}  → {observed_id}"
           f"（BLE≈{ble_from_wifi_mac(observed_wifi)}）")
     print(f"  期望 device_id    : {args.expect_device_id}")
-    print(f"  镜像 ELF      : {elf}  sha256[:16]={elf_sha[:16]}  build_sha={build_sha}")
-    print(f"  期望 build_sha: {args.expect_build_sha}")
+    print(f"  冻结 BIN      : {binp}")
+    print(f"    sha256      = {bin_sha}")
+    print(f"    期望 sha256 = {expect_bin}  一致={bin_ok}")
+    if elf_sha:
+        print(f"  配套 ELF      : {args.elf}  sha256[:16]={elf_sha[:16]}  "
+              f"build_sha={build_sha}")
+        print(f"    期望 build_sha: {args.expect_build_sha}")
     print("====================")
 
     ok = True
@@ -299,15 +323,20 @@ def main():
     elif other_id.lower() == (observed_id or "").lower():
         print(f"[FAIL] 两端口指向同一设备（{other_id}）——映射证据不可信")
         ok = False
-    if build_sha.lower() != args.expect_build_sha.lower():
-        print(f"[FAIL] 镜像身份不符：实际 {build_sha} ≠ 期望 {args.expect_build_sha}")
+    if not bin_ok:
+        print(f"[FAIL] 冻结 BIN 身份不符：实际 {bin_sha} ≠ 期望 {expect_bin}")
+        ok = False
+    if args.elf and args.expect_build_sha and \
+            build_sha.lower() != args.expect_build_sha.lower():
+        print(f"[FAIL] 配套 ELF 身份不符：实际 {build_sha} ≠ 期望 {args.expect_build_sha}")
         ok = False
     if not ok:
         print("[STOP] 拒绝烧录（四元组核验未通过）")
         return 1
 
-    print("[OK] 四元组一致，可执行烧录；烧录后请用 device.info.build_sha 反证")
-    print(f"     期望 device.info.build_sha == {build_sha}")
+    print("[OK] 门禁通过（设备身份 + 冻结 BIN 字节身份）")
+    print("     烧录必须使用该冻结 BIN（不得重建），并在写入前紧邻复查 sha256；")
+    print("     烧录后仍以 device.info.build_sha 作固件内身份一致性检查（非字节级证明）。")
     return 0
 
 
