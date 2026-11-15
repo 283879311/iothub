@@ -15,14 +15,61 @@ HUPCL 会拉低 DTR,open() 时驱动设置初始线态也可能产生一次跳�
 第二个进程仍能 open 并重新拉一次线序,实测会把板子复位一次(POWERON_RESET),
 且两个读者会把字节流拆开(两边都拿不全)。要换输出文件,先结束旧进程、再起新的;
 一次会话只允许一个读者。
+
+2026-11-15(S6 门禁 v10):启动即取**按串口唯一**的协作锁
+(`port_identity.port_lock_path()`，如 /run/lock/iothub_serial_ttyUSB1.lock)。
+取不到 → 退出码 3，不打开串口。门禁用同一路径试探/持有该锁，从而在不读
+/proc、不需要 root 的前提下判定"协作采集是否在运行"。
+边界：只约束遵循本协议的工具，**不能**排除 minicom/手工 cat 等外部持有者。
 """
+import fcntl
+import os
 import sys
 import termios
-import serial
 
-PORT = sys.argv[1] if len(sys.argv) > 1 else "/dev/ttyUSB0"
-OUT = sys.argv[2] if len(sys.argv) > 2 else "/tmp/serial.log"
+_argv = [a for a in sys.argv[1:] if a != "--lock-probe"]
+PROBE = (len(_argv) != len(sys.argv) - 1)      # 只验锁、不开串口（供离线测试）
+PORT = _argv[0] if len(_argv) > 0 else "/dev/ttyUSB0"
+OUT = _argv[1] if len(_argv) > 1 else "/tmp/serial.log"
 BAUD = 115200
+
+
+def _acquire_locks(port, out):
+    """取协作锁：**按串口唯一**（主）+ 按日志文件（旧版兼容）。
+
+    端口锁路径由 `port_identity.port_lock_path()` 计算，门禁使用同一函数——
+    这是"同一串口只允许一个协作使用者"的唯一判据。锁随进程退出自动释放
+    （含 SIGTERM/SIGKILL：内核关闭 fd 即解锁）。
+    """
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import port_identity as PI
+    held = []
+    for path, label in ((PI.port_lock_path(port), "端口"),
+                        (out + ".lock", "日志")):
+        try:
+            f = PI.open_lock_file(path)
+        except OSError as exc:
+            print("capture: 无法打开%s锁 %s（%s）— 拒绝启动"
+                  % (label, path, exc), flush=True)
+            raise SystemExit(3)
+        try:
+            fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError:
+            print("capture: %s锁已被持有：%s — 拒绝启动（同一串口只允许一个采集）"
+                  % (label, path), flush=True)
+            raise SystemExit(3)
+        held.append((path, f))
+    return held
+
+
+_locks = _acquire_locks(PORT, OUT)
+
+if PROBE:
+    print("capture: lock-probe ok port=%s locks=%s"
+          % (PORT, ",".join(p for p, _f in _locks)), flush=True)
+    raise SystemExit(0)
+
+import serial  # noqa: E402  （probe 模式不需要 pyserial）
 
 ser = serial.Serial()
 ser.port = PORT
@@ -30,18 +77,6 @@ ser.baudrate = BAUD
 ser.timeout = 1
 ser.dtr = False
 ser.rts = False
-
-# ---- 采集存活锁（S6 门禁用）：<log>.lock 上的 flock(LOCK_EX) ----
-# 目的：让回滚门禁在不读 /proc、不需要 root 的情况下**可证明**地判断
-# "采集是否仍在运行"。锁随进程退出自动释放。
-import fcntl as _fcntl
-_lock_f = open(OUT + ".lock", "a+")
-try:
-    _fcntl.flock(_lock_f, _fcntl.LOCK_EX | _fcntl.LOCK_NB)
-except OSError:
-    print("capture: another capture already holds %s.lock — 拒绝启动" % OUT,
-          flush=True)
-    raise SystemExit(3)
 
 with ser, open(OUT, "ab") as f:
     # 2026-10-17(1.3-60): 关闭 HUPCL —— 否则进程退出 close() 时驱动会拉低 DTR,

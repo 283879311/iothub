@@ -13,9 +13,12 @@
 """
 
 import json
+import os
 import re
+import stat
 import subprocess
 import sys
+import tempfile
 import time
 import uuid
 from pathlib import Path
@@ -122,6 +125,7 @@ MAC_RECORD_MAX_AGE_MIN = 120      # 固定阈值，不接受调用方放宽
 
 
 def write_mac_record(path, port, mac, log_dir):
+    Path(path).parent.mkdir(parents=True, exist_ok=True)   # 记录可能落在新建的证据目录里
     rec = {
         "version": MAC_RECORD_VERSION,
         "port": port,
@@ -208,35 +212,118 @@ def anchor_validate(anchor, port, log_dir, max_age_min=240):
 
 
 
-# ---------------- 录制进程三态（STOPPED / RUNNING / UNKNOWN） ----------------
-# 注意：不能用 inspect_capture().running 代替——那是"完整链校验通过"，
-# 进程可能仍存活但 argv/fd 校验失败；此处只看**进程存活与端口占用**。
+# ---------------- 串口协作锁（按**串口**唯一，不按日志文件） ----------------
+# 语义边界（必须如实对待，不得包装）：
+#   本协议只约束**遵循本协议**的工具（本仓库 capture_serial.py 与门禁）。
+#   它**不能**排除 minicom / 手工 cat / 其它 esptool 等外部进程占用串口。
+#   因此：
+#     COOPERATING_CAPTURE_STOPPED ≠ PORT_FREE
+#   读 MAC 需要两个**互相独立**的条件：
+#     1) 门禁成功持有端口锁（证明没有协作采集在运行/启动，且在读期间不能启动）；
+#     2) 操作者显式声明"无外部工具占用该串口"（软件无法证明，写入证据留痕）。
 
-STOPPED, RUNNING, UNKNOWN = "STOPPED", "RUNNING", "UNKNOWN"
+RUNNING = "RUNNING"
+COOPERATING_STOPPED = "COOPERATING_CAPTURE_STOPPED"
+UNKNOWN = "UNKNOWN"
+
+PORT_FREE_NOT_PROVEN = ("协作锁三态只说明是否有遵循本协议的采集在运行；"
+                        "不能证明串口无外部持有者（port_free_proven 恒为 false）")
+
+LOCK_DIRS = ("/run/lock", "/tmp")     # 优先系统锁目录（1777）；都不可写时用 tmp
 
 
-
-def _lock_state(log_path):
-    """测试采集存活锁：返回 (locked, reason)。
-
-    采集进程（capture_serial.py）运行时持有 `<log>.lock` 的 flock(LOCK_EX)。
-    这里用 LOCK_EX|LOCK_NB 试探：
-      - BlockingIOError → 锁被持有 → 采集**正在运行**；
-      - 成功取得 → 无人持有 → 采集**已停止**（立即释放并关闭）；
-      - 其它 OSError → 无法判定（UNKNOWN）。
-    该判定**不需要 root、不读 /proc、不触碰串口**，且对本仓库的采集进程是
-    可证明的（它们必然持锁）。
-    """
-    import fcntl
-    if not log_path:
-        return (None, "no_log_path")
-    lock_path = str(log_path) + ".lock"
+def port_lock_id(port):
+    """规范化串口标识：realpath 后取 basename（by-id/别名归一到 ttyUSBx）。"""
     try:
-        f = open(lock_path, "a+")
+        resolved = Path(port).resolve()
+    except OSError:
+        resolved = Path(port)
+    return resolved.name or "unknown"
+
+
+def port_lock_path(port, lock_dir=None):
+    """**按串口唯一**的锁路径；capture 与门禁必须用同一函数计算。
+
+    锁名只取决于规范化后的串口名（如 ttyUSB1），与日志文件无关——
+    否则两个不同日志路径的采集会各自持锁却同时占用同一串口。
+    """
+    name = "iothub_serial_%s.lock" % re.sub(r"[^A-Za-z0-9_.-]", "_",
+                                            port_lock_id(port))
+    if lock_dir:
+        return str(Path(lock_dir) / name)
+    for d in LOCK_DIRS:
+        if os.access(d, os.W_OK):
+            return str(Path(d) / name)
+    return str(Path(tempfile.gettempdir()) / name)
+
+
+def open_lock_file(path, create=True):
+    """打开锁文件：O_NOFOLLOW 防符号链接（/run/lock、/tmp 均为 1777）。"""
+    flags = os.O_RDWR | os.O_CLOEXEC | os.O_NOFOLLOW
+    if create:
+        flags |= os.O_CREAT
+    fd = os.open(path, flags, 0o664)
+    try:
+        if not stat.S_ISREG(os.fstat(fd).st_mode):
+            raise OSError("lock path is not a regular file")
+    except OSError:
+        os.close(fd)
+        raise
+    return os.fdopen(fd, "r+", encoding="utf-8")
+
+
+class PortLock:
+    """端口锁持有者：与 capture_serial.py 使用**同一路径**的 flock(LOCK_EX)。"""
+
+    def __init__(self, port=None, lock_path=None):
+        self.path = lock_path or port_lock_path(port)
+        self._f = None
+
+    def acquire(self, timeout_s=5.0):
+        import fcntl
+        deadline = time.time() + max(0.0, timeout_s)
+        while True:
+            try:
+                f = open_lock_file(self.path)
+            except OSError as exc:
+                return (False, f"open_failed:{type(exc).__name__}")
+            try:
+                fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                self._f = f
+                return (True, "acquired")
+            except BlockingIOError:
+                f.close()
+                if time.time() >= deadline:
+                    return (False, "held_by_other")
+                time.sleep(0.2)
+            except OSError as exc:
+                f.close()
+                return (False, f"flock_failed:{type(exc).__name__}")
+
+    def release(self):
+        import fcntl
+        f, self._f = self._f, None
+        if f is None:
+            return
+        try:
+            fcntl.flock(f, fcntl.LOCK_UN)
+        except OSError:
+            pass
+        try:
+            f.close()
+        except OSError:
+            pass
+
+
+def _probe_lock(path):
+    """试探锁；返回 (held, reason)。held=None 表示**无法判定**。"""
+    import fcntl
+    try:
+        f = open_lock_file(path, create=False)
     except FileNotFoundError:
         return (False, "lock_file_absent")     # 从未启动过 → 视为未运行
     except OSError as exc:
-        return (None, f"lock_open_failed:{type(exc).__name__}")
+        return (None, f"open_failed:{type(exc).__name__}")
     try:
         try:
             fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -258,23 +345,45 @@ def _scan_holders(proc_root, port):
     return ([], f"proc_scan_disabled(lock_protocol):{port}")
 
 
-def capture_state(port, log_path=None, proc_root="/proc", scanner=None):
-    """三态 STOPPED / RUNNING / UNKNOWN —— 基于**采集存活锁**（可证明）。
+def capture_state(port, log_path=None, lock_path=None, scanner=None):
+    """三态 RUNNING / COOPERATING_CAPTURE_STOPPED / UNKNOWN（**不是**端口空闲证明）。
 
-    判定（不读 /proc、不需要 root、不触碰串口）：
-      RUNNING : `<log>.lock` 被 flock 持有（采集在运行）或 pidfile 进程仍存活
-      STOPPED : 锁可取得（无人持有）且 pidfile 进程不存在
-      UNKNOWN : 锁文件/加锁出错、pidfile 存在但不可解析、或注入了未知原因
+    判定（不读 /proc 枚举、不需要 root、不触碰串口）：
+      RUNNING               : 端口锁被持有（协作采集在运行）、或旧版采集的
+                              `<log>.lock` 仍被持有、或 pidfile 进程仍存活
+      COOPERATING_STOPPED   : 端口锁可取得且无 pidfile 进程存活
+      UNKNOWN               : 锁打不开/加锁出错、pidfile 不可解析、或注入了未知原因
+
+    任何返回都带 `port_free_proven: False`：本函数**不**证明串口无人占用。
     """
-    inf = {"port": port, "holders": [], "pidfile_pid": None,
-           "lock": None, "unknown_reason": None}
+    inf = {"port": port,
+           "port_lock": None, "log_lock": None,
+           "port_free_proven": False,
+           "state_meaning": PORT_FREE_NOT_PROVEN,
+           "pidfile_pid": None, "pidfile_state": "absent",
+           "unknown_reason": None}
 
-    locked, why = _lock_state(log_path)
-    inf["lock"] = {"locked": locked, "reason": why}
-    if locked is None:
-        inf["unknown_reason"] = why
-    elif locked is True:
+    plock = lock_path or port_lock_path(port)
+    held, why = _probe_lock(plock)
+    inf["port_lock"] = {"path": plock, "held": held, "reason": why}
+    if held is True:
         return (RUNNING, inf)
+    if held is None:
+        inf["unknown_reason"] = why or "port_lock_unknown"
+    if not log_path:
+        # 无日志路径 → 无法排除旧版采集的 <log>.lock / pidfile → 不猜
+        inf["unknown_reason"] = inf["unknown_reason"] or "no_log_path"
+
+    # 旧版本（<v10）采集只持有 <log>.lock：据该日志所在进程保守判运行
+    if log_path:
+        lpath = str(log_path) + ".lock"
+        lheld, lwhy = _probe_lock(lpath)
+        inf["log_lock"] = {"path": lpath, "held": lheld, "reason": lwhy}
+        if lheld is True:
+            return (RUNNING, inf)
+        if lheld is None:
+            inf["unknown_reason"] = (inf["unknown_reason"]
+                                     or lwhy or "log_lock_unknown")
 
     pidfile_state = "absent"
     if log_path:
@@ -298,11 +407,85 @@ def capture_state(port, log_path=None, proc_root="/proc", scanner=None):
     if inf["pidfile_pid"] and Path(f"/proc/{inf['pidfile_pid']}").is_dir():
         return (RUNNING, inf)               # 锁已释放但进程未退出（异常态）→ 保守判运行
     if scanner is not None:                 # 测试可注入额外原因
-        _h, extra = scanner(proc_root, port)
+        _h, extra = scanner(None, port)
         if extra:
             inf["unknown_reason"] = extra
             return (UNKNOWN, inf)
-    return (STOPPED, inf)
+    return (COOPERATING_STOPPED, inf)
+
+
+# ---------------- 最终证据消费端校验（可单测，门禁放行的唯一依据） ----------------
+
+FINAL_EVIDENCE_NAME = "mac_read_flow.final.json"
+EVIDENCE_MAX_AGE_MIN = 240        # 固定阈值，不接受放宽
+
+
+def validate_final_evidence(evidence_dir, run_id, port, mac=EXPECT_MAC_65D8,
+                            max_age_min=EVIDENCE_MAX_AGE_MIN,
+                            require_restore=True):
+    """校验最终证据是否**唯一属于本轮**；返回 (ok, reasons[], data)。
+
+    覆盖：run_id / 端口 / MAC / 证据写入结果 / 协作停止态 / 端口锁持有 /
+    操作者声明 / 恢复字段完整性 / 时间新鲜度。
+    旧目录里残留的 final 文件会因 run_id 不同而被拒绝。
+    """
+    if not evidence_dir:
+        return (False, ["evidence_dir 为空"], None)
+    path = Path(evidence_dir) / FINAL_EVIDENCE_NAME
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return (False, [f"最终证据不存在：{path}"], None)
+    except Exception as exc:  # noqa: BLE001
+        return (False, [f"最终证据不可解析（{type(exc).__name__}）"], None)
+    if not isinstance(data, dict):
+        return (False, ["最终证据根对象不是字典"], data)
+
+    r = []
+
+    def need(cond, msg):
+        if not cond:
+            r.append(msg)
+
+    need(isinstance(run_id, str) and bool(run_id), f"run_id 非法（{run_id!r}）")
+    need(data.get("run_id") == run_id,
+         f"run_id 不符（{data.get('run_id')!r} vs {run_id!r}）")
+    need(data.get("port") == port, f"port 不符（{data.get('port')!r}）")
+    need(str(data.get("mac", "")).lower() == str(mac).lower(),
+         f"mac 不符（{data.get('mac')!r}）")
+    need(data.get("evidence_write_result") == "ok",
+         f"证据写入结果非 ok（{data.get('evidence_write_result')!r}）")
+    need(data.get("mac_ok") is True, "mac_ok 非 True")
+    need(data.get("state_after_stop") == COOPERATING_STOPPED,
+         f"state_after_stop 非 {COOPERATING_STOPPED}"
+         f"（{data.get('state_after_stop')!r}）")
+    pl = data.get("port_lock") or {}
+    need(pl.get("acquired") is True, "端口锁未成功持有（port_lock.acquired != True）")
+    need(data.get("external_holder_attested") is True, "缺少操作者外部占用声明")
+    need(data.get("port_free_proven") is False,
+         "port_free_proven 必须为 False（不得伪装端口已空闲）")
+    errs = data.get("errors")
+    need(isinstance(errs, list) and not errs, f"errors 非空（{errs!r}）")
+    if require_restore:
+        need(data.get("state_after_restore") == RUNNING,
+             f"state_after_restore 非 {RUNNING}"
+             f"（{data.get('state_after_restore')!r}）")
+        need(data.get("run_app_ok") is True, "run_app_ok 非 True")
+        need(data.get("capture_restarted") is True, "capture_restarted 非 True")
+        need(data.get("new_boot") is True, "new_boot 非 True")
+        need(data.get("record_written") is True, "record_written 非 True")
+    at = data.get("at")
+    try:
+        ts = time.mktime(time.strptime(str(at), "%Y-%m-%dT%H:%M:%S"))
+    except Exception:  # noqa: BLE001
+        r.append(f"时间戳不可解析（{at!r}）")
+    else:
+        age = time.time() - ts
+        if age < -300:
+            r.append(f"时间戳在未来（age={age:.0f}s）")
+        elif age > max_age_min * 60:
+            r.append(f"证据过期 age={age/60:.1f}min > {max_age_min}min")
+    return (not r, r, data)
 
 
 # ---------------- 统一"停录制→读 MAC→恢复→重启录制" ----------------
@@ -347,25 +530,33 @@ def wait_new_boot(log_path, from_size, timeout_s=15.0):
 def read_mac_flow(port, log_dir, out_record, capture_ctl="tools/serial_capture_ctl.sh",
                   evidence_dir=None, expect_mac=EXPECT_MAC_65D8,
                   read_mac=None, run_app=None, strict_restore=True,
-                  chain_check=None, state_fn=None, run_id=None):
+                  chain_check=None, state_fn=None, run_id=None,
+                  external_holder_attested=False, attestation_note=None,
+                  lock_path=None, lock_timeout_s=5.0):
     """步骤 0 / 回滚门禁共用的唯一实现。
 
-    状态流程：检查录制链 → 停录制 → read_mac → **无论结果都恢复**
-    （run_app + 重启录制 + 等新 boot 证据）→ 判定 → 写记录与证据。
+    状态流程：检查录制链 → 停录制 → **持端口锁** → read_mac → 无论结果都恢复
+    （run_app → 释放锁 → 重启录制 → 等新 boot 证据）→ 判定 → 写记录与证据。
+
+    读 MAC 的**两个独立条件**（缺一即拒绝；不得把"协作采集已停"当成"端口空闲"）：
+      1) 端口锁由本流程成功持有——读期间任何协作采集都无法启动；
+      2) `external_holder_attested=True`：操作者显式声明无外部工具占用该串口。
+         软件**无法**证明这一点（minicom / 手工 cat / 其它 esptool 不遵循本协议），
+         因此证据里 `port_free_proven` 恒为 False，且校验端强制要求它为 False。
 
     每一步都独立异常保护：read/run/start/boot 任一抛出或失败都不会阻断
     后续恢复步骤；最终统一计算 state_confirmed 与 ok。
-    成功条件：MAC 正确 **且** run 成功 **且** 录制重启成功 **且**
-    （strict_restore 时）新 boot 证据出现 **且** 记录/证据写入成功。
-    `evidence_dir` 为**必填**（恢复证据是成功条件的一部分）。
+    成功条件：MAC 正确 **且** 端口锁已持有 **且** 操作者已声明 **且** run 成功
+    **且** 录制重启成功 **且**（strict_restore 时）新 boot 证据出现
+    **且** 记录/证据写入成功。`evidence_dir` 为**必填**。
     """
     read_mac = read_mac or esptool_read_mac
     run_app = run_app or esptool_run_app
-    state_fn = state_fn or (lambda: capture_state(port, log_path))
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     from preflight_flash import inspect_capture  # noqa: E402
 
     log_path = str(Path(log_dir) / f"serial_{Path(port).name}.log")
+    state_fn = state_fn or (lambda: capture_state(port, log_path, lock_path=lock_path))
     run_id = run_id or (time.strftime("%Y%m%d_%H%M%S") + "_" + uuid.uuid4().hex[:8])
     ev = {"run_id": run_id,
           "port": port, "log_path": log_path, "evidence_dir": str(evidence_dir),
@@ -373,6 +564,11 @@ def read_mac_flow(port, log_dir, out_record, capture_ctl="tools/serial_capture_c
           "mac_ok": False, "run_app_ok": False, "capture_restarted": False,
           "new_boot": False, "record_written": False,
           "evidence_written": False, "state_confirmed": False,
+          "port_free_proven": False,
+          "external_holder_attested": bool(external_holder_attested),
+          "attestation_note": attestation_note,
+          "port_lock": {"path": lock_path or port_lock_path(port),
+                        "acquired": False, "reason": None},
           "errors": [], "at": time.strftime("%Y-%m-%dT%H:%M:%S")}
 
     def note_error(stage, exc):
@@ -383,6 +579,15 @@ def read_mac_flow(port, log_dir, out_record, capture_ctl="tools/serial_capture_c
     if not evidence_dir:
         print("  [FAIL] evidence_dir 必填（恢复证据是成功条件）")
         ev["errors"].append("evidence_dir_missing")
+        return (False, ev)
+
+    # 证据目录必须尽早可用：后面的 MAC 记录与两阶段证据都写在这里
+    try:
+        Path(evidence_dir).mkdir(parents=True, exist_ok=True)
+    except Exception as exc:  # noqa: BLE001
+        note_error("evidence_dir_mkdir", exc)
+        ev["evidence_write_attempted"] = True
+        ev["evidence_write_result"] = f"fail:{type(exc).__name__}"
         return (False, ev)
 
     # ---- 1. 录制链 ----
@@ -418,87 +623,110 @@ def read_mac_flow(port, log_dir, out_record, capture_ctl="tools/serial_capture_c
         ev["stop_cmd_ok"] = stopped_ok
         ev["state_after_stop"] = st
         ev["state_after_stop_info"] = stinfo
-        ev["capture_stopped"] = (st == STOPPED)
-        print(f"  [{'ok' if st == STOPPED else 'FAIL'}] 停录制后状态={st} "
-              f"cmd={stopped_ok} holders={stinfo.get('holders')} msg={msg[:50]}")
+        ev["capture_stopped"] = (st == COOPERATING_STOPPED)
+        print(f"  [{'ok' if st == COOPERATING_STOPPED else 'FAIL'}] 停录制后状态={st} "
+              f"cmd={stopped_ok} port_lock={stinfo.get('port_lock')} msg={msg[:50]}")
         if st == UNKNOWN:
-            print("  [STOP] 无法确认录制进程/端口占用——不得读 MAC")
+            print("  [STOP] 无法确认协作采集状态——不得读 MAC")
+        elif st == COOPERATING_STOPPED:
+            print("  [info] 该状态只表示**协作采集已停**，不证明串口无外部持有者")
 
-    # ---- 3. 读 MAC（异常也继续到恢复）----
+    # ---- 3. 持端口锁 + 读 MAC（两个独立条件，缺一即拒绝）----
+    lock = PortLock(port=port, lock_path=lock_path)
     mac_read_attempted = False
-    if ev["capture_stopped"]:
-        mac_read_attempted = True
-        try:
-            ok_mac, mac_or_err = read_mac(port)
-            if ok_mac:
-                ev["mac"] = mac_or_err
-                ev["mac_ok"] = (str(mac_or_err).lower() == expect_mac)
-                print(f"  [{'ok' if ev['mac_ok'] else 'FAIL'}] read_mac={mac_or_err}"
-                      f"{'' if ev['mac_ok'] else f'（期望 {expect_mac}）'}")
+    try:
+        if ev["capture_stopped"]:
+            if not external_holder_attested:
+                ev["errors"].append("external_holder_not_attested")
+                print("  [STOP] 缺操作者声明（无外部工具占用该串口）——不得读 MAC")
             else:
-                print(f"  [FAIL] read_mac 失败：{str(mac_or_err)[:100]}")
-        except Exception as exc:  # noqa: BLE001
-            note_error("read_mac", exc)
+                ok_lk, lk_why = lock.acquire(lock_timeout_s)
+                ev["port_lock"]["acquired"] = bool(ok_lk)
+                ev["port_lock"]["reason"] = lk_why
+                print(f"  [{'ok' if ok_lk else 'FAIL'}] 端口锁 {lock.path}（{lk_why}）")
+                if ok_lk:
+                    mac_read_attempted = True
+                    try:
+                        ok_mac, mac_or_err = read_mac(port)
+                        if ok_mac:
+                            ev["mac"] = mac_or_err
+                            ev["mac_ok"] = (str(mac_or_err).lower() == expect_mac)
+                            print(f"  [{'ok' if ev['mac_ok'] else 'FAIL'}] "
+                                  f"read_mac={mac_or_err}"
+                                  f"{'' if ev['mac_ok'] else f'（期望 {expect_mac}）'}")
+                        else:
+                            print(f"  [FAIL] read_mac 失败：{str(mac_or_err)[:100]}")
+                    except Exception as exc:  # noqa: BLE001
+                        note_error("read_mac", exc)
 
-    # ---- 4. 恢复：run_app 与 重启录制 各自独立 ----
-    # 触发条件：读 MAC（进程确实停了）**或** 曾发起停止且当前未运行
-    restore_needed = bool(mac_read_attempted or
-                          (stop_issued and ev.get("state_after_stop") == STOPPED))
-    if restore_needed:
-        size_before = _log_size(log_path)
-        try:
-            run_ok, rmsg = run_app(port)
-        except Exception as exc:  # noqa: BLE001
-            note_error("run_app", exc)
-            run_ok, rmsg = False, "exception"
-        ev["run_app_ok"] = bool(run_ok)
-        print(f"  [{'ok' if run_ok else 'FAIL'}] 恢复 app：{str(rmsg)[:70]}")
+        # ---- 4. 恢复：run_app 与 重启录制 各自独立 ----
+        # run_app 只在"确实读过 MAC"时需要（否则芯片没进下载模式）；
+        # 重启录制在"曾发起停止且确认协作采集已停"时需要。
+        need_run = mac_read_attempted
+        need_start = bool(stop_issued
+                          and ev.get("state_after_stop") == COOPERATING_STOPPED)
+        if need_run or need_start:
+            size_before = _log_size(log_path)
+            if need_run:
+                try:
+                    run_ok, rmsg = run_app(port)
+                except Exception as exc:  # noqa: BLE001
+                    note_error("run_app", exc)
+                    run_ok, rmsg = False, "exception"
+                ev["run_app_ok"] = bool(run_ok)
+                print(f"  [{'ok' if run_ok else 'FAIL'}] 恢复 app：{str(rmsg)[:70]}")
+            lock.release()          # 必须先释放：capture 启动需要同一把端口锁
 
-        try:
-            cap3 = inspect_capture(log_dir, Path(port).name)
-            already = cap3.get("running") is True
-        except Exception:  # noqa: BLE001
-            already = False
-        if already:
-            start_ok, smsg = True, "already running (skip start)"
-        else:
             try:
-                start_ok, smsg = _ctl("start", port, log_path, capture_ctl)
-            except Exception as exc:  # noqa: BLE001
-                note_error("capture_start", exc)
-                start_ok, smsg = False, "exception"
-        ev["capture_restarted"] = bool(start_ok)
-        print(f"  [{'ok' if start_ok else 'FAIL'}] 重启录制：{smsg}")
+                cap3 = inspect_capture(log_dir, Path(port).name)
+                already = cap3.get("running") is True
+            except Exception:  # noqa: BLE001
+                already = False
+            if already:
+                start_ok, smsg = True, "already running (skip start)"
+            else:
+                try:
+                    start_ok, smsg = _ctl("start", port, log_path, capture_ctl)
+                except Exception as exc:  # noqa: BLE001
+                    note_error("capture_start", exc)
+                    start_ok, smsg = False, "exception"
+            ev["capture_restarted"] = bool(start_ok)
+            print(f"  [{'ok' if start_ok else 'FAIL'}] 重启录制：{smsg}")
 
-        try:
-            st2, st2info = state_fn()
-        except Exception:  # noqa: BLE001
-            st2, st2info = UNKNOWN, {}
-        ev["state_after_restore"] = st2
-        if st2 != RUNNING:
-            ev["errors"].append(f"state_after_restore={st2}")
-            print(f"  [FAIL] 恢复后录制状态={st2}（期望 RUNNING）")
-            start_ok = False
-            ev["capture_restarted"] = False
-
-        if start_ok and strict_restore:
             try:
-                boot_ok, bmsg = wait_new_boot(log_path, size_before)
-            except Exception as exc:  # noqa: BLE001
-                note_error("wait_new_boot", exc)
-                boot_ok, bmsg = False, "exception"
-            ev["new_boot"] = bool(boot_ok)
-            print(f"  [{'ok' if boot_ok else 'FAIL'}] 新 boot 证据：{bmsg}")
-        elif not strict_restore:
-            ev["new_boot"] = None
-            print("  [info] strict_restore=False：跳过新 boot 证据等待")
+                st2, st2info = state_fn()
+            except Exception:  # noqa: BLE001
+                st2, st2info = UNKNOWN, {}
+            ev["state_after_restore"] = st2
+            if st2 != RUNNING:
+                ev["errors"].append(f"state_after_restore={st2}")
+                print(f"  [FAIL] 恢复后录制状态={st2}（期望 RUNNING）")
+                start_ok = False
+                ev["capture_restarted"] = False
+
+            if start_ok and strict_restore:
+                try:
+                    boot_ok, bmsg = wait_new_boot(log_path, size_before)
+                except Exception as exc:  # noqa: BLE001
+                    note_error("wait_new_boot", exc)
+                    boot_ok, bmsg = False, "exception"
+                ev["new_boot"] = bool(boot_ok)
+                print(f"  [{'ok' if boot_ok else 'FAIL'}] 新 boot 证据：{bmsg}")
+            elif not strict_restore:
+                ev["new_boot"] = None
+                print("  [info] strict_restore=False：跳过新 boot 证据等待")
+    finally:
+        lock.release()                  # 任何异常路径都必须放锁
 
     # ---- 5. 判定 ----
     mac_ok = ev["mac_ok"] is True
     ev["state_confirmed"] = bool(
         mac_ok and ev["run_app_ok"] and ev["capture_restarted"]
         and (ev["new_boot"] is True or not strict_restore))
-    ok = bool(chain_ok and ev["capture_stopped"] and ev["state_confirmed"])
+    ok = bool(chain_ok and ev["capture_stopped"]
+              and ev["port_lock"].get("acquired") is True
+              and external_holder_attested is True
+              and ev["state_confirmed"])
 
     # ---- 6. 记录与证据（失败也尽力写；写入失败计入 ok）----
     if ok and ev["mac"]:
@@ -551,10 +779,21 @@ def _cli():
     r.add_argument("--out", required=True)
     r.add_argument("--evidence-dir", required=True,
                    help="本轮证据目录（恢复流程证据写入此处；写失败即失败）")
+    r.add_argument("--attest-no-external-holder", required=True,
+                   metavar="说明",
+                   help="操作者声明：该串口无外部工具占用（minicom/手工 cat 等）。"
+                        "软件无法证明，必须显式声明并写入证据")
     a = ap.parse_args()
     if a.cmd == "read":
+        if not a.attest_no_external_holder.strip():
+            print("[FAIL] --attest-no-external-holder 不能为空")
+            return 2
+        print("[info] 边界：本流程只能证明**协作采集已停**，"
+              "不证明串口无外部持有者（port_free_proven=false）")
         ok, ev = read_mac_flow(a.port, a.log_dir, a.out,
-                               evidence_dir=a.evidence_dir)
+                               evidence_dir=a.evidence_dir,
+                               external_holder_attested=True,
+                               attestation_note=a.attest_no_external_holder.strip())
         return 0 if ok else 1
     return 2
 

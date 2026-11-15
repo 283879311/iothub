@@ -2,18 +2,25 @@
 """S6 阶段 B 门禁纯离线测试（可重复执行，不连设备、不动串口）。
 
 覆盖：
-  A. capture_state 三态判定（STOPPED / RUNNING / UNKNOWN，含 /proc 不可用）
-  B. read_mac_flow 异常与恢复语义（stop 失败但已停、read 异常、run 异常、
-     MAC 不符、证据写入失败、evidence_dir 缺失）
-  C. anchor_validate / load_mac_record 严格校验矩阵
+  A. 串口协作锁三态（按**串口**唯一，真实 flock）：
+     RUNNING / COOPERATING_CAPTURE_STOPPED / UNKNOWN；
+     同串口不同日志路径的采集必须互相判为 RUNNING；
+     capture_serial.py 真实启动路径（--lock-probe）在锁被占时拒绝启动。
+  B. read_mac_flow 授权与恢复语义：端口锁 + 操作者声明两个独立条件、
+     stop 失败但已停、read 异常、run 异常、MAC 不符、证据写入失败。
+  C. anchor_validate / load_mac_record 严格校验矩阵。
+  D. validate_final_evidence 消费端校验（run_id/端口/MAC/旧终态/恢复字段）。
 
 用法：.venv-bleak/bin/python tests/s6_gate/test_gate.py
 """
 
+import fcntl
 import json
 import os
+import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -24,6 +31,7 @@ import port_identity as PI  # noqa: E402
 
 PASS = 0
 FAIL = 0
+FAKE_PORTS = []          # 用完清理 /run/lock 下的锁文件
 
 
 def ck(name, cond, detail=""):
@@ -36,97 +44,127 @@ def ck(name, cond, detail=""):
         print(f"  FAIL  {name}  {detail}")
 
 
-def fake_proc(root, holders=(), pidfile_pid=None, unreadable=False):
-    """构造假 /proc：holders 里的 pid 持有目标端口。"""
-    root = Path(root)
-    root.mkdir(parents=True, exist_ok=True)
-
-    def mkproc(pid, hold=False):
-        base = root / str(pid)
-        d = base / "fd"
-        d.mkdir(parents=True, exist_ok=True)
-        # 扫描按 UID 过滤：桩进程必须是当前用户
-        (base / "status").write_text(f"Name:\ttest\nUid:\t{os.getuid()}\t0\t0\t0\n")
-        (base / "cmdline").write_bytes(b"python3\x00tools/capture_serial.py\x00")
-        if hold:
-            os.symlink("/dev/ttyUSB1", d / "3")
-
-    for pid in holders:
-        mkproc(pid, hold=True)
-    if pidfile_pid is not None:
-        mkproc(pidfile_pid, hold=False)
-    return str(root)
+def make_log(tmp, name):
+    log = Path(tmp) / f"{name}.log"
+    log.write_text("x")
+    return str(log)
 
 
-def test_capture_state(tmp):
-    print("[A] capture_state 三态（基于存活锁，真实 flock）")
-    import fcntl
+def test_port_lock_state(tmp):
+    print("[A] 串口协作锁三态（真实 flock，按串口唯一）")
 
-    def mklog(name):
-        log = Path(tmp) / f"{name}.log"
-        log.write_text("x")
-        return str(log), str(log) + ".lock"
+    # A1 端口锁被持有 → RUNNING（显式 lock_path，测试隔离）
+    lp = str(tmp / "a1.lock")
+    h = PI.PortLock(lock_path=lp)
+    ok, why = h.acquire(0)
+    st, inf = PI.capture_state("/dev/ttyUSB1", make_log(tmp, "a1"), lock_path=lp)
+    ck("A1 端口锁被持有 → RUNNING",
+       ok and st == PI.RUNNING and inf["port_lock"]["reason"] == "lock_held",
+       f"{st} {inf['port_lock']}")
+    h.release()
 
-    # A1 锁被持有 → RUNNING
-    log, lockp = mklog("a1")
-    holder = open(lockp, "a+")
-    fcntl.flock(holder, fcntl.LOCK_EX | fcntl.LOCK_NB)
-    st, inf = PI.capture_state("/dev/ttyUSB1", log)
-    ck("A1 锁被持有 → RUNNING",
-       st == PI.RUNNING and inf["lock"]["reason"] == "lock_held", f"{st}")
-    fcntl.flock(holder, fcntl.LOCK_UN); holder.close()
+    # A2 端口锁空闲、无 pidfile → COOPERATING_CAPTURE_STOPPED
+    lp = str(tmp / "a2.lock")
+    PI.open_lock_file(lp).close()
+    st, inf = PI.capture_state("/dev/ttyUSB1", make_log(tmp, "a2"), lock_path=lp)
+    ck("A2 锁空闲 → COOPERATING_CAPTURE_STOPPED",
+       st == PI.COOPERATING_STOPPED, st)
+    ck("A2 不声称端口已空闲（port_free_proven=False）",
+       inf["port_free_proven"] is False, str(inf["port_free_proven"]))
 
-    # A2 锁空闲、无 pidfile → STOPPED
-    log, lockp = mklog("a2")
-    Path(lockp).write_text("")
-    st, _ = PI.capture_state("/dev/ttyUSB1", log)
-    ck("A2 锁空闲 → STOPPED", st == PI.STOPPED, st)
-
-    # A3 锁文件不存在（从未启动）→ STOPPED
-    log, _ = mklog("a3")
-    st, _ = PI.capture_state("/dev/ttyUSB1", log)
-    ck("A3 锁文件缺失 → STOPPED", st == PI.STOPPED, st)
+    # A3 锁文件不存在（从未启动）→ COOPERATING_CAPTURE_STOPPED
+    log = make_log(tmp, "a3")
+    st, _ = PI.capture_state("/dev/ttyUSB1", log, lock_path=str(tmp / "a3.lock"))
+    ck("A3 锁文件缺失 → COOPERATING_CAPTURE_STOPPED",
+       st == PI.COOPERATING_STOPPED, st)
 
     # A4 pidfile 存在但不可解析 → UNKNOWN
-    log, lockp = mklog("a4")
-    Path(lockp).write_text("")
+    lp = str(tmp / "a4.lock")
+    PI.open_lock_file(lp).close()
+    log = make_log(tmp, "a4")
     Path(log + ".pid").write_text("not-a-pid")
-    st, inf = PI.capture_state("/dev/ttyUSB1", log)
+    st, inf = PI.capture_state("/dev/ttyUSB1", log, lock_path=lp)
     ck("A4 pidfile 不可解析 → UNKNOWN",
        st == PI.UNKNOWN and inf["unknown_reason"] == "pidfile_unparsable", st)
 
     # A5 锁空闲但 pid 进程存活 → RUNNING（保守）
-    log, lockp = mklog("a5")
-    Path(lockp).write_text("")
+    lp = str(tmp / "a5.lock")
+    PI.open_lock_file(lp).close()
+    log = make_log(tmp, "a5")
     Path(log + ".pid").write_text(str(os.getpid()))
-    st, _ = PI.capture_state("/dev/ttyUSB1", log)
+    st, _ = PI.capture_state("/dev/ttyUSB1", log, lock_path=lp)
     ck("A5 锁空闲但 pid 存活 → RUNNING", st == PI.RUNNING, st)
 
-    # A6 无 log_path → UNKNOWN
-    st, inf = PI.capture_state("/dev/ttyUSB1", None)
+    # A6 无 log_path → UNKNOWN（无法排除旧版采集的日志锁）
+    lp = str(tmp / "a6.lock")
+    PI.open_lock_file(lp).close()
+    st, inf = PI.capture_state("/dev/ttyUSB1", None, lock_path=lp)
     ck("A6 无 log_path → UNKNOWN",
        st == PI.UNKNOWN and inf["unknown_reason"] == "no_log_path", st)
 
     # A7 注入 scanner 额外未知原因 → UNKNOWN
-    log, lockp = mklog("a7")
-    Path(lockp).write_text("")
-    st, inf = PI.capture_state("/dev/ttyUSB1", log,
-                               scanner=lambda r, pt: ([], "injected_unknown"))
+    lp = str(tmp / "a7.lock")
+    PI.open_lock_file(lp).close()
+    st, _ = PI.capture_state("/dev/ttyUSB1", make_log(tmp, "a7"), lock_path=lp,
+                             scanner=lambda r, pt: ([], "injected_unknown"))
     ck("A7 注入未知原因 → UNKNOWN", st == PI.UNKNOWN, st)
 
+    # A8 同串口、**不同日志路径**：另一路径的采集必须被判 RUNNING
+    fake = "/dev/ttyUSB_T8"
+    FAKE_PORTS.append(fake)
+    real_lp = PI.port_lock_path(fake)
+    h = PI.PortLock(port=fake)
+    ok, _ = h.acquire(0)
+    other_log = str(tmp / "other_dir_a" / "serial.log")
+    Path(other_log).parent.mkdir(parents=True, exist_ok=True)
+    st, inf = PI.capture_state(fake, other_log)          # 查询方用另一条日志路径
+    ck("A8 同串口不同日志路径 → RUNNING（锁按串口而非日志）",
+       ok and st == PI.RUNNING and inf["port_lock"]["path"] == real_lp,
+       f"{st} {inf['port_lock']}")
+    ck("A8 该路径的日志锁并不存在（判定不依赖日志锁）",
+       not Path(other_log + ".lock").exists())
+    h.release()
+    st, _ = PI.capture_state(fake, other_log)
+    ck("A8 释放后 → COOPERATING_CAPTURE_STOPPED", st == PI.COOPERATING_STOPPED, st)
+
+    # A9 capture_serial.py 真实启动路径：锁被占 → rc=3；释放后 → rc=0
+    probe = [sys.executable, str(ROOT / "tools" / "capture_serial.py"),
+             "--lock-probe", fake, str(tmp / "probe_dir" / "serial.log")]
+    Path(tmp / "probe_dir").mkdir(parents=True, exist_ok=True)
+    h = PI.PortLock(port=fake)
+    h.acquire(0)
+    r = subprocess.run(probe, capture_output=True, text=True, timeout=60)
+    ck("A9 端口锁被占 → capture 拒绝启动（rc=3，未开串口）",
+       r.returncode == 3 and "拒绝启动" in (r.stdout + r.stderr),
+       f"rc={r.returncode} out={(r.stdout + r.stderr)[:120]}")
+    h.release()
+    r = subprocess.run(probe, capture_output=True, text=True, timeout=60)
+    ck("A9 锁空闲 → capture 可取锁（rc=0）",
+       r.returncode == 0 and "lock-probe ok" in r.stdout,
+       f"rc={r.returncode} out={(r.stdout + r.stderr)[:120]}")
+
+    # 清理测试在 /run/lock 留下的锁文件
+    for p in [real_lp, str(tmp / "probe_dir" / "serial.log.lock")]:
+        try:
+            os.unlink(p)
+        except OSError:
+            pass
+
+
 def test_read_mac_flow(tmp):
-    print("[B] read_mac_flow 恢复语义（注入 fake，不碰真实串口）")
+    print("[B] read_mac_flow 授权与恢复语义（注入 fake，不碰真实串口）")
     CHAIN_OK = {k: True for k in ("running", "script_ok", "port_arg_ok",
                                   "log_arg_ok", "fd_holds_port", "fd_holds_log")}
     chain = lambda log_dir, name: dict(CHAIN_OK)   # noqa: E731
 
     class States:
-        """按调用次序返回 STOPPED → RUNNING（stop 后 / start 后）。"""
+        """按调用次序返回给定状态（默认 RUNNING）。"""
         def __init__(self, seq):
             self.seq = list(seq)
         def __call__(self):
             st = self.seq.pop(0) if self.seq else PI.RUNNING
-            return (st, {"port": "/dev/ttyUSB1", "holders": [], "reason": "test"})
+            return (st, {"port": "/dev/ttyUSB1", "port_lock": {"reason": "test"}})
+
     L = str(tmp / "logs"); Path(L).mkdir(parents=True, exist_ok=True)
     log = Path(L) / "serial_ttyUSB1.log"; log.write_text("rst:0x1 boot\n")
 
@@ -136,101 +174,142 @@ def test_read_mac_flow(tmp):
     run_ok = lambda port: (True, "ran")                          # noqa: E731
     run_raise = lambda port: (_ for _ in ()).throw(RuntimeError("boom"))  # noqa: E731
 
-    def ctl_writer(path, stop_rc=0, start_rc=0, remove_pid=None):
+    def ctl_writer(path, stop_rc=0, start_rc=0):
         p = Path(path)
         p.write_text(
             "#!/bin/sh\n"
-            f'[ "$1" = stop ] && {{ {("rm -f " + remove_pid) if remove_pid else "true"}; exit {stop_rc}; }}\n'
+            f'[ "$1" = stop ] && exit {stop_rc}\n'
             f'[ "$1" = start ] && exit {start_rc}\n'
             "exit 1\n")
         os.chmod(p, 0o755)
         return str(p)
 
-    # B1 正常：stop ok → read ok → run ok → start ok → 记录+证据
-    ctl = ctl_writer(tmp / "b1.sh")
-    ok, ev = PI.read_mac_flow("/dev/ttyUSB1", L, str(tmp / "b1.json"),
-                              capture_ctl=ctl, evidence_dir=str(tmp / "ev1"),
-                              read_mac=mac_ok, run_app=run_ok,
-                              strict_restore=False, chain_check=chain,
-                              state_fn=States([PI.STOPPED, PI.RUNNING]))
-    ck("B1 正常 → ok/记录/证据",
-       ok and ev["record_written"] and ev["evidence_written"],
-       f"{ok} {ev.get('errors')}")
+    def run_case(tag, states, **kw):
+        lp = str(tmp / f"lk_{tag}")
+        args = dict(evidence_dir=str(tmp / f"ev_{tag}"), lock_path=lp,
+                    strict_restore=False, chain_check=chain, state_fn=States(states),
+                    capture_ctl=ctl_writer(tmp / f"{tag}.sh"))
+        args.update(kw)
+        return PI.read_mac_flow("/dev/ttyUSB1", L, str(tmp / f"{tag}.json"), **args)
 
-    # B2 read_mac 抛异常 → 仍恢复，ok=False，证据落盘
-    ctl = ctl_writer(tmp / "b2.sh")
-    ok, ev = PI.read_mac_flow("/dev/ttyUSB1", L, str(tmp / "b2.json"),
-                              capture_ctl=ctl, evidence_dir=str(tmp / "ev2"),
-                              read_mac=mac_raise, run_app=run_ok,
-                              strict_restore=False, chain_check=chain,
-                              state_fn=States([PI.STOPPED, PI.RUNNING]))
-    ck("B2 read 异常 → 仍恢复且证据落盘",
-       (not ok) and ev["run_app_ok"] and ev["evidence_written"]
-       and any("read_mac" in e for e in ev["errors"]), str(ev.get("errors")))
-
-    # B3 run_app 抛异常 → 仍重启录制
-    ctl = ctl_writer(tmp / "b3.sh")
-    ok, ev = PI.read_mac_flow("/dev/ttyUSB1", L, str(tmp / "b3.json"),
-                              capture_ctl=ctl, evidence_dir=str(tmp / "ev3"),
-                              read_mac=mac_ok, run_app=run_raise,
-                              strict_restore=False, chain_check=chain,
-                              state_fn=States([PI.STOPPED, PI.RUNNING]))
-    ck("B3 run 异常 → 仍重启录制",
-       (not ok) and ev["capture_restarted"] is True
-       and any("run_app" in e for e in ev["errors"]), str(ev.get("errors")))
-
-    # B4 MAC 不符 → 恢复后 ok=False
-    ctl = ctl_writer(tmp / "b4.sh")
-    ok, ev = PI.read_mac_flow("/dev/ttyUSB1", L, str(tmp / "b4.json"),
-                              capture_ctl=ctl, evidence_dir=str(tmp / "ev4"),
-                              read_mac=mac_bad, run_app=run_ok,
-                              strict_restore=False, chain_check=chain,
-                              state_fn=States([PI.STOPPED, PI.RUNNING]))
-    ck("B4 MAC 不符 → 恢复但 ok=False", (not ok) and ev["mac_ok"] is False, str(ok))
-
-    # B7 state=UNKNOWN → read_mac 调用次数必须为 0
+    # B0 缺操作者声明 → 不读 MAC、不取端口锁，但仍重启录制
     calls = {"n": 0}
     def mac_count(port):
         calls["n"] += 1
         return (True, "10:97:bd:d3:65:d8")
-    ctl = ctl_writer(tmp / "b7.sh")
-    ok, ev = PI.read_mac_flow("/dev/ttyUSB1", L, str(tmp / "b7.json"),
-                              capture_ctl=ctl, evidence_dir=str(tmp / "ev7"),
-                              read_mac=mac_count, run_app=run_ok,
-                              strict_restore=False, chain_check=chain,
-                              state_fn=States([PI.UNKNOWN]))
-    ck("B7 UNKNOWN → read_mac 0 次且 ok=False",
-       (not ok) and calls["n"] == 0, f"calls={calls['n']} ok={ok}")
+    ok, ev = run_case("b0", [PI.COOPERATING_STOPPED, PI.RUNNING], read_mac=mac_count,
+                      run_app=run_ok)
+    ck("B0 无操作者声明 → read_mac 0 次且 ok=False",
+       (not ok) and calls["n"] == 0
+       and "external_holder_not_attested" in ev["errors"], str(ev.get("errors")))
+    ck("B0 仍重启录制（采集已停必须恢复）",
+       ev["capture_restarted"] is True and ev["state_after_restore"] == PI.RUNNING,
+       str(ev.get("state_after_restore")))
+
+    # B1 正常：声明 + 端口锁 + stop ok → read ok → run ok → start ok
+    ok, ev = run_case("b1", [PI.COOPERATING_STOPPED, PI.RUNNING], read_mac=mac_ok,
+                      run_app=run_ok, external_holder_attested=True,
+                      attestation_note="test")
+    ck("B1 正常 → ok/记录/证据/端口锁",
+       ok and ev["record_written"] and ev["evidence_written"]
+       and ev["port_lock"]["acquired"] is True
+       and ev["port_free_proven"] is False,
+       f"{ok} {ev.get('errors')} {ev.get('port_lock')}")
+    fin_ok, fin_why, _ = PI.validate_final_evidence(
+        str(tmp / "ev_b1"), ev["run_id"], "/dev/ttyUSB1", require_restore=False)
+    ck("B1 证据可被消费端校验通过", fin_ok, str(fin_why))
+
+    # B11 记录与证据同落在**尚不存在**的证据目录（门禁默认形态）→ 仍成功
+    evdir = str(tmp / "ev_new_b11" / "nested")
+    ok, ev = PI.read_mac_flow("/dev/ttyUSB1", L, str(Path(evdir) / "mac_record.json"),
+                              capture_ctl=ctl_writer(tmp / "b11.sh"),
+                              evidence_dir=evdir, lock_path=str(tmp / "lk_b11"),
+                              read_mac=mac_ok, run_app=run_ok, strict_restore=False,
+                              chain_check=chain,
+                              state_fn=States([PI.COOPERATING_STOPPED, PI.RUNNING]),
+                              external_holder_attested=True)
+    ck("B11 证据目录尚不存在 → 记录与证据均写出且 ok",
+       ok and ev["record_written"] and ev["evidence_written"],
+       str(ev.get("errors")))
+
+    # B2 read_mac 抛异常 → 仍恢复，ok=False，证据落盘，端口锁已释放
+    ok, ev = run_case("b2", [PI.COOPERATING_STOPPED, PI.RUNNING], read_mac=mac_raise,
+                      run_app=run_ok, external_holder_attested=True)
+    ck("B2 read 异常 → 仍恢复且证据落盘",
+       (not ok) and ev["run_app_ok"] and ev["evidence_written"]
+       and any("read_mac" in e for e in ev["errors"]), str(ev.get("errors")))
+    lp2 = str(tmp / "lk_b2")
+    h = PI.PortLock(lock_path=lp2)
+    rel_ok, _ = h.acquire(0)
+    h.release()
+    ck("B2 异常后端口锁已释放", rel_ok)
+
+    # B3 run_app 抛异常 → 仍重启录制
+    ok, ev = run_case("b3", [PI.COOPERATING_STOPPED, PI.RUNNING], read_mac=mac_ok,
+                      run_app=run_raise, external_holder_attested=True)
+    ck("B3 run 异常 → 仍重启录制",
+       (not ok) and ev["capture_restarted"] is True
+       and any("run_app" in e for e in ev["errors"]), str(ev.get("errors")))
+
+    # B4 MAC 不符 → 恢复但 ok=False
+    ok, ev = run_case("b4", [PI.COOPERATING_STOPPED, PI.RUNNING], read_mac=mac_bad,
+                      run_app=run_ok, external_holder_attested=True)
+    ck("B4 MAC 不符 → 恢复但 ok=False", (not ok) and ev["mac_ok"] is False, str(ok))
+
+    # B7 state=UNKNOWN → read_mac 0 次、不取锁、不重启录制（终止态）
+    calls = {"n": 0}
+    def mac_count7(port):
+        calls["n"] += 1
+        return (True, "10:97:bd:d3:65:d8")
+    ok, ev = run_case("b7", [PI.UNKNOWN], read_mac=mac_count7, run_app=run_ok,
+                      external_holder_attested=True)
+    ck("B7 UNKNOWN → read_mac 0 次、不取端口锁、不重启录制",
+       (not ok) and calls["n"] == 0 and ev["port_lock"]["acquired"] is False
+       and ev["capture_restarted"] is False,
+       f"calls={calls['n']} ok={ok} {ev.get('port_lock')}")
 
     # B8 state=RUNNING（stop 未生效）→ read_mac 0 次
     calls2 = {"n": 0}
-    def mac_count2(port):
+    def mac_count8(port):
         calls2["n"] += 1
         return (True, "10:97:bd:d3:65:d8")
-    ok, ev = PI.read_mac_flow("/dev/ttyUSB1", L, str(tmp / "b8.json"),
-                              capture_ctl=ctl, evidence_dir=str(tmp / "ev8"),
-                              read_mac=mac_count2, run_app=run_ok,
-                              strict_restore=False, chain_check=chain,
-                              state_fn=States([PI.RUNNING]))
+    ok, ev = run_case("b8", [PI.RUNNING], read_mac=mac_count8, run_app=run_ok,
+                      external_holder_attested=True)
     ck("B8 RUNNING → read_mac 0 次且 ok=False",
        (not ok) and calls2["n"] == 0, f"calls={calls2['n']} ok={ok}")
 
+    # B10 端口锁被他人持有 → 不读 MAC、ok=False，但仍重启录制
+    calls = {"n": 0}
+    def mac_count10(port):
+        calls["n"] += 1
+        return (True, "10:97:bd:d3:65:d8")
+    lp10 = str(tmp / "lk_b10")
+    h = PI.PortLock(lock_path=lp10)
+    h.acquire(0)
+    ok, ev = run_case("b10", [PI.COOPERATING_STOPPED, PI.RUNNING], read_mac=mac_count10,
+                      run_app=run_ok, external_holder_attested=True, lock_timeout_s=0.5)
+    ck("B10 端口锁被占 → read_mac 0 次且 ok=False",
+       (not ok) and calls["n"] == 0
+       and ev["port_lock"]["reason"] == "held_by_other", f"{ev.get('port_lock')}")
+    ck("B10 仍重启录制（不让采集停在已停状态）",
+       ev["capture_restarted"] is True, str(ev.get("state_after_restore")))
+    h.release()
+
     # B5 evidence_dir 缺失 → 拒绝
     ok, ev = PI.read_mac_flow("/dev/ttyUSB1", L, str(tmp / "b5.json"),
-                              capture_ctl=ctl, evidence_dir=None,
+                              capture_ctl=ctl_writer(tmp / "b5.sh"),
+                              evidence_dir=None, lock_path=str(tmp / "lk_b5"),
                               read_mac=mac_ok, run_app=run_ok,
-                              strict_restore=False)
+                              strict_restore=False, external_holder_attested=True)
     ck("B5 evidence_dir 缺失 → 拒绝",
        (not ok) and "evidence_dir_missing" in ev["errors"], str(ev.get("errors")))
 
     # B6 证据目录不可写 → ok=False
     ro = Path(tmp / "ro"); ro.mkdir()
     os.chmod(ro, 0o555)
-    ok, ev = PI.read_mac_flow("/dev/ttyUSB1", L, str(tmp / "b6.json"),
-                              capture_ctl=ctl, evidence_dir=str(ro / "sub"),
-                              read_mac=mac_ok, run_app=run_ok,
-                              strict_restore=False, chain_check=chain,
-                              state_fn=States([PI.STOPPED, PI.RUNNING]))
+    ok, ev = run_case("b6", [PI.COOPERATING_STOPPED, PI.RUNNING], read_mac=mac_ok,
+                      run_app=run_ok, external_holder_attested=True,
+                      evidence_dir=str(ro / "sub"))
     os.chmod(ro, 0o755)
     ck("B6 证据写入失败 → ok=False",
        (not ok) and str(ev.get("evidence_write_result")).startswith("fail"),
@@ -242,7 +321,7 @@ def test_anchor_and_record(tmp):
     L = "/tmp/logs"
     base = {"version": 1, "port": "/dev/ttyUSB1", "log_dir": L,
             "mac": "10:97:bd:d3:65:d8", "mac_ok": True,
-            "checked_at_unix": int(__import__("time").time())}
+            "checked_at_unix": int(time.time())}
     ck("C1 合法锚点 → 通过", PI.anchor_validate(base, "/dev/ttyUSB1", L)[0])
     for name, mut in [
         ("空对象", {}),
@@ -258,14 +337,13 @@ def test_anchor_and_record(tmp):
         ck(f"C 锚点 {name} → 拒绝",
            not PI.anchor_validate(mut, "/dev/ttyUSB1", L)[0])
 
-    # MAC 记录
     def rec(path, body):
         Path(path).write_text(json.dumps(body))
         return str(path)
 
     good = {"version": 1, "port": "/dev/ttyUSB1", "log_dir": L,
             "mac": "10:97:bd:d3:65:d8",
-            "read_at_unix": int(__import__("time").time())}
+            "read_at_unix": int(time.time())}
     ck("C10 合法记录 → 通过",
        PI.load_mac_record(rec(tmp / "r1.json", good), "/dev/ttyUSB1", L)[0])
     for name, mut in [
@@ -280,11 +358,108 @@ def test_anchor_and_record(tmp):
                                   "/dev/ttyUSB1", L)[0])
 
 
+def test_final_evidence(tmp):
+    print("[D] 最终证据消费端校验（唯一关联本轮）")
+    good = {
+        "run_id": "20261115_120000_abcd1234",
+        "port": "/dev/ttyUSB1",
+        "mac": "10:97:bd:d3:65:d8",
+        "mac_ok": True,
+        "evidence_write_result": "ok",
+        "state_after_stop": PI.COOPERATING_STOPPED,
+        "state_after_restore": PI.RUNNING,
+        "run_app_ok": True,
+        "capture_restarted": True,
+        "new_boot": True,
+        "record_written": True,
+        "port_lock": {"path": "/run/lock/iothub_serial_ttyUSB1.lock",
+                      "acquired": True, "reason": "acquired"},
+        "external_holder_attested": True,
+        "port_free_proven": False,
+        "errors": [],
+        "at": time.strftime("%Y-%m-%dT%H:%M:%S"),
+    }
+
+    def write_case(name, body):
+        d = Path(tmp) / f"d_{name}"
+        d.mkdir(parents=True, exist_ok=True)
+        (d / PI.FINAL_EVIDENCE_NAME).write_text(json.dumps(body, ensure_ascii=False))
+        return str(d)
+
+    def reason_has(rs, needle):
+        return any(needle in r for r in rs)
+
+    d = write_case("ok", good)
+    ok, rs, _ = PI.validate_final_evidence(d, good["run_id"], "/dev/ttyUSB1")
+    ck("D1 全字段匹配 → 通过", ok, str(rs))
+
+    d = write_case("runid", {**good, "run_id": "20261115_115900_deadbeef"})
+    ok, rs, _ = PI.validate_final_evidence(d, good["run_id"], "/dev/ttyUSB1")
+    ck("D2 run_id 不符 → 拒绝", (not ok) and reason_has(rs, "run_id"), str(rs))
+
+    d = write_case("port", {**good, "port": "/dev/ttyUSB0"})
+    ok, rs, _ = PI.validate_final_evidence(d, good["run_id"], "/dev/ttyUSB1")
+    ck("D3 端口不符 → 拒绝", (not ok) and reason_has(rs, "port"), str(rs))
+
+    d = write_case("mac", {**good, "mac": "de:ad:be:ef:00:11"})
+    ok, rs, _ = PI.validate_final_evidence(d, good["run_id"], "/dev/ttyUSB1")
+    ck("D4 MAC 不符 → 拒绝", (not ok) and reason_has(rs, "mac"), str(rs))
+
+    # D5 旧 final 文件（上一轮遗留）不得冒充本轮
+    d = write_case("stale", {**good, "run_id": "20261114_090000_0000aaaa",
+                             "at": time.strftime(
+                                 "%Y-%m-%dT%H:%M:%S",
+                                 time.localtime(time.time() - 3 * 86400))})
+    ok, rs, _ = PI.validate_final_evidence(d, good["run_id"], "/dev/ttyUSB1")
+    ck("D5 旧终态证据（旧 run_id/旧时间）→ 拒绝",
+       (not ok) and reason_has(rs, "run_id") and reason_has(rs, "过期"), str(rs))
+
+    for tag, mut in [
+        ("restore_unknown", {**good, "state_after_restore": PI.UNKNOWN}),
+        ("run_fail", {**good, "run_app_ok": False}),
+        ("restart_fail", {**good, "capture_restarted": False}),
+        ("no_boot", {**good, "new_boot": False}),
+        ("no_record", {**good, "record_written": False}),
+    ]:
+        d = write_case(tag, mut)
+        ok, rs, _ = PI.validate_final_evidence(d, good["run_id"], "/dev/ttyUSB1")
+        ck(f"D6 恢复字段异常 {tag} → 拒绝", not ok, str(rs))
+
+    for tag, mut in [
+        ("no_lock", {**good, "port_lock": {"acquired": False, "reason": "held_by_other"}}),
+        ("no_attest", {**good, "external_holder_attested": False}),
+        ("fake_free", {**good, "port_free_proven": True}),
+        ("errors", {**good, "errors": ["read_mac:RuntimeError:boom"]}),
+        ("write_fail", {**good, "evidence_write_result": "fail:OSError"}),
+        ("stop_running", {**good, "state_after_stop": PI.RUNNING}),
+    ]:
+        d = write_case(tag, mut)
+        ok, rs, _ = PI.validate_final_evidence(d, good["run_id"], "/dev/ttyUSB1")
+        ck(f"D7 授权/写入字段异常 {tag} → 拒绝", not ok, str(rs))
+
+    # D8 文件缺失 / 非法 JSON
+    d = Path(tmp) / "d_missing"; d.mkdir()
+    ok, rs, _ = PI.validate_final_evidence(str(d), good["run_id"], "/dev/ttyUSB1")
+    ck("D8 最终证据缺失 → 拒绝", (not ok) and reason_has(rs, "不存在"), str(rs))
+    (d / PI.FINAL_EVIDENCE_NAME).write_text("{not json")
+    ok, rs, _ = PI.validate_final_evidence(str(d), good["run_id"], "/dev/ttyUSB1")
+    ck("D8 最终证据不可解析 → 拒绝", (not ok) and reason_has(rs, "不可解析"), str(rs))
+
+
 def main():
     tmp = Path(tempfile.mkdtemp(prefix="s6_gate_test_"))
-    test_capture_state(tmp)
-    test_read_mac_flow(tmp)
-    test_anchor_and_record(tmp)
+    try:
+        test_port_lock_state(tmp)
+        test_read_mac_flow(tmp)
+        test_anchor_and_record(tmp)
+        test_final_evidence(tmp)
+    finally:
+        for p in FAKE_PORTS:
+            for suffix in ("", ".lock"):
+                try:
+                    os.unlink(PI.port_lock_path(p) + suffix)
+                except OSError:
+                    pass
     print(f"\ns6_gate: {PASS} passed, {FAIL} failed")
     return 0 if FAIL == 0 else 1
 

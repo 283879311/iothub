@@ -12,6 +12,15 @@
   4. 日志：fresh 且 boot_marker。
   5. dmesg（补充）：可读且发现 ttyUSB 事件 → 拒绝；不可读 → 仅记录。
   6. 回滚 BIN：完整 SHA-256 等于授权值。
+  7. 最终证据：`validate_final_evidence()` 校验 run_id/端口/MAC/端口锁/
+     操作者声明/恢复字段/时间新鲜度；证据目录必须全新（拒绝旧产物复用）。
+
+读 MAC 的**两个独立条件**（缺一即拒绝）：
+  a) 本门禁按**串口**唯一持有端口锁（`/run/lock/iothub_serial_<ttyUSBx>.lock`），
+     证明没有协作采集在运行、且读期间无法启动；
+  b) `--attest-no-external-holder <说明>`：操作者声明无外部工具占用该串口。
+     软件无法证明这一点（minicom / 手工 cat / 其它 esptool 不遵循本协议），
+     故证据里 `port_free_proven` 恒为 false，校验端强制要求它为 false。
 
 read_mac 会令芯片停在下载模式；本门禁不写 Flash，随后由烧录（自带复位）
 或 `esptool run` 回到 app。
@@ -28,6 +37,7 @@ import json
 import subprocess
 import sys
 import time
+import uuid
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -62,6 +72,9 @@ def main():
     ap.add_argument("--usb-events-min", type=int, default=240)
     ap.add_argument("--evidence-dir", required=True,
                     help="本轮证据目录（恢复流程/门禁证据写入此处；写失败即失败）")
+    ap.add_argument("--attest-no-external-holder", required=True, metavar="说明",
+                    help="操作者声明：该串口无外部工具占用（minicom/手工 cat/"
+                         "其它 esptool）。软件无法证明，必须显式声明并写入证据")
     ap.add_argument("--skip-restore", action="store_true",
                     help="不等待新 boot 证据（仅供紧接烧录的调用点；仍会 run+重启录制）")
     ap.add_argument("--capture-ctl", default="tools/serial_capture_ctl.sh",
@@ -74,6 +87,19 @@ def main():
     if args.max_anchor_age_min > 240 or args.usb_events_min > 240:
         print("[FAIL] 门禁阈值不得放宽（max-anchor-age-min / usb-events-min ≤ 240）")
         return 2
+
+    # 0a. 证据目录必须为本轮专用：拒绝复用任何已有产物（防旧 final 冒充本轮）
+    stale = [n for n in ("mac_read_flow.final.json", "mac_read_flow.json",
+                         "mac_record_gate.json", "rollback_gate_last.json")
+             if (Path(args.evidence_dir) / n).exists()]
+    if stale:
+        print(f"[FAIL] 证据目录已有旧产物 {stale}——每轮必须使用全新目录")
+        return 2
+    if not args.attest_no_external_holder.strip():
+        print("[FAIL] --attest-no-external-holder 不能为空")
+        return 2
+    print("[info] 边界：协作锁只证明**本仓库采集**是否运行；"
+          "串口无外部持有者由操作者声明（软件无法证明，port_free_proven=false）")
 
     def check(cond, msg):
         print(("  [ok]   " if cond else "  [FAIL] ") + msg)
@@ -124,28 +150,26 @@ def main():
     check(loginfo.get("fresh") is True, f"日志新鲜 age={loginfo.get('age_sec')}s")
     check(loginfo.get("boot_marker") is True, "日志 boot 标记")
 
-    # 4. 板卡身份（主证据）：统一恢复流程（停录制→read_mac→run→重启录制→新 boot 证据）
+    # 4. 板卡身份（主证据）：统一恢复流程（停录制→持端口锁→read_mac→run→
+    #    重启录制→新 boot 证据）。读 MAC 的两个独立条件：端口锁 + 操作者声明。
     if not fails:
         restore_info["attempted"] = True
-        run_id = time.strftime("%Y%m%d_%H%M%S") + "_gate"
+        run_id = time.strftime("%Y%m%d_%H%M%S") + "_" + uuid.uuid4().hex[:8]
         ok_flow, ev = PI.read_mac_flow(
             args.port, args.log_dir, str(Path(args.evidence_dir) / "mac_record_gate.json"),
             capture_ctl=args.capture_ctl, evidence_dir=args.evidence_dir,
-            strict_restore=not args.skip_restore, run_id=run_id)
+            strict_restore=not args.skip_restore, run_id=run_id,
+            external_holder_attested=True,
+            attestation_note=args.attest_no_external_holder.strip())
         restore_info = ev
-        check(ok_flow, "MAC 读取 + 恢复流程（stop→mac→run→start→new boot）")
-        # 强制消费端门禁：最终证据必须存在且结论为 ok（不以首份快照为准）
-        fin = Path(args.evidence_dir) / "mac_read_flow.final.json"
-        fin_ok = False
-        try:
-            fj = json.loads(fin.read_text(encoding="utf-8"))
-            fin_ok = (fj.get("evidence_write_result") == "ok"
-                      and fj.get("run_id") == run_id
-                      and fj.get("port") == args.port
-                      and str(fj.get("mac", "")).lower() == EXPECT_MAC)
-        except Exception as exc:  # noqa: BLE001
-            print(f"  [info] 最终证据不可读（{type(exc).__name__}）")
-        check(fin_ok, f"最终证据存在且结论 ok（{fin.name}）")
+        check(ok_flow, "MAC 读取 + 恢复流程（stop→lock→mac→run→start→new boot）")
+        # 强制消费端门禁：最终证据必须唯一属于本轮且结论 ok（不以首份快照为准）
+        fin_ok, fin_reasons, _fin = PI.validate_final_evidence(
+            args.evidence_dir, run_id, args.port, EXPECT_MAC,
+            require_restore=not args.skip_restore)
+        for why in fin_reasons:
+            print(f"  [info] 最终证据：{why}")
+        check(fin_ok, f"最终证据唯一属于本轮（run_id={run_id}）")
         if ev.get("mac"):
             check(str(ev["mac"]).lower() == EXPECT_MAC, f"MAC==65D8（{ev['mac']}）")
             if anchor and anchor.get("mac"):
