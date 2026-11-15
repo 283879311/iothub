@@ -211,6 +211,8 @@ def main():
                     help="可选：期望 build_sha（需同时给 --elf）")
     ap.add_argument("--max-age-sec", type=int, default=120,
                     help="日志新鲜度上限（秒），超龄视为映射证据过期")
+    ap.add_argument("--emit-anchor", required=False,
+                    help="输出本轮回滚锚点 JSON（供 rollback_gate 使用）")
     args = ap.parse_args()
 
     if args.port not in ("/dev/ttyUSB0", "/dev/ttyUSB1"):
@@ -338,6 +340,17 @@ def main():
     if not ok:
         print("[STOP] 拒绝烧录（四元组核验未通过）")
         return 1
+
+    if args.emit_anchor:
+        try:
+            import port_identity as PI
+            anchor = PI.build_anchor(args.port, args.log_dir)
+            PI.write_anchor(args.emit_anchor, anchor)
+            print(f"  锚点已写出：{args.emit_anchor}  mac={anchor.get('mac')} "
+                  f"checked_at={anchor.get('checked_at')}")
+        except Exception as exc:  # noqa: BLE001
+            print(f"[FAIL] 锚点生成失败（{type(exc).__name__}: {exc}）")
+            return 2
 
     print("[OK] 门禁通过（设备身份 + 冻结 BIN 字节身份）")
     print("     烧录必须使用该冻结 BIN（不得重建），并在写入前紧邻复查 sha256；")

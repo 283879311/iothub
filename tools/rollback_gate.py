@@ -1,158 +1,158 @@
 #!/usr/bin/env python3
-"""S6 阶段 B · 回滚烧录前门禁（P0-1）：确认 /dev/ttyUSB1 当前连接 65D8。
+"""S6 阶段 B · 回滚烧录门禁 v2：以芯片 MAC 为板卡身份（独立于 app）。
 
-与 preflight_flash.py 的差异：FI 烧录失败后 app 可能无法启动（无 MQTT
-client_id、无 boot 后身份日志），因此本脚本**不依赖** client_id/boot 标记，
-改用以下独立证据确认端口↔设备映射：
+证据链（全部参与放行判定，缺一即拒绝）：
+  1. 板卡身份（主证据）：`esptool read_mac` 读 eFuse MAC——即使 FI 固件无法启动
+     （下载模式）仍可核验；必须等于 preflight 锚点 MAC 且等于 65D8 的
+     `10:97:bd:d3:65:d8`。**不使用** dev:inode / st_rdev / by-id 作身份
+     （inode 可复用；本机 CH340 无序列号）。
+  2. 锚点：preflight 产物，校验存在/可解析/新鲜度/端口/日志目录一致。
+  3. 录制链：script_ok / port_arg_ok / log_arg_ok / fd_holds_port /
+     fd_holds_log 逐项必须 True。
+  4. 日志：fresh 且 boot_marker。
+  5. dmesg（补充）：可读且发现 ttyUSB 事件 → 拒绝；不可读 → 仅记录。
+  6. 回滚 BIN：完整 SHA-256 等于授权值。
 
-  A) console 录制连续性：capture 进程存活、持有串口与日志（PID/fd）；
-     映射 = **本次烧录会话期间**该端口的**历史身份记录**（事故记录中已实证
-     ttyUSB1=65D8，断电后未再拔插/枚举变化——以 USB 枚举稳定性证据为准）；
-  B) BLE 实时观测：65D8 在广播中（无线通道独立于串口假设）；
-  C) USB 枚举稳定性：ttyUSB1 上一次映射核验（preflight 通过时刻）以来，
-     内核未出现新的 USB 断连/枚举事件（dmesg / 日志 tail 检查）。
-
-若 A/B/C 任一不成立 → 拒绝回滚写入，恢复失败 STOP，等待人工处理。
-**不能因为回滚 BIN 的 SHA 正确就推定串口连接的设备正确。**
+read_mac 会令芯片停在下载模式；本门禁不写 Flash，随后由烧录（自带复位）
+或 `esptool run` 回到 app。
 
 用法：
-  tools/rollback_gate.py --ble-observed 10:97:BD:D3:65:DA \
-      --bin docs/evidence/S6_stageB/bin/iothub_a7e04b6a9.bin \
-      --expect-bin-sha256 047e4726...ea41
+  tools/rollback_gate.py --port /dev/ttyUSB1 --log-dir <本轮目录> \
+      --anchor-file <preflight 锚点.json> \
+      --bin <回滚BIN> --expect-bin-sha256 047e...
 """
 
 import argparse
 import hashlib
-import re
 import subprocess
 import sys
 import time
 from pathlib import Path
 
-SERIAL_DIR = Path("artifacts/cmd04_flash_20261114/phaseA")
-EXPECT_PORT = "/dev/ttyUSB1"
-EXPECT_PORT_NAME = "ttyUSB1"
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+import port_identity as PI  # noqa: E402
+from preflight_flash import inspect_capture, inspect_log  # noqa: E402
+
+EXPECT_MAC = PI.EXPECT_MAC_65D8
 
 
-def capture_alive():
-    """录制进程存活且持有串口与日志（复用 preflight 的链判定）。"""
-    sys.path.insert(0, str(Path(__file__).resolve().parent))
-    from preflight_flash import inspect_capture, inspect_log  # noqa: E402
-
-    cap = inspect_capture(SERIAL_DIR, EXPECT_PORT_NAME)
-    li = inspect_log(SERIAL_DIR, EXPECT_PORT_NAME, 120)
-    return cap, li
-
-
-EXPECT_MAC = "10:97:BD:D3:65:DA"
-
-
-def port_ident(node=EXPECT_PORT):
-    """设备节点身份 dev:inode。**重新枚举会分配新 inode**——这是不依赖 root 的
-    客观映射锚点（USB 掉线重连/换设备必变）。"""
-    try:
-        st = Path(node).stat()
-        return f"{st.st_dev}:{st.st_ino}"
-    except OSError as exc:
-        return f"ERR:{type(exc).__name__}"
-
-
-def usb_stable_since(minutes=120):
-    """内核日志近 N 分钟内无 ttyUSB 断连/枚举事件。
-    **fail-closed**：dmesg 不可用/权限不足/输出无法判定 → 返回 False（拒绝放行），
-    绝不以"无证据"当作"稳定"。"""
+def usb_events_since(minutes):
     try:
         r = subprocess.run(["dmesg", "--ctime", "--since", f"{minutes} minutes ago"],
                            capture_output=True, text=True, timeout=10)
         if r.returncode != 0:
-            return (None, f"dmesg 不可读（rc={r.returncode}）——按补充证据缺失处理，"
-                          f"以设备节点身份为准")
-        out = r.stdout
-        if not out.strip():
-            return (True, "近 N 分钟无内核事件（含 USB）")
-    except Exception as exc:  # noqa: BLE001
-        return (None, f"dmesg 不可用（{type(exc).__name__}）——按补充证据缺失处理，"
-                      f"以设备节点身份为准")
-    events = [ln for ln in out.splitlines()
+            return (None, f"dmesg 不可读（rc={r.returncode}）")
+        ev = [ln for ln in r.stdout.splitlines()
               if "ttyUSB" in ln or "disconnect" in ln.lower()]
-    return (not events, events[:5] or "无 ttyUSB/断连事件")
+        return (not ev, ev[:5] or "无 ttyUSB/断连事件")
+    except Exception as exc:  # noqa: BLE001
+        return (None, f"dmesg 不可用（{type(exc).__name__}）")
 
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--ble-observed-mac", required=True,
-                    help="BLE 扫描实时观测到的目标 MAC（必须等于 " + EXPECT_MAC + "）")
-    ap.add_argument("--scan-anchor", required=False,
-                    help="本次扫描证据（时间戳/日志行），写入归档")
-    ap.add_argument("--bin", required=True, help="回滚 BIN（冻结文件）")
+    ap.add_argument("--port", required=True)
+    ap.add_argument("--log-dir", required=True)
+    ap.add_argument("--anchor-file", required=True)
+    ap.add_argument("--bin", required=True)
     ap.add_argument("--expect-bin-sha256", required=True)
-    ap.add_argument("--usb-stable-min", type=int, default=120)
-    ap.add_argument("--preflight-pass-at", required=True,
-                    help="本次 FI preflight 门禁通过时刻 HH:MM:SS（映射时间锚点）")
-    ap.add_argument("--preflight-port-ident", required=True,
-                    help="preflight 通过时 /dev/ttyUSB1 的 dev:inode（如 0:1234）")
+    ap.add_argument("--max-anchor-age-min", type=int, default=240)
+    ap.add_argument("--usb-events-min", type=int, default=240)
+    ap.add_argument("--capture-ctl", default="tools/serial_capture_ctl.sh",
+                    help="串口录制控制脚本（停录制以读取 MAC）")
+    ap.add_argument("--force-mac-read", action="store_true",
+                    help="即使前序检查失败也读取 MAC（诊断用）")
     args = ap.parse_args()
 
+    fails = []
+
+    def check(cond, msg):
+        print(("  [ok]   " if cond else "  [FAIL] ") + msg)
+        if not cond:
+            fails.append(msg)
+
+    # 0. 端口
+    check(args.port == "/dev/ttyUSB1", f"端口必须为 /dev/ttyUSB1（{args.port}）")
+
+    # 1. 锚点
+    anchor = None
+    try:
+        anchor = PI.load_anchor(args.anchor_file)
+        check(True, f"锚点可解析：{args.anchor_file}")
+    except Exception as exc:  # noqa: BLE001
+        check(False, f"锚点不可解析（{type(exc).__name__}）")
+    if anchor:
+        try:
+            age = time.time() - float(anchor.get("checked_at_unix", 0))
+        except Exception:  # noqa: BLE001
+            age = -1
+        check(0 <= age <= args.max_anchor_age_min * 60,
+              f"锚点新鲜度 age={age/60:.1f}min ≤ {args.max_anchor_age_min}min")
+        check(anchor.get("port") == args.port, f"锚点端口（{anchor.get('port')}）")
+        check(anchor.get("mac_ok") is True and anchor.get("mac"),
+              f"锚点含有效 MAC（{anchor.get('mac')}）")
+        # 锚点 MAC 本身必须等于期望 65D8（在停录制之前就判，避免无谓动串口）
+        check(anchor.get("mac") is not None and
+              str(anchor["mac"]).lower() == EXPECT_MAC,
+              f"锚点 MAC == 65D8（{anchor.get('mac')} vs {EXPECT_MAC}）")
+        check(anchor.get("log_dir") == args.log_dir,
+              f"锚点日志目录（{anchor.get('log_dir')}）")
+
+    # 1b. 回滚 BIN（提前校验：失败则不再动用串口）
     binp = Path(args.bin)
     if not binp.is_file():
-        print(f"[FAIL] 回滚 BIN 不存在: {binp}")
-        return 2
-    sha = hashlib.sha256(binp.read_bytes()).hexdigest()
-    bin_ok = sha == args.expect_bin_sha256.strip().lower()
-    print(f"  回滚 BIN : {binp}")
-    print(f"  sha256   = {sha}  期望={args.expect_bin_sha256}  一致={bin_ok}")
-
-    cap, _caplog = capture_alive()
-    from preflight_flash import inspect_log
-    _mac, loginfo = inspect_log(SERIAL_DIR, EXPECT_PORT_NAME, 120)
-    print(f"  capture  : running={cap.get('running')} "
-          f"script_ok={cap.get('script_ok')} port_arg_ok={cap.get('port_arg_ok')} "
-          f"fd_port={cap.get('fd_holds_port')} fd_log={cap.get('fd_holds_log')}")
-    print(f"  log      : fresh={loginfo.get('fresh')} age={loginfo.get('age_sec')}s "
-          f"boot_marker={loginfo.get('boot_marker')}")
-    usb_ok, usb_ev = usb_stable_since(args.usb_stable_min)
-    print(f"  usb      : 稳定={usb_ok} 近{args.usb_stable_min}min 事件={usb_ev}")
-
-    ble_mac = str(args.ble_observed_mac).strip().upper()
-    ble_observed = (ble_mac == EXPECT_MAC)
-    print(f"  ble      : observed_mac={ble_mac} 期望={EXPECT_MAC} "
-          f"一致={ble_observed} anchor={args.scan_anchor or '(未提供)'}")
-
-    ok = True
-    if not bin_ok:
-        print("[FAIL] 回滚 BIN sha 不符")
-        ok = False
-    if not cap.get("running"):
-        print("[FAIL] 录制链不完整（PID→脚本→串口→日志）")
-        ok = False
-    if not ble_observed:
-        print("[FAIL] BLE 实时观测未确认 65D8 在广播")
-        ok = False
-    cur_ident = port_ident()
-    ident_ok = (cur_ident == args.preflight_port_ident)
-    print(f"  port-id  : current={cur_ident} preflight={args.preflight_port_ident} "
-          f"一致={ident_ok}（重新枚举会换 inode）")
-    if not ident_ok:
-        print("[FAIL] 设备节点身份与 preflight 锚点不一致——端口可能已重新枚举/换设备")
-        ok = False
-    if usb_ok is False:                     # dmesg 可读且发现事件 → 明确失败
-        print(f"[FAIL] 近 {args.usb_stable_min}min 存在 USB 断连/枚举事件：{usb_ev}")
-        ok = False
-    elif usb_ok is None:
-        print(f"  usb      : {usb_ev}（补充证据缺失，不作为失败理由）")
-    # 映射时间锚点：preflight 通过时刻（由调用方传入，格式 HH:MM:SS）之后
-    # 的 console 日志必须仍然有该端口的身份/心跳记录，且 USB 无新事件。
-    if not args.preflight_pass_at:
-        print("[FAIL] 未提供 preflight 通过时刻——映射证据缺时间锚点")
-        ok = False
+        check(False, f"回滚 BIN 不存在：{binp}")
     else:
-        print(f"  anchor   : preflight_pass_at={args.preflight_pass_at} "
-              f"（用于核对此后枚举连续性与 console 连续性）")
+        sha = hashlib.sha256(binp.read_bytes()).hexdigest()
+        check(sha == args.expect_bin_sha256.strip().lower(),
+              f"回滚 BIN sha256（{sha[:16]}…）")
 
-    if not ok:
-        print("[STOP] 回滚门禁未通过——禁止写入，恢复失败 STOP，等待人工处理")
+    # 2/3. 录制链 + 日志（此时 capture 仍在运行）
+    name = Path(args.port).name
+    cap = inspect_capture(args.log_dir, name)
+    for k in ("script_ok", "port_arg_ok", "log_arg_ok",
+              "fd_holds_port", "fd_holds_log", "running"):
+        check(cap.get(k) is True, f"录制链 {k}")
+    _m, loginfo = inspect_log(args.log_dir, name, 120)
+    check(loginfo.get("fresh") is True, f"日志新鲜 age={loginfo.get('age_sec')}s")
+    check(loginfo.get("boot_marker") is True, "日志 boot 标记")
+
+    # 4. 板卡身份（主证据）：需端口空闲 → 停录制后 read_mac
+    log_path = str(Path(args.log_dir) / f"serial_{name}.log")
+    stopped = False
+    if not fails or args.force_mac_read:
+        print(f"  [step] 停录制以读取芯片 MAC：{log_path}")
+        r = subprocess.run([args.capture_ctl, "stop", log_path],
+                           capture_output=True, text=True)
+        print(f"         {r.stdout.strip() or r.stderr.strip()}")
+        stopped = r.returncode == 0
+        check(stopped, "录制已停止（read_mac 需端口空闲）")
+    if stopped or args.force_mac_read:
+        ok_mac, mac = PI.esptool_read_mac(args.port)
+        check(ok_mac, f"esptool read_mac（{mac if ok_mac else str(mac)[:70]}）")
+        if ok_mac:
+            check(mac.lower() == EXPECT_MAC, f"MAC==65D8（{mac}）")
+            if anchor and anchor.get("mac"):
+                check(mac.lower() == str(anchor["mac"]).lower(),
+                      f"MAC==锚点（{mac} vs {anchor['mac']}）")
+
+    # 5. dmesg 补充
+    usb_ok, usb_ev = usb_events_since(args.usb_events_min)
+    if usb_ok is False:
+        check(False, f"近 {args.usb_events_min}min USB 事件：{usb_ev}")
+    else:
+        print(f"  [info] dmesg：{usb_ev}（补充，不否决）")
+
+    print()
+    if fails:
+        print(f"[STOP] 回滚门禁未通过（{len(fails)} 项）——禁止写入，恢复失败 STOP")
+        for f in fails:
+            print(f"       · {f}")
         return 1
-    print("[OK] 回滚门禁通过（端口/录制/BLE/USB 四路独立证据一致）")
+    print("[OK] 回滚门禁通过（MAC+锚点+录制链+日志+BIN）")
+    print("     录制已停止、芯片在下载模式——可直接烧录（烧录自带复位）；")
+    print("     烧录完成后必须重新启动录制（serial_capture_ctl.sh start）。")
     return 0
 
 
