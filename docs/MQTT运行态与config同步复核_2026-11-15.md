@@ -138,11 +138,11 @@ config.set
 
 ## 10. R4 Wi-Fi 状态快照（已实施，`CODE_DONE`）
 
-> 本轮只出设计，未改代码。R1/R2 的授权不延伸到 R4。
+> 本节保留问题范围与设计依据；实施结果与验证见 §10.6（提交 `8d7d768`）。
 
-### 10.1 问题范围（`mqtt.c` 当前全部 `s_wifi` 读点）
+### 10.1 问题范围（R4 实施前的 `s_wifi` 读点基线）
 
-| 行 | 上下文 | 读取 | 现状 |
+| 行 | 上下文 | 读取 | R4 前状态 |
 | --- | --- | --- | --- |
 | 653 | `publish_attributes`（telemetry 任务） | `s_wifi.sta_ip` | 无 W |
 | 709 | `publish_state`（telemetry 任务） | `s_wifi.sta_has_ip` | 无 W |
@@ -150,9 +150,10 @@ config.set
 | 1709 | `app_mqtt_apply_config`（restart/boot） | `s_wifi.sta_has_ip` | 无 W |
 
 写者：wifi 事件/驱动路径在 `app_wifi_runtime_lock`（W）内更新 `s_wifi`（如 `wifi.c` 的 STA 事件处理）。
+以上四处现均由 `app_mqtt_wifi_snapshot()` 覆盖（§10.6）；表中行号为实施前基线。
 `W` 为递归 mutex（`config.c:225–232`）。
 
-### 10.2 方案
+### 10.2 方案（已实施）
 
 在 `mqtt.c` 内新增**只读快照**，与 R1/R2 的 config 快照同构：
 

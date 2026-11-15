@@ -1431,8 +1431,9 @@ static void app_mqtt_event_handler(void *handler_args, esp_event_base_t base, in
         s_mqtt.connected = true;
         s_mqtt.fatal_error = false;
         /* DEF-NET-001 会话归属:CONNACK 属于此刻的链路,打上代次;
-         * 事件在 esp-mqtt 任务上下文,读 gen 只走 wifi 的 runtime 锁,锁序
-         * (mqtt 锁内取 wifi 锁)与既有 s_wifi.sta_has_ip 读点一致。 */
+         * 事件在 esp-mqtt 任务上下文,读 gen 只走 wifi 的 runtime 锁;
+         * 此处形成既有 M→W 锁序(app_wifi_link_generation 内部取 W),
+         * 不是对 s_wifi 字段的无锁读取(字段读取统一走 app_mqtt_wifi_snapshot)。 */
         s_mqtt.connected_gen = app_wifi_link_generation();
         app_mqtt_unlock();
         app_copy_string(s_mqtt.last_error, sizeof(s_mqtt.last_error), "");
