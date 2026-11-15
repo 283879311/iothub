@@ -11,6 +11,11 @@
 判据全部来自**设备 console 日志**（op_owner 转移 / cleanup 终态）。
 
 用法：.venv-bleak/bin/python tools/s6_owner_regression.py [--cases R1,R2,R3,R5]
+
+每轮在 `s6_owner_regression/run_<时间戳>_<uuid6>/` 下独立落盘：
+  - `regression.log`：本轮事件流
+  - `results.json`：本轮结果（含 run_id；R3 仅聚合本轮 R1/R2）
+串口日志缺失/为空 → `SerialUnavailable` 直接中止，绝不从历史日志取证。
 """
 
 import argparse
@@ -247,6 +252,7 @@ async def main():
         except Exception:  # noqa: BLE001
             pass
 
+    results["run_id"] = RUN_ID
     (OUT / "results.json").write_text(json.dumps(results, ensure_ascii=False, indent=1),
                                      encoding="utf-8")
     allok = all(v.get("ok") for k, v in results.items() if k.startswith("R"))

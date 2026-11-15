@@ -4426,18 +4426,43 @@ static void app_wifi_restart_run_cleanup(const char *op_id)
 
 #ifdef APP_WIFI_FAULT_INJECT
     {   /* R6 注入：有界阻塞 cleanup 入口，用于逼出 12s re-notify / 25s abort 窗口。
-         * 上限 40s（与注入接口一致），分片 delay 便于 monitor 按秒观察。 */
-        int hold = 0;
+         * 计时值与 hook 共享：每 500ms 重新读取剩余量，因此
+         *   ① `diag.m1hook clear`（清零 cleanup_hold_ms）可在 ≤500ms 内中断等待；
+         *   ② watchdog 置 abort 时提前退出，交给 abort 安全点消费（不等满时长）。
+         * 上限 40s，一次性消费，不会永久阻塞。 */
+        int remain0 = 0;
         portENTER_CRITICAL(&s_wifi_hook_mux);
-        hold = s_wifi_hook.cleanup_hold_ms;
-        s_wifi_hook.cleanup_hold_ms = 0;      /* 一次性 */
+        remain0 = s_wifi_hook.cleanup_hold_ms;
         portEXIT_CRITICAL(&s_wifi_hook_mux);
-        if (hold > 0) {
-            ESP_LOGW(TAG, "hook: cleanup hold start %dms op=%s", hold, op_id);
-            for (int left = hold; left > 0; left -= 500) {
-                vTaskDelay(pdMS_TO_TICKS(left > 500 ? 500 : left));
+        if (remain0 > 0) {
+            ESP_LOGW(TAG, "hook: cleanup hold start %dms op=%s", remain0, op_id);
+            for (;;) {
+                int remain;
+                bool abort_set;
+                portENTER_CRITICAL(&s_wifi_hook_mux);
+                remain = s_wifi_hook.cleanup_hold_ms;
+                if (remain > 0) {
+                    s_wifi_hook.cleanup_hold_ms = (remain > 500) ? remain - 500 : 0;
+                }
+                portEXIT_CRITICAL(&s_wifi_hook_mux);
+                app_wifi_tryconnect_state_lock();
+                abort_set = (s_wifi_cleanup_abort &&
+                             s_wifi_owner.owner == APP_WIFI_OWNER_CLEANUP);
+                app_wifi_tryconnect_state_unlock();
+                if (remain <= 0) {
+                    ESP_LOGW(TAG, "hook: cleanup hold end(released) op=%s", op_id);
+                    break;
+                }
+                if (abort_set) {
+                    ESP_LOGW(TAG, "hook: cleanup hold end(abort) op=%s", op_id);
+                    break;
+                }
+                vTaskDelay(pdMS_TO_TICKS(remain > 500 ? 500 : remain));
             }
-            ESP_LOGW(TAG, "hook: cleanup hold end op=%s", op_id);
+            /* abort 已置位则立刻在安全点消费，避免继续驱动操作 */
+            if (app_wifi_owner_cleanup_abort_consume("cleanup_hold_abort")) {
+                return;
+            }
         }
     }
 #endif
