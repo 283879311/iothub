@@ -28,7 +28,8 @@ from bleak import BleakClient  # noqa: E402
 from p0_acceptance import Session, scan_filtered  # noqa: E402
 
 OUT_BASE = Path("artifacts/cmd04_flash_20261115/s6_owner_regression")
-RUN_ID = time.strftime("%Y%m%d_%H%M%S")
+import uuid as _uuid
+RUN_ID = time.strftime("%Y%m%d_%H%M%S") + "_" + _uuid.uuid4().hex[:6]
 OUT = OUT_BASE / f"run_{RUN_ID}"      # 每次运行独立目录：R3 只聚合本轮
 SERIAL = Path("artifacts/cmd04_flash_20261114/phaseA/serial_ttyUSB1.log")
 ADDR = "10:97:BD:D3:65:DA"
@@ -46,8 +47,21 @@ def log(t):
     _log.flush()
 
 
+class SerialUnavailable(RuntimeError):
+    pass
+
+
 def mark():
-    return SERIAL.stat().st_size if SERIAL.is_file() else 0
+    """本轮串口证据起点。日志不存在/不可读 → 抛错中止（绝不用 0 从历史取证）。"""
+    if not SERIAL.is_file():
+        raise SerialUnavailable(f"串口日志不存在：{SERIAL}")
+    try:
+        size = SERIAL.stat().st_size
+    except OSError as exc:
+        raise SerialUnavailable(f"串口日志不可读：{exc}") from exc
+    if size <= 0:
+        raise SerialUnavailable(f"串口日志为空：{SERIAL}")
+    return size
 
 
 def since(off):

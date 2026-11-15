@@ -190,6 +190,7 @@ typedef struct {
     int hold_timeout_ms;
     uint32_t hold_seq;
     int restart_wake_fail;      /* S6：一次性 restart_wake 失败注入（R4 用） */
+    int cleanup_hold_ms;        /* S6：R6 用——cleanup 入口有界阻塞，逼出 watchdog 窗口 */
 } app_wifi_test_hook_t;
 static app_wifi_test_hook_t s_wifi_hook;
 static portMUX_TYPE s_wifi_hook_mux = portMUX_INITIALIZER_UNLOCKED;
@@ -3356,6 +3357,16 @@ esp_err_t app_wifi_test_hook(const char *action, const char *stage,
         ESP_LOGW(TAG, "hook_armed stop_fail count=%d", count);
         return ESP_OK;
     }
+    if (strcmp(action, "cleanup_hold") == 0) {
+        if (timeout_ms <= 0 || timeout_ms > 40000) {
+            return ESP_ERR_INVALID_ARG;   /* 上限 40s：足够覆盖 25s abort，且不会无限阻塞 */
+        }
+        portENTER_CRITICAL(&s_wifi_hook_mux);
+        s_wifi_hook.cleanup_hold_ms = timeout_ms;
+        portEXIT_CRITICAL(&s_wifi_hook_mux);
+        ESP_LOGW(TAG, "hook_armed cleanup_hold %dms (R6)", timeout_ms);
+        return ESP_OK;
+    }
     if (strcmp(action, "restart_wake_fail") == 0) {
         int n = (count > 0) ? count : 1;
         portENTER_CRITICAL(&s_wifi_hook_mux);
@@ -3411,6 +3422,7 @@ esp_err_t app_wifi_test_hook(const char *action, const char *stage,
         uint32_t consumed;
         uint32_t completed;
         int rw_fail;
+        int hold_ms;
 
         portENTER_CRITICAL(&s_wifi_hook_mux);
         active = s_wifi_hook.active;
@@ -3419,6 +3431,7 @@ esp_err_t app_wifi_test_hook(const char *action, const char *stage,
         stop_count = s_wifi_hook.stop_fail_count;
         hold_armed = s_wifi_hook.hold_armed;
         rw_fail = s_wifi_hook.restart_wake_fail;
+        hold_ms = s_wifi_hook.cleanup_hold_ms;
         portEXIT_CRITICAL(&s_wifi_hook_mux);
         app_wifi_runtime_lock();
         await = s_wifi_apply_await_start;
@@ -3426,9 +3439,9 @@ esp_err_t app_wifi_test_hook(const char *action, const char *stage,
         completed = s_wifi_apply_start_completed_gen;
         app_wifi_runtime_unlock();
         ESP_LOGI(TAG, "hook_status active=%d fail_stage=%s fail_count=%d stop_fail=%d "
-                      "hold_armed=%d restart_wake_fail=%d await=%d consumed=%u completed=%u",
+                      "hold_armed=%d restart_wake_fail=%d cleanup_hold_ms=%d await=%d consumed=%u completed=%u",
                  (int)active, app_wifi_apply_stage_name(st), fail_count, stop_count,
-                 (int)hold_armed, rw_fail, (int)await, (unsigned)consumed,
+                 (int)hold_armed, rw_fail, hold_ms, (int)await, (unsigned)consumed,
                  (unsigned)completed);
         return ESP_OK;
     }
@@ -3444,6 +3457,7 @@ esp_err_t app_wifi_test_hook(const char *action, const char *stage,
         s_wifi_hook.fail_count = 0;
         s_wifi_hook.stop_fail_count = 0;
         s_wifi_hook.restart_wake_fail = 0;   /* S6：R4 注入撤销，避免残留影响后续唤醒 */
+        s_wifi_hook.cleanup_hold_ms = 0;     /* S6：R6 注入撤销，避免后续 cleanup 被阻塞 */
         s_wifi_hook.hold_timeout_ms = 0;
         portEXIT_CRITICAL(&s_wifi_hook_mux);
         ESP_LOGW(TAG, "hook_cleared");
@@ -4409,6 +4423,24 @@ static void app_wifi_restart_run_cleanup(const char *op_id)
     if (app_wifi_owner_cleanup_abort_consume("cleanup_entry")) {
         return;
     }
+
+#ifdef APP_WIFI_FAULT_INJECT
+    {   /* R6 注入：有界阻塞 cleanup 入口，用于逼出 12s re-notify / 25s abort 窗口。
+         * 上限 40s（与注入接口一致），分片 delay 便于 monitor 按秒观察。 */
+        int hold = 0;
+        portENTER_CRITICAL(&s_wifi_hook_mux);
+        hold = s_wifi_hook.cleanup_hold_ms;
+        s_wifi_hook.cleanup_hold_ms = 0;      /* 一次性 */
+        portEXIT_CRITICAL(&s_wifi_hook_mux);
+        if (hold > 0) {
+            ESP_LOGW(TAG, "hook: cleanup hold start %dms op=%s", hold, op_id);
+            for (int left = hold; left > 0; left -= 500) {
+                vTaskDelay(pdMS_TO_TICKS(left > 500 ? 500 : left));
+            }
+            ESP_LOGW(TAG, "hook: cleanup hold end op=%s", op_id);
+        }
+    }
+#endif
 
     app_wifi_build_cfg_from_config(&cfg);
     for (attempt = 0; attempt < 3; attempt++) {
