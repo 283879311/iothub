@@ -147,7 +147,8 @@ def load_mac_record(path, port, log_dir, max_age_min=MAC_RECORD_MAX_AGE_MIN):
                         "read_at_unix") if k not in rec]
     if miss:
         return (False, f"MAC 记录缺字段 {miss}", rec)
-    if rec.get("version") != MAC_RECORD_VERSION:
+    if not is_strict_int(rec.get("version")) or \
+            rec.get("version") != MAC_RECORD_VERSION:
         return (False, f"MAC 记录版本不符（{rec.get('version')}）", rec)
     if rec.get("port") != port:
         return (False, f"MAC 记录端口不符（{rec.get('port')} vs {port}）", rec)
@@ -156,10 +157,176 @@ def load_mac_record(path, port, log_dir, max_age_min=MAC_RECORD_MAX_AGE_MIN):
     mac = str(rec.get("mac", "")).lower()
     if mac != EXPECT_MAC_65D8:
         return (False, f"MAC 记录值不是 65D8（{mac}）", rec)
-    age = time.time() - float(rec.get("read_at_unix", 0))
+    ts = rec.get("read_at_unix")
+    if not is_strict_number(ts):
+        return (False, f"MAC 记录时间戳类型非数值（{ts!r}）", rec)
+    age = time.time() - float(ts)
     if not (0 <= age <= max_age_min * 60):
         return (False, f"MAC 记录过期 age={age/60:.1f}min > {max_age_min}min", rec)
     return (True, mac, rec)
+
+
+
+
+# ---------------- 严格校验辅助 ----------------
+
+def is_strict_int(v):
+    """排除 bool（Python 中 bool 是 int 子类）。"""
+    return type(v) is int
+
+
+def is_strict_number(v):
+    return type(v) in (int, float)
+
+
+def anchor_validate(anchor, port, log_dir, max_age_min=240):
+    """锚点严格校验；返回 (ok, reasons[])。"""
+    r = []
+    if not isinstance(anchor, dict) or len(anchor) == 0:
+        return (False, ["根对象为空或非字典"])
+    if not is_strict_int(anchor.get("version")) or anchor.get("version") != 1:
+        r.append(f"version 必须严格等于整数 1（实际 {anchor.get('version')!r}）")
+    if anchor.get("port") != port:
+        r.append(f"port 不符（{anchor.get('port')!r}）")
+    if str(anchor.get("log_dir")) != str(log_dir):
+        r.append(f"log_dir 不符（{anchor.get('log_dir')!r}）")
+    mac = anchor.get("mac")
+    if not isinstance(mac, str) or mac.lower() != EXPECT_MAC_65D8:
+        r.append(f"mac 非 65D8 字符串（{mac!r}）")
+    ts = anchor.get("checked_at_unix")
+    if not is_strict_number(ts):
+        r.append(f"checked_at_unix 类型非数值（{ts!r}）")
+    else:
+        age = time.time() - float(ts)
+        if not (0 <= age <= max_age_min * 60):
+            r.append(f"锚点过期 age={age/60:.1f}min > {max_age_min}min")
+    return (not r, r)
+
+
+# ---------------- 统一"停录制→读 MAC→恢复→重启录制" ----------------
+
+def _ctl(cmd, port, log_path, capture_ctl):
+    try:
+        r = subprocess.run([capture_ctl, cmd, port, log_path],
+                           capture_output=True, text=True, timeout=30)
+        return (r.returncode == 0, (r.stdout or r.stderr).strip()[:160])
+    except Exception as exc:  # noqa: BLE001
+        return (False, f"{type(exc).__name__}: {exc}")
+
+
+def _log_size(log_path):
+    try:
+        return Path(log_path).stat().st_size
+    except OSError:
+        return 0
+
+
+def wait_new_boot(log_path, from_size, timeout_s=15.0):
+    """等待日志出现新的 boot 证据（rst:0x1 或 app_init ELF SHA）。"""
+    t0 = time.time()
+    while time.time() - t0 < timeout_s:
+        try:
+            with open(log_path, "rb") as f:
+                f.seek(0, 2)
+                size = f.tell()
+                if size <= from_size:
+                    time.sleep(1.0)
+                    continue
+                f.seek(from_size)
+                data = f.read().decode("utf-8", "replace")
+            if "rst:0x1" in data or "app_init: ELF file SHA256" in data:
+                return (True, f"new boot evidence @+{time.time()-t0:.0f}s")
+        except OSError as exc:
+            return (False, f"日志不可读：{exc}")
+        time.sleep(1.0)
+    return (False, f"{timeout_s:.0f}s 内未见新的 boot 证据")
+
+
+def read_mac_flow(port, log_dir, out_record, capture_ctl="tools/serial_capture_ctl.sh",
+                  evidence_dir=None, expect_mac=EXPECT_MAC_65D8,
+                  read_mac=None, run_app=None, strict_restore=True):
+    """步骤 0 的唯一实现（CLI 与测试共用）。
+
+    状态流程：检查录制链 → 停录制 → read_mac → **无论结果都恢复**
+    （run_app + 重启录制 + 等待新 boot 证据）→ 判定。
+    成功条件：MAC 正确 **且** run_app 成功 **且** 录制重启成功
+    （strict_restore 时还要求新 boot 证据）。
+    """
+    read_mac = read_mac or esptool_read_mac
+    run_app = run_app or esptool_run_app
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from preflight_flash import inspect_capture  # noqa: E402
+
+    log_path = str(Path(log_dir) / f"serial_{Path(port).name}.log")
+    ev = {"port": port, "log_path": log_path,
+          "chain_before": None, "capture_stopped": None, "mac": None,
+          "mac_ok": None, "run_app_ok": None, "capture_restarted": None,
+          "new_boot": None, "state_confirmed": False,
+          "at": time.strftime("%Y-%m-%dT%H:%M:%S")}
+
+    cap = inspect_capture(log_dir, Path(port).name)
+    ev["chain_before"] = {k: cap.get(k) for k in
+                          ("running", "script_ok", "port_arg_ok", "log_arg_ok",
+                           "fd_holds_port", "fd_holds_log")}
+    chain_ok = all(v is True for v in ev["chain_before"].values())
+
+    stopped = start_ok = new_boot_ok = False
+    mac = None
+    if chain_ok:
+        stopped, msg = _ctl("stop", port, log_path, capture_ctl)
+        ev["capture_stopped"] = stopped
+        print(f"  [{'ok' if stopped else 'FAIL'}] 停录制：{msg}")
+    else:
+        ev["capture_stopped"] = False
+        print("  [FAIL] 录制链不完整——不停录制、不读 MAC（先修复录制）")
+
+    if stopped:
+        try:
+            ok_mac, mac_or_err = read_mac(port)
+            if ok_mac:
+                mac = mac_or_err
+                ev["mac"] = mac
+                ev["mac_ok"] = (mac.lower() == expect_mac)
+                print(f"  [{'ok' if ev['mac_ok'] else 'FAIL'}] read_mac={mac}"
+                      f"{'' if ev['mac_ok'] else f'（期望 {expect_mac}）'}")
+            else:
+                ev["mac_ok"] = False
+                print(f"  [FAIL] read_mac 失败：{str(mac_or_err)[:100]}")
+        finally:
+            # 无论读取成功/失败/MAC 不符，都恢复
+            size_before = _log_size(log_path)
+            run_ok, rmsg = run_app(port)
+            ev["run_app_ok"] = run_ok
+            print(f"  [{'ok' if run_ok else 'FAIL'}] 恢复 app：{str(rmsg)[:70]}")
+            start_ok, smsg = _ctl("start", port, log_path, capture_ctl)
+            ev["capture_restarted"] = start_ok
+            print(f"  [{'ok' if start_ok else 'FAIL'}] 重启录制：{smsg}")
+            if start_ok:
+                new_boot_ok, bmsg = wait_new_boot(log_path, size_before)
+                ev["new_boot"] = new_boot_ok
+                print(f"  [{'ok' if new_boot_ok else 'FAIL'}] 新 boot 证据：{bmsg}")
+
+    mac_ok = ev.get("mac_ok") is True
+    ev["state_confirmed"] = bool(mac_ok and ev.get("run_app_ok")
+                                 and ev.get("capture_restarted")
+                                 and (new_boot_ok or not strict_restore))
+    ok = bool(chain_ok and stopped and ev["state_confirmed"])
+
+    if evidence_dir:
+        try:
+            Path(evidence_dir).mkdir(parents=True, exist_ok=True)
+            Path(evidence_dir, "mac_read_flow.json").write_text(
+                json.dumps(ev, ensure_ascii=False, indent=1), encoding="utf-8")
+        except Exception as exc:  # noqa: BLE001
+            print(f"  [FAIL] 恢复证据写入失败（{type(exc).__name__}）——按失败处理")
+            ok = False
+
+    if ok and mac:
+        write_mac_record(out_record, port, mac, log_dir)
+        print(f"  [ok] MAC 记录已写出：{out_record}")
+    elif not ok:
+        print("  [STOP] 设备/录制状态不可确认（见 mac_read_flow.json），不得继续")
+    return (ok, ev)
 
 
 def _cli():
@@ -170,25 +337,13 @@ def _cli():
     r.add_argument("--port", required=True)
     r.add_argument("--log-dir", required=True)
     r.add_argument("--out", required=True)
-    r.add_argument("--restore-app", action="store_true",
-                   help="读完后 esptool run 回到 app")
+    r.add_argument("--evidence-dir", required=True,
+                   help="本轮证据目录（恢复流程证据写入此处；写失败即失败）")
     a = ap.parse_args()
     if a.cmd == "read":
-        ok, mac = esptool_read_mac(a.port)
-        if not ok:
-            print(f"[FAIL] read_mac 失败：{mac}")
-            return 2
-        if mac.lower() != EXPECT_MAC_65D8:
-            print(f"[FAIL] MAC 不是 65D8：{mac}")
-            return 1
-        rec = write_mac_record(a.out, a.port, mac, a.log_dir)
-        print(f"[ok] MAC 记录已写出 {a.out} mac={mac} at={rec['read_at']}")
-        if a.restore_app:
-            rok, msg = esptool_run_app(a.port)
-            print(f"[{'ok' if rok else 'FAIL'}] restore app: {str(msg)[:80]}")
-            if not rok:
-                return 2
-        return 0
+        ok, ev = read_mac_flow(a.port, a.log_dir, a.out,
+                               evidence_dir=a.evidence_dir)
+        return 0 if ok else 1
     return 2
 
 

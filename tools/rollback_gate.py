@@ -60,8 +60,10 @@ def main():
     ap.add_argument("--expect-bin-sha256", required=True)
     ap.add_argument("--max-anchor-age-min", type=int, default=240)
     ap.add_argument("--usb-events-min", type=int, default=240)
+    ap.add_argument("--evidence-dir", required=True,
+                    help="本轮证据目录（恢复流程/门禁证据写入此处；写失败即失败）")
     ap.add_argument("--skip-restore", action="store_true",
-                    help="不恢复（仅供烧录前紧邻调用；默认恢复 app+录制）")
+                    help="不等待新 boot 证据（仅供紧接烧录的调用点；仍会 run+重启录制）")
     ap.add_argument("--capture-ctl", default="tools/serial_capture_ctl.sh",
                     help="串口录制控制脚本（停录制以读取 MAC）")
     args = ap.parse_args()
@@ -87,33 +89,12 @@ def main():
         check(True, f"锚点可解析：{args.anchor_file}")
     except Exception as exc:  # noqa: BLE001
         check(False, f"锚点不可解析（{type(exc).__name__}）")
-    if anchor is not None and (not isinstance(anchor, dict) or len(anchor) == 0):
-        check(False, "锚点根对象为空或不是字典（拒绝空 {} 绕过字段校验）")
-        anchor = None
     if anchor is not None:
-        required = {"version": int, "port": str, "log_dir": str,
-                    "mac": (str, type(None)), "checked_at_unix": (int, float)}
-        miss = [k for k in required if k not in anchor]
-        check(not miss, f"锚点字段完整（缺 {miss}）" if miss else "锚点字段完整")
-        badtype = [k for k, t in required.items()
-                   if k in anchor and not isinstance(anchor[k], t)]
-        check(not badtype, f"锚点字段类型正确（异常 {badtype}）" if badtype
-              else "锚点字段类型正确")
-        try:
-            age = time.time() - float(anchor.get("checked_at_unix", 0))
-        except Exception:  # noqa: BLE001
-            age = -1
-        check(0 <= age <= args.max_anchor_age_min * 60,
-              f"锚点新鲜度 age={age/60:.1f}min ≤ {args.max_anchor_age_min}min")
-        check(anchor.get("port") == args.port, f"锚点端口（{anchor.get('port')}）")
-        check(anchor.get("mac_ok") is True and anchor.get("mac"),
-              f"锚点含有效 MAC（{anchor.get('mac')}）")
-        # 锚点 MAC 本身必须等于期望 65D8（在停录制之前就判，避免无谓动串口）
-        check(anchor.get("mac") is not None and
-              str(anchor["mac"]).lower() == EXPECT_MAC,
-              f"锚点 MAC == 65D8（{anchor.get('mac')} vs {EXPECT_MAC}）")
-        check(anchor.get("log_dir") == args.log_dir,
-              f"锚点日志目录（{anchor.get('log_dir')}）")
+        ok_a, reasons = PI.anchor_validate(anchor, args.port, args.log_dir,
+                                           args.max_anchor_age_min)
+        check(ok_a, "锚点严格校验" if ok_a else f"锚点严格校验失败：{reasons}")
+    else:
+        anchor = None
 
     # 1b. 回滚 BIN（提前校验：失败则不再动用串口）
     binp = Path(args.bin)
@@ -134,45 +115,19 @@ def main():
     check(loginfo.get("fresh") is True, f"日志新鲜 age={loginfo.get('age_sec')}s")
     check(loginfo.get("boot_marker") is True, "日志 boot 标记")
 
-    # 4. 板卡身份（主证据）：需端口空闲 → 停录制后 read_mac；**无论结果都恢复**
-    log_path = str(Path(args.log_dir) / f"serial_{name}.log")
-    restore_info = {"stopped": False, "mac_read": None, "run_app": None,
-                    "capture_restarted": None}
+    # 4. 板卡身份（主证据）：统一恢复流程（停录制→read_mac→run→重启录制→新 boot 证据）
     if not fails:
-        print(f"  [step] 停录制以读取芯片 MAC：{log_path}")
-        r = subprocess.run([args.capture_ctl, "stop", log_path],
-                           capture_output=True, text=True)
-        print(f"         {r.stdout.strip() or r.stderr.strip()}")
-        restore_info["stopped"] = (r.returncode == 0)
-        check(restore_info["stopped"], "录制已停止（read_mac 需端口空闲）")
-        if restore_info["stopped"]:
-            try:
-                ok_mac, mac = PI.esptool_read_mac(args.port)
-                restore_info["mac_read"] = mac if ok_mac else None
-                check(ok_mac, f"esptool read_mac（{mac if ok_mac else str(mac)[:70]}）")
-                if ok_mac:
-                    check(mac.lower() == EXPECT_MAC, f"MAC==65D8（{mac}）")
-                    if anchor and anchor.get("mac"):
-                        check(mac.lower() == str(anchor["mac"]).lower(),
-                              f"MAC==锚点（{mac} vs {anchor['mac']}）")
-            finally:
-                # 恢复设备与录制（默认）；--skip-restore 仅用于"紧接着烧录"场景
-                if args.skip_restore:
-                    restore_info["run_app"] = "skipped(by flag)"
-                    restore_info["capture_restarted"] = "skipped(by flag)"
-                    print("  [info] --skip-restore：保持下载模式与录制停止（紧接烧录）")
-                else:
-                    rok, rmsg = PI.esptool_run_app(args.port)
-                    restore_info["run_app"] = rok
-                    print(f"  [{'ok' if rok else 'FAIL'}] 恢复 app：{str(rmsg)[:70]}")
-                    r2 = subprocess.run([args.capture_ctl, "start", args.port, log_path],
-                                        capture_output=True, text=True)
-                    restore_info["capture_restarted"] = (r2.returncode == 0)
-                    print(f"  [{'ok' if r2.returncode == 0 else 'FAIL'}] 重启录制："
-                          f"{r2.stdout.strip() or r2.stderr.strip()}")
-                    check(rok, "读 MAC 后已恢复 app")
-                    check(r2.returncode == 0, "读 MAC 后录制已重启")
-
+        ok_flow, ev = PI.read_mac_flow(
+            args.port, args.log_dir, str(Path(args.evidence_dir) / "mac_record_gate.json"),
+            capture_ctl=args.capture_ctl, evidence_dir=args.evidence_dir,
+            strict_restore=not args.skip_restore)
+        restore_info = ev
+        check(ok_flow, "MAC 读取 + 恢复流程（stop→mac→run→start→new boot）")
+        if ev.get("mac"):
+            check(str(ev["mac"]).lower() == EXPECT_MAC, f"MAC==65D8（{ev['mac']}）")
+            if anchor and anchor.get("mac"):
+                check(str(ev["mac"]).lower() == str(anchor["mac"]).lower(),
+                      f"MAC==锚点（{ev['mac']}）")
     # 5. dmesg 补充
     usb_ok, usb_ev = usb_events_since(args.usb_events_min)
     if usb_ok is False:
@@ -181,13 +136,13 @@ def main():
         print(f"  [info] dmesg：{usb_ev}（补充，不否决）")
 
     try:
-        Path("artifacts/cmd04_flash_20261115/gate_test").mkdir(parents=True, exist_ok=True)
-        Path("artifacts/cmd04_flash_20261115/gate_test/rollback_gate_last.json") \
-            .write_text(json.dumps({"restore": restore_info, "fails": fails,
-                                    "at": time.strftime("%Y-%m-%dT%H:%M:%S")},
-                                   ensure_ascii=False, indent=1), encoding="utf-8")
-    except Exception:  # noqa: BLE001
-        pass
+        Path(args.evidence_dir).mkdir(parents=True, exist_ok=True)
+        Path(args.evidence_dir, "rollback_gate_last.json").write_text(
+            json.dumps({"restore": restore_info, "fails": fails,
+                        "at": time.strftime("%Y-%m-%dT%H:%M:%S")},
+                       ensure_ascii=False, indent=1), encoding="utf-8")
+    except Exception as exc:  # noqa: BLE001
+        check(False, f"门禁证据写入失败（{type(exc).__name__}）")
 
     print()
     if fails:
