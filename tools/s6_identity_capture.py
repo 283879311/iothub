@@ -1,16 +1,23 @@
 #!/usr/bin/env python3
-"""S6 阶段 B · 65D8 六维身份 ×2（**只读**采集，需单独授权窗口）。
+"""S6 阶段 B · 65D8 六维身份 ×2（**受限**采集，需单独授权窗口）。
 
-授权范围（2026-11-15 窄窗口）：
-  - BLE 扫描/连接/读取；命令仅 device.info / device.status / network.status / config.get；
-  - 同一 BLE 会话两轮，间隔 ≥20s；
-  - console 只**读取现有日志文件**（不暂停、不重启、不重开串口采集）；
-  - 不做任何配置写入、网络扫描/连接/断开、MQTT 发布、diag 注入、复位、烧录。
+**本采集不是"无副作用审计"**，会话本身包含以下可能改变 RAM 状态的动作：
+  - `auth.login`：校验口令并写入**短时 RAM token**（不写持久配置）；
+  - `device.status` / `network.status`：内部复用 `app_cmd_build_network_status()`，
+    若 trial 恰好过期会调用 `app_cmd_net_trial_clear()`（清理 RAM trial，
+    必要时结束配置事务）；
+  - 断开连接：`app_ble_cmd_on_disconnect()` 可能取消 BLE 所属的可取消
+    异步网络操作、清理 BLE 所属 trial。
+因此采集**前置要求** `trial.state == idle`（非 idle 立即停止，不尝试修复）；
+断开只发生一次，且在证据中显式记录。
+
+授权范围内允许的命令仅：device.info / device.status / network.status / config.get。
+不做配置写入、网络扫描/连接/断开、MQTT 发布、diag 注入、复位、烧录。
 
 输出：`<out-dir>/identity_capture.json`
-  - 两轮原始响应帧（sanitize 后）+ 时间戳
+  - 两轮**脱敏后的解析响应对象**与原始长度（raw_len；**不保存原始字节**）
   - 两轮 console 快照（文件大小/行数/最后 uptime/行号、client_id、boot 标记、ELF SHA）
-  - 六维逐项比对结果
+  - 六维逐项比对 + 实测轮次间隔
 
 用法：
   .venv-bleak/bin/python tools/s6_identity_capture.py \
@@ -27,8 +34,6 @@ import uuid
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "ble_p0"))
-
-from bleak import BleakClient  # noqa: E402
 
 from p0_acceptance import Session, sanitize, scan_filtered  # noqa: E402
 
@@ -79,16 +84,16 @@ def console_snapshot(log_path):
 
 
 async def read_round(s, tag):
-    """一轮只读命令；异常立即上抛（授权要求：失败即停）。"""
+    """一轮读取；任一命令 ok=false 或异常立即上抛（授权要求：失败即停）。"""
     out = {"tag": tag, "at_unix": int(time.time()),
            "at": time.strftime("%Y-%m-%dT%H:%M:%S"), "responses": {}}
     for cmd in READ_CMDS:
         r = await s.v1(cmd, timeout=15)
-        out["responses"][cmd] = {
-            "ok": bool(r.obj.get("ok")),
-            "obj": sanitize(r.obj),
-            "raw_len": len(r.raw),
-        }
+        ok = bool(r.obj.get("ok"))
+        out["responses"][cmd] = {"ok": ok, "obj": sanitize(r.obj),
+                                 "raw_len": len(r.raw)}
+        if not ok:
+            raise RuntimeError(f"{tag} {cmd} 返回 ok=false")
     return out
 
 
@@ -155,6 +160,10 @@ async def main():
     ap.add_argument("--gap-s", type=float, default=20.0)
     args = ap.parse_args()
 
+    if args.gap_s < 20.0:
+        print("[FAIL] --gap-s 必须 ≥20s（授权要求）")
+        return 2
+
     out_dir = Path(args.out_dir or (
         "artifacts/s6_identity_20261115/run_%s_%s"
         % (time.strftime("%Y%m%d_%H%M%S"), uuid.uuid4().hex[:6])))
@@ -167,32 +176,57 @@ async def main():
         print("[STOP] 65D8 不在广播中——按授权要求停止本轮，不做修复尝试")
         return 3
 
-    cli = BleakClient(ADDR, timeout=25)
-    await cli.connect()
-    s = Session(cli, address=ADDR)
-    await s._connect_once()          # login（读取类命令的前置鉴权）
+    # 只建立**一次**连接（不做"先连再 _connect_once 重连"的循环）
+    s = Session(None, address=ADDR)
+    await s._connect_once()          # 一次 connect + 一次 auth.login（短时 RAM token）
 
     try:
-        c1 = console_snapshot(args.console_log)
-        r1 = await read_round(s, "round1")
-        print(f"[identity] round1 @ {r1['at']} console_uptime={c1.get('uptime_ms')}")
-        await asyncio.sleep(args.gap_s)
-        c2 = console_snapshot(args.console_log)
-        r2 = await read_round(s, "round2")
-        print(f"[identity] round2 @ {r2['at']} console_uptime={c2.get('uptime_ms')}")
-    finally:
         try:
-            await s.close()
-        except Exception:  # noqa: BLE001
-            pass
-        try:
-            await cli.disconnect()
-        except Exception:  # noqa: BLE001
-            pass
+            # 前置安全条件：trial 必须 idle；非 idle 时断开可能触发清理，直接停
+            pre = await s.v1("network.status", timeout=15)
+            pre_data = pre.obj.get("data") or {}
+            trial = (pre_data.get("trial") or {}).get("state")
+            if trial != "idle":
+                print(f"[STOP] 前置检查 trial.state={trial!r} != idle —— 不进入采集")
+                return 4
 
+            c1 = console_snapshot(args.console_log)
+            r1 = await read_round(s, "round1")
+            print(f"[identity] round1 @ {r1['at']} console_uptime={c1.get('uptime_ms')}")
+            await asyncio.sleep(args.gap_s)
+            c2 = console_snapshot(args.console_log)
+            r2 = await read_round(s, "round2")
+            print(f"[identity] round2 @ {r2['at']} console_uptime={c2.get('uptime_ms')}")
+            post = await s.v1("network.status", timeout=15)
+            post_trial = ((post.obj.get("data") or {}).get("trial") or {}).get("state")
+        except Exception as exc:  # noqa: BLE001
+            print(f"[STOP] 采集失败：{type(exc).__name__}: {str(exc)[:120]}"
+                  "——按授权要求停止，不做修复尝试")
+            return 5
+    finally:
+        await s.close()              # 一次断开（回调可能清理 BLE 所属 trial）
+
+    measured = r2["at_unix"] - r1["at_unix"]
     ok, dims = compare([r1, r2], [c1, c2])
-    ev = {"version": 1, "address": ADDR, "scope": "read-only identity capture",
-          "cmds": list(READ_CMDS), "gap_s": args.gap_s,
+    if measured < 20:
+        ok = False
+        dims.append({"dim": "0_gap", "ok": False,
+                     "detail": f"实测间隔 {measured}s < 20s"})
+    else:
+        dims.insert(0, {"dim": "0_gap", "ok": True, "detail": f"实测 {measured}s"})
+
+    ev = {"version": 2, "address": ADDR,
+          "scope": "受限采集（见 session_side_effects；不是无副作用审计）",
+          "cmds": list(READ_CMDS), "configured_gap_s": args.gap_s,
+          "measured_gap_s": measured,
+          "session_side_effects": {
+              "connect_count": 1, "disconnect_count": 1, "auth_login": True,
+              "note": "auth.login 写入短时 RAM token；device.status/network.status "
+                      "在 trial 过期时可能触发 trial 清理；断开回调可能清理 BLE "
+                      "所属 trial 与可取消的异步网络操作",
+          },
+          "precheck_trial_state": trial,
+          "postcheck_trial_state": post_trial,
           "rounds": [r1, r2], "console": [c1, c2], "dims": dims, "ok": ok}
     (out_dir / "identity_capture.json").write_text(
         json.dumps(ev, ensure_ascii=False, indent=1), encoding="utf-8")

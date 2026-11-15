@@ -773,7 +773,8 @@ def test_chain_exception(tmp):
 FAKE_HOLDER = """#!/bin/sh
 exec 9>>"$1"
 flock -n 9 || exit 1
-exec sleep 60      # exec：持锁进程 == 记录的 PID，kill 即释放
+# cmdline 必须含 capture_serial（guard 用它做强校验）
+exec python3 -c 'import time; time.sleep(60)' capture_serial.py
 """
 
 FAKE_CTL = r"""#!/bin/sh
@@ -782,15 +783,16 @@ case "$1" in
 start)
   [ "${FAKE_START_FAIL:-0}" = "1" ] && exit 1
   if flock -n "$LOCK" -c true 2>/dev/null; then
-    "$HOLD" "$LOCK" >/dev/null 2>&1 &   # helper 自己持锁，$! 即持锁进程
+    "$HOLD" "$LOCK" >/dev/null 2>&1 &
     echo $! > "$LOCK.holder"
+    echo $! > "$3.pid"                 # 模拟 serial_capture_ctl.sh 写 pidfile
     exit 0
   fi
   exit 1
   ;;
 stop)
   [ -f "$LOCK.holder" ] && kill "$(cat "$LOCK.holder")" 2>/dev/null
-  rm -f "$LOCK.holder"
+  rm -f "$LOCK.holder" "$3.pid"
   exit "${FAKE_STOP_RC:-0}"
   ;;
 esac
@@ -820,9 +822,23 @@ def test_capture_guard(tmp):
         time.sleep(0.2)
 
     def running():
-        r = subprocess.run(["flock", "-n", lockf, "-c", "true"],
-                           capture_output=True)
-        return r.returncode != 0          # 取不到锁 = 有进程持有 = 采集在跑
+        """与 guard 同口径：pidfile 进程(Q=cmdline 含 capture_serial) + 端口锁。"""
+        pid_ok = False
+        pidf = Path(log + ".pid")
+        if pidf.exists():
+            try:
+                pid = int(pidf.read_text().strip())
+            except Exception:  # noqa: BLE001
+                pid = None
+            if pid:
+                try:
+                    pid_ok = (b"capture_serial"
+                              in Path(f"/proc/{pid}/cmdline").read_bytes())
+                except OSError:
+                    pid_ok = False
+        lock_held = subprocess.run(["flock", "-n", lockf, "-c", "true"],
+                                   capture_output=True).returncode != 0
+        return pid_ok and lock_held
 
     def guard(cmd, evid=None, extra=None):
         args = [str(ROOT / "tools" / "capture_guard.sh"), port, log, ctl]
@@ -845,9 +861,10 @@ def test_capture_guard(tmp):
         e1 = str(tmp / "i1.json")
         r = guard(["true"], e1)
         d = ev(e1)
-        ck("I1 命令未停采集 → rc=0、无需重启、锁仍在",
+        ck("I1 命令未停采集 → rc=0、无需重启、状态仍 RUNNING",
            r.returncode == 0 and d.get("capture_restored") is True
-           and d.get("restart_rc") is None and running(), f"{r.returncode} {d}")
+           and d.get("restart_rc") is None and running()
+           and d.get("state_before") == "RUNNING", f"{r.returncode} {d}")
 
         # I2 stop 后命令失败(rc=3) → guard 必须重启采集，rc 保持 3
         holder_start()
@@ -858,15 +875,25 @@ def test_capture_guard(tmp):
            r.returncode == 3 and d.get("capture_restored") is True
            and d.get("restart_rc") == 0 and running(), f"{r.returncode} {d}")
 
-        # I3 stop 后 **重启失败** → 必须明确失败 rc=9，不得宣称成功
+        # I3 采集无法恢复且命令 rc=0 → 必须 90（恢复失败优先）
         holder_start()
         e3 = str(tmp / "i3.json")
         r = guard(["sh", "-c", f'"{ctl}" stop "{port}" "{log}"'], e3,
                   {"FAKE_START_FAIL": "1"})
         d = ev(e3)
-        ck("I3 采集无法恢复 → rc=9 且 result=recovery_failed",
-           r.returncode == 9 and d.get("result") == "recovery_failed"
+        ck("I3 采集无法恢复（命令 rc=0）→ rc=90 且 result=recovery_failed",
+           r.returncode == 90 and d.get("result") == "recovery_failed"
            and d.get("capture_restored") is False, f"{r.returncode} {d}")
+
+        # I6 采集无法恢复 **且** 命令本身失败(rc=3) → 仍必须 90（不得透传 3）
+        holder_start()
+        e6 = str(tmp / "i6.json")
+        r = guard(["sh", "-c", f'"{ctl}" stop "{port}" "{log}"; exit 3'], e6,
+                  {"FAKE_START_FAIL": "1"})
+        d = ev(e6)
+        ck("I6 命令 rc=3 且恢复失败 → rc=90（恢复失败优先于命令 rc）",
+           r.returncode == 90 and d.get("command_rc") == 3
+           and d.get("result") == "recovery_failed", f"{r.returncode} {d}")
 
         # I4 stop 命令报失败(rc=1)但实际已停 → guard 仍按实际状态恢复
         holder_start()
@@ -876,6 +903,51 @@ def test_capture_guard(tmp):
         d = ev(e4)
         ck("I4 stop 报失败但已停 → 仍恢复采集、rc=5 保留",
            r.returncode == 5 and d.get("capture_restored") is True, f"{r.returncode} {d}")
+
+        # I7 证据写入失败 → rc=91（采集已恢复也不得视为成功）
+        holder_start()
+        r = guard(["true"], str(tmp / "no_such_dir" / "x.json"))
+        ck("I7 证据写入失败 → rc=91", r.returncode == 91, f"{r.returncode}")
+
+        # I8 TERM 中断：命令停采集后被杀 → 仍恢复采集，退出码 143
+        holder_start()
+        e8 = str(tmp / "i8.json")
+        p = subprocess.Popen(
+            [str(ROOT / "tools" / "capture_guard.sh"), port, log, ctl,
+             "--evidence", e8, "--",
+             "sh", "-c", f'"{ctl}" stop "{port}" "{log}"; sleep 5'],
+            env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        for _ in range(40):
+            time.sleep(0.1)
+            if not running():
+                break
+        p.terminate()
+        try:
+            p.wait(timeout=30)
+        except subprocess.TimeoutExpired:
+            p.kill()
+        d = ev(e8)
+        ck("I8 TERM 中断后仍恢复采集（rc=143，result=restored）",
+           p.returncode == 143 and d.get("result") == "restored" and running(),
+           f"rc={p.returncode} {d}")
+
+        # I9 锁被非采集进程持有 → UNKNOWN，不得误判为 RUNNING/已恢复
+        holder_stop()
+        foreign = subprocess.Popen([hold, lockf],
+                                   stdout=subprocess.DEVNULL,
+                                   stderr=subprocess.DEVNULL)   # 无 pidfile
+        time.sleep(0.4)
+        e9 = str(tmp / "i9.json")
+        r = guard(["true"], e9)
+        d = ev(e9)
+        foreign.terminate()
+        try:
+            foreign.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            foreign.kill()
+        ck("I9 锁被非采集进程持有 → state_before=UNKNOWN 且不判恢复",
+           r.returncode == 90 and d.get("state_before") == "UNKNOWN"
+           and d.get("capture_restored") is False, f"{r.returncode} {d}")
 
         # I5 rollback_recovery.sh：门禁失败时绝不进入停采集/烧录
         bad = tmp / "bad_anchor.json"; bad.write_text("{}")

@@ -64,19 +64,31 @@ fi
 echo "[R2] 2/3 停采集 → 烧录（guard 包裹，退出必恢复采集）"
 tools/capture_guard.sh "$PORT" "$LOG" "$CTL" --evidence "$REC_EVID" -- \
   bash -c 'ct="$1"; port="$2"; log="$3"; bin="$4"; sha="$5"
-           "$ct" stop "$port" "$log"      # 不看 rc：由 guard 按实际锁状态复查
+           "$ct" stop "$port" "$log"      # 不看 rc：由 guard 按 PID+锁状态复查
            tools/flash_frozen.sh "$bin" "$sha"' \
   _ "$CTL" "$PORT" "$LOG" "$RB_BIN" "$RB_SHA"
-FLASH_RC=$?
+GRC=$?
 
 echo "[R2] 3/3 完成检查"
-if [ "$FLASH_RC" -eq 9 ]; then
-  echo "[RECOVERY FAILED] 烧录未完成或采集未能恢复——设备标注未恢复，人工介入" >&2
-  exit 9
+# guard 的恢复状态优先：90=采集未恢复，91=证据写入失败（均不得视为成功）
+if [ "$GRC" -eq 90 ]; then
+  echo "[RECOVERY FAILED] 采集未能恢复——设备标注未恢复，人工介入" >&2
+  exit 90
 fi
-if [ "$FLASH_RC" -ne 0 ]; then
-  echo "[STOP] 烧录失败（rc=$FLASH_RC）；采集已由 guard 恢复，禁止重试烧录，人工介入" >&2
-  exit "$FLASH_RC"
+if [ "$GRC" -eq 91 ]; then
+  echo "[RECOVERY FAILED] 采集已恢复但恢复证据写入失败——不得视为成功" >&2
+  exit 91
 fi
-echo "[OK] 烧录返回 0 且采集已恢复。下一步（人工）：等新 boot → BLE 反证"
+# 双保险：即使返回码像成功，也要求证据里 result=restored
+RESULT=$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1])).get("result",""))' \
+         "$REC_EVID" 2>/dev/null || true)
+if [ "$RESULT" != "restored" ]; then
+  echo "[RECOVERY FAILED] 恢复证据缺失或 result!=restored（$RESULT）" >&2
+  exit 90
+fi
+if [ "$GRC" -ne 0 ]; then
+  echo "[STOP] 烧录失败（rc=$GRC）；采集已恢复，禁止重试烧录，人工介入" >&2
+  exit "$GRC"
+fi
+echo "[OK] 烧录返回 0 且采集已恢复（证据 result=restored）。下一步（人工）：等新 boot → BLE 反证"
 echo "     device.info.build_sha == a7e04b6a9 → trial=idle / 无活动 op / mqtt_connected=true"

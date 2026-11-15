@@ -1,21 +1,24 @@
 #!/usr/bin/env bash
 # capture_guard.sh — 包裹"停采集→烧录→恢复"的任意命令，**保证退出时采集在跑**
 #
-# 用途（S6 阶段 B · R2）：烧录失败/中断/esptool 报错时，`set -e` 会让脚本直接退出，
-# 采集可能停在"已停"状态，设备却处于部分写入或无法启动。本脚本把恢复采集
-# 从"正常路径的一步"变成"退出路径的保证"：
-#   1) 记录进入时采集是否在跑（端口协作锁是否被持有）；
-#   2) 执行被包裹命令（不因非零退出而提前中断）；
-#   3) 退出时（含 TERM/INT）若采集未运行 → 用 capture_ctl 重启并复查；
-#   4) 无法恢复 → **明确失败**（exit 9），绝不输出成功结论；
-#   5) 可选写出 JSON 证据（GUARD_EVIDENCE=<path>）：gap 起止、命令 rc、重启结果。
+# 目的（S6 阶段 B · R2）：烧录失败/中断/esptool 报错时 `set -e` 会让脚本直接退出，
+# 采集可能停在"已停"，设备却处于部分写入或无法启动。把恢复采集从"正常路径的一步"
+# 变成"退出路径的保证"。
+#
+# 采集状态判定（**PID + 端口锁双重验证**，不一致即 UNKNOWN）：
+#   RUNNING : <log>.pid 存在且该 PID 存活、cmdline 含 capture_serial
+#             **且** 端口协作锁被持有
+#   STOPPED : 无存活采集 PID **且** 端口锁可取得
+#   UNKNOWN : pidfile 不可解析 / 锁文件不可读写 / 两项证据不一致
+#             （例如锁被非采集进程持有）
+#
+# 返回码（**恢复状态与命令返回码分离**，恢复失败优先）：
+#   0..89  被包裹命令的真实返回码（命令成功即 0）
+#   90     采集未能恢复（不论命令返回什么）
+#   91     证据写入失败（无法产出可复核记录，不得视为成功）
 #
 # 用法：
 #   tools/capture_guard.sh <port> <log> <capture_ctl> [--evidence <json>] -- <cmd...>
-#
-# 例：
-#   tools/capture_guard.sh /dev/ttyUSB1 $LOG tools/serial_capture_ctl.sh -- \
-#       sh -c 'tools/serial_capture_ctl.sh stop /dev/ttyUSB1 '"$LOG"'; tools/flash_frozen.sh ...'
 set -uo pipefail
 
 PORT="${1:-}"; LOG="${2:-}"; CTL="${3:-}"
@@ -36,61 +39,110 @@ real_port=$(readlink -f -- "$PORT" 2>/dev/null || true)
 lock_id=$(basename "$real_port")
 if [ -w /run/lock ]; then LOCK_DIR=/run/lock; else LOCK_DIR=/tmp; fi
 LOCK_FILE="$LOCK_DIR/iothub_serial_${lock_id}.lock"
+PIDFILE="$LOG.pid"
 
-capture_running() { ! flock -n "$LOCK_FILE" -c true 2>/dev/null; }
+capture_state() {          # echoes RUNNING | STOPPED | UNKNOWN
+  local pid pid_alive=0 lock_state unknown=0
+  if [ -e "$PIDFILE" ]; then
+    pid=$(tr -dc '0-9' < "$PIDFILE" 2>/dev/null)
+    if [ -z "$pid" ]; then
+      unknown=1
+    elif [ -d "/proc/$pid" ] \
+         && grep -qa capture_serial "/proc/$pid/cmdline" 2>/dev/null; then
+      pid_alive=1
+    fi
+  fi
+  if [ ! -e "$LOCK_FILE" ]; then
+    lock_state=free
+  elif [ ! -r "$LOCK_FILE" ] || [ ! -w "$LOCK_FILE" ]; then
+    unknown=1
+  elif flock -n "$LOCK_FILE" -c true 2>/dev/null; then
+    lock_state=free
+  else
+    lock_state=held
+  fi
+  [ "$unknown" = 1 ] && { echo UNKNOWN; return; }
+  if [ "$pid_alive" = 1 ] && [ "$lock_state" = held ]; then
+    echo RUNNING
+  elif [ "$pid_alive" = 0 ] && [ "$lock_state" = free ]; then
+    echo STOPPED
+  else
+    echo UNKNOWN          # 锁被非采集进程持有 / pid 存活但锁已释放
+  fi
+}
 
-RUNNING_BEFORE=0
-capture_running && RUNNING_BEFORE=1
-T0=$(date +%s)
+STATE_BEFORE=$(capture_state)
+W0=$(date +%s)
 RESTART_RC=""
 RESTORED=0
+EVID_OK=0
 
 guard_exit() {
   local rc=$?
   set +e
-  if capture_running; then
-    RESTORED=1
-  else
-    echo "[guard] 命令退出($rc)后采集未运行——尝试重启" >&2
+  STATE_AFTER=$(capture_state)
+  if [ "$STATE_AFTER" != RUNNING ]; then
+    echo "[guard] 命令退出($rc)后采集状态=$STATE_AFTER——尝试重启" >&2
     "$CTL" start "$PORT" "$LOG"; RESTART_RC=$?
     sleep 1
-    capture_running && RESTORED=1
+    STATE_AFTER=$(capture_state)
+    [ "$STATE_AFTER" = RUNNING ] && RESTORED=1
+  else
+    RESTORED=1
   fi
-  T1=$(date +%s)
+  W1=$(date +%s)
   if [ -n "$EVID" ]; then
-    python3 - "$EVID" "$PORT" "$LOG" "$RUNNING_BEFORE" "$rc" "$RESTORED" \
-      "$RESTART_RC" "$T0" "$T1" <<'PY' || echo "[guard] 证据写入失败" >&2
-import json, sys, time
-out, port, log, rb, rc, restored, rrc, t0, t1 = sys.argv[1:10]
+    G_OUT="$EVID" G_PORT="$PORT" G_LOG="$LOG" \
+    G_STATE_BEFORE="$STATE_BEFORE" G_STATE_AFTER="$STATE_AFTER" \
+    G_CMD_RC="$rc" G_RESTORED="$RESTORED" G_RESTART_RC="$RESTART_RC" \
+    G_W0="$W0" G_W1="$W1" \
+    python3 - <<'PY'
+import json, os, time
+e = os.environ
+restored = e["G_RESTORED"] == "1"
+rrc = e["G_RESTART_RC"]
 doc = {
-    "version": 1,
-    "port": port, "log": log,
-    "capture_running_before": rb == "1",
-    "command_rc": int(rc),
-    "gap_start_unix": int(t0), "gap_end_unix": int(t1),
-    "gap_s": int(t1) - int(t0),
-    "restart_rc": (int(rrc) if rrc not in ("", None) else None),
-    "capture_restored": restored == "1",
-    "result": "restored" if restored == "1" else "recovery_failed",
+    "version": 2,
+    "port": e["G_PORT"], "log": e["G_LOG"],
+    "state_before": e["G_STATE_BEFORE"],
+    "state_after": e["G_STATE_AFTER"],
+    "capture_restored": restored,
+    "command_rc": int(e["G_CMD_RC"]),
+    "restart_rc": (int(rrc) if rrc else None),
+    "guard_window_start_unix": int(e["G_W0"]),
+    "guard_window_end_unix": int(e["G_W1"]),
+    "guard_window_s": int(e["G_W1"]) - int(e["G_W0"]),
+    "result": "restored" if restored else "recovery_failed",
     "at_unix": int(time.time()),
 }
-with open(out, "w", encoding="utf-8") as f:
+with open(e["G_OUT"], "w", encoding="utf-8") as f:
     f.write(json.dumps(doc, ensure_ascii=False, indent=1))
 PY
-  fi
-  if [ "$RESTORED" != "1" ]; then
-    echo "[guard][RECOVERY FAILED] 采集未能恢复——不得宣称恢复成功" >&2
-    [ "$rc" = "0" ] && rc=9
+    if [ $? -eq 0 ]; then
+      EVID_OK=1
+    else
+      echo "[guard] 证据写入失败：$EVID" >&2
+    fi
   else
-    echo "[guard] 采集已在运行（gap ${T0}->${T1}）"
+    EVID_OK=1          # 未要求写证据
   fi
+  # ---- 恢复状态优先于命令返回码 ----
+  if [ "$RESTORED" != 1 ]; then
+    echo "[guard][RECOVERY FAILED] 采集未能恢复（state=$STATE_AFTER）——不得宣称恢复成功" >&2
+    exit 90
+  fi
+  if [ "$EVID_OK" != 1 ]; then
+    echo "[guard][EVIDENCE FAILED] 采集已恢复但证据写入失败——按失败处理" >&2
+    exit 91
+  fi
+  echo "[guard] 采集运行中（guard 窗口 ${W0}->${W1}s）"
   exit "$rc"
 }
 
 trap guard_exit EXIT
 trap 'exit 143' TERM INT
 
-echo "[guard] 进入：采集运行=$RUNNING_BEFORE 锁=$LOCK_FILE"
+echo "[guard] 进入：采集状态=$STATE_BEFORE 锁=$LOCK_FILE"
 "${CMD[@]}"
 rc=$?
 echo "[guard] 命令退出 rc=$rc"
