@@ -388,6 +388,10 @@ def test_anchor_and_record(tmp):
         ("mac_ok=False", {**base, "mac_ok": False}),
         ("mac 伪造", {**base, "mac": "de:ad:be:ef:00:11"}),
         ("时间非数值", {**base, "checked_at_unix": "abc"}),
+        ("时间 NaN", {**base, "checked_at_unix": float("nan")}),
+        ("时间 +Inf", {**base, "checked_at_unix": float("inf")}),
+        ("时间 -Inf", {**base, "checked_at_unix": float("-inf")}),
+        ("时间 bool", {**base, "checked_at_unix": True}),
         ("过期", {**base, "checked_at_unix": 1}),
         ("端口不符", {**base, "port": "/dev/ttyUSB0"}),
         ("目录不符", {**base, "log_dir": "/tmp"}),
@@ -407,6 +411,8 @@ def test_anchor_and_record(tmp):
     for name, mut in [
         ("version=True", {**good, "version": True}),
         ("时间非数值", {**good, "read_at_unix": "x"}),
+        ("时间 NaN", {**good, "read_at_unix": float("nan")}),
+        ("时间 +Inf", {**good, "read_at_unix": float("inf")}),
         ("mac 不符", {**good, "mac": "de:ad:be:ef:00:11"}),
         ("端口不符", {**good, "port": "/dev/ttyUSB0"}),
         ("缺字段", {"version": 1, "port": "/dev/ttyUSB1"}),
@@ -515,6 +521,13 @@ def test_final_evidence(tmp):
         ("no_at_unix", {k: v for k, v in good.items() if k != "at_unix"}),
         ("bad_at_unix", {**good, "at_unix": "abc"}),
         ("stale_at_unix", {**good, "at_unix": int(time.time()) - 3 * 86400}),
+        ("nan_at_unix", {**good, "at_unix": float("nan")}),
+        ("inf_at_unix", {**good, "at_unix": float("inf")}),
+        ("neg_inf_at_unix", {**good, "at_unix": float("-inf")}),
+        ("bool_at_unix", {**good, "at_unix": True}),
+        ("str_at_unix", {**good, "at_unix": "1794741630"}),
+        ("future_at_unix", {**good, "at_unix": int(time.time()) + 3600}),
+        ("just_over_240", {**good, "at_unix": int(time.time()) - 241 * 60}),
     ]:
         d = write_case(tag, mut)
         ok, rs, _ = PI.validate_final_evidence(d, good["run_id"], "/dev/ttyUSB1")

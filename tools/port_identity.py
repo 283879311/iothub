@@ -13,6 +13,7 @@
 """
 
 import json
+import math
 import os
 import re
 import stat
@@ -181,7 +182,14 @@ def is_strict_int(v):
 
 
 def is_strict_number(v):
-    return type(v) in (int, float)
+    """严格有限数值：排除 bool、NaN、±Inf。
+
+    NaN 与任何数比较都是 False，会**绕过** `age < -300` / `age > max_age` 两个
+    边界判断（NaN 时间戳就能冒充"新鲜"）；bool 是 int 子类。这里一并排除。
+    """
+    if type(v) is int:
+        return True
+    return type(v) is float and math.isfinite(v)
 
 
 def anchor_validate(anchor, port, log_dir, max_age_min=240):
