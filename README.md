@@ -1,92 +1,143 @@
 # iothub
 
-基于 ESP-IDF(v6.0,目标芯片 ESP32)的物联网控制与现场调试网关:本地管理走 BLE NUS 命令面,数据面含 UART/BLE/MQTT,云端为 ThingsBoard MQTT,GPIO 控制与状态上报由共享命令层承载。**Web/HTTP server、captive portal 和 Web OTA 已按产品决定删除**;OTA 核心保留但当前没有 HTTP 传输入口。
+基于 ESP-IDF 6.0.x、面向经典 ESP32（4 MB Flash、无 PSRAM）的物联网控制与现场数据网关。当前产品以 **BLE NUS 本地管理 + ThingsBoard MQTT 远程管理/上报 + UART1 工业数据接入** 为核心；控制命令与原始字节数据分属两个平面。
 
-当前固件版本:**1.3**(`CMakeLists.txt` 在配置期由 `git describe --always --dirty --exclude=v*` 派生 `PROJECT_VER = 1.3-<git短SHA>[-dirty]`,例如 `1.3-2ef2a38`;`device.info` 返回的 `firmware` 即该串)。v1.2 起规划**统一命令解析层(控制面 / 数据面双平面)+ MCP 兼容**,把 MQTT、串口、BLE 收敛到同一套命令语义(经典蓝牙 / SPP 已于 v1.2 移除),详见 `问题与版本优化.md`。
+> 当前文档以仓库 `main` 的 `d09f355` 为源码核对基线。固件版本由构建时 Git 描述串生成：`1.3-<git短SHA>[-dirty]`；无 Git 元数据时为 `1.3-unknown`。
 
-> **v1-only 边界（2026-11-04）**：外部 BLE/MQTT 命令只接受 `{"id","version":"1.0","cmd","args"}`；v0 `method/params` 返回 `unsupported_version`（2026-11-05 起 v0 源码、旧方法别名与 `APP_CMD_V0_COMPAT` 开关已全部删除，无回退路径）。成功读 `data`，错误读 `{code,message}`。MQTT/ThingsBoard 只是传输服务器，不需要协议迁移；发送命令的客户端必须用 v1 payload。
+## 当前产品边界
 
-## 功能
+| 能力 | 当前状态 |
+|---|---|
+| 本地管理 | **BLE NUS Peripheral**，CMD 特征负责设备命令；Wi-Fi/MQTT 不可用时仍可现场管理 |
+| 远程管理 | ThingsBoard MQTT RPC，使用与 BLE 相同的 v1 命令封装，并受命令来源策略限制 |
+| 工业数据接入 | UART1、BLE NUS Data 特征、MQTT 数据主题，通过 `data_pipe` 转发原始字节 |
+| Wi-Fi | 当前运行路径以 STA 为准；BLE 是首次配网、重新配置和断网救援入口 |
+| OTA | 保留双 OTA 分区、镜像启动确认和失败回滚核心；**当前没有固件下载/上传传输入口** |
+| Web / HTTP | **已从当前产品构建和运行路径移除**：无 Web 管理页、HTTP API、captive portal 或 Web OTA |
+| Classic Bluetooth / SPP | **已移除**：不再构建、不再作为数据或控制通道 |
+| MCP / JSON-RPC Server | 10 月的 1.2 方案曾讨论 MCP 兼容；当前固件没有实现 MCP Server，也不使用 JSON-RPC 2.0 |
 
-- **UART 数据面**:UART 参数配置与原始字节收发,数据经 `data_pipe` 在 UART/BLE/MQTT 间路由;Web 串口调试台已删除。
-- **GPIO/命令层**:继电器、LED、触摸输入统一走 `cmd.c`;MQTT RPC 与 BLE CMD 共用 `led.set/led.toggle/relay.set/io.set/io.get` 及旧别名;触摸按下调用同一 `led.toggle`,长按不重复;每路可配置上电策略,引脚由 Kconfig 统一配置。
-- **BLE 本地管理**:NUS CMD 通道提供登录、配置、Wi-Fi 扫描/试连/提交、MQTT 配置、GPIO/UART 命令;Web 管理页和强制门户已删除。
-- **网络**:STA 为正常目标;BLE 配网提交显式写入 STA;旧 AP/APSTA 配置仍兼容但不再有 Web 门户。最多 5 条 STA profile,RSSI 择优自动重连。
-- **MQTT(ThingsBoard)**:10s 周期遥测(继电器/LED/输入/堆内存)+ attributes 上报;下行命令使用 v1 envelope（`cmd/args`），TB 只负责转发；支持 tb_cloud / tb_selfhost / 自定义 topic,TLS(证书 bundle,可选)与 LWT;数据面自 1.3-82 起走 QoS1。
-- **联网验证(DEF-NET-001,2026-11-07)**:Wi-Fi 拿到 IP 后自动验证 Broker 路径(TCP)与 MQTT 会话,通过才算 settle;`network.status` 增 `internet_verified`/`net_verify_stage`,`operation.get` 增 `stages`;tryconnect 的 `got_ip` 语义 = IP+联网+MQTT 就绪,验证失败自动回滚(`internet_unverified`/`mqtt_unavailable`/`verify_timeout`);详见 `docs/R-NET设备验收报告_2026-11-07.md`。
-- **OTA**:OTA 确认/回滚核心保留;HTTP 上传入口和网页资源分区已删除,当前没有 OTA 传输通道,后续需通过 BLE/MQTT 等新通道接入。
-- **恢复出厂**:BOOT 键(GPIO0)长按 5s 后 LED 闪烁提示；松开后 LED 恢复原状态，设备清除默认配置、已保存 Wi-Fi 列表和配网 PIN/状态，再重启。
-- **蓝牙**:BLE NUS GATT 数据面(peripheral 从机 + central 主机),支持数据 RX/TX 与 CMD 通道(命令写 `6E400004`、回包订阅 `6E400005`);v1 先 `auth.login` 换 token，token 在 `data.token`;默认 NimBLE 主机栈,可回退 Bluedroid;经典蓝牙 / SPP 已于 v1.2 移除(CONFIG_BT_CLASSIC_ENABLED=n)。
+Web/HTTP 与 Classic Bluetooth/SPP 的移除是面向有限 RAM/heap 的产品取舍，不是等待启用的功能开关。当前不要再按旧版规划把 Web 或 SPP 当作后续待办通道。
 
-## 软件架构概览
+## 功能与命令
 
-固件采用分层、双控制入口与控制面/数据面分离的结构：
+- **统一命令层**：BLE 和 MQTT 通过 `cmd_context`、来源策略与统一分发入口执行设备命令；底层 Wi-Fi、配置、GPIO、UART、operation 等模块仍各自拥有业务状态和资源。
+- **设备与状态读取**：`device.info`、`device.status`、`network.status`、`gpio.status`、`uart.runtime`。
+- **配置管理**：`config.get`、`config.set`；读取按 domain 过滤并脱敏。写入走配置应用/事务路径，不由 BLE 或 MQTT 传输代码直接写 NVS。
+- **GPIO 控制**：`io.get`、`io.set`、`led.set/toggle`、`relay.set/toggle`。触摸输入事件复用同一设备控制逻辑；引脚默认值来自 Kconfig。
+- **网络管理**：`network.status`、`network.scan`、`network.profile.list/delete`、`network.reconnect`、`network.tryconnect/apply/cancel`、`operation.get`。扫描、profile 管理和手动重连为 BLE 本地管理能力；MQTT 远程网络事务受独立编译门禁保护，默认构建不应视为已开放远程换网。
+- **UART**：`uart.send`、`uart.runtime`；UART1 是工业数据端口，不作为第二条独立命令解析通道。UART RX 必须遵守单一读者原则。
+- **链路诊断**：`data.loopback` 用于 BLE 数据通道诊断，不是 MQTT 远程控制功能。
+- **恢复出厂**：BOOT(GPIO0) 长按触发本地恢复流程；现场恢复能力不依赖 Web 门户。
 
-```text
-ThingsBoard MQTT（云端命令 / 遥测 / attributes）
-                  |
-BLE NUS（本地管理）| 统一 v1 命令协议
-                  v
-       command context / policy / dispatch
-                  |
-     +------------+-------------+
-     |            |             |
-  配置与事务    设备控制       状态查询
-  Wi-Fi/OTA     GPIO/UART      device/network
-     |            |             |
-     +------ ESP-IDF / FreeRTOS +
-                  |
-       NVS / Wi-Fi / NimBLE / MQTT
-                  |
-      data_pipe：UART / BLE / MQTT
+### 外部命令协议
+
+BLE CMD 与 ThingsBoard MQTT RPC 使用项目自己的 v1 JSON envelope：
+
+```json
+{
+  "id": "request-id",
+  "version": "1.0",
+  "cmd": "device.status",
+  "args": {}
+}
 ```
 
-- **控制面**：BLE NUS 与 ThingsBoard MQTT 共用 v1 命令语义；命令来源通过 context 参与权限策略判断。
-- **网络事务**：Wi-Fi tryconnect/apply/cancel 采用异步 operation，维护 owner、operation 状态、trial、联网验证和 cleanup。
-- **数据面**：`data_pipe` 负责 UART/BLE/MQTT 数据路由；不与命令 JSON 通道混为一体。
-- **配置面**：配置结构、Wi-Fi profile 和运行态配置应用由各自模块管理；配置事务 guard 用于串行化配置变更。
-- **设备能力**：GPIO、UART、BLE、MQTT、OTA 分别由专用模块实现，命令层负责协调而不应取代底层模块。
-- **资源约束**：ESP32 内存有限，异步任务、队列、JSON 构建和锁持有时间均需纳入资源与并发审查。
+- 仅接受 v1 封装；旧版 v0 `method/params`、旧方法别名和 `APP_CMD_V0_COMPAT` 回退路径已删除。
+- `id` 用于请求/响应关联；成功结果与错误按当前 v1 命令协议返回。
+- `auth.login` 仅用于 BLE 本地会话；登录 token 是应用层鉴权，不等同于 BLE 链路加密。
+- MQTT 传输使用 ThingsBoard RPC topic（`v1/devices/me/rpc/request/+`）或自定义后端 topic。MQTT 可执行哪些命令由固件的 v1 命令表和来源策略共同决定，不应把“MQTT 已连接”理解为拥有 BLE 全部权限。
 
-当前命令层的详细函数职责、调用关系、锁审查和拆分建议见 [`docs/cmd.c_review_2026-11-14.md`](docs/cmd.c_review_2026-11-14.md)；后续执行顺序与验收状态见 [`docs/cmd_refactor_plan.md`](docs/cmd_refactor_plan.md)。
+## 软件架构
 
-## 硬件引脚(编译期固定,`main/constants.h`)
+控制面与数据面相互独立。控制面解释命令语义；数据面只搬运原始字节，不把工业设备帧送进 JSON 命令解析器。
 
-| 功能 | GPIO |
-| --- | --- |
-| 继电器 | 16 |
-| 状态灯 | 4 |
-| 输入检测 | 27(T7 触摸焊盘) |
-| UART1 TX / RX | 17 / 18 |
-| BOOT 键(恢复出厂) | 0 |
+```text
+                    控制面
+  BLE NUS CMD RX/TX                 ThingsBoard MQTT RPC
+   6E400004 / 005                   v1/devices/me/rpc/*
+          |                                |
+          +---------------+----------------+
+                          |
+                 command context
+              source / auth / policy
+                          |
+                  v1 command dispatch
+                          |
+         +----------------+------------------+
+         |                |                  |
+     config / NVS      Wi-Fi / operation   GPIO / UART
+     config_apply      netcheck / owner    device state
+
+
+                    数据面
+    UART1              BLE NUS Data            MQTT data topics
+  UART driver          6E400002 / 003          iothub/<MAC>/data/*
+       |                    |                       |
+       +--------------------+-----------------------+
+                            |
+                         data_pipe
+             framing / routing / bounded queue
+```
+
+- **BLE**：正常产品运行固定为 Peripheral。设备提供 NUS 服务，Data RX/TX 使用 `6E400002/003`，CMD RX/TX 使用 `6E400004/005`。源码仍保留 Central/GATTC 兼容和 A/B 测试代码，但当前产品启动流程强制收敛为 Peripheral，Central 不是正常运行模式。
+- **启动顺序**：加载配置和 operation 基础设施后先启动 BLE，再启动 Wi-Fi；因此 Wi-Fi 启动/连接故障不应阻断现场 BLE 救援。
+- **Wi-Fi 事务**：`network.tryconnect` 由异步 operation 执行，按 owner、trial、operation ID 和 cleanup 生命周期管理；不会把“STA 已关联”直接当作提交成功。
+- **联网验证**：DEF-NET-001 在候选拿到 IP 后验证 Broker TCP 路径和 MQTT 会话。当前 `got_ip` 是试连流程的联网验证就绪阶段，不只是 Wi-Fi 关联或 DHCP 成功；验证失败会进入失败清理/恢复路径。详情见网络验收报告。
+- **配置面**：配置结构、Wi-Fi profile、配置应用和事务 guard 分层管理；传输层不得绕过 `config_apply` 直接改写配置。
+- **数据面**：UART1、BLE Data 和 MQTT 作为三个数据端口，由 `data_pipe` 按 NVS 路由配置转发。队列有界；队列满时允许丢帧并记录统计，不能把它描述为无损传输。MQTT 数据面发布使用 QoS 1 和 outbox 入队机制；这不代表设备侧所有前置队列都绝不丢帧。
+- **资源约束**：默认构建针对 4 MB Flash、无 PSRAM 的 ESP32。任务栈、队列、JSON 缓冲、MQTT outbox、BLE host/GATT 和 largest free block 都是需要持续审查的资源；不要为了加功能重新引入已移除的 Web/AP 门户或 SPP 常驻负担。
+
+## 网络与 ThingsBoard
+
+- ThingsBoard 后端使用标准遥测、attributes 和 RPC topic；自定义 MQTT 后端使用项目自定义 topic。
+- MQTT 设备 client ID 由 STA MAC 派生。
+- 数据面 MQTT 主题独立于命令 RPC：`iothub/<MAC>/data/up`（设备上行）和 `iothub/<MAC>/data/down`（设备下行）；数据内容按数据面编码约定处理，不与 RPC JSON 混用。
+- 周期遥测与低优先级 attributes 会在资源/ outbox 积压时让路；RPC 响应不经过低优先级状态合并路径。
+- MQTT 网络事务命令默认受 `APP_CMD_MQTT_NET_TXN_ENABLE` 编译门禁控制；仅在明确的测试/授权构建中启用，不要把规划稿中的远程换网能力当成默认产品能力。
+
+## OTA 与分区
+
+OTA 当前有两部分能力：
+
+1. 双 OTA app 分区和 bootloader rollback 支持；
+2. 新镜像启动后的健康确认：在限定窗口内检查 STA/MQTT 健康状态，确认有效或触发回滚。
+
+当前没有 HTTP 上传、网页资源、MQTT 文件下载或 BLE 固件传输实现。**不能仅凭双 OTA 分区和回滚确认代码宣称设备已经具备可用的远程 OTA 升级链路。** 新传输方案需要单独设计、实现和验收。
+
+当前 `partitions.csv`：
+
+| 分区 | Offset | Size |
+|---|---:|---:|
+| nvs | `0x9000` | 16 KiB |
+| otadata | `0xD000` | 8 KiB |
+| phy_init | `0xF000` | 4 KiB |
+| ota_0 | `0x10000` | `0x1E0000` = 1.875 MiB |
+| ota_1 | `0x1F0000` | `0x1E0000` = 1.875 MiB |
+| storage | `0x3D0000` | `0x10000` = 64 KiB（当前无 Web/LittleFS 资源镜像） |
+| coredump | `0x3E0000` | 32 KiB |
 
 ## 构建与烧录
 
-推荐用仓库内的统一入口 —— 它会自动定位 ESP-IDF / 工具链 / venv,并把 `ninja` 放进 PATH
-(否则 ESP-IDF 会回落到 `make` 并报生成器不匹配),同时**自动清理**被 VS Code CMake 扩展污染的 `build/` 缓存:
+推荐使用仓库构建入口。脚本优先使用环境变量 `IDF_PATH`，未设置时尝试从 `~/.espressif/v*/esp-idf` 定位 ESP-IDF，并显式配置工具链、Python venv 和 Ninja：
 
 ```bash
-tools/idfbuild.sh              # 默认 profile = NimBLE(1.3-62 起,稳定性优先)
-tools/idfbuild.sh flash        # 烧录(可后接 -p /dev/ttyUSB0 等 idf.py 参数)
+tools/idfbuild.sh              # 默认 NimBLE profile，执行 build
+tools/idfbuild.sh flash        # 烧录（可附加 -p /dev/ttyUSB0 等 idf.py 参数）
 tools/idfbuild.sh monitor
-tools/idfbuild.sh paths        # 自检:ninja / cmake / toolchain / idf.py / python 的定位结果
-tools/idfbuild.sh cache-guard  # 仅清理生成器不匹配的 build/ 缓存
+tools/idfbuild.sh paths        # 查看 ninja / cmake / toolchain / idf.py / python 定位
+tools/idfbuild.sh cache-guard  # 检查/清理生成器不匹配的 build 缓存
+tools/idfbuild.sh version      # 显示使用的 ESP-IDF 版本
 ```
 
-GPIO 引脚由 Kconfig 统一配置（`main/Kconfig.projbuild` → `Iothub Configuration` → `GPIO pin assignment`），默认继电器 16、状态灯 4、输入 27(触摸 T7)。换脚只需菜单配置/修改 `sdkconfig` 后重新构建烧录，不需要改 `state.c` 或其它源码；GPIO34–39 不能作为输出，构建期会拒绝。
-
-默认 BT 主机栈为 **NimBLE**。需要回退 Bluedroid 时用独立的回退 profile:
+当前根 `sdkconfig` 使用 NimBLE。仓库保留独立 `build-bluedroid` profile 作为构建回退路径；它不是默认产品运行配置。使用回退 profile：
 
 ```bash
 IDF_BUILD_DIR=build-bluedroid tools/idfbuild.sh build
 IDF_BUILD_DIR=build-bluedroid tools/idfbuild.sh flash -p /dev/ttyUSB0
 ```
 
-回退 profile 以 `sdkconfig.bluedroid` 为完整种子(保留 ACL=1 / SMP 关 / GATT profiles=4 等裁剪),
-构建结束会自动恢复根 `sdkconfig` 的 NimBLE 配置;不要用 `idf.py -B <其他目录>` 直接构建,
-避免把 profile 配置写回根文件。
-
-等价的原生命令(需自行保证环境已激活、`ninja` 在 PATH 中):
+等价原生命令（需自行激活 ESP-IDF 环境并确保 Ninja 在 PATH 中）：
 
 ```bash
 idf.py set-target esp32
@@ -94,48 +145,41 @@ idf.py build
 idf.py -p PORT flash monitor
 ```
 
-## 分区表(`partitions.csv`)
+GPIO 默认值由 `main/Kconfig.projbuild` 配置并写入 `sdkconfig`：继电器 GPIO16、状态灯 GPIO4、输入 GPIO27（默认启用触摸输入）。UART1 使用 TX GPIO17 / RX GPIO18。调整引脚前必须核对 ESP32 模组实际引脚能力、Flash/PSRAM 占用和板级电路；GPIO34–39 仅输入，不能配置为输出。
 
-nvs 16K / otadata / phy / **ota_0 + ota_1 各 1.9375MB(双 OTA)** / storage(原网页资源分区,现未使用)32KB / coredump 32KB。
+## 首次使用（BLE 本地管理）
 
-> 布局要点(2026-10-08):APP 分区偏移必须 64K 对齐(`gen_esp32part.py`);storage 分区现在不再有 LittleFS 镜像,仅保留占位,后续可单独回收。
+1. 手机或主机扫描设备广播，连接配置的 BLE 设备名；当前固件为 NUS Peripheral。
+2. 发现 NUS 服务并订阅 CMD TX `6E400005`，向 CMD RX `6E400004` 发送 v1 `auth.login`（`args.username/password`）；成功后 token 位于响应 `data.token`。首次使用请通过受控方式修改出厂管理凭据，不要把默认口令写入公共文档或日志。
+3. 使用 `network.scan` 查看现场 AP，调用 `network.tryconnect` 创建异步 operation；通过 `operation.get` 查询阶段。联网验证就绪后，使用 `network.apply` 提交；需要中止时按 operation 状态调用 `network.cancel`。
+4. 使用 `config.get` 读取允许的配置域，使用 `config.set` 并在 `args.patch` 中提交配置变更。密码/token 只返回是否已设置，不回显明文。
+5. Wi-Fi 配置或 MQTT 配置变更后，分别确认 STA 网络、MQTT 会话和设备状态；不要把“配置已保存”误认为“远程连接已恢复”。
 
-## 首次使用（BLE-only）
+## 目录结构与文档导航
 
-1. 连接 BLE NUS 设备 `IotHubBLE-XXXX`（XXXX 为 MAC 后缀），订阅 CMD TX `6E400005`；
-2. 在 CMD RX `6E400004` 发送 v1 `auth.login`（`args.username/password`），token 在 `data.token`；默认 `admin / 123456`，可经 `auth.admin.set` 修改；
-3. 用 `network.scan` 扫描，`network.tryconnect` 创建异步事务，轮询 `operation.get` 到 `got_ip`，再用 `network.apply`（`operation_id`）提交；取消用 `network.cancel`；
-4. 用 v1 `config.set`（`args.patch`）配置 MQTT/静态 IP；BLE v1 允许 network/static 域，设备获取 STA IP 后自动连接并上报。
-
-## 目录结构
-
-```
-main/            固件源码(模块划分见各 .h 接口)
-tools/           宿主侧脚本与单测(协议/JSON 转义单测、BLE NUS/角色互换验收;**不进固件**)
-问题与版本优化.md  唯一主记录:v1.0–v1.2.1 历史 + v1.3 增量/清单 + 附录 A–E
-docs/soak_test_plan.md  全链路 soak 方案(独立)
-docs/cmd.c_review_2026-11-14.md  cmd.c 第一轮逐函数审查
-docs/cmd_refactor_plan.md  cmd.c 优化跟进与验收计划
-docs/archive/     原始日志/历史归档(只读留证)
+```text
+main/             ESP-IDF 固件源码（命令、BLE、Wi-Fi、MQTT、UART、data_pipe、operation、OTA 等）
+tools/            构建入口、BLE/主机侧工具、测试与证据采集脚本（不编入固件）
+tests/            宿主侧单元/门禁测试
+docs/             架构审查、测试方案、验收报告和证据索引
+问题与版本优化.md 版本演进与问题主记录
 ```
 
-## 文档导航
+- **版本/问题主记录**：`问题与版本优化.md`。
+- **全链路 soak 计划**：[`docs/soak_test_plan.md`](docs/soak_test_plan.md)。
+- **命令层审查**：[`docs/cmd.c_review_2026-11-14.md`](docs/cmd.c_review_2026-11-14.md)。
+- **命令层跟进计划**：[`docs/cmd_refactor_plan.md`](docs/cmd_refactor_plan.md)。
+- 原始日志和历史证据见 `docs/archive/` 与 `docs/evidence/`；计划状态和硬件实测状态以各专项文档为准。
 
-- **唯一主记录**:`问题与版本优化.md` —— v1.0–v1.2.1 历史、v1.3 增量与当前推进清单、附录 A NimBLE 评估、B 串口抓包、C 已解决索引、D UART 调试、E 手机验收测试卡。
-- **独立方案**:`docs/soak_test_plan.md`(全链路 soak;具体执行状态以该文档为准)。
-- **cmd.c 审查**:[`docs/cmd.c_review_2026-11-14.md`](docs/cmd.c_review_2026-11-14.md)(函数职责、调用关系、锁、重复逻辑和拆分方案)。
-- **cmd.c 优化跟进**:[`docs/cmd_refactor_plan.md`](docs/cmd_refactor_plan.md)(任务状态、阶段计划和验收门槛)。
-- **原始归档**:`docs/archive/`(日志/代码,只读留证)。
+## 已知限制与安全提示
 
-## 已知问题与安全提示
-
-- **BLE 链路无链路加密，登录 token 是应用层鉴权**。首启默认口令必须修改；NVS 中 WiFi/MQTT/管理凭据保持明文，设备需物理受控。TLS/NVS 加密按既有决定不排期，MQTT 可选 TLS 不受影响。
-- UART RX 电气层问题排查记录见 `问题与版本优化.md` 附录 D;
-- B 板在高负载下曾出现一次 WiFi/IP 失联(BLE/CMD 仍存活,heap 健康),重新插拔 USB 后 115200/9600 各 1h 未复现;保留后续观察(24h 按当前安排暂缓,1.3-77/78/79)。
-- Web/HTTP/captive 已删除；C 65D8 在 STA-only + MQTT 下稳态 heap≈55KB、largest≈49KB，BLE+MQTT+worker 峰值已重新获得余量。
-- BLE 真机四态(RX/TX/CMD RX/CMD TX)尚未执行;断连重广播、A/B 双向角色互换(1.3-78/81)已通过,手机 nRF Connect 步骤见 `docs/soak_test_plan.md` §2.4,另一台 Ubuntu 的角色互换/数据面/回传执行包见 §2.5。
-- MQTT 数据面旧实现误用 `esp_mqtt_client_enqueue` 的 QoS0/store=false(返回 -1、未真正入队),导致实际漏发远大于 `dropped_mqtt` 记录的 2%;已改 QoS1/store=true,1KB/s 负载 6min 0 丢、outbox 0(1.3-82)。
+- **BLE 当前未启用链路加密/绑定**；`auth.login` token 只是应用层鉴权，不能替代链路加密。部署时应限制物理接近范围，并在正式使用前更换出厂管理凭据。
+- NVS 中 Wi-Fi/MQTT/管理凭据目前没有启用 NVS encryption；不得把可读取 NVS 的设备视为凭据保密。
+- MQTT TLS 可按配置启用；使用明文 MQTT 时，网络路径上的凭据与命令缺少传输层机密性保护。
+- SPP、Web/HTTP、captive portal 和 Web OTA 均不属于当前产品能力；不要依据旧版规划文档或残留常量推断这些功能仍可用。
+- OTA 传输尚未接入；新镜像健康确认/回滚不等于完整 OTA 下载和升级流程。
+- 资源数值必须结合具体板型、固件 SHA、运行场景与日志记录；README 不给出跨构建通用的 heap 保证值。
 
 ## 测试凭据管理
 
-测试设备 Token、Wi-Fi 密码和管理口令不得提交到公开 README 或其他公开文档。请通过设备本地配置、受控的环境变量或不纳入版本控制的本地文件管理；曾经公开过的凭据应视为已泄露并轮换。
+测试设备 Token、Wi-Fi 密码、管理员口令、私钥和证书不得提交到公开仓库或 README。通过设备本地配置、受控环境变量或不纳入版本控制的文件管理；曾经公开过的凭据应视为已泄露并轮换。
