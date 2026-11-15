@@ -213,6 +213,8 @@ def main():
                     help="日志新鲜度上限（秒），超龄视为映射证据过期")
     ap.add_argument("--emit-anchor", required=False,
                     help="输出本轮回滚锚点 JSON（供 rollback_gate 使用）")
+    ap.add_argument("--mac-record", required=False,
+                    help="步骤 0 的芯片 MAC 记录（--emit-anchor 时必填）")
     args = ap.parse_args()
 
     if args.port not in ("/dev/ttyUSB0", "/dev/ttyUSB1"):
@@ -342,12 +344,26 @@ def main():
         return 1
 
     if args.emit_anchor:
+        import port_identity as PI
+
+        if not args.mac_record:
+            print("[FAIL] --emit-anchor 必须同时提供 --mac-record（锚点不得静默写入 mac=null）")
+            return 2
+        ok_rec, mac_or_err, rec = PI.load_mac_record(
+            args.mac_record, args.port, args.log_dir)
+        if not ok_rec:
+            print(f"[FAIL] MAC 记录校验失败：{mac_or_err}")
+            return 2
         try:
-            import port_identity as PI
-            anchor = PI.build_anchor(args.port, args.log_dir)
+            anchor = PI.build_anchor(args.port, args.log_dir, mac=mac_or_err)
+            if not anchor.get("mac_ok") or not anchor.get("mac"):
+                print("[FAIL] 锚点生成结果 mac_ok/mac 无效（拒绝写出）")
+                return 2
+            anchor["mac_record"] = str(args.mac_record)
+            anchor["mac_record_read_at"] = rec.get("read_at")
             PI.write_anchor(args.emit_anchor, anchor)
             print(f"  锚点已写出：{args.emit_anchor}  mac={anchor.get('mac')} "
-                  f"checked_at={anchor.get('checked_at')}")
+                  f"from_record={rec.get('read_at')} checked_at={anchor.get('checked_at')}")
         except Exception as exc:  # noqa: BLE001
             print(f"[FAIL] 锚点生成失败（{type(exc).__name__}: {exc}）")
             return 2

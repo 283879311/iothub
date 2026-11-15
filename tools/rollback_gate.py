@@ -24,6 +24,7 @@ read_mac 会令芯片停在下载模式；本门禁不写 Flash，随后由烧�
 
 import argparse
 import hashlib
+import json
 import subprocess
 import sys
 import time
@@ -59,13 +60,17 @@ def main():
     ap.add_argument("--expect-bin-sha256", required=True)
     ap.add_argument("--max-anchor-age-min", type=int, default=240)
     ap.add_argument("--usb-events-min", type=int, default=240)
+    ap.add_argument("--skip-restore", action="store_true",
+                    help="不恢复（仅供烧录前紧邻调用；默认恢复 app+录制）")
     ap.add_argument("--capture-ctl", default="tools/serial_capture_ctl.sh",
                     help="串口录制控制脚本（停录制以读取 MAC）")
-    ap.add_argument("--force-mac-read", action="store_true",
-                    help="即使前序检查失败也读取 MAC（诊断用）")
     args = ap.parse_args()
 
     fails = []
+    # 阈值固定：不接受放宽（只允许更严）
+    if args.max_anchor_age_min > 240 or args.usb_events_min > 240:
+        print("[FAIL] 门禁阈值不得放宽（max-anchor-age-min / usb-events-min ≤ 240）")
+        return 2
 
     def check(cond, msg):
         print(("  [ok]   " if cond else "  [FAIL] ") + msg)
@@ -82,7 +87,18 @@ def main():
         check(True, f"锚点可解析：{args.anchor_file}")
     except Exception as exc:  # noqa: BLE001
         check(False, f"锚点不可解析（{type(exc).__name__}）")
-    if anchor:
+    if anchor is not None and (not isinstance(anchor, dict) or len(anchor) == 0):
+        check(False, "锚点根对象为空或不是字典（拒绝空 {} 绕过字段校验）")
+        anchor = None
+    if anchor is not None:
+        required = {"version": int, "port": str, "log_dir": str,
+                    "mac": (str, type(None)), "checked_at_unix": (int, float)}
+        miss = [k for k in required if k not in anchor]
+        check(not miss, f"锚点字段完整（缺 {miss}）" if miss else "锚点字段完整")
+        badtype = [k for k, t in required.items()
+                   if k in anchor and not isinstance(anchor[k], t)]
+        check(not badtype, f"锚点字段类型正确（异常 {badtype}）" if badtype
+              else "锚点字段类型正确")
         try:
             age = time.time() - float(anchor.get("checked_at_unix", 0))
         except Exception:  # noqa: BLE001
@@ -118,24 +134,44 @@ def main():
     check(loginfo.get("fresh") is True, f"日志新鲜 age={loginfo.get('age_sec')}s")
     check(loginfo.get("boot_marker") is True, "日志 boot 标记")
 
-    # 4. 板卡身份（主证据）：需端口空闲 → 停录制后 read_mac
+    # 4. 板卡身份（主证据）：需端口空闲 → 停录制后 read_mac；**无论结果都恢复**
     log_path = str(Path(args.log_dir) / f"serial_{name}.log")
-    stopped = False
-    if not fails or args.force_mac_read:
+    restore_info = {"stopped": False, "mac_read": None, "run_app": None,
+                    "capture_restarted": None}
+    if not fails:
         print(f"  [step] 停录制以读取芯片 MAC：{log_path}")
         r = subprocess.run([args.capture_ctl, "stop", log_path],
                            capture_output=True, text=True)
         print(f"         {r.stdout.strip() or r.stderr.strip()}")
-        stopped = r.returncode == 0
-        check(stopped, "录制已停止（read_mac 需端口空闲）")
-    if stopped or args.force_mac_read:
-        ok_mac, mac = PI.esptool_read_mac(args.port)
-        check(ok_mac, f"esptool read_mac（{mac if ok_mac else str(mac)[:70]}）")
-        if ok_mac:
-            check(mac.lower() == EXPECT_MAC, f"MAC==65D8（{mac}）")
-            if anchor and anchor.get("mac"):
-                check(mac.lower() == str(anchor["mac"]).lower(),
-                      f"MAC==锚点（{mac} vs {anchor['mac']}）")
+        restore_info["stopped"] = (r.returncode == 0)
+        check(restore_info["stopped"], "录制已停止（read_mac 需端口空闲）")
+        if restore_info["stopped"]:
+            try:
+                ok_mac, mac = PI.esptool_read_mac(args.port)
+                restore_info["mac_read"] = mac if ok_mac else None
+                check(ok_mac, f"esptool read_mac（{mac if ok_mac else str(mac)[:70]}）")
+                if ok_mac:
+                    check(mac.lower() == EXPECT_MAC, f"MAC==65D8（{mac}）")
+                    if anchor and anchor.get("mac"):
+                        check(mac.lower() == str(anchor["mac"]).lower(),
+                              f"MAC==锚点（{mac} vs {anchor['mac']}）")
+            finally:
+                # 恢复设备与录制（默认）；--skip-restore 仅用于"紧接着烧录"场景
+                if args.skip_restore:
+                    restore_info["run_app"] = "skipped(by flag)"
+                    restore_info["capture_restarted"] = "skipped(by flag)"
+                    print("  [info] --skip-restore：保持下载模式与录制停止（紧接烧录）")
+                else:
+                    rok, rmsg = PI.esptool_run_app(args.port)
+                    restore_info["run_app"] = rok
+                    print(f"  [{'ok' if rok else 'FAIL'}] 恢复 app：{str(rmsg)[:70]}")
+                    r2 = subprocess.run([args.capture_ctl, "start", args.port, log_path],
+                                        capture_output=True, text=True)
+                    restore_info["capture_restarted"] = (r2.returncode == 0)
+                    print(f"  [{'ok' if r2.returncode == 0 else 'FAIL'}] 重启录制："
+                          f"{r2.stdout.strip() or r2.stderr.strip()}")
+                    check(rok, "读 MAC 后已恢复 app")
+                    check(r2.returncode == 0, "读 MAC 后录制已重启")
 
     # 5. dmesg 补充
     usb_ok, usb_ev = usb_events_since(args.usb_events_min)
@@ -144,6 +180,15 @@ def main():
     else:
         print(f"  [info] dmesg：{usb_ev}（补充，不否决）")
 
+    try:
+        Path("artifacts/cmd04_flash_20261115/gate_test").mkdir(parents=True, exist_ok=True)
+        Path("artifacts/cmd04_flash_20261115/gate_test/rollback_gate_last.json") \
+            .write_text(json.dumps({"restore": restore_info, "fails": fails,
+                                    "at": time.strftime("%Y-%m-%dT%H:%M:%S")},
+                                   ensure_ascii=False, indent=1), encoding="utf-8")
+    except Exception:  # noqa: BLE001
+        pass
+
     print()
     if fails:
         print(f"[STOP] 回滚门禁未通过（{len(fails)} 项）——禁止写入，恢复失败 STOP")
@@ -151,8 +196,12 @@ def main():
             print(f"       · {f}")
         return 1
     print("[OK] 回滚门禁通过（MAC+锚点+录制链+日志+BIN）")
-    print("     录制已停止、芯片在下载模式——可直接烧录（烧录自带复位）；")
-    print("     烧录完成后必须重新启动录制（serial_capture_ctl.sh start）。")
+    if args.skip_restore:
+        print("     --skip-restore：芯片在下载模式、录制停止——可立即烧录（烧录自带复位），")
+        print("     烧录后必须 serial_capture_ctl.sh start <port> <log> 重启录制")
+    else:
+        print("     已恢复：芯片回到 app、录制已重启（restore 结果见 gate 证据 JSON）")
+        print("     若随后要烧录：再停录制（记计划内 gap）→ flash_frozen.sh → 重启录制")
     return 0
 
 
