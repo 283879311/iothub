@@ -37,13 +37,49 @@ from pathlib import Path
 SERIAL_DIR = Path("artifacts/cmd04_flash_20261114/phaseA")
 
 
+def capture_chain_ok(argv, cwd, fd_targets, port, log_path):
+    """完整证据链判定（P1-4）：PID → capture_serial.py → 指定串口 → 指定日志。
+
+    argv        : /proc/<pid>/cmdline 按 NUL 拆分后的参数列表
+    cwd         : /proc/<pid>/cwd 解析结果（用于解析 argv 中的相对路径）
+    fd_targets  : 该进程所有 fd 的 readlink 结果集合
+    port        : 端口名，如 ttyUSB1（期望 /dev/ttyUSB1）
+    log_path    : 门禁正在检查的日志路径
+    返回 (ok, detail)；detail 含逐项结论，便于归档。
+    """
+    import os
+    dev = f"/dev/{port}"
+    log_real = os.path.realpath(str(log_path))
+
+    script_ok = any(str(a).endswith("capture_serial.py") for a in argv)
+    port_ok = dev in [str(a) for a in argv]
+    argv_logs = [str(a) for a in argv
+                 if str(a).endswith(".log") or "/serial_" in str(a)]
+    argv_log_real = None
+    if argv_logs:
+        a = argv_logs[-1]
+        argv_log_real = os.path.realpath(
+            a if os.path.isabs(a) else os.path.join(cwd or "", a))
+    log_arg_ok = (argv_log_real == log_real)
+
+    holds_port = dev in fd_targets
+    holds_log = log_real in fd_targets
+
+    detail = {"script_ok": script_ok, "port_arg_ok": port_ok,
+              "argv_log": argv_logs[-1] if argv_logs else None,
+              "argv_log_real": argv_log_real, "expect_log_real": log_real,
+              "log_arg_ok": log_arg_ok, "fd_holds_port": holds_port,
+              "fd_holds_log": holds_log}
+    ok = script_ok and port_ok and log_arg_ok and holds_port and holds_log
+    return ok, detail
+
+
 def inspect_capture(log_dir, port):
-    """录制活动性证据（主证据）：PID 存活 + cmdline 含 capture_serial +
-    /proc/<pid>/fd 中有指向该串口的句柄。"""
+    """录制活动性 + 目标关联（主证据）：PID 存活、argv 指向本串口与本日志、
+    fd 同时持有串口与日志文件。"""
     import os
     log = Path(log_dir) / f"serial_{port}.log"
     pidfile = Path(str(log) + ".pid")
-    dev = f"/dev/{port}"
     info = {"pidfile": str(pidfile), "pidfile_exists": pidfile.is_file()}
     if not pidfile.is_file():
         info["running"] = False
@@ -60,24 +96,27 @@ def inspect_capture(log_dir, port):
         info["running"] = False
         return info
     try:
-        cmd = (proc / "cmdline").read_bytes().replace(b"\x00", b" ").decode(
-            "utf-8", "replace")
+        argv = [x for x in (proc / "cmdline").read_bytes().split(b"\x00") if x]
+        argv = [x.decode("utf-8", "replace") for x in argv]
     except OSError:
-        cmd = ""
-    info["cmd_ok"] = ("capture_serial" in cmd) and (port in cmd)
-    fd_ok = False
+        argv = []
+    try:
+        cwd = os.readlink(proc / "cwd")
+    except OSError:
+        cwd = ""
+    fd_targets = set()
     try:
         for fd in (proc / "fd").iterdir():
             try:
-                if os.readlink(fd) == dev:
-                    fd_ok = True
-                    break
+                fd_targets.add(os.readlink(fd))
             except OSError:
                 continue
     except OSError:
-        fd_ok = False
-    info["holds_port"] = fd_ok
-    info["running"] = bool(info["cmd_ok"] and fd_ok)
+        pass
+    ok, detail = capture_chain_ok(argv, cwd, fd_targets, port, log)
+    info.update(detail)
+    info["argv"] = argv
+    info["running"] = ok
     return info
 
 
@@ -170,9 +209,12 @@ def main():
     print(f"  日志          : {loginfo.get('file')}")
     for tag, ci in (("目标端口", capinfo), ("另一端口", capother)):
         print(f"  [{tag} capture] pid={ci.get('pid')} 存活={ci.get('proc_exists')} "
-              f"cmd_ok={ci.get('cmd_ok')} 持有{args.log_dir and ''}"
-              f"端口={ci.get('holds_port')} running={ci.get('running')} "
-              f"pidfile={ci.get('pidfile_exists')}")
+              f"script_ok={ci.get('script_ok')} port_arg_ok={ci.get('port_arg_ok')} "
+              f"log_arg_ok={ci.get('log_arg_ok')} fd持端口={ci.get('fd_holds_port')} "
+              f"fd持日志={ci.get('fd_holds_log')} running={ci.get('running')}")
+        print(f"    argv={ci.get('argv')}")
+        print(f"    argv_log_real={ci.get('argv_log_real')} "
+              f"expect_log_real={ci.get('expect_log_real')}")
     for tag, li in (("目标端口", loginfo), ("另一端口", other_info)):
         print(f"  [{tag}] {li.get('file')}")
         print(f"    存在={li.get('exists')} size={li.get('size')} "
@@ -190,13 +232,16 @@ def main():
     ok = True
     # 主证据：录制进程仍存活并持有串口；mtime 只作辅助
     if not capinfo.get("running"):
-        print(f"[FAIL] 目标端口录制未运行（pid存活={capinfo.get('proc_exists')} "
-              f"cmd_ok={capinfo.get('cmd_ok')} 持端口={capinfo.get('holds_port')}）"
-              f"——映射证据不是实时采集")
+        print(f"[FAIL] 目标端口录制链不完整（存活={capinfo.get('proc_exists')} "
+              f"script={capinfo.get('script_ok')} port_arg={capinfo.get('port_arg_ok')} "
+              f"log_arg={capinfo.get('log_arg_ok')} fd端口={capinfo.get('fd_holds_port')} "
+              f"fd日志={capinfo.get('fd_holds_log')}）——PID→进程→串口→日志 未闭合")
         ok = False
     if not capother.get("running"):
-        print(f"[FAIL] 另一端口录制未运行（pid存活={capother.get('proc_exists')} "
-              f"cmd_ok={capother.get('cmd_ok')} 持端口={capother.get('holds_port')}）")
+        print(f"[FAIL] 另一端口录制链不完整（存活={capother.get('proc_exists')} "
+              f"script={capother.get('script_ok')} port_arg={capother.get('port_arg_ok')} "
+              f"log_arg={capother.get('log_arg_ok')} fd端口={capother.get('fd_holds_port')} "
+              f"fd日志={capother.get('fd_holds_log')}）")
         ok = False
     if not loginfo.get("exists"):
         print("[FAIL] 日志文件不存在（本次会话未采集）")
