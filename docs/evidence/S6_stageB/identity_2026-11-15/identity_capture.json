@@ -1,0 +1,513 @@
+{
+ "version": 1,
+ "address": "10:97:BD:D3:65:DA",
+ "scope": "read-only identity capture",
+ "cmds": [
+  "device.info",
+  "device.status",
+  "network.status",
+  "config.get"
+ ],
+ "gap_s": 20.0,
+ "rounds": [
+  {
+   "tag": "round1",
+   "at_unix": 1794744153,
+   "at": "2026-11-15T20:02:33",
+   "responses": {
+    "device.info": {
+     "ok": true,
+     "obj": {
+      "id": "device.info-2",
+      "ok": true,
+      "data": {
+       "model": "iothub",
+       "firmware": "1.3-94df45a",
+       "build_sha": "a7e04b6a9",
+       "device_id": "IotHub-65D8",
+       "build_variant": "mqtt_net_txn=on",
+       "protocol_versions": [
+        "1.0"
+       ],
+       "security": {
+        "link_encrypted": false,
+        "bonded": false,
+        "l2_ready": false,
+        "sensitive_writes_allowed": false
+       }
+      }
+     },
+     "raw_len": 296
+    },
+    "device.status": {
+     "ok": true,
+     "obj": {
+      "id": "device.status-3",
+      "ok": true,
+      "data": {
+       "model": "iothub",
+       "firmware": "1.3-94df45a",
+       "build_sha": "a7e04b6a9",
+       "device_id": "IotHub-65D8",
+       "uptime_ms": 2518777,
+       "reset_reason": "poweron",
+       "heap": {
+        "free": 41692,
+        "min_free": 34240,
+        "largest": 36864,
+        "internal_largest": 36864
+       },
+       "stack": {
+        "min_free": 976,
+        "min_task": "IDLE1",
+        "low": "tcpip=2016B mqtt_telemetry=1640B mqtt_boost=1308B mqtt_restart=1820B app_diag=1716B Tmr Svc=1660B IDLE0=980B IDLE1=976B"
+       },
+       "ble": {
+        "advertising": false,
+        "connected": true,
+        "mtu": 256,
+        "adv_retry_count": 0,
+        "runtime_mode": 1,
+        "last_error": "",
+        "conn_find": 0,
+        "rx_age_ms": 13
+       },
+       "mqtt": {
+        "connected": true,
+        "connecting": false,
+        "last_error": "",
+        "outbox": 0,
+        "telemetry_shed": 0
+       },
+       "partition": {
+        "label": "ota_0",
+        "address": 65536,
+        "size": 1966080,
+        "used": 1175632,
+        "free": 790448,
+        "flash_total": 4194304,
+        "ota_state": "valid"
+       },
+       "network": {
+        "sta_connected": true,
+        "sta_has_ip": true,
+        "sta_ip": "192.168.1.45",
+        "last_disconnect": "none",
+        "connected_ssid": "CMCC-502",
+        "connected_profile": 0,
+        "internet_verified": true,
+        "net_verify_stage": "mqtt",
+        "nc_tcp_fails_last": 0,
+        "nc_tcp_last_errno": 0,
+        "rssi": -51,
+        "channel": 8,
+        "bssid": "5c:c0:a0:bd:f6:28",
+        "rssi_valid": true,
+        "sta_ssid": "CMCC-502",
+        "password_set": true,
+        "mode": "sta",
+        "persistent_use_static": false,
+        "persistent_static_ip": "",
+        "cfg_state": "dhcp",
+        "mqtt_connected": true,
+        "mqtt_last_error": "",
+        "trial": {
+         "state": "idle"
+        }
+       }
+      }
+     },
+     "raw_len": 1304
+    },
+    "network.status": {
+     "ok": true,
+     "obj": {
+      "id": "network.status-4",
+      "ok": true,
+      "data": {
+       "sta_connected": true,
+       "sta_has_ip": true,
+       "sta_ip": "192.168.1.45",
+       "last_disconnect": "none",
+       "connected_ssid": "CMCC-502",
+       "connected_profile": 0,
+       "internet_verified": true,
+       "net_verify_stage": "mqtt",
+       "nc_tcp_fails_last": 0,
+       "nc_tcp_last_errno": 0,
+       "rssi": -61,
+       "channel": 8,
+       "bssid": "5c:c0:a0:bd:f6:28",
+       "rssi_valid": true,
+       "sta_ssid": "CMCC-502",
+       "password_set": true,
+       "mode": "sta",
+       "persistent_use_static": false,
+       "persistent_static_ip": "",
+       "cfg_state": "dhcp",
+       "mqtt_connected": true,
+       "mqtt_last_error": "",
+       "trial": {
+        "state": "idle"
+       }
+      }
+     },
+     "raw_len": 544
+    },
+    "config.get": {
+     "ok": true,
+     "obj": {
+      "id": "config.get-5",
+      "ok": true,
+      "data": {
+       "network": {
+        "net_mode": "sta",
+        "sta_ssid": "CMCC-502",
+        "sta_password_set": true,
+        "sta_use_static": false,
+        "sta_static_ip": "",
+        "sta_static_gateway": "",
+        "sta_static_netmask": "",
+        "sta_static_dns1": "",
+        "sta_static_dns2": "",
+        "sta_connected": true,
+        "sta_has_ip": true,
+        "sta_ip": "192.168.1.45",
+        "last_disconnect": "none"
+       },
+       "mqtt": {
+        "mqtt_backend": "tb_selfhost",
+        "mqtt_host": "139.9.93.245",
+        "mqtt_port": 21883,
+        "mqtt_use_tls": false,
+        "mqtt_token_set": true,
+        "connected": true,
+        "publish_count": 262,
+        "outbox": 0,
+        "last_error": ""
+       },
+       "bluetooth": {
+        "bt_role": "ble",
+        "bt_device_name": "IotHubBLE-65D8",
+        "runtime_mode": "ble",
+        "adv_active": false,
+        "connected": true,
+        "adv_retry_count": 0,
+        "last_error": ""
+       },
+       "uart": {
+        "uart_baudrate": 115200,
+        "uart_data_bits": 8,
+        "uart_stop_bits": 1,
+        "uart_parity_mode": "none",
+        "uart_rx_gpio": 18,
+        "uart_tx_gpio": 17
+       },
+       "gpio": {
+        "relay_on": false,
+        "led_on": false,
+        "relay_power_policy": 0,
+        "led_power_policy": 0,
+        "relay_active_high": true,
+        "led_active_high": true,
+        "input_active_low": true,
+        "input_active": false,
+        "io_seq": 18,
+        "relay_gpio": 16,
+        "led_gpio": 4,
+        "input_gpio": 27
+       },
+       "web": {
+        "username": "admin"
+       }
+      }
+     },
+     "raw_len": 1076
+    }
+   }
+  },
+  {
+   "tag": "round2",
+   "at_unix": 1794744177,
+   "at": "2026-11-15T20:02:57",
+   "responses": {
+    "device.info": {
+     "ok": true,
+     "obj": {
+      "id": "device.info-6",
+      "ok": true,
+      "data": {
+       "model": "iothub",
+       "firmware": "1.3-94df45a",
+       "build_sha": "a7e04b6a9",
+       "device_id": "IotHub-65D8",
+       "build_variant": "mqtt_net_txn=on",
+       "protocol_versions": [
+        "1.0"
+       ],
+       "security": {
+        "link_encrypted": false,
+        "bonded": false,
+        "l2_ready": false,
+        "sensitive_writes_allowed": false
+       }
+      }
+     },
+     "raw_len": 296
+    },
+    "device.status": {
+     "ok": true,
+     "obj": {
+      "id": "device.status-7",
+      "ok": true,
+      "data": {
+       "model": "iothub",
+       "firmware": "1.3-94df45a",
+       "build_sha": "a7e04b6a9",
+       "device_id": "IotHub-65D8",
+       "uptime_ms": 2542627,
+       "reset_reason": "poweron",
+       "heap": {
+        "free": 41564,
+        "min_free": 34240,
+        "largest": 36864,
+        "internal_largest": 36864
+       },
+       "stack": {
+        "min_free": 976,
+        "min_task": "IDLE1",
+        "low": "tcpip=2016B mqtt_telemetry=1640B mqtt_boost=1308B mqtt_restart=1820B app_diag=1716B Tmr Svc=1660B IDLE0=980B IDLE1=976B"
+       },
+       "ble": {
+        "advertising": false,
+        "connected": true,
+        "mtu": 256,
+        "adv_retry_count": 0,
+        "runtime_mode": 1,
+        "last_error": "",
+        "conn_find": 0,
+        "rx_age_ms": 14
+       },
+       "mqtt": {
+        "connected": true,
+        "connecting": false,
+        "last_error": "",
+        "outbox": 0,
+        "telemetry_shed": 0
+       },
+       "partition": {
+        "label": "ota_0",
+        "address": 65536,
+        "size": 1966080,
+        "used": 1175632,
+        "free": 790448,
+        "flash_total": 4194304,
+        "ota_state": "valid"
+       },
+       "network": {
+        "sta_connected": true,
+        "sta_has_ip": true,
+        "sta_ip": "192.168.1.45",
+        "last_disconnect": "none",
+        "connected_ssid": "CMCC-502",
+        "connected_profile": 0,
+        "internet_verified": true,
+        "net_verify_stage": "mqtt",
+        "nc_tcp_fails_last": 0,
+        "nc_tcp_last_errno": 0,
+        "rssi": -61,
+        "channel": 8,
+        "bssid": "5c:c0:a0:bd:f6:28",
+        "rssi_valid": true,
+        "sta_ssid": "CMCC-502",
+        "password_set": true,
+        "mode": "sta",
+        "persistent_use_static": false,
+        "persistent_static_ip": "",
+        "cfg_state": "dhcp",
+        "mqtt_connected": true,
+        "mqtt_last_error": "",
+        "trial": {
+         "state": "idle"
+        }
+       }
+      }
+     },
+     "raw_len": 1304
+    },
+    "network.status": {
+     "ok": true,
+     "obj": {
+      "id": "network.status-8",
+      "ok": true,
+      "data": {
+       "sta_connected": true,
+       "sta_has_ip": true,
+       "sta_ip": "192.168.1.45",
+       "last_disconnect": "none",
+       "connected_ssid": "CMCC-502",
+       "connected_profile": 0,
+       "internet_verified": true,
+       "net_verify_stage": "mqtt",
+       "nc_tcp_fails_last": 0,
+       "nc_tcp_last_errno": 0,
+       "rssi": -51,
+       "channel": 8,
+       "bssid": "5c:c0:a0:bd:f6:28",
+       "rssi_valid": true,
+       "sta_ssid": "CMCC-502",
+       "password_set": true,
+       "mode": "sta",
+       "persistent_use_static": false,
+       "persistent_static_ip": "",
+       "cfg_state": "dhcp",
+       "mqtt_connected": true,
+       "mqtt_last_error": "",
+       "trial": {
+        "state": "idle"
+       }
+      }
+     },
+     "raw_len": 544
+    },
+    "config.get": {
+     "ok": true,
+     "obj": {
+      "id": "config.get-9",
+      "ok": true,
+      "data": {
+       "network": {
+        "net_mode": "sta",
+        "sta_ssid": "CMCC-502",
+        "sta_password_set": true,
+        "sta_use_static": false,
+        "sta_static_ip": "",
+        "sta_static_gateway": "",
+        "sta_static_netmask": "",
+        "sta_static_dns1": "",
+        "sta_static_dns2": "",
+        "sta_connected": true,
+        "sta_has_ip": true,
+        "sta_ip": "192.168.1.45",
+        "last_disconnect": "none"
+       },
+       "mqtt": {
+        "mqtt_backend": "tb_selfhost",
+        "mqtt_host": "139.9.93.245",
+        "mqtt_port": 21883,
+        "mqtt_use_tls": false,
+        "mqtt_token_set": true,
+        "connected": true,
+        "publish_count": 264,
+        "outbox": 0,
+        "last_error": ""
+       },
+       "bluetooth": {
+        "bt_role": "ble",
+        "bt_device_name": "IotHubBLE-65D8",
+        "runtime_mode": "ble",
+        "adv_active": false,
+        "connected": true,
+        "adv_retry_count": 0,
+        "last_error": ""
+       },
+       "uart": {
+        "uart_baudrate": 115200,
+        "uart_data_bits": 8,
+        "uart_stop_bits": 1,
+        "uart_parity_mode": "none",
+        "uart_rx_gpio": 18,
+        "uart_tx_gpio": 17
+       },
+       "gpio": {
+        "relay_on": false,
+        "led_on": false,
+        "relay_power_policy": 0,
+        "led_power_policy": 0,
+        "relay_active_high": true,
+        "led_active_high": true,
+        "input_active_low": true,
+        "input_active": false,
+        "io_seq": 18,
+        "relay_gpio": 16,
+        "led_gpio": 4,
+        "input_gpio": 27
+       },
+       "web": {
+        "username": "admin"
+       }
+      }
+     },
+     "raw_len": 1076
+    }
+   }
+  }
+ ],
+ "console": [
+  {
+   "path": "artifacts/cmd04_flash_20261114/phaseA/serial_ttyUSB1.log",
+   "size": 2271177,
+   "mtime_unix": 1794744152.5375185,
+   "total_lines": 34596,
+   "at_unix": 1794744153,
+   "uptime_ms": 2516892,
+   "uptime_line": 31283,
+   "uptime_tail": "I (1432) uart: ALREADY NULL",
+   "boot_marker_line": 30508,
+   "boot_uptime_ms": 31522,
+   "client_id": "iothub-1097BDD365D8",
+   "client_id_line": 30680,
+   "elf_sha": "a7e04b6a9",
+   "elf_sha_line": 30547
+  },
+  {
+   "path": "artifacts/cmd04_flash_20261114/phaseA/serial_ttyUSB1.log",
+   "size": 2275880,
+   "mtime_unix": 1794744176.5576375,
+   "total_lines": 34693,
+   "at_unix": 1794744177,
+   "uptime_ms": 2540172,
+   "uptime_line": 31380,
+   "uptime_tail": "I (802) BTDM_INIT: BT controller compile version [919c7f4]",
+   "boot_marker_line": 30508,
+   "boot_uptime_ms": 31522,
+   "client_id": "iothub-1097BDD365D8",
+   "client_id_line": 30680,
+   "elf_sha": "a7e04b6a9",
+   "elf_sha_line": 30547
+  }
+ ],
+ "dims": [
+  {
+   "dim": "1_ble_addr",
+   "ok": true,
+   "detail": "10:97:BD:D3:65:DA"
+  },
+  {
+   "dim": "2_device_id",
+   "ok": true,
+   "detail": "IotHub-65D8 / IotHub-65D8"
+  },
+  {
+   "dim": "3_build_sha",
+   "ok": true,
+   "detail": "rounds=a7e04b6a9/a7e04b6a9 console=a7e04b6a9/a7e04b6a9"
+  },
+  {
+   "dim": "4_port_mapping",
+   "ok": true,
+   "detail": "client_id=iothub-1097BDD365D8@30680 / iothub-1097BDD365D8@30680"
+  },
+  {
+   "dim": "5_boot_session",
+   "ok": true,
+   "detail": "boot_line=30508/30508 Δu=23.3s Δwall=24s"
+  },
+  {
+   "dim": "6_network_mqtt",
+   "ok": true,
+   "detail": "(True, 'CMCC-502', '192.168.1.45') / (True, 'CMCC-502', '192.168.1.45')"
+  }
+ ],
+ "ok": true
+}

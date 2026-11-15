@@ -427,7 +427,8 @@ def capture_state(port, log_path=None, lock_path=None, scanner=None):
 FINAL_EVIDENCE_NAME = "mac_read_flow.final.json"
 EVIDENCE_MAX_AGE_MIN = 240        # 固定阈值，不接受放宽
 EVIDENCE_PRODUCTS = ("mac_read_flow.final.json", "mac_read_flow.json",
-                     "mac_record_gate.json", "rollback_gate_last.json")
+                     "mac_record_gate.json", "rollback_gate_last.json",
+                     "rollback_recovery.json")
 
 
 def evidence_dir_stale(evidence_dir):

@@ -770,6 +770,130 @@ def test_chain_exception(tmp):
        str(ev.get("errors")))
 
 
+FAKE_HOLDER = """#!/bin/sh
+exec 9>>"$1"
+flock -n 9 || exit 1
+exec sleep 60      # exec：持锁进程 == 记录的 PID，kill 即释放
+"""
+
+FAKE_CTL = r"""#!/bin/sh
+LOCK="$FAKE_LOCK"; HOLD="$FAKE_HOLD"
+case "$1" in
+start)
+  [ "${FAKE_START_FAIL:-0}" = "1" ] && exit 1
+  if flock -n "$LOCK" -c true 2>/dev/null; then
+    "$HOLD" "$LOCK" >/dev/null 2>&1 &   # helper 自己持锁，$! 即持锁进程
+    echo $! > "$LOCK.holder"
+    exit 0
+  fi
+  exit 1
+  ;;
+stop)
+  [ -f "$LOCK.holder" ] && kill "$(cat "$LOCK.holder")" 2>/dev/null
+  rm -f "$LOCK.holder"
+  exit "${FAKE_STOP_RC:-0}"
+  ;;
+esac
+exit 2
+"""
+
+
+def test_capture_guard(tmp):
+    print("[I] capture_guard：烧录失败/中断后必须恢复采集")
+    port = "/dev/ttyFAKE_G"
+    log = str(tmp / "guard.log"); Path(log).write_text("x")
+    lockf = PI.port_lock_path(port)
+    ctl = str(tmp / "fake_ctl.sh")
+    hold = str(tmp / "fake_holder.sh")
+    Path(ctl).write_text(FAKE_CTL); os.chmod(ctl, 0o755)
+    Path(hold).write_text(FAKE_HOLDER); os.chmod(hold, 0o755)
+    env = {**os.environ, "FAKE_LOCK": lockf, "FAKE_HOLD": hold}
+
+    def holder_start():
+        if running():
+            return
+        subprocess.run([ctl, "start", port, log], env=env, check=True)
+        time.sleep(0.4)
+
+    def holder_stop():
+        subprocess.run([ctl, "stop", port, log], env=env)
+        time.sleep(0.2)
+
+    def running():
+        r = subprocess.run(["flock", "-n", lockf, "-c", "true"],
+                           capture_output=True)
+        return r.returncode != 0          # 取不到锁 = 有进程持有 = 采集在跑
+
+    def guard(cmd, evid=None, extra=None):
+        args = [str(ROOT / "tools" / "capture_guard.sh"), port, log, ctl]
+        if evid:
+            args += ["--evidence", evid]
+        args += ["--"] + cmd
+        e = dict(env); e.update(extra or {})
+        return subprocess.run(args, capture_output=True, text=True,
+                              timeout=90, env=e)
+
+    def ev(path):
+        try:
+            return json.loads(Path(path).read_text(encoding="utf-8"))
+        except Exception:  # noqa: BLE001
+            return {}
+
+    try:
+        # I1 采集在跑、命令不碰采集 → 不重启、rc 保持
+        holder_start()
+        e1 = str(tmp / "i1.json")
+        r = guard(["true"], e1)
+        d = ev(e1)
+        ck("I1 命令未停采集 → rc=0、无需重启、锁仍在",
+           r.returncode == 0 and d.get("capture_restored") is True
+           and d.get("restart_rc") is None and running(), f"{r.returncode} {d}")
+
+        # I2 stop 后命令失败(rc=3) → guard 必须重启采集，rc 保持 3
+        holder_start()
+        e2 = str(tmp / "i2.json")
+        r = guard(["sh", "-c", f'"{ctl}" stop "{port}" "{log}"; exit 3'], e2)
+        d = ev(e2)
+        ck("I2 停采集后失败 → 采集被恢复、rc=3 保留",
+           r.returncode == 3 and d.get("capture_restored") is True
+           and d.get("restart_rc") == 0 and running(), f"{r.returncode} {d}")
+
+        # I3 stop 后 **重启失败** → 必须明确失败 rc=9，不得宣称成功
+        holder_start()
+        e3 = str(tmp / "i3.json")
+        r = guard(["sh", "-c", f'"{ctl}" stop "{port}" "{log}"'], e3,
+                  {"FAKE_START_FAIL": "1"})
+        d = ev(e3)
+        ck("I3 采集无法恢复 → rc=9 且 result=recovery_failed",
+           r.returncode == 9 and d.get("result") == "recovery_failed"
+           and d.get("capture_restored") is False, f"{r.returncode} {d}")
+
+        # I4 stop 命令报失败(rc=1)但实际已停 → guard 仍按实际状态恢复
+        holder_start()
+        e4 = str(tmp / "i4.json")
+        r = guard(["sh", "-c", f'"{ctl}" stop "{port}" "{log}"; exit 5'], e4,
+                  {"FAKE_STOP_RC": "1"})
+        d = ev(e4)
+        ck("I4 stop 报失败但已停 → 仍恢复采集、rc=5 保留",
+           r.returncode == 5 and d.get("capture_restored") is True, f"{r.returncode} {d}")
+
+        # I5 rollback_recovery.sh：门禁失败时绝不进入停采集/烧录
+        bad = tmp / "bad_anchor.json"; bad.write_text("{}")
+        rr = subprocess.run(
+            [str(ROOT / "tools" / "rollback_recovery.sh"),
+             "--log-dir", str(tmp / "no_logs"),
+             "--anchor-file", str(bad),
+             "--evidence-dir", str(tmp / "i5_ev"),
+             "--attest-no-external-holder", "test"],
+            capture_output=True, text=True, timeout=60)
+        out = rr.stdout + rr.stderr
+        ck("I5 门禁失败 → 脚本 rc=1 且未进入烧录阶段",
+           rr.returncode == 1 and "禁止烧录" in out and "capture_guard" not in out,
+           f"rc={rr.returncode} out={out[-200:]}")
+    finally:
+        holder_stop()
+
+
 def test_evidence_dir(tmp):
     print("[E] 证据目录全新性（read / rollback_gate 共用同一函数）")
     d = str(tmp / "e_new" / "nested")
@@ -803,6 +927,7 @@ def main():
         test_recovery_path(tmp)
         test_gate_recovery_wiring(tmp)
         test_chain_exception(tmp)
+        test_capture_guard(tmp)
         test_evidence_dir(tmp)
     finally:
         for p in FAKE_PORTS:
