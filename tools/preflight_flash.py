@@ -55,7 +55,16 @@ def capture_chain_ok(argv, cwd, fd_targets, port, log_path):
     # → cmdline 布局固定为 4 项：[python, capture_serial.py, /dev/ttyUSBx, <log>]
     # 必须**按位置**核验；在 argv 中"搜索"会把多余/伪装参数当成证据。
     argv = [str(x) for x in argv]
-    script_ok = len(argv) >= 2 and argv[1].endswith("capture_serial.py")
+    # 脚本身份：必须**就是**本仓库这一份 capture_serial.py（同名文件不算）
+    expected_script = os.path.realpath(
+        os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                     "capture_serial.py"))
+    script_real = None
+    if len(argv) >= 2:
+        a1 = argv[1]
+        script_real = os.path.realpath(
+            a1 if os.path.isabs(a1) else os.path.join(cwd or "", a1))
+    script_ok = (script_real == expected_script)
     port_ok = len(argv) >= 3 and argv[2] == dev
     argv_log = argv[3] if len(argv) >= 4 else None
     # 参数数量必须与脚本调用形式一致（拒绝多余/缺失）
@@ -71,6 +80,8 @@ def capture_chain_ok(argv, cwd, fd_targets, port, log_path):
     holds_log = log_real in fd_targets
 
     detail = {"argc": len(argv), "argc_ok": argc_ok,
+              "script_real": script_real,
+              "expected_script_real": expected_script,
               "script_ok": script_ok, "port_arg_ok": port_ok,
               "argv_log": argv_log, "argv_log_real": argv_log_real,
               "expect_log_real": log_real, "log_arg_ok": log_arg_ok,
@@ -194,10 +205,11 @@ def main():
                     help="日志新鲜度上限（秒），超龄视为映射证据过期")
     args = ap.parse_args()
 
-    name = Path(args.port).name
-    if name not in ("ttyUSB0", "ttyUSB1"):
-        print(f"[FAIL] 端口不在白名单（{name}）——仅接受 ttyUSB0 / ttyUSB1")
+    if args.port not in ("/dev/ttyUSB0", "/dev/ttyUSB1"):
+        print(f"[FAIL] 端口不在白名单（{args.port}）——"
+              f"仅接受完整路径 /dev/ttyUSB0 或 /dev/ttyUSB1")
         return 2
+    name = Path(args.port).name
     other = "ttyUSB1" if name == "ttyUSB0" else "ttyUSB0"
     observed_wifi, loginfo = inspect_log(args.log_dir, name, args.max_age_sec)
     other_wifi, other_info = inspect_log(args.log_dir, other, args.max_age_sec)
@@ -223,6 +235,8 @@ def main():
               f"log_arg_ok={ci.get('log_arg_ok')} fd持端口={ci.get('fd_holds_port')} "
               f"fd持日志={ci.get('fd_holds_log')} running={ci.get('running')}")
         print(f"    argv={ci.get('argv')}")
+        print(f"    script_real={ci.get('script_real')}")
+        print(f"    expect_script_real={ci.get('expected_script_real')}")
         print(f"    argv_log_real={ci.get('argv_log_real')} "
               f"expect_log_real={ci.get('expect_log_real')}")
     for tag, li in (("目标端口", loginfo), ("另一端口", other_info)):
