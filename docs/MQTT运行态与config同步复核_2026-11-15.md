@@ -34,6 +34,9 @@ config.set
 
 ## 3. MQTT 的 `s_config` 读点（全部**未持 C**）
 
+> 行号为 **R1/R2 实施前**（`1165d23`）基线；R1/R2 实施后这些读取已集中到
+> `app_mqtt_cfg_snapshot()`（仅该函数在 C 内读 `s_config`），见 §9。
+
 | 位置 | 任务上下文 | 读取字段 | 锁 |
 | --- | --- | --- | --- |
 | `mqtt.c:192–199` `app_mqtt_build_uri` | restart / boot | `mqtt_use_tls/host/port` | 无 |
@@ -129,3 +132,71 @@ config.set
 **未实施（未授权）**：R3 pending 暴露、R4 `sta_has_ip/sta_ip` 的 W 快照、R5 esp-mqtt 拷贝语义确认。`s_wifi.sta_has_ip`/`sta_ip` 仍为无 W 读。
 
 **为何不是 `PASS`**：未运行 ESP-IDF 构建与设备回归；数据竞争的运行时效果（撕裂读概率、MQTT 属性一致性）尚无实测证据。
+
+
+---
+
+## 10. R4 最小修复设计（Wi-Fi 状态快照，**待授权**）
+
+> 本轮只出设计，未改代码。R1/R2 的授权不延伸到 R4。
+
+### 10.1 问题范围（`mqtt.c` 当前全部 `s_wifi` 读点）
+
+| 行 | 上下文 | 读取 | 现状 |
+| --- | --- | --- | --- |
+| 653 | `publish_attributes`（telemetry 任务） | `s_wifi.sta_ip` | 无 W |
+| 709 | `publish_state`（telemetry 任务） | `s_wifi.sta_has_ip` | 无 W |
+| 1451 | `MQTT_EVENT_DISCONNECTED`（esp-mqtt 任务） | `s_wifi.sta_has_ip` | 无 W（M 已于 1446 释放） |
+| 1709 | `app_mqtt_apply_config`（restart/boot） | `s_wifi.sta_has_ip` | 无 W |
+
+写者：wifi 事件/驱动路径在 `app_wifi_runtime_lock`（W）内更新 `s_wifi`（如 `wifi.c` 的 STA 事件处理）。
+`W` 为递归 mutex（`config.c:225–232`）。
+
+### 10.2 方案
+
+在 `mqtt.c` 内新增**只读快照**，与 R1/R2 的 config 快照同构：
+
+```c
+typedef struct {
+    bool sta_has_ip;
+    char sta_ip[16];
+} app_mqtt_wifi_snap_t;
+
+static void app_mqtt_wifi_snapshot(app_mqtt_wifi_snap_t *snap)
+{
+    app_wifi_runtime_lock();
+    snap->sta_has_ip = s_wifi.sta_has_ip;
+    app_copy_string(snap->sta_ip, sizeof(snap->sta_ip), s_wifi.sta_ip);
+    app_wifi_runtime_unlock();
+}
+```
+
+替换四处：
+
+1. `publish_attributes`：config 快照之后取 wifi 快照，`sta_ip` 用 `wifi.sta_ip`；
+2. `publish_state`：同上，`sta_has_ip` 用 `wifi.sta_has_ip`；
+3. `MQTT_EVENT_DISCONNECTED`：在 `is_current_client` 判定（M 已释放）之后取快照，
+   `if (is_current_client && wifi.sta_has_ip)`；
+4. `app_mqtt_apply_config`：config 快照之后、`waiting_sta_ip` 判定之前取快照。
+
+### 10.3 锁序约束（关键）
+
+- **C 与 W 顺序取用、绝不嵌套**：`app_mqtt_cfg_snapshot()` 返回时 C 已释放，再取 W。
+  CMD-05 的偏序审计只覆盖 `J→C→P`，**未审计 C↔W**；本设计不新增该边。
+- **保留既有 `M→W`**：`mqtt.c:1411–1415` 在持 M 时调 `app_wifi_link_generation()`
+  （`wifi.c:2823–2831` 取 W），这是既有顺序；新增四处取 W 时**均未持有 M**，因此不会出现 `W→M`。
+- 快照函数内只复制两个字段；不调用 cJSON、不发布、不阻塞。
+
+### 10.4 明确不做
+
+- 不把 Wi-Fi 字段并入 `app_mqtt_cfg_snap_t`（那会形成 `C→W` 新嵌套边，需另行审计）；
+- 不改变 `waiting_sta_ip` 早退语义、不改 `s_mqtt.connected_gen` 的取代次时机；
+- 不触碰 R3（pending 暴露）与 R5（esp-mqtt 拷贝语义）。
+
+### 10.5 验收与未决
+
+- 实施后最多 `CODE_DONE`：`git diff --check`、`syntax_check --strict main/mqtt.c`、全量 `grep s_wifi.` 复核；
+- `PASS` 需 ESP-IDF 构建 + 设备回归（未授权）；
+- **未决**：W 的持有时长未测。`publish_attributes/state` 每次取一次 W（连接建立时各一次，
+  IO 变化与遥测周期各触发一次），若未来 W 持有者出现长操作，MQTT 发布会被牵连——建议
+  纳入 CMD-14 式测量，而不是在本补丁里猜。
