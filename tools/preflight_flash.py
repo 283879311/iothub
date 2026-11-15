@@ -51,26 +51,32 @@ def capture_chain_ok(argv, cwd, fd_targets, port, log_path):
     dev = f"/dev/{port}"
     log_real = os.path.realpath(str(log_path))
 
-    script_ok = any(str(a).endswith("capture_serial.py") for a in argv)
-    port_ok = dev in [str(a) for a in argv]
-    argv_logs = [str(a) for a in argv
-                 if str(a).endswith(".log") or "/serial_" in str(a)]
+    # capture_serial.py 的实际读参方式：PORT=argv[1], OUT=argv[2]
+    # → cmdline 布局固定为 4 项：[python, capture_serial.py, /dev/ttyUSBx, <log>]
+    # 必须**按位置**核验；在 argv 中"搜索"会把多余/伪装参数当成证据。
+    argv = [str(x) for x in argv]
+    script_ok = len(argv) >= 2 and argv[1].endswith("capture_serial.py")
+    port_ok = len(argv) >= 3 and argv[2] == dev
+    argv_log = argv[3] if len(argv) >= 4 else None
+    # 参数数量必须与脚本调用形式一致（拒绝多余/缺失）
+    argc_ok = (len(argv) == 4) and script_ok and port_ok and argv_log is not None
     argv_log_real = None
-    if argv_logs:
-        a = argv_logs[-1]
+    if argv_log is not None:
         argv_log_real = os.path.realpath(
-            a if os.path.isabs(a) else os.path.join(cwd or "", a))
+            argv_log if os.path.isabs(argv_log) else os.path.join(cwd or "",
+                                                                  argv_log))
     log_arg_ok = (argv_log_real == log_real)
 
     holds_port = dev in fd_targets
     holds_log = log_real in fd_targets
 
-    detail = {"script_ok": script_ok, "port_arg_ok": port_ok,
-              "argv_log": argv_logs[-1] if argv_logs else None,
-              "argv_log_real": argv_log_real, "expect_log_real": log_real,
-              "log_arg_ok": log_arg_ok, "fd_holds_port": holds_port,
-              "fd_holds_log": holds_log}
-    ok = script_ok and port_ok and log_arg_ok and holds_port and holds_log
+    detail = {"argc": len(argv), "argc_ok": argc_ok,
+              "script_ok": script_ok, "port_arg_ok": port_ok,
+              "argv_log": argv_log, "argv_log_real": argv_log_real,
+              "expect_log_real": log_real, "log_arg_ok": log_arg_ok,
+              "fd_holds_port": holds_port, "fd_holds_log": holds_log}
+    ok = (argc_ok and script_ok and port_ok and log_arg_ok
+          and holds_port and holds_log)
     return ok, detail
 
 
@@ -189,6 +195,9 @@ def main():
     args = ap.parse_args()
 
     name = Path(args.port).name
+    if name not in ("ttyUSB0", "ttyUSB1"):
+        print(f"[FAIL] 端口不在白名单（{name}）——仅接受 ttyUSB0 / ttyUSB1")
+        return 2
     other = "ttyUSB1" if name == "ttyUSB0" else "ttyUSB0"
     observed_wifi, loginfo = inspect_log(args.log_dir, name, args.max_age_sec)
     other_wifi, other_info = inspect_log(args.log_dir, other, args.max_age_sec)
@@ -209,6 +218,7 @@ def main():
     print(f"  日志          : {loginfo.get('file')}")
     for tag, ci in (("目标端口", capinfo), ("另一端口", capother)):
         print(f"  [{tag} capture] pid={ci.get('pid')} 存活={ci.get('proc_exists')} "
+              f"argc={ci.get('argc')} argc_ok={ci.get('argc_ok')} "
               f"script_ok={ci.get('script_ok')} port_arg_ok={ci.get('port_arg_ok')} "
               f"log_arg_ok={ci.get('log_arg_ok')} fd持端口={ci.get('fd_holds_port')} "
               f"fd持日志={ci.get('fd_holds_log')} running={ci.get('running')}")
