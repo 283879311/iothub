@@ -67,7 +67,8 @@ def mark():
             if size <= 0:
                 raise SerialUnavailable(f"串口日志为空：{SERIAL}")
             f.seek(size - 1)
-            f.read(1)                      # 真实读取，验证可读性（stat 成功≠可读）
+            if len(f.read(1)) != 1:        # 校验实际读取长度（截断/竞态防护）
+                raise SerialUnavailable(f"串口日志读取长度异常：{SERIAL}")
     except SerialUnavailable:
         raise
     except OSError as exc:
@@ -211,7 +212,23 @@ async def main():
     args = ap.parse_args()
     want = [c.strip().upper() for c in args.cases.split(",") if c.strip()]
 
-    OUT.mkdir(parents=True, exist_ok=True)
+    for _ in range(3):                     # 严格唯一：已存在则换新 run id，绝不复用
+        try:
+            OUT.mkdir(parents=True, exist_ok=False)
+            break
+        except FileExistsError:
+            global RUN_ID
+            RUN_ID = time.strftime("%Y%m%d_%H%M%S") + "_" + uuid.uuid4().hex[:8]
+            new_out = OUT_BASE / f"run_{RUN_ID}"
+            if new_out.exists():
+                continue
+            # 重新指向新目录（模块级常量替换）
+            globals()["OUT"] = new_out
+            OUT = new_out
+            break
+    else:
+        print("[fatal] 3 次尝试均无法创建唯一运行目录", flush=True)
+        return 2
     _log = open(OUT / "regression.log", "a", encoding="utf-8")
     log(f"=== owner 回归开始 run={RUN_ID} cases={want} ===")
     results = {}
