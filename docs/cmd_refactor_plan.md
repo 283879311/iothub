@@ -18,7 +18,7 @@
 | ID | 优先级 | 项目 | 状态 | 验收要求 |
 |---|---|---|---|---|
 | CMD-01 | P0 | `io.get` Wi-Fi runtime 状态读取加锁快照 | TEST_PENDING | 最小代码修改已在 `add93e7`；待 ESP-IDF 构建及 BLE/MQTT 入口回归，未通过前不标 PASS |
-| CMD-02 | P0 | `s_net_async` 逐字段所有权与读点收口 | CODE_DONE? | 静态盘点见 `CMD-02_03_并发静态审查_2026-11-15.md` §1；7 处读点已定位，代码尚未修改；需窄函数/锁内局部副本方案与静态回归 |
+| CMD-02 | P0 | `s_net_async` 逐字段所有权与读点收口 | REVIEWED | 静态盘点见 `CMD-02_03_并发静态审查_2026-11-15.md` §1；7 处读点已定位，代码尚未修改；需窄函数/锁内局部副本方案与静态回归 |
 | CMD-03 | P0 | operation/job 锁序、callback 时序及 expiring 窄窗口 | DESIGN_READY | 锁序与回调静态审查完成；测试设计见 `CMD-03_窄窗口竞态_测试设计_2026-11-15.md`；Phase A host 测试尚未实施，Phase B 需代码授权，Phase C 需独立设备授权 |
 | CMD-04 | P1 | network/device status 改为快照后构造 JSON | TODO | 锁持有期间无 cJSON 分配；字段兼容 |
 | CMD-05 | P1 | 复核 config lock 与 Wi-Fi profile lock 全局锁序 | TODO | 覆盖 profile 保存、删除、Wi-Fi 事件回写路径 |
