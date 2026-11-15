@@ -239,6 +239,22 @@ static _Atomic bool s_backend_is_tb;
  * 仅在 stop_clients 之后、client init 之前刷新。 */
 static char s_token_snap[sizeof(((app_config_t *)0)->mqtt_token)];
 
+/* CMD-15 R4：Wi-Fi 运行态快照——W 内只复制字段，锁外使用。
+ * 与 config 快照是**先后两次独立快照**：各自字段受对应锁保护，
+ * 但不保证 C 域与 W 域在同一时刻一致；禁止为联合快照引入 C→W 嵌套。 */
+typedef struct {
+    bool sta_has_ip;
+    char sta_ip[16];
+} app_mqtt_wifi_snap_t;
+
+static void app_mqtt_wifi_snapshot(app_mqtt_wifi_snap_t *snap)
+{
+    app_wifi_runtime_lock();
+    snap->sta_has_ip = s_wifi.sta_has_ip;
+    app_copy_string(snap->sta_ip, sizeof(snap->sta_ip), s_wifi.sta_ip);
+    app_wifi_runtime_unlock();
+}
+
 static void app_mqtt_build_uri(const app_mqtt_cfg_snap_t *cfg)
 {
     snprintf(s_mqtt.uri, sizeof(s_mqtt.uri), "%s://%s:%u",
@@ -634,9 +650,11 @@ static void app_mqtt_publish_attributes(void)
         app_mqtt_on_io_change();
         return;
     }
-    /* CMD-15 R2：一次 C 内快照，锁外构造 payload */
+    /* CMD-15 R2：一次 C 内快照，锁外构造 payload；R4：Wi-Fi 字段另取 W 快照 */
     app_mqtt_cfg_snap_t cfg;
+    app_mqtt_wifi_snap_t wifi;
     app_mqtt_cfg_snapshot(&cfg);
+    app_mqtt_wifi_snapshot(&wifi);
     app_mqtt_build_uart_frame_str(uart_frame, sizeof(uart_frame), &cfg);
 
     app_desc = esp_app_get_description();
@@ -650,7 +668,7 @@ static void app_mqtt_publish_attributes(void)
     cJSON_AddStringToObject(root, "fw_version",  fw_version);
     cJSON_AddStringToObject(root, "net_mode",    app_network_mode_to_string(cfg.net_mode));
     cJSON_AddStringToObject(root, "sta_ssid",    cfg.sta_ssid);
-    cJSON_AddStringToObject(root, "sta_ip",      s_wifi.sta_ip);
+    cJSON_AddStringToObject(root, "sta_ip",      wifi.sta_ip);
     cJSON_AddStringToObject(root, "bt_mode",     app_bt_mode_to_string(cfg.bt_role));
     cJSON_AddStringToObject(root, "uart_frame",  uart_frame);
     cJSON_AddNumberToObject(root, "uart_baudrate", (double)cfg.uart_baudrate);
@@ -685,9 +703,11 @@ static void app_mqtt_publish_state(void)
         app_mqtt_on_io_change();
         return;
     }
-    /* CMD-15 R2：一次 C 内快照，锁外构造 payload */
+    /* CMD-15 R2：一次 C 内快照，锁外构造 payload；R4：Wi-Fi 字段另取 W 快照 */
     app_mqtt_cfg_snap_t cfg;
+    app_mqtt_wifi_snap_t wifi;
     app_mqtt_cfg_snapshot(&cfg);
+    app_mqtt_wifi_snapshot(&wifi);
     app_mqtt_build_uart_frame_str(uart_frame, sizeof(uart_frame), &cfg);
 
     root = cJSON_CreateObject();
@@ -706,7 +726,7 @@ static void app_mqtt_publish_state(void)
     }
     cJSON_AddStringToObject(root, "bt_mode",       app_bt_mode_to_string(cfg.bt_role));
     cJSON_AddStringToObject(root, "net_mode",      app_network_mode_to_string(cfg.net_mode));
-    cJSON_AddBoolToObject  (root, "sta_has_ip",    s_wifi.sta_has_ip);
+    cJSON_AddBoolToObject  (root, "sta_has_ip",    wifi.sta_has_ip);
     cJSON_AddNumberToObject(root, "free_heap",     (double)esp_get_free_heap_size());
     cJSON_AddNumberToObject(root, "uart_baudrate", (double)cfg.uart_baudrate);
     cJSON_AddStringToObject(root, "uart_frame",    uart_frame);
@@ -1448,8 +1468,13 @@ static void app_mqtt_event_handler(void *handler_args, esp_event_base_t base, in
         /* 已关闭客户端内建自动重连 → 由应用层按退避重连(问题与版本优化.md 1.3-10)。
          * 仅在 STA 仍有 IP 时才调度:STA 掉线的情况由 WIFI_EVENT 处理器统一处理,
          * 避免"网络已断还在猛重连"的风暴。 */
-        if (is_current_client && s_wifi.sta_has_ip) {
-            (void)app_mqtt_schedule_restart();
+        if (is_current_client) {
+            /* R4：仅在当前客户端事件上取 W 快照；stale 事件不触碰 Wi-Fi 锁 */
+            app_mqtt_wifi_snap_t wifi;
+            app_mqtt_wifi_snapshot(&wifi);
+            if (wifi.sta_has_ip) {
+                (void)app_mqtt_schedule_restart();
+            }
         }
         break;
     }
@@ -1691,6 +1716,7 @@ esp_err_t app_mqtt_apply_config(void)
     bool is_tb_backend;
     esp_err_t err;
     app_mqtt_cfg_snap_t cfg;
+    app_mqtt_wifi_snap_t wifi;
 
     app_mqtt_ensure_runtime_init();
     app_mqtt_stop_clients();
@@ -1698,6 +1724,9 @@ esp_err_t app_mqtt_apply_config(void)
     /* CMD-15 R1：停旧客户端之后、使用之前取配置快照；C 仅覆盖字段复制，
      * 不含 stop/init/JSON 等阻塞操作。 */
     app_mqtt_cfg_snapshot(&cfg);
+    /* CMD-15 R4：wifi 快照在 C 释放之后单独取得——C/W 顺序取用、不嵌套；
+     * 两者不保证同一时刻，本处只要求各自字段受对应锁保护。 */
+    app_mqtt_wifi_snapshot(&wifi);
     is_tb_backend = strcmp(cfg.backend, "tb_cloud") == 0 ||
                     strcmp(cfg.backend, "tb_selfhost") == 0;
     atomic_store(&s_backend_is_tb, is_tb_backend);
@@ -1706,7 +1735,7 @@ esp_err_t app_mqtt_apply_config(void)
         app_copy_string(s_mqtt.last_error, sizeof(s_mqtt.last_error), "mqtt_not_configured");
         return ESP_OK;
     }
-    if (!app_network_mode_has_sta(cfg.net_mode) || !s_wifi.sta_has_ip) {
+    if (!app_network_mode_has_sta(cfg.net_mode) || !wifi.sta_has_ip) {
         app_copy_string(s_mqtt.last_error, sizeof(s_mqtt.last_error), "waiting_sta_ip");
         return ESP_OK;
     }
