@@ -14,8 +14,9 @@
 
 特殊：`contract/v1/*.json` 的状态以文件内 `contract_version`/`status` 字段为准（冻结基线，不在本索引展开）。
 
-## ACTIVE（47）
+## ACTIVE（48）
 
+- [CMD-02_15_联合验证授权申请_2026-11-15.md](CMD-02_15_联合验证授权申请_2026-11-15.md)——CMD-02+CMD-15 联合验证窗口：阶段1 构建/阶段2 host 测试申请，阶段3 设备回归不含
 - [MQTT运行态与config同步复核_2026-11-15.md](MQTT运行态与config同步复核_2026-11-15.md)——MQTT 无锁读 `s_config`（P1）、陈旧窗口上界 ~41s、pending 未暴露；CMD-15
 - [CMD-05_config_profile锁序审查_2026-11-15.md](CMD-05_config_profile锁序审查_2026-11-15.md)——config/profile 锁序静态审查：`J → C → P` 偏序、长持锁风险、CMD-06 前置约束
 - [CMD-03_窄窗口竞态_测试设计_2026-11-15.md](CMD-03_窄窗口竞态_测试设计_2026-11-15.md)——cancel/expire 窄窗口的可证伪测试设计（Phase A operation 层 host；Phase B 抽取 store_trial 守卫；Phase C 设备）
