@@ -47,7 +47,7 @@
 
 ## 历史、证据与归档
 
-- [archive/](archive/)：已完成、被替代或不再作为当前行为依据的设计、申请和执行记录。
+- [archive/](archive/README.md)：已完成、被替代或不再作为当前行为依据的设计、申请和执行记录；按归档规则保留审计链。
 - [evidence/](evidence/)：按专项保存的原始证据、清单和摘要。
 - [soak_results/](soak_results/) 与 [t5_results/](t5_results/)：历史长稳测试结果。
 - [CMD-02/15 联合验证原始批准记录](archive/2026-11/CMD-02_15_联合验证授权申请_2026-11-15_历史批准记录.md)：原始批准文本和门禁细节；当前状态看 `cmd_refactor_plan.md` §8。
