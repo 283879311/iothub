@@ -413,6 +413,7 @@ def test_anchor_and_record(tmp):
         ("时间非数值", {**good, "read_at_unix": "x"}),
         ("时间 NaN", {**good, "read_at_unix": float("nan")}),
         ("时间 +Inf", {**good, "read_at_unix": float("inf")}),
+        ("时间 -Inf", {**good, "read_at_unix": float("-inf")}),
         ("mac 不符", {**good, "mac": "de:ad:be:ef:00:11"}),
         ("端口不符", {**good, "port": "/dev/ttyUSB0"}),
         ("缺字段", {"version": 1, "port": "/dev/ttyUSB1"}),
