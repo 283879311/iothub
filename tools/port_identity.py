@@ -621,6 +621,7 @@ def read_mac_flow(port, log_dir, out_record, capture_ctl="tools/serial_capture_c
           "attestation_note": attestation_note,
           "port_lock": {"path": lock_path or port_lock_path(port),
                         "acquired": False, "reason": None},
+          "diagnostics": [],
           "errors": [], "at": time.strftime("%Y-%m-%dT%H:%M:%S"),
           "at_unix": int(time.time())}
 
@@ -628,6 +629,12 @@ def read_mac_flow(port, log_dir, out_record, capture_ctl="tools/serial_capture_c
         msg = f"{stage}:{type(exc).__name__}:{str(exc)[:80]}"
         ev["errors"].append(msg)
         print(f"  [ERR] {msg}")
+
+    def note_diag(stage, exc):
+        """恢复模式的软诊断：记录但不进入 errors（errors 非空即判失败）。"""
+        msg = f"{stage}:{type(exc).__name__}:{str(exc)[:80]}"
+        ev["diagnostics"].append(msg)
+        print(f"  [info] {msg}（恢复模式：仅记录）")
 
     if not evidence_dir:
         print("  [FAIL] evidence_dir 必填（恢复证据是成功条件）")
@@ -660,7 +667,12 @@ def read_mac_flow(port, log_dir, out_record, capture_ctl="tools/serial_capture_c
                               ("running", "script_ok", "port_arg_ok", "log_arg_ok",
                                "fd_holds_port", "fd_holds_log")}
     except Exception as exc:  # noqa: BLE001
-        note_error("chain_check", exc)
+        # 恢复模式：检查函数本身抛异常不等于"设备不可恢复"，降级为诊断；
+        # 串口互斥仍由端口锁 + 三态判定保证（不放宽 UNKNOWN/锁/最终证据）。
+        if require_chain:
+            note_error("chain_check", exc)
+        else:
+            note_diag("chain_check", exc)
         ev["chain_before"] = {}
     chain_ok = bool(ev["chain_before"]) and all(
         v is True for v in ev["chain_before"].values())

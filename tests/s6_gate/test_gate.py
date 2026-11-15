@@ -625,66 +625,149 @@ def test_recovery_path(tmp):
 
 
 def test_gate_recovery_wiring(tmp):
-    print("[G] rollback_gate 恢复模式接线（monkeypatch，不碰串口）")
+    print("[G] rollback_gate 恢复模式接线（fake flow 写真实最终证据，不碰串口）")
     import rollback_gate as RG
 
     def write_bin():
         p = Path(tmp) / "rb.bin"; p.write_bytes(b"\x00" * 64)
         return str(p), hashlib.sha256(p.read_bytes()).hexdigest()
 
-    def write_anchor(mac="10:97:bd:d3:65:d8"):
+    LOGS = str(tmp / "logs3")
+    Path(LOGS).mkdir(parents=True, exist_ok=True)
+
+    def write_anchor():
         p = Path(tmp) / "anchor.json"
         p.write_text(json.dumps({
             "version": 1, "port": "/dev/ttyUSB1",
-            "log_dir": str(tmp / "logs3"), "mac": mac, "mac_ok": True,
+            "log_dir": LOGS, "mac": "10:97:bd:d3:65:d8", "mac_ok": True,
             "checked_at_unix": int(time.time())}))
         return str(p)
 
-    (Path(tmp) / "logs3").mkdir(parents=True, exist_ok=True)
-
     seen = []
+    state = {"new_boot": None, "run_app_ok": True}
 
     def fake_flow(*a, **kw):
         seen.append(kw)
-        return (True, {"mac": "10:97:bd:d3:65:d8", "port": "/dev/ttyUSB1",
-                       "run_id": kw.get("run_id"), "errors": []})
+        d = Path(kw["evidence_dir"])
+        ev = {"run_id": kw["run_id"], "port": "/dev/ttyUSB1",
+              "mac": "10:97:bd:d3:65:d8", "mac_ok": True,
+              "evidence_write_result": "ok",
+              "state_after_stop": PI.COOPERATING_STOPPED,
+              "state_after_restore": PI.RUNNING,
+              "run_app_ok": state["run_app_ok"], "capture_restarted": True,
+              "new_boot": state["new_boot"], "record_written": True,
+              "port_lock": {"path": PI.port_lock_path("/dev/ttyUSB1"),
+                            "acquired": True, "reason": "acquired"},
+              "external_holder_attested": True, "attestation_note": "test",
+              "port_free_proven": False, "errors": [], "diagnostics": [],
+              "at": time.strftime("%Y-%m-%dT%H:%M:%S"),
+              "at_unix": int(time.time())}
+        (d / PI.FINAL_EVIDENCE_NAME).write_text(json.dumps(ev), encoding="utf-8")
+        return (True, ev)
+
+    def argv(evdir, extra=()):
+        return (["rollback_gate.py", "--port", "/dev/ttyUSB1", "--log-dir", LOGS,
+                 "--anchor-file", anchor, "--bin", binp,
+                 "--expect-bin-sha256", bsha, "--evidence-dir", evdir,
+                 "--attest-no-external-holder", "test"] + list(extra))
 
     orig = (RG.inspect_capture, RG.inspect_log, RG.PI.read_mac_flow,
-            RG.PI.validate_final_evidence, RG.usb_events_since, sys.argv)
+            RG.usb_events_since, sys.argv)
     try:
         RG.inspect_capture = lambda *a, **k: {x: False for x in RG.CHAIN_KEYS}
         RG.inspect_log = lambda *a, **k: ({}, {"fresh": False, "boot_marker": False,
                                                "age_sec": 9999})
         RG.PI.read_mac_flow = fake_flow
-        RG.PI.validate_final_evidence = lambda *a, **k: (True, [], {})
         RG.usb_events_since = lambda *a, **k: (True, "none")
         binp, bsha = write_bin()
         anchor = write_anchor()
 
-        # G1 正常模式：链/日志不满足 → rc=1 且根本不调用 read_mac_flow
-        sys.argv = ["rollback_gate.py", "--port", "/dev/ttyUSB1",
-                    "--log-dir", str(tmp / "logs3"), "--anchor-file", anchor,
-                    "--bin", binp, "--expect-bin-sha256", bsha,
-                    "--evidence-dir", str(tmp / "g1_ev"),
-                    "--attest-no-external-holder", "test"]
+        # G1 正常模式：链/日志不满足 → rc=1，根本不调用 read_mac_flow
+        sys.argv = argv(str(tmp / "g1_ev"))
         rc = RG.main()
         ck("G1 正常模式链不合格 → rc=1 且不读 MAC",
            rc == 1 and not seen, f"rc={rc} seen={len(seen)}")
 
-        # G2 恢复模式：同样不合格 → rc=0，且 require_chain/strict_restore 被放宽
-        sys.argv = ["rollback_gate.py", "--port", "/dev/ttyUSB1",
-                    "--log-dir", str(tmp / "logs3"), "--anchor-file", anchor,
-                    "--bin", binp, "--expect-bin-sha256", bsha,
-                    "--evidence-dir", str(tmp / "g2_ev"),
-                    "--attest-no-external-holder", "test", "--recovery-mode"]
+        # G2 恢复模式：同样不合格 → rc=0；真实消费端校验只放开 new_boot
+        state["new_boot"], state["run_app_ok"] = None, True
+        sys.argv = argv(str(tmp / "g2_ev"), ["--recovery-mode"])
         rc = RG.main()
         kw = seen[-1] if seen else {}
-        ck("G2 恢复模式 → rc=0 且 require_chain=False / strict_restore=False",
+        ck("G2 恢复模式 → rc=0 且 require_chain/strict_restore 放宽、仅 new_boot 免检",
            rc == 0 and kw.get("require_chain") is False
            and kw.get("strict_restore") is False, f"rc={rc} kw={kw}")
+
+        # G3 恢复模式下 run_app 失败仍判失败（其余恢复字段不放宽）
+        state["new_boot"], state["run_app_ok"] = None, False
+        sys.argv = argv(str(tmp / "g3_ev"), ["--recovery-mode"])
+        rc = RG.main()
+        ck("G3 恢复模式但 run_app_ok=False → rc=1（恢复字段照查）", rc == 1, f"rc={rc}")
+        state["run_app_ok"] = True
+
+        # G4 恢复模式：检查函数**抛异常**也降级为诊断，仍进入读 MAC
+        n_before = len(seen)
+        RG.inspect_capture = lambda *a, **k: (_ for _ in ()).throw(OSError("boom"))
+        RG.inspect_log = lambda *a, **k: (_ for _ in ()).throw(OSError("boom"))
+        sys.argv = argv(str(tmp / "g4_ev"), ["--recovery-mode"])
+        rc = RG.main()
+        ck("G4 恢复模式检查异常 → rc=0 且仍调用 read_mac_flow",
+           rc == 0 and len(seen) == n_before + 1, f"rc={rc} seen={len(seen)}")
+
+        # G5 正常模式：检查函数抛异常仍是硬失败
+        n_before = len(seen)
+        sys.argv = argv(str(tmp / "g5_ev"))
+        rc = RG.main()
+        ck("G5 正常模式检查异常 → rc=1 且不读 MAC",
+           rc == 1 and len(seen) == n_before, f"rc={rc} seen={len(seen)}")
     finally:
         (RG.inspect_capture, RG.inspect_log, RG.PI.read_mac_flow,
-         RG.PI.validate_final_evidence, RG.usb_events_since, sys.argv) = orig
+         RG.usb_events_since, sys.argv) = orig
+
+
+def test_chain_exception(tmp):
+    print("[H] 录制链检查异常：正常模式 vs 恢复模式")
+    def chain_raise(log_dir, name):
+        raise OSError("boom")
+
+    class States:
+        def __init__(self, seq):
+            self.seq = list(seq)
+        def __call__(self):
+            st = self.seq.pop(0) if self.seq else PI.RUNNING
+            return (st, {"port": "/dev/ttyUSB1", "port_lock": {"reason": "test"}})
+
+    def ctl_writer(path):
+        p = Path(path); p.write_text("#!/bin/sh\nexit 0\n"); os.chmod(p, 0o755)
+        return str(p)
+
+    L = str(tmp / "logs_h"); Path(L).mkdir(parents=True, exist_ok=True)
+    (Path(L) / "serial_ttyUSB1.log").write_text("x")
+    mac_ok = lambda port: (True, "10:97:bd:d3:65:d8")   # noqa: E731
+    run_ok = lambda port: (True, "ran")                  # noqa: E731
+
+    ok, ev = PI.read_mac_flow(
+        "/dev/ttyUSB1", L, str(tmp / "h1.json"),
+        capture_ctl=ctl_writer(tmp / "h1.sh"), evidence_dir=str(tmp / "ev_h1"),
+        lock_path=str(tmp / "lk_h1"), read_mac=mac_ok, run_app=run_ok,
+        strict_restore=False, chain_check=chain_raise,
+        state_fn=States([PI.COOPERATING_STOPPED, PI.RUNNING]),
+        external_holder_attested=True, attestation_note="test",
+        require_chain=False)
+    ck("H1 恢复模式：链检查异常 → ok=True，errors 空、diagnostics 有记录",
+       ok and ev["errors"] == [] and any("chain_check" in d for d in ev["diagnostics"]),
+       f"{ok} errors={ev['errors']} diag={ev.get('diagnostics')}")
+
+    ok, ev = PI.read_mac_flow(
+        "/dev/ttyUSB1", L, str(tmp / "h2.json"),
+        capture_ctl=ctl_writer(tmp / "h2.sh"), evidence_dir=str(tmp / "ev_h2"),
+        lock_path=str(tmp / "lk_h2"), read_mac=mac_ok, run_app=run_ok,
+        strict_restore=False, chain_check=chain_raise,
+        state_fn=States([PI.RUNNING]),
+        external_holder_attested=True, attestation_note="test",
+        require_chain=True)
+    ck("H2 正常模式：链检查异常 → ok=False 且写入 errors",
+       (not ok) and any("chain_check" in e for e in ev["errors"]),
+       str(ev.get("errors")))
 
 
 def test_evidence_dir(tmp):
@@ -719,6 +802,7 @@ def main():
         test_final_evidence(tmp)
         test_recovery_path(tmp)
         test_gate_recovery_wiring(tmp)
+        test_chain_exception(tmp)
         test_evidence_dir(tmp)
     finally:
         for p in FAKE_PORTS:

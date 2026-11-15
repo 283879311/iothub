@@ -112,6 +112,7 @@ def main():
     args = ap.parse_args()
 
     fails = []
+    diags = []          # 恢复模式下"仅记录"的软诊断（不参与放行）
     restore_info = {"attempted": False, "result": None}
     # 阈值固定：不接受放宽（只允许更严）
     if args.max_anchor_age_min > 240 or args.usb_events_min > 240:
@@ -169,12 +170,22 @@ def main():
     try:
         cap = inspect_capture(args.log_dir, name)
     except Exception as exc:  # noqa: BLE001
-        check(False, f"录制链检查异常（{type(exc).__name__}: {str(exc)[:60]}）")
+        msg = f"录制链检查异常（{type(exc).__name__}: {str(exc)[:60]}）"
+        if args.recovery_mode:
+            print(f"  [info] {msg}（恢复模式：仅记录）")
+            diags.append(msg)
+        else:
+            check(False, msg)
         cap = {}
     try:
         _m, loginfo = inspect_log(args.log_dir, name, 120)
     except Exception as exc:  # noqa: BLE001
-        check(False, f"日志检查异常（{type(exc).__name__}: {str(exc)[:60]}）")
+        msg = f"日志检查异常（{type(exc).__name__}: {str(exc)[:60]}）"
+        if args.recovery_mode:
+            print(f"  [info] {msg}（恢复模式：仅记录）")
+            diags.append(msg)
+        else:
+            check(False, msg)
         loginfo = {}
     hard, soft, passes = evaluate_preflight(cap, loginfo, args.recovery_mode)
     for msg in passes:
@@ -222,6 +233,7 @@ def main():
         Path(args.evidence_dir).mkdir(parents=True, exist_ok=True)
         Path(args.evidence_dir, "rollback_gate_last.json").write_text(
             json.dumps({"restore": restore_info, "fails": fails,
+                        "diagnostics": diags, "recovery_mode": args.recovery_mode,
                         "at": time.strftime("%Y-%m-%dT%H:%M:%S")},
                        ensure_ascii=False, indent=1), encoding="utf-8")
     except Exception as exc:  # noqa: BLE001
