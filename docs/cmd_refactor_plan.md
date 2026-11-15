@@ -31,6 +31,7 @@
 | CMD-12 | P2 | 全仓检索 HTTP source/owner、旧 wrapper、测试 hook 及命名清理 | TODO | 逐项列调用者；确认后才删除；包含三项 owner/domain/password helper 收敛评估 |
 | CMD-13 | P2 | 收敛 `cmd.c` 为入口、policy、分发和统一收尾 | TODO | 无业务状态全局变量泄漏；入口可读且测试通过 |
 | CMD-14 | P1 | 记录 `apply_async` 持 job 锁跨 NVS 的持锁预算，评估是否需要缩短锁区 | TODO | 先形成测量方法和证据；**未完成评估前不得缩短锁区** |
+| CMD-15 | P1 | MQTT 运行态读取 `s_config` 的锁/一致性收口 | REVIEWED | `MQTT运行态与config同步复核_2026-11-15.md`：3 个任务上下文无 C 读、存在 ≤~41s 陈旧窗口、无 pending 可观测、`s_wifi.sta_*` 无 W 读；R1–R5 修复待授权 |
 
 ## 3. 分阶段实施
 
@@ -237,3 +238,19 @@
 - 未完成项 / 风险：未测持锁时长；`s_config` 无锁读者与 data_pipe 路由位图读者另案
 - 授权边界：已授权=只读审查；未授权=代码修改、构建、设备
 - 下一唯一动作：按队列评估 CMD-01 构建/回归或 CMD-06 前置条件；CMD-02 的 PASS 仍待构建/回归授权
+
+
+### 7.9 交接记录 · 2026-11-15 · MQTT 运行态与 config 同步复核
+
+- 日期：2026-11-15
+- main HEAD / 源码基线：`07b08cc`（CMD-05 REVIEWED）
+- 本轮 CMD：新增 CMD-15（MQTT 配置一致性）
+- 本轮变更：新增 `MQTT运行态与config同步复核_2026-11-15.md`；台账增 CMD-15 → REVIEWED；索引同步
+- 状态变化：CMD-15 新增，`REVIEWED`
+- 验证：只读源码追踪（mqtt.c/config_apply.c/cmd.c）；未运行构建/测试
+- 结论：陈旧窗口有界（defer 15s + heap 5s + ack 1.2s + stop ≤20s，最坏 ~41s）；
+  **P1 数据竞争**：telemetry/restart 无 C 读 `s_config`，与 C 内整结构 memcpy 并发；
+  `is_pending/deferred` 仅日志、未暴露给客户端
+- 未完成项 / 风险：窗口长度未实测；esp-mqtt 字符串拷贝语义未验证；`app_mqtt_stop` 在 Wi-Fi 事件任务内同步执行
+- 授权边界：已授权=只读复核；未授权=代码修改、构建、设备
+- 下一唯一动作：等用户决定 CMD-15 的修复授权或 CMD-02 构建/回归授权；两项目前均未获批
