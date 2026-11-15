@@ -1,6 +1,6 @@
 # MQTT 运行态与 config 同步复核（2026-11-15）
 
-> **状态：REVIEWED**（只读复核；未改代码、未构建、未上机）
+> **状态：CODE_DONE（R1/R2 已实施；R3/R4/R5 未授权）**（未构建、未上机）
 > **基线**：`07b08cc` 时点的 `main/mqtt.c`、`main/config_apply.c`、`main/cmd.c`
 > **关联**：CMD-05 §3/§5（"mqtt.c 不取 C 不能证明缓存一致"）；本结论新增 CMD-15 跟踪
 
@@ -106,3 +106,26 @@ config.set
 - **存在陈旧窗口**：config 已保存、`config.set` 已返回成功，运行态最坏可在 ~41s 后才切换；窗口内状态/属性读数与真实 broker 不一致，且无 API 字段可观测。
 - **存在数据竞争**：MQTT 三个任务无锁读 `s_config`，与 C 内整结构 memcpy 并发；这不是"缓存陈旧"而是撕裂读风险，优先级高于陈旧窗口。
 - CMD-05 的正确解读应是"未发现锁序反向边"，**不是**"MQTT 配置一致性已验证"。本文件补上后者，跟踪项记为 **CMD-15**（REVIEWED，修复待授权）。
+
+
+---
+
+## 9. 实施记录（2026-11-15，R1/R2，`CODE_DONE`）
+
+提交：`999db00fd34d8b8696ae49e8a163c082c891f584`（仅 `main/mqtt.c`）。
+
+| 项 | 落点 | 内容 |
+| --- | --- | --- |
+| 快照结构 | `app_mqtt_cfg_snap_t` + `app_mqtt_cfg_snapshot()` | 持 C 复制 host/token/backend/sta_ssid/port/uart_*/net_mode/bt_role/relay/led 策略；锁内无其他调用 |
+| R1 | `app_mqtt_apply_config` | 停旧客户端后取快照；host/port/tls/token/backend/net_mode 全部用快照；`build_uri(&cfg)` |
+| R1 附带 | backend 热路径 | `s_backend_is_tb` 原子缓存（apply_config 内更新）；8 处 topic/RPC 读取不再碰 `s_config` |
+| R1 附带 | `credentials.username` | 模块静态 `s_token_snap`（stop 后、init 前刷新），不交局部地址、不指向会被改写的 `s_config.token`；R5 未验证前对两种 esp-mqtt 语义都安全 |
+| R2 | `publish_attributes` / `publish_state` | 各取一次 C 内快照，锁外构造 JSON；`build_uart_frame_str(out, size, &cfg)` |
+
+**约束核对**：C 仅复制；字段覆盖 R1/R2 路径全部配置项；局部快照生命周期覆盖使用点、交给 esp-mqtt 的指针为静态副本；defer/重启/退避语义未改；全量 grep 后 `s_config.` 仅存在于快照函数内（持 C）。
+
+**静态验证**：`git diff --check` 通过；`python3 tests/syntax_check.py --strict main/mqtt.c` OK（1 通过 / 0 失败）。
+
+**未实施（未授权）**：R3 pending 暴露、R4 `sta_has_ip/sta_ip` 的 W 快照、R5 esp-mqtt 拷贝语义确认。`s_wifi.sta_has_ip`/`sta_ip` 仍为无 W 读。
+
+**为何不是 `PASS`**：未运行 ESP-IDF 构建与设备回归；数据竞争的运行时效果（撕裂读概率、MQTT 属性一致性）尚无实测证据。

@@ -31,7 +31,7 @@
 | CMD-12 | P2 | 全仓检索 HTTP source/owner、旧 wrapper、测试 hook 及命名清理 | TODO | 逐项列调用者；确认后才删除；包含三项 owner/domain/password helper 收敛评估 |
 | CMD-13 | P2 | 收敛 `cmd.c` 为入口、policy、分发和统一收尾 | TODO | 无业务状态全局变量泄漏；入口可读且测试通过 |
 | CMD-14 | P1 | 记录 `apply_async` 持 job 锁跨 NVS 的持锁预算，评估是否需要缩短锁区 | TODO | 先形成测量方法和证据；**未完成评估前不得缩短锁区** |
-| CMD-15 | P1 | MQTT 运行态读取 `s_config` 的锁/一致性收口 | REVIEWED | `MQTT运行态与config同步复核_2026-11-15.md`：3 个任务上下文无 C 读、存在 ≤~41s 陈旧窗口、无 pending 可观测、`s_wifi.sta_*` 无 W 读；R1–R5 修复待授权 |
+| CMD-15 | P1 | MQTT 运行态读取 `s_config` 的锁/一致性收口 | CODE_DONE | R1/R2 已实施（`999db00`）：C 内快照 + backend 原子缓存 + token 静态副本；`git diff --check` 与 `syntax_check --strict` 通过，`s_config.` 仅剩快照函数（持 C）。**PASS 待构建/回归**；R3/R4/R5 未授权 |
 
 ## 3. 分阶段实施
 
@@ -254,3 +254,16 @@
 - 未完成项 / 风险：窗口长度未实测；esp-mqtt 字符串拷贝语义未验证；`app_mqtt_stop` 在 Wi-Fi 事件任务内同步执行
 - 授权边界：已授权=只读复核；未授权=代码修改、构建、设备
 - 下一唯一动作：等用户决定 CMD-15 的修复授权或 CMD-02 构建/回归授权；两项目前均未获批
+
+
+### 7.10 交接记录 · 2026-11-15 · CMD-15 R1/R2 实施
+
+- 日期：2026-11-15
+- main HEAD / 源码基线：`999db00`（父 `1165d23`）
+- 本轮 CMD：CMD-15（R1/R2）
+- 本轮变更：`main/mqtt.c`（快照结构/helper、apply_config、两处 payload、backend 原子缓存、token 静态副本）
+- 状态变化：CMD-15 `REVIEWED -> CODE_DONE`
+- 验证：`git diff --check` 通过；`syntax_check.py --strict main/mqtt.c` OK；全量 grep 确认 `s_config.` 仅在快照函数（持 C）
+- 未完成项 / 风险：R3/R4/R5 未授权；`s_wifi.sta_has_ip/sta_ip` 仍无 W 读；esp-mqtt 字符串拷贝语义未验证；未构建/未回归
+- 授权边界：已授权=R1/R2；未授权=R3/R4/R5、构建、设备、CMD-02 回归、Phase B、CMD-06
+- 下一唯一动作：等 CMD-15 R3/R4 或 CMD-02 构建/回归的单独授权；否则按队列进入下一个只读项
