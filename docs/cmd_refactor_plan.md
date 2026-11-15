@@ -31,7 +31,7 @@
 | CMD-12 | P2 | 全仓检索 HTTP source/owner、旧 wrapper、测试 hook 及命名清理 | TODO | 逐项列调用者；确认后才删除；包含三项 owner/domain/password helper 收敛评估 |
 | CMD-13 | P2 | 收敛 `cmd.c` 为入口、policy、分发和统一收尾 | TODO | 无业务状态全局变量泄漏；入口可读且测试通过 |
 | CMD-14 | P1 | 记录 `apply_async` 持 job 锁跨 NVS 的持锁预算，评估是否需要缩短锁区 | TODO | 先形成测量方法和证据；**未完成评估前不得缩短锁区** |
-| CMD-15 | P1 | MQTT 运行态读取 `s_config` 的锁/一致性收口 | CODE_DONE | R1/R2 已实施（`999db00`）：C 内快照 + backend 原子缓存 + token 静态副本。R4（`s_wifi` W 快照）最小设计见复核文档 §10，**待授权**；R3/R5 未授权。PASS 待构建/回归 |
+| CMD-15 | P1 | MQTT 运行态读取 `s_config` 的锁/一致性收口 | CODE_DONE | R1/R2（`999db00`）+ R4（`8d7d768`）已实施：C 内快照、backend 原子缓存、token 静态副本、四处 `s_wifi` 改 W 快照（含 DISCONNECTED 条件调用）。`diff --check`/`syntax_check --strict` 通过，`s_wifi.` 仅剩快照函数（W 内）。**PASS 待构建/回归**；R3/R5 未授权 |
 
 ## 3. 分阶段实施
 
@@ -282,3 +282,17 @@
 - 未完成项 / 风险：W 持有时长未测；R3/R5 未授权
 - 授权边界：已授权=设计文档；未授权=R4 代码、构建、设备
 - 下一唯一动作：用户审阅并授权 R4 后实施（范围仅四处读取点）
+
+
+### 7.12 交接记录 · 2026-11-15 · CMD-15 R4 实施
+
+- 日期：2026-11-15
+- main HEAD / 源码基线：`8d7d768`（父 `43cc0d6`）
+- 本轮 CMD：CMD-15 R4
+- 本轮变更：`main/mqtt.c`（wifi 快照 helper、四处替换、DISCONNECTED 条件调用、非原子注释）
+- 状态变化：CMD-15 仍 `CODE_DONE`；R4 已实施
+- 验证：`git diff --check` 通过；`syntax_check.py --strict main/mqtt.c` OK；
+  `grep s_wifi.` 仅 helper 内两行（W 内）+ 一处历史注释
+- 未完成项 / 风险：R3/R5 未授权；W 持有时长未测；未构建/未回归
+- 授权边界：已授权=R4 四处；未授权=R3/R5、构建、设备、CMD-02 回归、Phase B、CMD-06
+- 下一唯一动作：等待 CMD-02 构建+回归授权（一并验证 CMD-15），或按队列进入下一个只读项

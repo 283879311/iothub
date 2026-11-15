@@ -1,6 +1,6 @@
 # MQTT 运行态与 config 同步复核（2026-11-15）
 
-> **状态：CODE_DONE（R1/R2 已实施；R3/R4/R5 未授权）**（未构建、未上机）
+> **状态：CODE_DONE（R1/R2/R4 已实施；R3/R5 未授权）**（未构建、未上机）
 > **基线**：`07b08cc` 时点的 `main/mqtt.c`、`main/config_apply.c`、`main/cmd.c`
 > **关联**：CMD-05 §3/§5（"mqtt.c 不取 C 不能证明缓存一致"）；本结论新增 CMD-15 跟踪
 
@@ -136,7 +136,7 @@ config.set
 
 ---
 
-## 10. R4 最小修复设计（Wi-Fi 状态快照，**待授权**）
+## 10. R4 Wi-Fi 状态快照（已实施，`CODE_DONE`）
 
 > 本轮只出设计，未改代码。R1/R2 的授权不延伸到 R4。
 
@@ -200,3 +200,27 @@ static void app_mqtt_wifi_snapshot(app_mqtt_wifi_snap_t *snap)
 - **未决**：W 的持有时长未测。`publish_attributes/state` 每次取一次 W（连接建立时各一次，
   IO 变化与遥测周期各触发一次），若未来 W 持有者出现长操作，MQTT 发布会被牵连——建议
   纳入 CMD-14 式测量，而不是在本补丁里猜。
+
+
+### 10.6 实施记录（2026-11-15，`CODE_DONE`）
+
+提交：`8d7d768e46b46f9c2ff5574dcdfe53d26c72ed7a`（仅 `main/mqtt.c`，+36/−7）。
+
+| 落点 | 实现 |
+| --- | --- |
+| helper | `app_mqtt_wifi_snap_t` + `app_mqtt_wifi_snapshot()`：W 内只复制 `sta_has_ip`/`sta_ip` |
+| `publish_attributes` | cfg 快照之后取 W 快照；`sta_ip` 用快照 |
+| `publish_state` | 同上；`sta_has_ip` 用快照 |
+| `MQTT_EVENT_DISCONNECTED` | 按评审约束**条件调用**：仅 `is_current_client` 为真时取 W；stale 事件不触碰 Wi-Fi 锁 |
+| `app_mqtt_apply_config` | cfg 快照之后、`waiting_sta_ip` 判定之前取 W 快照 |
+
+**锁序核对**：C 与 W 顺序取用、不嵌套（cfg 快照返回时 C 已释放）；既有 `M→W`
+（`mqtt.c:1411–1415` 持 M 调 `app_wifi_link_generation`）不变；新增四处取 W 时均未持 M。
+**非原子性**：cfg/wifi 是先后两次独立快照，只保证各自字段受对应锁保护，不保证 C/W 同刻一致；
+已在 helper 与 `apply_config` 注释、以及本节写明。
+
+**静态验证**：`git diff --check` 通过；`syntax_check.py --strict main/mqtt.c` OK；
+全量 `grep s_wifi.` 只剩 helper 内两行（W 内）与一处历史注释。
+
+**未实施（未授权）**：R3（pending/deferred 暴露）、R5（esp-mqtt 拷贝语义确认）。
+**未标 PASS**：未构建、未回归；W 持有时长未测。
