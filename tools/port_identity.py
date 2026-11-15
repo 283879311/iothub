@@ -295,15 +295,29 @@ def read_mac_flow(port, log_dir, out_record, capture_ctl="tools/serial_capture_c
     if not chain_ok:
         print("  [FAIL] 录制链不完整——不停录制、不读 MAC")
 
-    # ---- 2. 停录制 ----
+    # ---- 2. 停录制（**发起过停止就不等于无需恢复**）----
+    stop_issued = False
     if chain_ok:
+        stop_issued = True
         try:
-            stopped, msg = _ctl("stop", port, log_path, capture_ctl)
+            stopped_ok, msg = _ctl("stop", port, log_path, capture_ctl)
         except Exception as exc:  # noqa: BLE001
             note_error("capture_stop", exc)
-            stopped, msg = False, "exception"
-        ev["capture_stopped"] = stopped
-        print(f"  [{'ok' if stopped else 'FAIL'}] 停录制：{msg}")
+            stopped_ok, msg = False, "exception"
+        # 以**实际状态**为准：停止命令非零/异常时也可能已退出
+        try:
+            cap2 = inspect_capture(log_dir, Path(port).name)
+            running_now = cap2.get("running") is True
+        except Exception as exc:  # noqa: BLE001
+            note_error("post_stop_inspect", exc)
+            running_now = None
+        ev["capture_stopped"] = (running_now is False)
+        ev["stop_cmd_ok"] = stopped_ok
+        ev["running_after_stop"] = running_now
+        print(f"  [{'ok' if ev['capture_stopped'] else 'FAIL'}] 停录制：cmd={stopped_ok} "
+              f"实际运行={running_now}  msg={msg[:60]}")
+        if running_now is None:
+            print("  [STOP] 停录制后无法确认录制状态——不得继续读 MAC")
 
     # ---- 3. 读 MAC（异常也继续到恢复）----
     mac_read_attempted = False
@@ -322,7 +336,10 @@ def read_mac_flow(port, log_dir, out_record, capture_ctl="tools/serial_capture_c
             note_error("read_mac", exc)
 
     # ---- 4. 恢复：run_app 与 重启录制 各自独立 ----
-    if mac_read_attempted:
+    # 触发条件：读 MAC（进程确实停了）**或** 曾发起停止且当前未运行
+    restore_needed = mac_read_attempted or (
+        stop_issued and ev.get("running_after_stop") is False)
+    if restore_needed:
         size_before = _log_size(log_path)
         try:
             run_ok, rmsg = run_app(port)
@@ -333,10 +350,18 @@ def read_mac_flow(port, log_dir, out_record, capture_ctl="tools/serial_capture_c
         print(f"  [{'ok' if run_ok else 'FAIL'}] 恢复 app：{str(rmsg)[:70]}")
 
         try:
-            start_ok, smsg = _ctl("start", port, log_path, capture_ctl)
-        except Exception as exc:  # noqa: BLE001
-            note_error("capture_start", exc)
-            start_ok, smsg = False, "exception"
+            cap3 = inspect_capture(log_dir, Path(port).name)
+            already = cap3.get("running") is True
+        except Exception:  # noqa: BLE001
+            already = False
+        if already:
+            start_ok, smsg = True, "already running (skip start)"
+        else:
+            try:
+                start_ok, smsg = _ctl("start", port, log_path, capture_ctl)
+            except Exception as exc:  # noqa: BLE001
+                note_error("capture_start", exc)
+                start_ok, smsg = False, "exception"
         ev["capture_restarted"] = bool(start_ok)
         print(f"  [{'ok' if start_ok else 'FAIL'}] 重启录制：{smsg}")
 
@@ -369,13 +394,24 @@ def read_mac_flow(port, log_dir, out_record, capture_ctl="tools/serial_capture_c
             note_error("write_mac_record", exc)
             ok = False
 
+    ev["evidence_write_attempted"] = True
+    ev["evidence_write_result"] = None
     try:
         Path(evidence_dir).mkdir(parents=True, exist_ok=True)
-        Path(evidence_dir, "mac_read_flow.json").write_text(
-            json.dumps(ev, ensure_ascii=False, indent=1), encoding="utf-8")
+        path = Path(evidence_dir, "mac_read_flow.json")
+        path.write_text(json.dumps(ev, ensure_ascii=False, indent=1),
+                        encoding="utf-8")
+        ev["evidence_write_result"] = "ok"
         ev["evidence_written"] = True
+        # 落盘后写入"最终状态"副本，使磁盘证据与返回值一致（失败也记录）
+        final = dict(ev)
+        final["evidence_write_result"] = "ok"
+        Path(evidence_dir, "mac_read_flow.final.json").write_text(
+            json.dumps(final, ensure_ascii=False, indent=1), encoding="utf-8")
     except Exception as exc:  # noqa: BLE001
         print(f"  [FAIL] 恢复证据写入失败（{type(exc).__name__}）——按失败处理")
+        ev["evidence_write_result"] = f"fail:{type(exc).__name__}"
+        ev["evidence_written"] = False
         ok = False
 
     if not ok:

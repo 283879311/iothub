@@ -108,11 +108,19 @@ def main():
 
     # 2/3. 录制链 + 日志（此时 capture 仍在运行）
     name = Path(args.port).name
-    cap = inspect_capture(args.log_dir, name)
+    try:
+        cap = inspect_capture(args.log_dir, name)
+    except Exception as exc:  # noqa: BLE001
+        check(False, f"录制链检查异常（{type(exc).__name__}: {str(exc)[:60]}）")
+        cap = {}
     for k in ("script_ok", "port_arg_ok", "log_arg_ok",
               "fd_holds_port", "fd_holds_log", "running"):
         check(cap.get(k) is True, f"录制链 {k}")
-    _m, loginfo = inspect_log(args.log_dir, name, 120)
+    try:
+        _m, loginfo = inspect_log(args.log_dir, name, 120)
+    except Exception as exc:  # noqa: BLE001
+        check(False, f"日志检查异常（{type(exc).__name__}: {str(exc)[:60]}）")
+        loginfo = {}
     check(loginfo.get("fresh") is True, f"日志新鲜 age={loginfo.get('age_sec')}s")
     check(loginfo.get("boot_marker") is True, "日志 boot 标记")
 
