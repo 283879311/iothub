@@ -1,23 +1,26 @@
 #!/usr/bin/env python3
 """S6 阶段 B · 65D8 六维身份 ×2（**受限**采集，需单独授权窗口）。
 
-**本采集不是"无副作用审计"**，会话本身包含以下可能改变 RAM 状态的动作：
+**本采集不是"无副作用审计"**，会话本身包含可能改变 RAM 状态的动作：
   - `auth.login`：校验口令并写入**短时 RAM token**（不写持久配置）；
-  - `device.status` / `network.status`：内部复用 `app_cmd_build_network_status()`，
-    若 trial 恰好过期会调用 `app_cmd_net_trial_clear()`（清理 RAM trial，
+  - `device.status` / `network.status`：复用 `app_cmd_build_network_status()`，
+    trial 恰好过期时会调用 `app_cmd_net_trial_clear()`（清理 RAM trial，
     必要时结束配置事务）；
-  - 断开连接：`app_ble_cmd_on_disconnect()` 可能取消 BLE 所属的可取消
-    异步网络操作、清理 BLE 所属 trial。
-因此采集**前置要求** `trial.state == idle`（非 idle 立即停止，不尝试修复）；
-断开只发生一次，且在证据中显式记录。
+  - 断开连接：`app_ble_cmd_on_disconnect()` 可能取消 BLE 所属可取消异步操作、
+    清理 BLE 所属 trial。
 
-授权范围内允许的命令仅：device.info / device.status / network.status / config.get。
-不做配置写入、网络扫描/连接/断开、MQTT 发布、diag 注入、复位、烧录。
+因此本工具要求固件提供**真正纯读取的状态快照**命令（`diag.snapshot`，契约见
+`SNAPSHOT_CONTRACT`），用于在**断开前**确认：trial 处于 idle 且不存在 BLE
+所属活动异步操作。当前固件（`a7e04b6a9`）**没有**该命令，`SNAPSHOT_SUPPORTED_BUILDS`
+为空集合，工具在连接设备前即拒绝运行（rc=6）——这是如实反映能力边界，不是缺陷。
 
-输出：`<out-dir>/identity_capture.json`
-  - 两轮**脱敏后的解析响应对象**与原始长度（raw_len；**不保存原始字节**）
-  - 两轮 console 快照（文件大小/行数/最后 uptime/行号、client_id、boot 标记、ELF SHA）
-  - 六维逐项比对 + 实测轮次间隔
+会话约束：
+  - **只建立一次连接/一次断开**，连接计数由实际调用点递增；
+  - 所有命令 `retries=0`、`allow_reconnect=False`、`allow_relogin=False`：
+    链路异常直接失败，**绝不自动重连**；
+  - 任一响应 `ok is not True` → 立即停止。
+
+输出：`<out-dir>/identity_capture.json`（脱敏后的解析响应对象 + raw_len，不保存原始字节）。
 
 用法：
   .venv-bleak/bin/python tools/s6_identity_capture.py \
@@ -27,6 +30,7 @@
 import argparse
 import asyncio
 import json
+import math
 import re
 import sys
 import time
@@ -44,6 +48,51 @@ EXPECT_CLIENT_ID = "iothub-1097BDD365D8"
 EXPECT_SSID = "CMCC-502"          # 当前持久网络（stage A 后实测）
 READ_CMDS = ("device.info", "device.status", "network.status", "config.get")
 
+# 纯读取快照命令（固件需新增；不得触发 trial/operation 清理）
+SNAPSHOT_CMD = "diag.snapshot"
+SNAPSHOT_CONTRACT = {
+    "cmd": SNAPSHOT_CMD,
+    "required_data": {
+        "trial": {"state": "idle|...（原始状态，不清算）"},
+        "ble_owned_active_operation": "false | {id, owner, state}（BLE 所属在飞操作）",
+    },
+    "规则": "构建响应时不得调用 app_cmd_net_trial_ready()/trial_clear()；只读原始字段",
+}
+# 支持该命令的 build_sha 白名单——固件尚未实现，故为空：工具拒绝运行
+SNAPSHOT_SUPPORTED_BUILDS = frozenset()
+
+
+class SnapshotError(RuntimeError):
+    pass
+
+
+class ReadOnlySession:
+    """单次会话：禁用自动重连/重试，真实计数连接与断开。"""
+
+    def __init__(self, session):
+        self.s = session
+        self.connect_count = 0
+        self.disconnect_count = 0
+
+    async def open(self):
+        await self.s._connect_once()          # 单次 connect + 一次 auth.login
+        self.connect_count += 1
+
+    async def close(self):
+        if getattr(self.s, "cli", None) is not None:
+            await self.s.close()
+            self.disconnect_count += 1
+
+    async def read(self, cmd):
+        req = {"id": f"{cmd}-{self.s.next_seq()}", "version": "1.0",
+               "cmd": cmd, "args": {}}
+        if getattr(self.s, "token", None):
+            req["token"] = self.s.token
+        # 绝不重试、绝不重连：异常立即上抛
+        return await self.s.send_request(req, timeout=15, retries=0,
+                                        allow_relogin=False,
+                                        allow_reconnect=False)
+
 
 def console_snapshot(log_path):
     """只读快照：不打开串口，不触碰采集进程。"""
@@ -52,20 +101,18 @@ def console_snapshot(log_path):
     data = p.read_bytes()
     text = data.decode("utf-8", "replace")
     lines = text.splitlines()
-    total_lines = len(lines)
 
     def line_of(idx):
         return text.count("\n", 0, idx) + 1
 
     snap = {"path": str(p), "size": st.st_size, "mtime_unix": st.st_mtime,
-            "total_lines": total_lines, "at_unix": int(time.time())}
+            "total_lines": len(lines), "at_unix": int(time.time())}
 
     ups = list(re.finditer(r"I \((\d+)\)", text))
     if ups:
         m = ups[-1]
         snap["uptime_ms"] = int(m.group(1))
         snap["uptime_line"] = line_of(m.start())
-        snap["uptime_tail"] = lines[snap["uptime_line"] - 1][:200] if lines else ""
     boots = list(re.finditer(r"rst:0x1", text))
     if boots:
         snap["boot_marker_line"] = line_of(boots[-1].start())
@@ -83,21 +130,93 @@ def console_snapshot(log_path):
     return snap
 
 
-async def read_round(s, tag):
-    """一轮读取；任一命令 ok=false 或异常立即上抛（授权要求：失败即停）。"""
+async def read_round(rs, tag):
+    """一轮读取；任一命令 ok is not True 或异常立即上抛。"""
     out = {"tag": tag, "at_unix": int(time.time()),
            "at": time.strftime("%Y-%m-%dT%H:%M:%S"), "responses": {}}
     for cmd in READ_CMDS:
-        r = await s.v1(cmd, timeout=15)
-        ok = bool(r.obj.get("ok"))
+        r = await rs.read(cmd)
+        ok = r.obj.get("ok") is True
         out["responses"][cmd] = {"ok": ok, "obj": sanitize(r.obj),
                                  "raw_len": len(r.raw)}
         if not ok:
-            raise RuntimeError(f"{tag} {cmd} 返回 ok=false")
+            raise RuntimeError(f"{tag} {cmd} 返回 ok!=true")
     return out
 
 
-def compare(rounds, consoles):
+async def read_snapshot(rs):
+    """读取纯读取快照；固件不支持或字段不合规 → SnapshotError。"""
+    try:
+        r = await rs.read(SNAPSHOT_CMD)
+    except Exception as exc:  # noqa: BLE001
+        raise SnapshotError(f"快照命令不可用：{type(exc).__name__}: {str(exc)[:80]}")
+    if r.obj.get("ok") is not True:
+        raise SnapshotError(f"快照命令 ok!=true（{r.obj.get('error')}）")
+    return r.obj.get("data") or {}
+
+
+def snapshot_clean(data):
+    """断开前安全条件：trial 为 idle 且无 BLE 所属活动异步操作。返回 (ok, why)。"""
+    trial = (data.get("trial") or {}).get("state")
+    if trial != "idle":
+        return (False, f"trial.state={trial!r} != idle")
+    active = data.get("ble_owned_active_operation")
+    if active not in (None, False, "", "none", {}):
+        return (False, f"存在 BLE 所属活动操作：{active!r}")
+    return (True, "clean")
+
+
+async def run_capture(rs, console_log, gap_s, expect_build=EXPECT_BUILD_SHA,
+                      sleep_fn=None):
+    """执行两轮采集（调用方负责连接/断开与计数）。返回 (ev, ok)。
+
+    `sleep_fn` 仅供离线测试注入（生产用 asyncio.sleep）。
+    """
+    sleep_fn = sleep_fn or asyncio.sleep
+    if not math.isfinite(gap_s) or gap_s < 20.0:
+        raise ValueError("gap_s 必须为有限数值且 ≥20s")
+
+    pre = await read_snapshot(rs)          # 前置：断开安全条件
+    clean, why = snapshot_clean(pre)
+    if not clean:
+        raise SnapshotError(f"前置快照不干净：{why}")
+
+    c1 = console_snapshot(console_log)
+    r1 = await read_round(rs, "round1")
+    await sleep_fn(gap_s)
+    c2 = console_snapshot(console_log)
+    r2 = await read_round(rs, "round2")
+
+    post = await read_snapshot(rs)         # 后置：断开前再确认
+    clean2, why2 = snapshot_clean(post)
+    if not clean2:
+        raise SnapshotError(f"后置快照不干净：{why2}")
+
+    measured = r2["at_unix"] - r1["at_unix"]
+    ok, dims = compare([r1, r2], [c1, c2], expect_build)
+    dims.insert(0, {"dim": "0_gap",
+                    "ok": measured >= 20,
+                    "detail": f"实测 {measured}s（要求 ≥20s）"})
+    ok = ok and measured >= 20
+    ev = {"version": 3, "address": ADDR,
+          "scope": "受限采集（见 session_side_effects；不是无副作用审计）",
+          "cmds": list(READ_CMDS), "snapshot_cmd": SNAPSHOT_CMD,
+          "configured_gap_s": gap_s, "measured_gap_s": measured,
+          "session_side_effects": {
+              "connect_count": rs.connect_count,
+              "disconnect_count": rs.disconnect_count,
+              "auth_login": True,
+              "note": "auth.login 写入短时 RAM token；device.status/network.status "
+                      "在 trial 过期时可能触发 trial 清理；断开回调可能清理 BLE "
+                      "所属 trial 与可取消的异步网络操作",
+          },
+          "precheck_snapshot": pre,
+          "postcheck_snapshot": post,
+          "rounds": [r1, r2], "console": [c1, c2], "dims": dims, "ok": ok}
+    return (ev, ok)
+
+
+def compare(rounds, consoles, expect_build=EXPECT_BUILD_SHA):
     """六维逐项比对；返回 (ok, dims[])。"""
     dims = []
     r1, r2 = rounds
@@ -105,9 +224,6 @@ def compare(rounds, consoles):
 
     def add(name, ok, detail):
         dims.append({"dim": name, "ok": bool(ok), "detail": detail})
-
-    # 1 BLE 地址（scan 已过滤，这里是会话实际地址）
-    add("1_ble_addr", True, ADDR)
 
     def dev_id(r):
         d = (r["responses"]["device.info"]["obj"].get("data") or {})
@@ -117,37 +233,35 @@ def compare(rounds, consoles):
         d = (r["responses"]["device.info"]["obj"].get("data") or {})
         return d.get("build_sha")
 
+    def net(r):
+        d = (r["responses"]["network.status"]["obj"].get("data") or {})
+        return (d.get("mqtt_connected") is True, d.get("connected_ssid"),
+                d.get("sta_ip"))
+
+    add("1_ble_addr", True, ADDR)
     id1, id2 = dev_id(r1), dev_id(r2)
     add("2_device_id", id1 == id2 == EXPECT_DEVICE_ID, f"{id1} / {id2}")
-
     b1, b2 = build(r1), build(r2)
     add("3_build_sha",
-        b1 == b2 == EXPECT_BUILD_SHA and c1.get("elf_sha") == c2.get("elf_sha") == EXPECT_BUILD_SHA,
+        b1 == b2 == expect_build
+        and c1.get("elf_sha") == c2.get("elf_sha") == expect_build,
         f"rounds={b1}/{b2} console={c1.get('elf_sha')}/{c2.get('elf_sha')}")
-
     add("4_port_mapping",
         c1.get("client_id") == c2.get("client_id") == EXPECT_CLIENT_ID,
         f"client_id={c1.get('client_id')}@{c1.get('client_id_line')} "
         f"/ {c2.get('client_id')}@{c2.get('client_id_line')}")
-
     same_session = (c1.get("boot_marker_line") == c2.get("boot_marker_line")
                     and c1.get("boot_uptime_ms") == c2.get("boot_uptime_ms"))
     du = (c2.get("uptime_ms") or 0) - (c1.get("uptime_ms") or 0)
-    dw = (c2.get("uptime_ms") is not None and c1.get("uptime_ms") is not None
-          and c2["at_unix"] - c1["at_unix"] is not None)
     dwall = c2["at_unix"] - c1["at_unix"]
     add("5_boot_session",
         same_session and abs(du / 1000.0 - dwall) <= 3.0,
         f"boot_line={c1.get('boot_marker_line')}/{c2.get('boot_marker_line')} "
         f"Δu={du/1000.0:.1f}s Δwall={dwall}s")
-
-    def net(r):
-        d = (r["responses"]["network.status"]["obj"].get("data") or {})
-        return (bool(d.get("mqtt_connected")), d.get("connected_ssid"),
-                (d.get("sta_ip") or d.get("ip")))
-
     n1, n2 = net(r1), net(r2)
-    add("6_network_mqtt", n1 == n2 and n1[0] is True and n1[1] == EXPECT_SSID,
+    add("6_network_mqtt",
+        n1 == n2 and n1[0] is True and n1[1] == EXPECT_SSID
+        and isinstance(n1[2], str) and bool(n1[2]),
         f"{n1} / {n2}")
     return (all(d["ok"] for d in dims), dims)
 
@@ -160,9 +274,15 @@ async def main():
     ap.add_argument("--gap-s", type=float, default=20.0)
     args = ap.parse_args()
 
-    if args.gap_s < 20.0:
-        print("[FAIL] --gap-s 必须 ≥20s（授权要求）")
+    if not math.isfinite(args.gap_s) or args.gap_s < 20.0:
+        print("[FAIL] --gap-s 必须为有限数值且 ≥20s（授权要求）")
         return 2
+
+    if not SNAPSHOT_SUPPORTED_BUILDS:
+        print("[STOP] 当前固件无纯读取快照命令 %r，无法在断开前证明无副作用。" % SNAPSHOT_CMD)
+        print("       按授权边界：**不连接设备、不采集**。需固件实现该命令后重新授权窗口。")
+        print("       契约：%s" % json.dumps(SNAPSHOT_CONTRACT, ensure_ascii=False))
+        return 6
 
     out_dir = Path(args.out_dir or (
         "artifacts/s6_identity_20261115/run_%s_%s"
@@ -171,68 +291,29 @@ async def main():
     print(f"[identity] out-dir = {out_dir}")
 
     recs = await scan_filtered(10.0)
-    hit = [r for r in recs if r["address"].lower() == ADDR.lower()]
-    if not hit:
+    if not [r for r in recs if r["address"].lower() == ADDR.lower()]:
         print("[STOP] 65D8 不在广播中——按授权要求停止本轮，不做修复尝试")
         return 3
 
-    # 只建立**一次**连接（不做"先连再 _connect_once 重连"的循环）
-    s = Session(None, address=ADDR)
-    await s._connect_once()          # 一次 connect + 一次 auth.login（短时 RAM token）
-
+    rs = ReadOnlySession(Session(None, address=ADDR))
     try:
-        try:
-            # 前置安全条件：trial 必须 idle；非 idle 时断开可能触发清理，直接停
-            pre = await s.v1("network.status", timeout=15)
-            pre_data = pre.obj.get("data") or {}
-            trial = (pre_data.get("trial") or {}).get("state")
-            if trial != "idle":
-                print(f"[STOP] 前置检查 trial.state={trial!r} != idle —— 不进入采集")
-                return 4
-
-            c1 = console_snapshot(args.console_log)
-            r1 = await read_round(s, "round1")
-            print(f"[identity] round1 @ {r1['at']} console_uptime={c1.get('uptime_ms')}")
-            await asyncio.sleep(args.gap_s)
-            c2 = console_snapshot(args.console_log)
-            r2 = await read_round(s, "round2")
-            print(f"[identity] round2 @ {r2['at']} console_uptime={c2.get('uptime_ms')}")
-            post = await s.v1("network.status", timeout=15)
-            post_trial = ((post.obj.get("data") or {}).get("trial") or {}).get("state")
-        except Exception as exc:  # noqa: BLE001
-            print(f"[STOP] 采集失败：{type(exc).__name__}: {str(exc)[:120]}"
-                  "——按授权要求停止，不做修复尝试")
-            return 5
+        await rs.open()
+        ev, ok = await run_capture(rs, args.console_log, args.gap_s)
+    except SnapshotError as exc:
+        print(f"[STOP] 快照条件不满足：{exc}——不做修复尝试")
+        return 7
+    except Exception as exc:  # noqa: BLE001
+        print(f"[STOP] 采集失败：{type(exc).__name__}: {str(exc)[:120]}")
+        return 5
     finally:
-        await s.close()              # 一次断开（回调可能清理 BLE 所属 trial）
+        await rs.close()
+        print(f"[identity] connect_count={rs.connect_count} "
+              f"disconnect_count={rs.disconnect_count}")
 
-    measured = r2["at_unix"] - r1["at_unix"]
-    ok, dims = compare([r1, r2], [c1, c2])
-    if measured < 20:
-        ok = False
-        dims.append({"dim": "0_gap", "ok": False,
-                     "detail": f"实测间隔 {measured}s < 20s"})
-    else:
-        dims.insert(0, {"dim": "0_gap", "ok": True, "detail": f"实测 {measured}s"})
-
-    ev = {"version": 2, "address": ADDR,
-          "scope": "受限采集（见 session_side_effects；不是无副作用审计）",
-          "cmds": list(READ_CMDS), "configured_gap_s": args.gap_s,
-          "measured_gap_s": measured,
-          "session_side_effects": {
-              "connect_count": 1, "disconnect_count": 1, "auth_login": True,
-              "note": "auth.login 写入短时 RAM token；device.status/network.status "
-                      "在 trial 过期时可能触发 trial 清理；断开回调可能清理 BLE "
-                      "所属 trial 与可取消的异步网络操作",
-          },
-          "precheck_trial_state": trial,
-          "postcheck_trial_state": post_trial,
-          "rounds": [r1, r2], "console": [c1, c2], "dims": dims, "ok": ok}
     (out_dir / "identity_capture.json").write_text(
         json.dumps(ev, ensure_ascii=False, indent=1), encoding="utf-8")
-
     print("\n=== 六维逐项 ===")
-    for d in dims:
+    for d in ev["dims"]:
         print(f"  [{'ok' if d['ok'] else 'FAIL'}] {d['dim']}: {d['detail']}")
     print(f"\n[{'OK' if ok else 'FAIL'}] 证据：{out_dir / 'identity_capture.json'}")
     return 0 if ok else 1

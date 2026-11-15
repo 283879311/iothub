@@ -931,23 +931,52 @@ def test_capture_guard(tmp):
            p.returncode == 143 and d.get("result") == "restored" and running(),
            f"rc={p.returncode} {d}")
 
-        # I9 锁被非采集进程持有 → UNKNOWN，不得误判为 RUNNING/已恢复
+        # I9 锁被非采集进程持有 → UNKNOWN：命令**根本不执行**（rc=92）
         holder_stop()
+        marker9 = tmp / "i9.marker"
         foreign = subprocess.Popen([hold, lockf],
                                    stdout=subprocess.DEVNULL,
                                    stderr=subprocess.DEVNULL)   # 无 pidfile
         time.sleep(0.4)
         e9 = str(tmp / "i9.json")
-        r = guard(["true"], e9)
+        r = guard(["sh", "-c", f'echo ran > "{marker9}"'], e9)
         d = ev(e9)
         foreign.terminate()
         try:
             foreign.wait(timeout=10)
         except subprocess.TimeoutExpired:
             foreign.kill()
-        ck("I9 锁被非采集进程持有 → state_before=UNKNOWN 且不判恢复",
-           r.returncode == 90 and d.get("state_before") == "UNKNOWN"
-           and d.get("capture_restored") is False, f"{r.returncode} {d}")
+        ck("I9 锁被非采集进程持有 → rc=92、命令未执行、不判恢复",
+           r.returncode == 92 and d.get("state_before") == "UNKNOWN"
+           and not marker9.exists()
+           and d.get("result") == "precondition_failed", f"{r.returncode} {d}")
+
+        # I10 进入时 STOPPED → rc=92，命令不执行（不烧录）
+        holder_stop()
+        marker10 = tmp / "i10.marker"
+        e10 = str(tmp / "i10.json")
+        r = guard(["sh", "-c", f'echo ran > "{marker10}"'], e10)
+        d = ev(e10)
+        ck("I10 进入状态 STOPPED → rc=92、命令未执行",
+           r.returncode == 92
+           and d.get("state_before") == PI.COOPERATING_STOPPED
+           and not marker10.exists(), f"{r.returncode} {d}")
+
+        # I11 锁路径不可用（目录不可写）→ UNKNOWN，不能因"文件不存在"判 STOPPED
+        ro = tmp / "ro_lock"; ro.mkdir()
+        os.chmod(ro, 0o555)
+        st11, inf11 = PI.capture_state("/dev/ttyFAKE_RO", str(tmp / "ro.log"),
+                                       lock_path=str(ro / "x.lock"))
+        os.chmod(ro, 0o755)
+        ck("I11 锁目录不可写 → UNKNOWN",
+           st11 == PI.UNKNOWN, f"{st11} {inf11.get('unknown_reason')}")
+
+        # I12 锁文件不存在但目录可写 → 实际创建并取得 → COOPERATING_STOPPED
+        lp12 = str(tmp / "i12.lock")
+        st12, _ = PI.capture_state("/dev/ttyFAKE_NO", str(tmp / "none.log"),
+                                   lock_path=lp12)
+        ck("I12 锁文件不存在 → 创建并取得成功 → COOPERATING_STOPPED",
+           st12 == PI.COOPERATING_STOPPED and Path(lp12).exists(), f"{st12}")
 
         # I5 rollback_recovery.sh：门禁失败时绝不进入停采集/烧录
         bad = tmp / "bad_anchor.json"; bad.write_text("{}")
@@ -964,6 +993,175 @@ def test_capture_guard(tmp):
            f"rc={rr.returncode} out={out[-200:]}")
     finally:
         holder_stop()
+
+
+def test_identity_tool(tmp):
+    print("[J] s6_identity_capture：单次会话、禁用重连、快照门禁")
+    import asyncio as aio
+    import s6_identity_capture as IC
+
+    class Resp:
+        def __init__(self, obj):
+            self.obj = obj
+            self.raw = b"{}"
+
+    class Fake:
+        token = "tok"
+        def __init__(self, handler):
+            self.handler = handler
+            self.calls = []
+            self._n = 0
+            self.connect_ok = 0
+        def next_seq(self):
+            self._n += 1
+            return self._n
+        async def _connect_once(self):
+            self.cli = object()
+            self.connect_ok += 1
+        async def close(self):
+            self.cli = None
+        async def send_request(self, req, timeout=20, retries=3,
+                               allow_relogin=True, allow_reconnect=True):
+            self.calls.append({"cmd": req["cmd"], "retries": retries,
+                               "allow_reconnect": allow_reconnect,
+                               "allow_relogin": allow_relogin})
+            return self.handler(req)
+
+    def ok_resp(data=None):
+        return Resp({"ok": True, "data": data or {}})
+
+    # J1 读命令必须 retries=0 / allow_reconnect=False；连接计数真实
+    fake = Fake(lambda req: ok_resp())
+    rs = IC.ReadOnlySession(fake)
+    aio.run(rs.open())
+    aio.run(rs.read("device.info"))
+    c = fake.calls[-1]
+    ck("J1 读命令禁用重试与重连（retries=0 / allow_reconnect=False）",
+       c["retries"] == 0 and c["allow_reconnect"] is False
+       and c["allow_relogin"] is False and rs.connect_count == 1, str(c))
+
+    # J2 链路异常直接上抛，不重试
+    def boom(req):
+        raise RuntimeError("link lost")
+    fake2 = Fake(boom)
+    rs2 = IC.ReadOnlySession(fake2)
+    aio.run(rs2.open())
+    try:
+        aio.run(rs2.read("device.info"))
+        raised = False
+    except RuntimeError:
+        raised = True
+    ck("J2 链路异常 → 上抛且只尝试 1 次（无自动重连）",
+       raised and len(fake2.calls) == 1, f"calls={len(fake2.calls)}")
+
+    # J3 断开计数真实
+    aio.run(rs2.close())
+    ck("J3 断开计数为实际调用", rs2.disconnect_count == 1,
+       str(rs2.disconnect_count))
+
+    log = str(tmp / "id.log")
+    Path(log).write_text(
+        "I (1000) app_init: ELF file SHA256:  a7e04b6a9...\n"
+        "I (1100) rst:0x1\n"
+        "I (1200) mqtt: client_id=iothub-1097BDD365D8\n"
+        "I (2000000) wifi: idle\n")
+
+    CLEAN = {"trial": {"state": "idle"}, "ble_owned_active_operation": False}
+    GOOD = {"device.info": {"device_id": "IotHub-65D8", "build_sha": "a7e04b6a9"},
+            "device.status": {"build_sha": "a7e04b6a9"},
+            "network.status": {"mqtt_connected": True, "connected_ssid": "CMCC-502",
+                               "sta_ip": "192.168.1.45"},
+            "config.get": {"network": {}}}
+
+    def handler_good(req):
+        cmd = req["cmd"]
+        if cmd == IC.SNAPSHOT_CMD:
+            return ok_resp(CLEAN)
+        return ok_resp(GOOD.get(cmd, {}))
+
+    # J4 正常路径：六维全过；gap 因测试未真等 20s 而单独判 False（防造假设计如此）
+    fake4 = Fake(handler_good)
+    rs4 = IC.ReadOnlySession(fake4)
+    aio.run(rs4.open())
+    ev, ok = aio.run(IC.run_capture(rs4, log, 20, sleep_fn=_no_sleep))
+    dims = {d["dim"]: d["ok"] for d in ev["dims"]}
+    ck("J4 六维全过、gap 维度因未真等而 False、总判 False",
+       all(v for k, v in dims.items() if k != "0_gap")
+       and dims["0_gap"] is False and ok is False, str(dims))
+    ck("J4 证据含快照前后与真实计数",
+       ev["precheck_snapshot"] == CLEAN and ev["postcheck_snapshot"] == CLEAN
+       and ev["session_side_effects"]["connect_count"] == 1, str(ev.get("session_side_effects")))
+
+    # J5 前置快照 trial 非 idle → 不进入采集
+    def handler_dirty(req):
+        if req["cmd"] == IC.SNAPSHOT_CMD:
+            return ok_resp({"trial": {"state": "accepted"},
+                            "ble_owned_active_operation": False})
+        return ok_resp(GOOD.get(req["cmd"], {}))
+    rs5 = IC.ReadOnlySession(Fake(handler_dirty))
+    aio.run(rs5.open())
+    try:
+        aio.run(IC.run_capture(rs5, log, 20, sleep_fn=_no_sleep))
+        got5 = ""
+    except IC.SnapshotError as exc:
+        got5 = str(exc)
+    ck("J5 前置快照非 idle → SnapshotError（不采集）", "trial.state" in got5, got5)
+
+    # J6 后置快照出现 BLE 活动操作 → SnapshotError（断开前拒绝成功）
+    state = {"n": 0}
+    def handler_post(req):
+        if req["cmd"] == IC.SNAPSHOT_CMD:
+            state["n"] += 1
+            if state["n"] == 1:
+                return ok_resp(CLEAN)
+            return ok_resp({"trial": {"state": "idle"},
+                            "ble_owned_active_operation": {"id": "op-1",
+                                                           "state": "connecting"}})
+        return ok_resp(GOOD.get(req["cmd"], {}))
+    rs6 = IC.ReadOnlySession(Fake(handler_post))
+    aio.run(rs6.open())
+    try:
+        aio.run(IC.run_capture(rs6, log, 20, sleep_fn=_no_sleep))
+        got6 = ""
+    except IC.SnapshotError as exc:
+        got6 = str(exc)
+    ck("J6 后置快照有活动操作 → SnapshotError", "活动操作" in got6, got6)
+
+    # J7 任一命令 ok!=true → 立即失败
+    def handler_bad(req):
+        if req["cmd"] == IC.SNAPSHOT_CMD:
+            return ok_resp(CLEAN)
+        if req["cmd"] == "config.get":
+            return Resp({"ok": False, "error": {"code": "x"}})
+        return ok_resp(GOOD.get(req["cmd"], {}))
+    rs7 = IC.ReadOnlySession(Fake(handler_bad))
+    aio.run(rs7.open())
+    try:
+        aio.run(IC.run_capture(rs7, log, 20, sleep_fn=_no_sleep))
+        got7 = ""
+    except RuntimeError as exc:
+        got7 = str(exc)
+    ck("J7 响应 ok!=true → 立即失败", "ok!=true" in got7, got7)
+
+    # J8 固件无快照命令 → 工具在连接前拒绝（rc=6）
+    r8 = subprocess.run([sys.executable, str(ROOT / "tools" / "s6_identity_capture.py"),
+                         "--console-log", log, "--gap-s", "25"],
+                        capture_output=True, text=True, timeout=60)
+    ck("J8 固件无 diag.snapshot → rc=6 且不连接设备",
+       r8.returncode == 6 and "无纯读取快照命令" in (r8.stdout + r8.stderr),
+       f"rc={r8.returncode}")
+
+    # J9 gap 参数必须有限且 ≥20（NaN / 10 都拒绝）
+    for gap, tag in (("nan", "NaN"), ("inf", "Inf"), ("10", "偏小")):
+        rg = subprocess.run([sys.executable,
+                             str(ROOT / "tools" / "s6_identity_capture.py"),
+                             "--console-log", log, "--gap-s", gap],
+                            capture_output=True, text=True, timeout=60)
+        ck(f"J9 --gap-s {tag} → rc=2", rg.returncode == 2, f"rc={rg.returncode}")
+
+
+async def _no_sleep(_s):
+    return None
 
 
 def test_evidence_dir(tmp):
@@ -1000,6 +1198,7 @@ def main():
         test_gate_recovery_wiring(tmp)
         test_chain_exception(tmp)
         test_capture_guard(tmp)
+        test_identity_tool(tmp)
         test_evidence_dir(tmp)
     finally:
         for p in FAKE_PORTS:

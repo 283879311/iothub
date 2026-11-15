@@ -324,12 +324,29 @@ class PortLock:
 
 
 def _probe_lock(path):
-    """试探锁；返回 (held, reason)。held=None 表示**无法判定**。"""
+    """试探锁；返回 (held, reason)。held=None 表示**无法判定**。
+
+    锁文件不存在时**尝试创建并取得**（拿不到就 UNKNOWN）——"文件不存在"
+    本身不足以证明锁可取得（可能是目录不可写/权限异常）。
+    """
     import fcntl
     try:
         f = open_lock_file(path, create=False)
     except FileNotFoundError:
-        return (False, "lock_file_absent")     # 从未启动过 → 视为未运行
+        try:
+            f = open_lock_file(path, create=True)
+        except OSError as exc:
+            return (None, f"create_failed:{type(exc).__name__}")
+        try:
+            fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError as exc:
+            return (None, f"flock_failed:{type(exc).__name__}")
+        try:
+            fcntl.flock(f, fcntl.LOCK_UN)
+        except OSError:
+            pass
+        f.close()
+        return (False, "lock_created_free")
     except OSError as exc:
         return (None, f"open_failed:{type(exc).__name__}")
     try:
@@ -422,8 +439,58 @@ def capture_state(port, log_path=None, lock_path=None, scanner=None):
     return (COOPERATING_STOPPED, inf)
 
 
-# ---------------- 最终证据消费端校验（可单测，门禁放行的唯一依据） ----------------
+def capture_liveness(port, log_path, lock_path=None):
+    """**严格**存活判定（供 capture_guard 使用）：PID + 端口锁双证。
 
+    与 `capture_state()` 的分工：
+      - `capture_state()` 回答"串口是否**可能**被协作采集占用"——锁被持有即判
+        RUNNING（保守，用于门禁决定能否读 MAC）；
+      - 本函数回答"**本仓库采集进程**是否确实在运行"——必须同时满足
+        pidfile 进程存活且 cmdline 含 `capture_serial`、端口锁被持有；
+        两项不一致（锁被非采集进程持有 / pid 存活但锁已释放 / pidfile 不可解析）
+        一律 UNKNOWN，**不得**判为 RUNNING。
+    """
+    inf = {"port": port, "pidfile_pid": None, "pidfile_state": "absent",
+           "pid_ok": False, "lock": None, "unknown_reason": None}
+    if not log_path:
+        inf["unknown_reason"] = "no_log_path"
+        return (UNKNOWN, inf)
+
+    plock = lock_path or port_lock_path(port)
+    held, why = _probe_lock(plock)
+    inf["lock"] = {"path": plock, "held": held, "reason": why}
+    if held is None:
+        inf["unknown_reason"] = why or "lock_unknown"
+
+    pidfile = Path(str(log_path) + ".pid")
+    try:
+        if pidfile.is_file():
+            try:
+                pid = int(pidfile.read_text(encoding="utf-8").strip())
+                inf["pidfile_pid"] = pid
+                inf["pidfile_state"] = "parsed"
+                try:
+                    cmdline = Path(f"/proc/{pid}/cmdline").read_bytes()
+                except OSError:
+                    cmdline = b""
+                inf["pid_ok"] = (b"capture_serial" in cmdline)
+            except Exception:  # noqa: BLE001
+                inf["pidfile_state"] = "unparsable"
+                inf["unknown_reason"] = inf["unknown_reason"] or "pidfile_unparsable"
+    except OSError as exc:  # noqa: BLE001
+        inf["pidfile_state"] = "stat_error"
+        inf["unknown_reason"] = inf["unknown_reason"] or f"pidfile_stat:{type(exc).__name__}"
+
+    if inf["unknown_reason"]:
+        return (UNKNOWN, inf)
+    if inf["pid_ok"] and held is True:
+        return (RUNNING, inf)
+    if (not inf["pid_ok"]) and held is False:
+        return (COOPERATING_STOPPED, inf)
+    return (UNKNOWN, inf)      # 两项证据不一致
+
+
+# ---------------- 最终证据消费端校验（可单测，门禁放行的唯一依据） ----------------
 FINAL_EVIDENCE_NAME = "mac_read_flow.final.json"
 EVIDENCE_MAX_AGE_MIN = 240        # 固定阈值，不接受放宽
 EVIDENCE_PRODUCTS = ("mac_read_flow.final.json", "mac_read_flow.json",
@@ -863,7 +930,21 @@ def _cli():
                    metavar="说明",
                    help="操作者声明：该串口无外部工具占用（minicom/手工 cat 等）。"
                         "软件无法证明，必须显式声明并写入证据")
+    st_parser = sub.add_parser("state", help="打印协作采集三态（供 shell/门禁使用）")
+    st_parser.add_argument("--port", required=True)
+    st_parser.add_argument("--log-path", required=True)
+    lv_parser = sub.add_parser("liveness", help="严格存活判定（PID+锁双证，供 guard 使用）")
+    lv_parser.add_argument("--port", required=True)
+    lv_parser.add_argument("--log-path", required=True)
     a = ap.parse_args()
+    if a.cmd == "state":
+        st, _inf = capture_state(a.port, a.log_path)
+        print(st)
+        return {"RUNNING": 0, "COOPERATING_CAPTURE_STOPPED": 1}.get(st, 2)
+    if a.cmd == "liveness":
+        st, _inf = capture_liveness(a.port, a.log_path)
+        print(st)
+        return {"RUNNING": 0, "COOPERATING_CAPTURE_STOPPED": 1}.get(st, 2)
     if a.cmd == "read":
         if not a.attest_no_external_holder.strip():
             print("[FAIL] --attest-no-external-holder 不能为空")
