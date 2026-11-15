@@ -31,6 +31,18 @@ ser.timeout = 1
 ser.dtr = False
 ser.rts = False
 
+# ---- 采集存活锁（S6 门禁用）：<log>.lock 上的 flock(LOCK_EX) ----
+# 目的：让回滚门禁在不读 /proc、不需要 root 的情况下**可证明**地判断
+# "采集是否仍在运行"。锁随进程退出自动释放。
+import fcntl as _fcntl
+_lock_f = open(OUT + ".lock", "a+")
+try:
+    _fcntl.flock(_lock_f, _fcntl.LOCK_EX | _fcntl.LOCK_NB)
+except OSError:
+    print("capture: another capture already holds %s.lock — 拒绝启动" % OUT,
+          flush=True)
+    raise SystemExit(3)
+
 with ser, open(OUT, "ab") as f:
     # 2026-10-17(1.3-60): 关闭 HUPCL —— 否则进程退出 close() 时驱动会拉低 DTR,
     # ESP32 自动复位电路收到 EN 脉冲,表现为"每次短抓包都 POWERON_RESET"。

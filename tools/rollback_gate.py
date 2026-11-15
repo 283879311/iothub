@@ -127,10 +127,11 @@ def main():
     # 4. 板卡身份（主证据）：统一恢复流程（停录制→read_mac→run→重启录制→新 boot 证据）
     if not fails:
         restore_info["attempted"] = True
+        run_id = time.strftime("%Y%m%d_%H%M%S") + "_gate"
         ok_flow, ev = PI.read_mac_flow(
             args.port, args.log_dir, str(Path(args.evidence_dir) / "mac_record_gate.json"),
             capture_ctl=args.capture_ctl, evidence_dir=args.evidence_dir,
-            strict_restore=not args.skip_restore)
+            strict_restore=not args.skip_restore, run_id=run_id)
         restore_info = ev
         check(ok_flow, "MAC 读取 + 恢复流程（stop→mac→run→start→new boot）")
         # 强制消费端门禁：最终证据必须存在且结论为 ok（不以首份快照为准）
@@ -138,7 +139,10 @@ def main():
         fin_ok = False
         try:
             fj = json.loads(fin.read_text(encoding="utf-8"))
-            fin_ok = (fj.get("evidence_write_result") == "ok")
+            fin_ok = (fj.get("evidence_write_result") == "ok"
+                      and fj.get("run_id") == run_id
+                      and fj.get("port") == args.port
+                      and str(fj.get("mac", "")).lower() == EXPECT_MAC)
         except Exception as exc:  # noqa: BLE001
             print(f"  [info] 最终证据不可读（{type(exc).__name__}）")
         check(fin_ok, f"最终证据存在且结论 ok（{fin.name}）")

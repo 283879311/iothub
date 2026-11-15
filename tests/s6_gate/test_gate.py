@@ -59,63 +59,60 @@ def fake_proc(root, holders=(), pidfile_pid=None, unreadable=False):
 
 
 def test_capture_state(tmp):
-    print("[A] capture_state 三态")
-    # A1 有进程持有端口 → RUNNING
-    p = fake_proc(tmp / "a1", holders=(111,))
-    st, inf = PI.capture_state("/dev/ttyUSB1", None, proc_root=p)
-    ck("A1 有 holder → RUNNING", st == PI.RUNNING and 111 in inf["holders"], f"{st}")
+    print("[A] capture_state 三态（基于存活锁，真实 flock）")
+    import fcntl
 
-    # A2 无 holder、pidfile 进程存活 → RUNNING
-    p = fake_proc(tmp / "a2", pidfile_pid=222)
-    log = Path(tmp / "a2.log"); log.write_text("x")
-    Path(str(log) + ".pid").write_text("222")
-    st, _ = PI.capture_state("/dev/ttyUSB1", str(log), proc_root=p)
-    ck("A2 pid 存活但未持端口 → RUNNING", st == PI.RUNNING, st)
+    def mklog(name):
+        log = Path(tmp) / f"{name}.log"
+        log.write_text("x")
+        return str(log), str(log) + ".lock"
 
-    # A3 无 holder、pid 不存在 → STOPPED
-    p = fake_proc(tmp / "a3")
-    log = Path(tmp / "a3.log"); log.write_text("x")
-    Path(str(log) + ".pid").write_text("999999")
-    st, _ = PI.capture_state("/dev/ttyUSB1", str(log), proc_root=p)
-    ck("A3 无 holder 且 pid 不存在 → STOPPED", st == PI.STOPPED, st)
+    # A1 锁被持有 → RUNNING
+    log, lockp = mklog("a1")
+    holder = open(lockp, "a+")
+    fcntl.flock(holder, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    st, inf = PI.capture_state("/dev/ttyUSB1", log)
+    ck("A1 锁被持有 → RUNNING",
+       st == PI.RUNNING and inf["lock"]["reason"] == "lock_held", f"{st}")
+    fcntl.flock(holder, fcntl.LOCK_UN); holder.close()
 
-    # A4 proc_root 不可用 → UNKNOWN
-    st, inf = PI.capture_state("/dev/ttyUSB1", None, proc_root=str(tmp / "no_such"))
-    ck("A4 /proc 不可用 → UNKNOWN", st == PI.UNKNOWN, st)
+    # A2 锁空闲、无 pidfile → STOPPED
+    log, lockp = mklog("a2")
+    Path(lockp).write_text("")
+    st, _ = PI.capture_state("/dev/ttyUSB1", log)
+    ck("A2 锁空闲 → STOPPED", st == PI.STOPPED, st)
 
-    # A5 fd 目录 EACCES → UNKNOWN（不能 fail-open 成 STOPPED）
-    st, inf = PI.capture_state("/dev/ttyUSB1", None, proc_root=p,
-                               scanner=lambda r, pt: ([], "eacces_fd_dir:pid=5"))
-    ck("A5 fd 目录不可读 → UNKNOWN", st == PI.UNKNOWN, st)
+    # A3 锁文件不存在（从未启动）→ STOPPED
+    log, _ = mklog("a3")
+    st, _ = PI.capture_state("/dev/ttyUSB1", log)
+    ck("A3 锁文件缺失 → STOPPED", st == PI.STOPPED, st)
 
-    # A6 readlink EPERM → UNKNOWN
-    st, inf = PI.capture_state("/dev/ttyUSB1", None, proc_root=p,
-                               scanner=lambda r, pt: ([], "eperm_readlink:pid=6"))
-    ck("A6 readlink 不可读 → UNKNOWN", st == PI.UNKNOWN, st)
+    # A4 pidfile 存在但不可解析 → UNKNOWN
+    log, lockp = mklog("a4")
+    Path(lockp).write_text("")
+    Path(log + ".pid").write_text("not-a-pid")
+    st, inf = PI.capture_state("/dev/ttyUSB1", log)
+    ck("A4 pidfile 不可解析 → UNKNOWN",
+       st == PI.UNKNOWN and inf["unknown_reason"] == "pidfile_unparsable", st)
 
-    # A7 扫描完整、无 holder → STOPPED（进程消失属可确认）
-    st, inf = PI.capture_state("/dev/ttyUSB1", None, proc_root=p,
-                               scanner=lambda r, pt: ([], None))
-    ck("A7 扫描完整无 holder → STOPPED", st == PI.STOPPED, st)
+    # A5 锁空闲但 pid 进程存活 → RUNNING（保守）
+    log, lockp = mklog("a5")
+    Path(lockp).write_text("")
+    Path(log + ".pid").write_text(str(os.getpid()))
+    st, _ = PI.capture_state("/dev/ttyUSB1", log)
+    ck("A5 锁空闲但 pid 存活 → RUNNING", st == PI.RUNNING, st)
 
-    # A8 scanner 抛异常 → UNKNOWN
-    st, inf = PI.capture_state("/dev/ttyUSB1", None, proc_root=p,
-                               scanner=lambda r, pt: (_ for _ in ()).throw(RuntimeError("x")))
-    ck("A8 scanner 异常 → UNKNOWN", st == PI.UNKNOWN, st)
+    # A6 无 log_path → UNKNOWN
+    st, inf = PI.capture_state("/dev/ttyUSB1", None)
+    ck("A6 无 log_path → UNKNOWN",
+       st == PI.UNKNOWN and inf["unknown_reason"] == "no_log_path", st)
 
-    # A9 PID 文件存在但内容不可解析 → UNKNOWN（不能当作没有 PID）
-    p9 = fake_proc(tmp / "a9")
-    log9 = Path(tmp / "a9.log"); log9.write_text("x")
-    Path(str(log9) + ".pid").write_text("not-a-pid")
-    st, inf = PI.capture_state("/dev/ttyUSB1", str(log9), proc_root=p9,
-                               scanner=lambda r, pt: ([], None))
-    ck("A9 pidfile 不可解析 → UNKNOWN", st == PI.UNKNOWN, st)
-
-    # A10 holder 存在 → RUNNING
-    st, inf = PI.capture_state("/dev/ttyUSB1", None, proc_root=p,
-                               scanner=lambda r, pt: ([123], None))
-    ck("A10 有 holder → RUNNING", st == PI.RUNNING, st)
-
+    # A7 注入 scanner 额外未知原因 → UNKNOWN
+    log, lockp = mklog("a7")
+    Path(lockp).write_text("")
+    st, inf = PI.capture_state("/dev/ttyUSB1", log,
+                               scanner=lambda r, pt: ([], "injected_unknown"))
+    ck("A7 注入未知原因 → UNKNOWN", st == PI.UNKNOWN, st)
 
 def test_read_mac_flow(tmp):
     print("[B] read_mac_flow 恢复语义（注入 fake，不碰真实串口）")

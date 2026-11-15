@@ -17,6 +17,7 @@ import re
 import subprocess
 import sys
 import time
+import uuid
 from pathlib import Path
 
 EXPECT_MAC_65D8 = "10:97:bd:d3:65:d8"     # 65D8 的 WiFi STA MAC（= client_id 里那 12 位）
@@ -215,131 +216,92 @@ STOPPED, RUNNING, UNKNOWN = "STOPPED", "RUNNING", "UNKNOWN"
 
 
 
-def _is_capture_proc(ent):
-    """cmdline 是否属于采集进程；不可读 → None（无法判定）。"""
+def _lock_state(log_path):
+    """测试采集存活锁：返回 (locked, reason)。
+
+    采集进程（capture_serial.py）运行时持有 `<log>.lock` 的 flock(LOCK_EX)。
+    这里用 LOCK_EX|LOCK_NB 试探：
+      - BlockingIOError → 锁被持有 → 采集**正在运行**；
+      - 成功取得 → 无人持有 → 采集**已停止**（立即释放并关闭）；
+      - 其它 OSError → 无法判定（UNKNOWN）。
+    该判定**不需要 root、不读 /proc、不触碰串口**，且对本仓库的采集进程是
+    可证明的（它们必然持锁）。
+    """
+    import fcntl
+    if not log_path:
+        return (None, "no_log_path")
+    lock_path = str(log_path) + ".lock"
     try:
-        cmd = (ent / "cmdline").read_bytes().replace(b"\x00", b" ").decode(
-            "utf-8", "replace")
+        f = open(lock_path, "a+")
     except FileNotFoundError:
-        return False
-        # 进程已退出：不是需要担心的采集进程
-    except OSError:
-        return None
-    return "capture_serial" in cmd
+        return (False, "lock_file_absent")     # 从未启动过 → 视为未运行
+    except OSError as exc:
+        return (None, f"lock_open_failed:{type(exc).__name__}")
+    try:
+        try:
+            fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            return (True, "lock_held")
+        except OSError as exc:
+            return (None, f"flock_failed:{type(exc).__name__}")
+        try:
+            fcntl.flock(f, fcntl.LOCK_UN)
+        except OSError:
+            pass
+        return (False, "lock_free")
+    finally:
+        f.close()
+
 
 def _scan_holders(proc_root, port):
-    """默认扫描：返回 (holders, unknown_reason)。
-
-    fail-closed 口径：
-      - 进程在扫描期间消失（FileNotFoundError/ENOENT）→ 跳过（可确认不存在）；
-      - EACCES/EPERM 或其它 OSError 无法检查 → 记录 unknown_reason（→ UNKNOWN）；
-      - 其余错误（列表失败）→ unknown_reason。
-    """
-    import os
-    holders = []
-    unknown = None
-    root = Path(proc_root)
-    try:
-        entries = list(root.iterdir())
-    except OSError as exc:
-        return ([], f"list_proc:{type(exc).__name__}")
-    my_uid = os.getuid()
-    for ent in entries:
-        if not ent.name.isdigit():
-            continue
-        # 只对本用户进程严格：其它用户的进程不可能是我们的采集进程，
-        # 对其 fd 的 EACCES 属正常，不应把整体判成 UNKNOWN。
-        try:
-            uid_line = (ent / "status").read_text(errors="replace")
-            m = re.search(r"^Uid:\s*(\d+)", uid_line, re.M)
-            if m is None:
-                unknown = unknown or f"uid_unparsable:pid={ent.name}"
-                continue
-            if int(m.group(1)) != my_uid:
-                continue
-        except FileNotFoundError:
-            continue
-        except OSError as exc:
-            unknown = unknown or f"uid_unreadable:pid={ent.name}:{type(exc).__name__}"
-            continue
-        fd_dir = ent / "fd"
-        try:
-            fds = list(fd_dir.iterdir())
-        except FileNotFoundError:
-            continue                      # 进程已退出，可确认不存在
-        except PermissionError:
-            rel = _is_capture_proc(ent)
-            if rel is None:
-                unknown = unknown or f"eacces_fd_dir:pid={ent.name}:cmdline_unreadable"
-            elif rel:
-                unknown = unknown or f"eacces_fd_dir:pid={ent.name}:capture"
-            # 非采集进程 → 跳过（不影响判定）
-            continue
-        except OSError as exc:
-            unknown = unknown or f"err_fd_dir:pid={ent.name}:{type(exc).__name__}"
-            continue
-        for fd in fds:
-            try:
-                target = os.readlink(fd)
-            except FileNotFoundError:
-                continue                  # 该 fd 已关闭
-            except PermissionError:
-                rel = _is_capture_proc(ent)
-                if rel is None:
-                    unknown = unknown or f"eperm_readlink:pid={ent.name}:cmdline_unreadable"
-                elif rel:
-                    unknown = unknown or f"eperm_readlink:pid={ent.name}:capture"
-                break        # 该进程不可判定 → 放弃该进程（非采集则不关心）
-
-            except OSError as exc:
-                unknown = unknown or f"err_readlink:pid={ent.name}:{type(exc).__name__}"
-                continue
-            if target == port:
-                holders.append(int(ent.name))
-                break
-    return (holders, unknown)
+    """保留旧接口（兼容注入），但三态判定已改为锁协议，不再使用 /proc 枚举。"""
+    return ([], f"proc_scan_disabled(lock_protocol):{port}")
 
 
 def capture_state(port, log_path=None, proc_root="/proc", scanner=None):
-    """三态：STOPPED / RUNNING / UNKNOWN（独立于完整链校验）。
+    """三态 STOPPED / RUNNING / UNKNOWN —— 基于**采集存活锁**（可证明）。
 
-    STOPPED 仅在"扫描完整完成、无任何 holder、PID 文件进程不存在"时给出；
-    扫描不完整（权限/异常）或 PID 文件存在但不可解析 → UNKNOWN（不得读 MAC）。
+    判定（不读 /proc、不需要 root、不触碰串口）：
+      RUNNING : `<log>.lock` 被 flock 持有（采集在运行）或 pidfile 进程仍存活
+      STOPPED : 锁可取得（无人持有）且 pidfile 进程不存在
+      UNKNOWN : 锁文件/加锁出错、pidfile 存在但不可解析、或注入了未知原因
     """
     inf = {"port": port, "holders": [], "pidfile_pid": None,
-           "unknown_reason": None}
-    if not Path(proc_root).is_dir():
-        inf["unknown_reason"] = f"proc_root 不可用：{proc_root}"
-        return (UNKNOWN, inf)
+           "lock": None, "unknown_reason": None}
 
-    scan = scanner or _scan_holders
-    try:
-        holders, unknown = scan(proc_root, port)
-    except Exception as exc:  # noqa: BLE001
-        inf["unknown_reason"] = f"scanner_exc:{type(exc).__name__}"
-        return (UNKNOWN, inf)
-    inf["holders"] = holders
-    inf["unknown_reason"] = unknown
+    locked, why = _lock_state(log_path)
+    inf["lock"] = {"locked": locked, "reason": why}
+    if locked is None:
+        inf["unknown_reason"] = why
+    elif locked is True:
+        return (RUNNING, inf)
 
-    # PID 文件：存在但不可解析 → UNKNOWN（不能当成"没有 PID"）
     pidfile_state = "absent"
     if log_path:
         pidfile = Path(str(log_path) + ".pid")
-        if pidfile.is_file():
-            try:
-                inf["pidfile_pid"] = int(pidfile.read_text(encoding="utf-8").strip())
-                pidfile_state = "parsed"
-            except Exception:  # noqa: BLE001
-                pidfile_state = "unparsable"
-                inf["unknown_reason"] = inf["unknown_reason"] or "pidfile_unparsable"
+        try:
+            if pidfile.is_file():
+                try:
+                    inf["pidfile_pid"] = int(pidfile.read_text(encoding="utf-8").strip())
+                    pidfile_state = "parsed"
+                except Exception:  # noqa: BLE001
+                    pidfile_state = "unparsable"
+                    inf["unknown_reason"] = inf["unknown_reason"] or "pidfile_unparsable"
+        except OSError as exc:
+            pidfile_state = "stat_error"
+            inf["unknown_reason"] = (inf["unknown_reason"]
+                                     or f"pidfile_stat:{type(exc).__name__}")
     inf["pidfile_state"] = pidfile_state
 
-    if holders:
-        return (RUNNING, inf)
-    if inf["unknown_reason"]:          # 含 scanner 的 unknown 与 pidfile 不可解析
+    if inf["unknown_reason"]:
         return (UNKNOWN, inf)
-    if inf["pidfile_pid"] and (Path(proc_root) / str(inf["pidfile_pid"])).is_dir():
-        return (RUNNING, inf)
+    if inf["pidfile_pid"] and Path(f"/proc/{inf['pidfile_pid']}").is_dir():
+        return (RUNNING, inf)               # 锁已释放但进程未退出（异常态）→ 保守判运行
+    if scanner is not None:                 # 测试可注入额外原因
+        _h, extra = scanner(proc_root, port)
+        if extra:
+            inf["unknown_reason"] = extra
+            return (UNKNOWN, inf)
     return (STOPPED, inf)
 
 
@@ -385,7 +347,7 @@ def wait_new_boot(log_path, from_size, timeout_s=15.0):
 def read_mac_flow(port, log_dir, out_record, capture_ctl="tools/serial_capture_ctl.sh",
                   evidence_dir=None, expect_mac=EXPECT_MAC_65D8,
                   read_mac=None, run_app=None, strict_restore=True,
-                  chain_check=None, state_fn=None):
+                  chain_check=None, state_fn=None, run_id=None):
     """步骤 0 / 回滚门禁共用的唯一实现。
 
     状态流程：检查录制链 → 停录制 → read_mac → **无论结果都恢复**
@@ -404,7 +366,9 @@ def read_mac_flow(port, log_dir, out_record, capture_ctl="tools/serial_capture_c
     from preflight_flash import inspect_capture  # noqa: E402
 
     log_path = str(Path(log_dir) / f"serial_{Path(port).name}.log")
-    ev = {"port": port, "log_path": log_path, "evidence_dir": str(evidence_dir),
+    run_id = run_id or (time.strftime("%Y%m%d_%H%M%S") + "_" + uuid.uuid4().hex[:8])
+    ev = {"run_id": run_id,
+          "port": port, "log_path": log_path, "evidence_dir": str(evidence_dir),
           "chain_before": None, "capture_stopped": False, "mac": None,
           "mac_ok": False, "run_app_ok": False, "capture_restarted": False,
           "new_boot": False, "record_written": False,
