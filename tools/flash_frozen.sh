@@ -27,15 +27,21 @@ FLASH_MODE="dio"; FLASH_FREQ="40m"; FLASH_SIZE="4MB"
 
 [ -f "$BIN_SRC" ] || { echo "[FAIL] BIN 不存在: $BIN_SRC"; exit 2; }
 
-SIZE=$(stat -c%s "$BIN_SRC")
-if [ "$SIZE" -gt "$LOCK_PART_SIZE" ]; then
-  echo "[FAIL] BIN 大小 $SIZE > app 分区上限 $LOCK_PART_SIZE（拒绝写入）"; exit 1
-fi
-
 # ---- 复制到私有冻结目录：校验对象 == 写入对象 ----
 FREEZE_DIR=$(mktemp -d "/tmp/s6_freeze.XXXXXX") || exit 2
 FROZEN="$FREEZE_DIR/frozen_$(basename "$BIN_SRC")"
 cp -- "$BIN_SRC" "$FROZEN"
+
+# 长度检查基于**冻结副本**（实际写入对象）
+SIZE=$(stat -c%s "$FROZEN")
+END=$((LOCK_ADDR + SIZE))
+PART_END=$((LOCK_ADDR + LOCK_PART_SIZE))
+if [ "$SIZE" -gt "$LOCK_PART_SIZE" ] || [ "$END" -gt "$PART_END" ]; then
+  echo "[FAIL] 写入区间越界：[$LOCK_ADDR, $END) 超出分区 [$LOCK_ADDR, $PART_END)"
+  exit 1
+fi
+printf '[ok] 写入区间 [0x%X, 0x%X) 落在 ota_0 [0x%X, 0x%X) 内\n' \
+  "$LOCK_ADDR" "$END" "$LOCK_ADDR" "$PART_END"
 
 ACTUAL=$(sha256sum "$FROZEN" | awk '{print $1}')
 if [ "$ACTUAL" != "$EXPECT" ]; then
@@ -46,7 +52,7 @@ fi
 echo "[ok] 冻结副本校验通过"
 echo "     副本     = $FROZEN"
 echo "     sha256   = $ACTUAL"
-echo "     size     = $SIZE (上限 $LOCK_PART_SIZE)"
+echo "     size     = $SIZE (上限 $LOCK_PART_SIZE, 终点 0x$(printf %X "$END"))"
 echo "     目标     = chip=$LOCK_CHIP port=$LOCK_PORT addr=$LOCK_ADDR"
 
 # ---- 写入：使用副本路径，且写入前再次校验同一副本 ----
@@ -62,6 +68,10 @@ echo "[run] esptool write_flash $LOCK_ADDR (from $FROZEN)"
   --flash_size "$FLASH_SIZE" "$LOCK_ADDR" "$FROZEN"
 
 ACTUAL3=$(sha256sum "$FROZEN" | awk '{print $1}')
-echo "[done] 写入完成；写入后副本 sha256=$ACTUAL3（应仍等于授权值）"
+if [ "$ACTUAL3" != "$EXPECT" ]; then
+  echo "[FAIL] 写入后冻结副本 SHA-256 不符：$ACTUAL3 != $EXPECT"
+  exit 1
+fi
+echo "[done] 写入后冻结副本 SHA-256 仍与授权值一致（$ACTUAL3）"
 echo "       证据副本保留：$FROZEN"
 echo "       务必再用 device.info.build_sha 反证固件内身份"
