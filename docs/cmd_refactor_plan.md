@@ -21,7 +21,7 @@
 | CMD-02 | P0 | `s_net_async` 逐字段所有权与读点收口 | CODE_DONE | 七处读点已按 §1.3 实施（`28f9090`）；`git diff --check` 与 `syntax_check --strict` 通过，全量读写点复核无新增无锁读。**PASS 待 ESP-IDF 构建 + 受理/重复幂等/apply/cancel/expire 回归**（未授权） |
 | CMD-03 | P0 | operation/job 锁序、callback 时序及 expiring 窄窗口 | IN_PROGRESS | Phase A host 测试已实施：S1–S5 ×50 ×10 轮全过（A1 100/100、A2 100/100、A3 100/100、A4/A5/A7 50/50），变异体在 A1 失败（可证伪）；见 `CMD-03_窄窗口竞态_测试设计_2026-11-15.md` 附录 A。Phase B（cmd 层 store_trial 守卫）需代码授权；Phase C 需设备授权 |
 | CMD-04 | P1 | network/device status 改为快照后构造 JSON | TODO | 锁持有期间无 cJSON 分配；字段兼容 |
-| CMD-05 | P1 | 复核 config lock 与 Wi-Fi profile lock 全局锁序 | TODO | 覆盖 profile 保存、删除、Wi-Fi 事件回写路径 |
+| CMD-05 | P1 | 复核 config lock 与 Wi-Fi profile lock 全局锁序 | REVIEWED | 静态审查完成（`CMD-05_config_profile锁序审查_2026-11-15.md`）：偏序 `J → C → P`、未发现反向边；风险为 C 跨 NVS 长持锁与 C/P 递归契约；CMD-06 前置约束见 §4 |
 | CMD-06 | P1 | 将网络异步事务整体迁移到 `cmd_net_txn.c` | TODO | 阶段 A 关闭后再实施；事务语义不变；接口不暴露可写全局状态 |
 | CMD-07 | P1 | 普通网络命令迁移到 `cmd_net.c` | TODO | scan/profile/reconnect/status 兼容 |
 | CMD-08 | P1 | 状态构造函数迁移到 `cmd_status.c` | TODO | device/network/gpio/uart JSON 字段一致 |
@@ -39,7 +39,7 @@
 - [x] CMD-01：已修复 `io.get` 对 `s_wifi.sta_has_ip` / `s_wifi.sta_ip` 的读取边界；锁内复制快照，锁外构造 JSON。代码提交：`add93e7`。静态检查通过；构建与 BLE/MQTT 入口回归尚未执行。
 - [x] CMD-02：静态盘点与最小补丁设计完成（`CMD-02_03_并发静态审查_2026-11-15.md` §1、§1.3）；7 处读点尚未修复，待用户批准后实施。
 - [x] CMD-03：锁序/回调静态审查完成（同上 §2）；测试设计完成；**Phase A host 测试已实施并通过**（`tests/operation_host/`，附录 A：A1 100/100、可证伪性检查 OK）。Phase B 未授权。
-- [ ] CMD-05：审查 config/profile 锁序。
+- [x] CMD-05：静态审查完成（`CMD-05_config_profile锁序审查_2026-11-15.md`）；未改代码。
 - [ ] 更新本计划和审查报告中的结论、证据及未决项。
 
 **阶段 A 验收门槛：**锁契约和字段所有权明确；不改变 operation 状态机和网络行为；构建通过；相关并发回归通过。
@@ -222,3 +222,18 @@
   CMD-03 `store_trial` 窄窗口未修复
 - 授权边界：已授权=七处源码修改；未授权=构建、设备回归、Phase B、模块迁移
 - 下一唯一动作：等待构建/回归授权后执行 CMD-02 验证；或按队列进入 CMD-05 静态审查
+
+
+### 7.8 交接记录 · 2026-11-15 · CMD-05 锁序审查
+
+- 日期：2026-11-15
+- main HEAD / 源码基线：`04e9584`（CMD-02 CODE_DONE）
+- 本轮 CMD：CMD-05
+- 本轮变更：新增 `CMD-05_config_profile锁序审查_2026-11-15.md`；台账 CMD-05 → REVIEWED
+- 状态变化：CMD-05 `TODO -> REVIEWED`
+- 验证：静态搜索 `main/{cmd,config,config_apply,wifi,mqtt,cmd_cfg_txn,bt,auth,state}.c` 的嵌套获取；
+  未运行构建/测试
+- 结论：偏序 `J → C → P`（及 `J → P`）一致，未发现 `P/C → J`、`P → C` 等反向边；风险为长持锁与递归契约
+- 未完成项 / 风险：未测持锁时长；`s_config` 无锁读者与 data_pipe 路由位图读者另案
+- 授权边界：已授权=只读审查；未授权=代码修改、构建、设备
+- 下一唯一动作：按队列评估 CMD-01 构建/回归或 CMD-06 前置条件；CMD-02 的 PASS 仍待构建/回归授权
