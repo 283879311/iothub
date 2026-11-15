@@ -30,6 +30,7 @@
 | CMD-11 | P2 | UART/IO/data 命令迁移到 `cmd_device.c` | TODO | 命令协议与错误码兼容 |
 | CMD-12 | P2 | 全仓检索 HTTP source/owner、旧 wrapper、测试 hook | TODO | 逐项列调用者；确认后才删除 |
 | CMD-13 | P2 | 收敛 `cmd.c` 为入口、policy、分发和统一收尾 | TODO | 无业务状态全局变量泄漏；入口可读且测试通过 |
+| CMD-14 | P1 | 记录 `apply_async` 持 job 锁跨 NVS 的持锁预算，评估是否需要缩短锁区 | TODO | 有实测持锁时长数据与并发设计；**未完成前不得缩短锁区** |
 
 ## 3. 分阶段实施
 
@@ -103,3 +104,12 @@
 - [ ] 建立代码级并发专项审查证据。
 - [ ] 阶段 A 尚未整体完成（CMD-01 已实施，CMD-02/03/05 未开始）。
 - [x] `cmd.c` 已有 CMD-01 最小代码修改（`add93e7`）；尚未执行 ESP-IDF 编译或真机验收。
+
+---
+
+## 5. 2026-11-16 复核增量（基线 d09f355）
+
+- 附录 A（`cmd.c_review_2026-11-14.md`）补齐 48 个函数的行号锚点与锁清单，CMD-02 的"读写点盘点"已有第一版材料，仍缺逐字段任务上下文标注。
+- 新增 CMD-14：`apply_async` 持 `s_net_job_lock` 跨内层 `execute_method`（含 NVS 写），属 R2-P0 的刻意设计；先测持锁时长，再讨论是否缩短。
+- 新增待办（未编号，随 CMD-12 一并处理）：`app_cmd_verify_web_password` 改名；`k_config_domains` 与 `app_cmd_domain_known` 合并；`cmd.c:43` 与 `cmd_policy.c:13` 的 owner 映射合并。
+- 本文档中的阶段 A/B/C 划分不变；本轮未移动任何代码。
