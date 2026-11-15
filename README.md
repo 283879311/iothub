@@ -2,7 +2,7 @@
 
 基于 ESP-IDF 6.0.x、面向经典 ESP32（4 MB Flash、无 PSRAM）的物联网控制与现场数据网关。当前产品以 **BLE NUS 本地管理 + ThingsBoard MQTT 远程管理/上报 + UART1 工业数据接入** 为核心；控制命令与原始字节数据分属两个平面。
 
-> 当前文档以仓库 `main` 的 `d09f355` 为源码核对基线。固件版本由构建时 Git 描述串生成：`1.3-<git短SHA>[-dirty]`；无 Git 元数据时为 `1.3-unknown`。
+> 当前源码核对基线：`8d7d768e46b46f9c2ff5574dcdfe53d26c72ed7a`（CMD-15 R4 源码提交；其后 `main` 的相关提交为文档维护）。每轮执行前仍须核对实际 `main` HEAD 与源码差异。固件版本由构建时 Git 描述串生成：`1.3-<git短SHA>[-dirty]`；无 Git 元数据时为 `1.3-unknown`。
 
 ## 当前产品边界
 
@@ -168,9 +168,9 @@ docs/             架构审查、测试方案、验收报告和证据索引
 - **版本/问题主记录**：`问题与版本优化.md`。
 - **全链路 soak 计划**：[`docs/soak_test_plan.md`](docs/soak_test_plan.md)。
 - **命令层审查**：[`docs/cmd.c_review_2026-11-14.md`](docs/cmd.c_review_2026-11-14.md)。
-- **命令层跟进计划**：[`docs/cmd_refactor_plan.md`](docs/cmd_refactor_plan.md)。
+- **项目执行台账**：[`docs/cmd_refactor_plan.md`](docs/cmd_refactor_plan.md)，CMD 任务、当前授权与下一步的唯一入口。
 - **近期变更（2026-11-14~15）**：[`docs/近期变更记录_2026-11-14至11-15.md`](docs/近期变更记录_2026-11-14至11-15.md)（CMD-04 合并窗口 / S6 固件缺陷 / 阶段 A / 阶段 B 门禁工具链 / 身份采集）。
-- **docs 索引**：[`docs/README.md`](docs/README.md)（ACTIVE/LEGACY/ARCHIVED/PLANNED 状态标定；详细审查与持续跟进统一入口）。
+- **项目文档导航**：[`docs/README.md`](docs/README.md)，按 CMD、S6、协议、测试和历史证据分类；当前执行状态以各专项主台账为准。
 - 原始日志和历史证据见 `docs/archive/` 与 `docs/evidence/`；计划状态和硬件实测状态以各专项文档为准。
 
 ## 已知限制与安全提示
