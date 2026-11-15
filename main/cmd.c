@@ -286,6 +286,19 @@ static void app_cmd_net_async_clear_job_sync(void)
     app_cmd_net_job_unlock();
 }
 
+/* CMD-02：active 的窄读点（内部持 J 快照后立即释放）。
+ * 只允许**未持 J** 的调用方使用——避免把递归锁依赖扩散到新路径。
+ * 注意：返回值是快照，调用方随后的业务动作与它并非原子。 */
+static bool app_cmd_net_job_is_active(void)
+{
+    bool active;
+
+    app_cmd_net_job_lock();
+    active = s_net_async.active;
+    app_cmd_net_job_unlock();
+    return active;
+}
+
 /* v1-only safety: static IP is pinned to the formal SSID. DHCP trials are not
  * allowed while the formal config is static; use BLE v1 config.set first. */
 static bool app_cmd_static_switch_blocked(const char *ssid, const cJSON *params,
@@ -552,8 +565,27 @@ static esp_err_t app_cmd_net_async_run(app_operation_t *op, void *ctx)
     char password[65];
     app_cmd_source_t owner;
 
-    if (op == NULL || job == NULL || !job->active) {
+    if (op == NULL || job == NULL) {
         return ESP_ERR_INVALID_ARG;
+    }
+    /* CMD-02：一次性持 J 快照 active/ssid/password/owner。
+     * 早退顺序保持原语义：active==false 时**先返回**，不做任何锁外调用。
+     * 注意：解锁后 job 仍可能被 cleanup 清零；本函数后续对
+     * s_net_async.netcheck_gen/st_* 的写入属 CMD-03 窄窗口范畴，本补丁不处理。 */
+    {
+        bool job_active;
+
+        app_cmd_net_job_lock();
+        job_active = job->active;
+        if (job_active) {
+            snprintf(ssid, sizeof(ssid), "%s", job->ssid);
+            snprintf(password, sizeof(password), "%s", job->password);
+            owner = job->owner;
+        }
+        app_cmd_net_job_unlock();
+        if (!job_active) {
+            return ESP_ERR_INVALID_ARG;
+        }
     }
     /* B5(第三轮):活动 operation 登记——scheduled/task run 日志的 op 字段 */
     app_wifi_set_active_operation(app_operation_id(op));
@@ -564,9 +596,6 @@ static esp_err_t app_cmd_net_async_run(app_operation_t *op, void *ctx)
         return ESP_ERR_INVALID_ARG;
     }
     generation = st0.generation;   /* R5:跨阻塞调用校验槽位未被复用 */
-    snprintf(ssid, sizeof(ssid), "%s", job->ssid);
-    snprintf(password, sizeof(password), "%s", job->password);
-    owner = job->owner;
     ESP_LOGI(TAG, "async tryconnect ssid='%s' op=%s", ssid,
              app_operation_id(op));
     /* DEF-MQTT-001:MQTT 源的受理回包必须先出站再拆 WiFi —— 试验的第一步
@@ -695,6 +724,8 @@ static bool app_cmd_net_tryconnect_async(const cJSON *params,
     const app_cmd_source_t source = ctx->source;
     app_operation_t *op = NULL;
     esp_err_t err;
+    /* CMD-02：受理响应只读本局部副本，不再在解锁后读共享缓冲区。 */
+    char accepted_operation_id[sizeof(s_net_async.operation_id)] = "";
 
     if (source == APP_CMD_SOURCE_MQTT && !app_cmd_mqtt_net_txn_enabled()) {
         *err_out = "guard_rejected";
@@ -720,28 +751,42 @@ static bool app_cmd_net_tryconnect_async(const cJSON *params,
             return true;
         }
     }
-    if (s_net_async.active) {
-        app_operation_t *existing = s_net_async.op;
-        if (existing != NULL && idem_key != NULL &&
-            strcmp(s_net_async.idem_key, idem_key) == 0) {
-            app_operation_status_t status;
-            cJSON *resp;
-            if (!app_operation_get_status(existing, &status)) {
-                *err_out = "not_found";
-                return false;
+    /* CMD-02：持 J 一次性快照 active/op/idem_key，解锁后再做幂等比较与
+     * operation 查询。本处只消除数据竞争，**不宣称**检查-动作原子：
+     * 快照后 job 可能被 cleanup 清零，返回旧 op 的幂等终态仍属合法结果。 */
+    {
+        bool job_active;
+        app_operation_t *job_op;
+        char job_idem_key[sizeof(s_net_async.idem_key)];
+
+        app_cmd_net_job_lock();
+        job_active = s_net_async.active;
+        job_op = s_net_async.op;
+        snprintf(job_idem_key, sizeof(job_idem_key), "%s", s_net_async.idem_key);
+        app_cmd_net_job_unlock();
+
+        if (job_active) {
+            if (job_op != NULL && idem_key != NULL &&
+                strcmp(job_idem_key, idem_key) == 0) {
+                app_operation_status_t status;
+                cJSON *resp;
+                if (!app_operation_get_status(job_op, &status)) {
+                    *err_out = "not_found";
+                    return false;
+                }
+                resp = cJSON_CreateObject();
+                if (resp == NULL) {
+                    *err_out = "out_of_memory";
+                    return false;
+                }
+                cJSON_AddStringToObject(resp, "operation_id", status.id);
+                cJSON_AddStringToObject(resp, "state", app_op_state_name(status.state));
+                *resp_out = resp;
+                return true;
             }
-            resp = cJSON_CreateObject();
-            if (resp == NULL) {
-                *err_out = "out_of_memory";
-                return false;
-            }
-            cJSON_AddStringToObject(resp, "operation_id", status.id);
-            cJSON_AddStringToObject(resp, "state", app_op_state_name(status.state));
-            *resp_out = resp;
-            return true;
+            *err_out = "busy";
+            return false;
         }
-        *err_out = "busy";
-        return false;
     }
     {
         bool trial_busy;
@@ -800,6 +845,8 @@ static bool app_cmd_net_tryconnect_async(const cJSON *params,
     s_net_async.op = op;
     snprintf(s_net_async.operation_id, sizeof(s_net_async.operation_id), "%s",
              app_operation_id(op));
+    snprintf(accepted_operation_id, sizeof(accepted_operation_id), "%s",
+             s_net_async.operation_id);
     app_cmd_net_job_unlock();
 
     {
@@ -808,7 +855,7 @@ static bool app_cmd_net_tryconnect_async(const cJSON *params,
             *err_out = "out_of_memory";
             return false;
         }
-        cJSON_AddStringToObject(resp, "operation_id", s_net_async.operation_id);
+        cJSON_AddStringToObject(resp, "operation_id", accepted_operation_id);
         cJSON_AddStringToObject(resp, "state", "accepted");
         *resp_out = resp;
     }
@@ -1030,11 +1077,20 @@ static bool app_cmd_net_apply_async(const app_cmd_context_t *ctx,
      * mqtt_unavailable / 误报 verify_timeout),根因:拆链重连后当前链路
      * 与本事务无关,查它没有意义且必然与重验证赛跑。候选网络状态在
      * 验证后到提交前的变化,由既有恢复链(LKG/救援,当日两次实证)兜底。 */
-    if (!s_net_async.st_internet_verified) {
-        /* 理论不可达:GOT_IP 交付门槛保证 verified 才置位 */
-        ESP_LOGW(TAG, "apply rejected: trial verification missing op=%s", status.id);
-        *err_out = "verify_timeout";
-        return false;
+    /* CMD-02：持 J 复制 bool 后解锁判断。本处只是兜底门，非原子判定——
+     * 真正的安全边界是后面的 set_state(COMMITTING) 与 expiring 闸。 */
+    {
+        bool internet_verified;
+
+        app_cmd_net_job_lock();
+        internet_verified = s_net_async.st_internet_verified;
+        app_cmd_net_job_unlock();
+        if (!internet_verified) {
+            /* 理论不可达:GOT_IP 交付门槛保证 verified 才置位 */
+            ESP_LOGW(TAG, "apply rejected: trial verification missing op=%s", status.id);
+            *err_out = "verify_timeout";
+            return false;
+        }
     }
     {
         bool trial_ok;
@@ -2664,7 +2720,7 @@ esp_err_t app_cmd_execute_method(const app_cmd_context_t *ctx, const char *metho
                 err = "params_required";
             } else if (app_cmd_static_switch_blocked(ssid_item->valuestring, params, &err)) {
                 /* err set by helper */
-            } else if (s_net_async.active) {
+            } else if (app_cmd_net_job_is_active()) {
                 err = "busy";
             } else {
                 /* R8:trial 忙检/清理入锁;紧随其后的 15s 阻塞试连不持锁
@@ -2754,7 +2810,7 @@ esp_err_t app_cmd_execute_method(const app_cmd_context_t *ctx, const char *metho
 
             if (source == APP_CMD_SOURCE_MQTT) {
                 err = "guard_rejected";
-            } else if (s_net_async.active && !s_net_async_apply_internal) {
+            } else if (app_cmd_net_job_is_active() && !s_net_async_apply_internal) {
                 err = "busy";
             } else if (!cJSON_IsString(trial_item) || trial_item->valuestring == NULL ||
                        !app_cmd_net_trial_ready(trial_item->valuestring)) {
@@ -2860,7 +2916,7 @@ esp_err_t app_cmd_execute_method(const app_cmd_context_t *ctx, const char *metho
 
             if (source == APP_CMD_SOURCE_MQTT) {
                 err = "guard_rejected";
-            } else if (s_net_async.active) {
+            } else if (app_cmd_net_job_is_active()) {
                 err = "busy";
             } else if (!cJSON_IsString(trial_item) || trial_item->valuestring == NULL ||
                        !app_cmd_net_trial_ready(trial_item->valuestring)) {
