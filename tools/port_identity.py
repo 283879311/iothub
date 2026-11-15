@@ -459,7 +459,8 @@ def prepare_fresh_evidence_dir(evidence_dir):
 
 def validate_final_evidence(evidence_dir, run_id, port, mac=EXPECT_MAC_65D8,
                             max_age_min=EVIDENCE_MAX_AGE_MIN,
-                            require_restore=True, expected_lock_path=None):
+                            require_restore=True, require_new_boot=True,
+                            expected_lock_path=None):
     """校验最终证据是否**唯一属于本轮**；返回 (ok, reasons[], data)。
 
     覆盖：run_id / 端口 / MAC / 证据写入结果 / 协作停止态 / 端口锁持有与**路径** /
@@ -517,8 +518,9 @@ def validate_final_evidence(evidence_dir, run_id, port, mac=EXPECT_MAC_65D8,
              f"（{data.get('state_after_restore')!r}）")
         need(data.get("run_app_ok") is True, "run_app_ok 非 True")
         need(data.get("capture_restarted") is True, "capture_restarted 非 True")
-        need(data.get("new_boot") is True, "new_boot 非 True")
         need(data.get("record_written") is True, "record_written 非 True")
+        if require_new_boot:
+            need(data.get("new_boot") is True, "new_boot 非 True")
     # 机器校验以 Unix 时间戳为准；`at` 仅作人读，仍需可解析
     ts = data.get("at_unix")
     if not is_strict_number(ts):
@@ -582,7 +584,7 @@ def read_mac_flow(port, log_dir, out_record, capture_ctl="tools/serial_capture_c
                   chain_check=None, state_fn=None, run_id=None,
                   external_holder_attested=False, attestation_note=None,
                   lock_path=None, lock_timeout_s=5.0,
-                  evidence_dir_prepared=False):
+                  evidence_dir_prepared=False, require_chain=True):
     """步骤 0 / 回滚门禁共用的唯一实现。
 
     状态流程：检查录制链 → 停录制 → **持端口锁** → read_mac → 无论结果都恢复
@@ -662,6 +664,11 @@ def read_mac_flow(port, log_dir, out_record, capture_ctl="tools/serial_capture_c
         ev["chain_before"] = {}
     chain_ok = bool(ev["chain_before"]) and all(
         v is True for v in ev["chain_before"].values())
+    if not require_chain:
+        # 恢复模式：FI 可能无法启动，不能把"app 在跑"当作恢复前提；
+        # 串口互斥改由**端口锁**保证（下面强制持有）。
+        print("  [info] require_chain=False（恢复模式）：录制链仅记录，不作放行条件")
+        chain_ok = True
     if not chain_ok:
         print("  [FAIL] 录制链不完整——不停录制、不读 MAC")
 

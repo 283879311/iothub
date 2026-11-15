@@ -27,6 +27,24 @@ FLASH_MODE="dio"; FLASH_FREQ="40m"; FLASH_SIZE="4MB"
 
 [ -f "$BIN_SRC" ] || { echo "[FAIL] BIN 不存在: $BIN_SRC"; exit 2; }
 
+# ---- 端口协作锁（与 capture_serial.py / 门禁同一路径）----
+# 采集在跑时必须先 stop（记计划内 gap）；这里再兜一层，**防止调用者漏停采集**
+# 就直接与采集进程争用串口（pyserial 不设 TIOCEXCL，第二个读者会拉线序/拆字节）。
+real_port=$(readlink -f -- "$LOCK_PORT" 2>/dev/null || true)
+[ -n "$real_port" ] || real_port="$LOCK_PORT"
+lock_id=$(basename "$real_port")
+if [ -w /run/lock ]; then LOCK_DIR=/run/lock; else LOCK_DIR=/tmp; fi
+LOCK_FILE="$LOCK_DIR/iothub_serial_${lock_id}.lock"
+[ -w "$LOCK_DIR" ] || { echo "[FAIL] 锁目录不可写: $LOCK_DIR"; exit 2; }
+exec 9>>"$LOCK_FILE"
+if ! flock -n 9; then
+  echo "[FAIL] 端口锁被占用: $LOCK_FILE"
+  echo "       采集可能仍在运行——先执行:"
+  echo "         tools/serial_capture_ctl.sh stop $LOCK_PORT <log>"
+  exit 6
+fi
+echo "[ok] 已持有端口锁 $LOCK_FILE"
+
 # ---- 复制到私有冻结目录：校验对象 == 写入对象 ----
 FREEZE_DIR=$(mktemp -d "/tmp/s6_freeze.XXXXXX") || exit 2
 FROZEN="$FREEZE_DIR/frozen_$(basename "$BIN_SRC")"

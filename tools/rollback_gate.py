@@ -8,7 +8,9 @@
      （inode 可复用；本机 CH340 无序列号）。
   2. 锚点：preflight 产物，校验存在/可解析/新鲜度/端口/日志目录一致。
   3. 录制链：script_ok / port_arg_ok / log_arg_ok / fd_holds_port /
-     fd_holds_log 逐项必须 True。
+     fd_holds_log 逐项必须 True。**恢复模式**（`--recovery-mode`）下改为
+     仅记录、不否决——FI 可能无法启动时，"app 在跑/日志新鲜/有 boot 输出"
+     不能作为回滚前提；串口互斥由端口锁保证。
   4. 日志：fresh 且 boot_marker。
   5. dmesg（补充）：可读且发现 ttyUSB 事件 → 拒绝；不可读 → 仅记录。
   6. 回滚 BIN：完整 SHA-256 等于授权值。
@@ -47,6 +49,30 @@ from preflight_flash import inspect_capture, inspect_log  # noqa: E402
 
 EXPECT_MAC = PI.EXPECT_MAC_65D8
 
+CHAIN_KEYS = ("script_ok", "port_arg_ok", "log_arg_ok",
+              "fd_holds_port", "fd_holds_log", "running")
+
+
+def evaluate_preflight(cap, loginfo, recovery_mode=False):
+    """录制链/日志的放行判定；返回 (hard_fails, soft_notes, passes)。
+
+    - 正常模式：任一不满足 → hard（禁止继续）；
+    - **恢复模式**（FI 可能无法启动）：不满足项只转 soft 记录，不否决。
+      理由：`app 必须能启动 / 日志必须新鲜 / 必须有 boot 输出` 不能作为
+      "回滚恢复"的前提——否则真需要恢复时会被 app 日志门禁挡住。
+      串口互斥改由 `read_mac_flow()` 内**强制持有端口锁**保证（协作采集
+      在运行则取不到锁 → 拒绝读 MAC）。
+    """
+    items = [(f"录制链 {k}", cap.get(k) is True) for k in CHAIN_KEYS]
+    items.append((f"日志新鲜 age={loginfo.get('age_sec')}s",
+                  loginfo.get("fresh") is True))
+    items.append(("日志 boot 标记", loginfo.get("boot_marker") is True))
+    passes = [n for n, ok in items if ok]
+    bad = [n for n, ok in items if not ok]
+    if recovery_mode:
+        return ([], bad, passes)
+    return (bad, [], passes)
+
 
 def usb_events_since(minutes):
     try:
@@ -77,6 +103,10 @@ def main():
                          "其它 esptool）。软件无法证明，必须显式声明并写入证据")
     ap.add_argument("--skip-restore", action="store_true",
                     help="不等待新 boot 证据（仅供紧接烧录的调用点；仍会 run+重启录制）")
+    ap.add_argument("--recovery-mode", action="store_true",
+                    help="恢复模式（FI 可能无法启动）：录制链/日志新鲜度/boot 证据"
+                         "只记录不否决，且不等新 boot；仍强制端口/锚点/BIN sha/"
+                         "端口锁/操作者声明/证据写入")
     ap.add_argument("--capture-ctl", default="tools/serial_capture_ctl.sh",
                     help="串口录制控制脚本（停录制以读取 MAC）")
     args = ap.parse_args()
@@ -99,6 +129,9 @@ def main():
         return 2
     print("[info] 边界：协作锁只证明**本仓库采集**是否运行；"
           "串口无外部持有者由操作者声明（软件无法证明，port_free_proven=false）")
+    if args.recovery_mode:
+        print("[info] 恢复模式：录制链/日志新鲜度/boot 证据**不参与否决**"
+              "（FI 可能无法启动）；仍强制端口/锚点/BIN sha/端口锁/操作者声明/证据写入")
 
     def check(cond, msg):
         print(("  [ok]   " if cond else "  [FAIL] ") + msg)
@@ -138,16 +171,18 @@ def main():
     except Exception as exc:  # noqa: BLE001
         check(False, f"录制链检查异常（{type(exc).__name__}: {str(exc)[:60]}）")
         cap = {}
-    for k in ("script_ok", "port_arg_ok", "log_arg_ok",
-              "fd_holds_port", "fd_holds_log", "running"):
-        check(cap.get(k) is True, f"录制链 {k}")
     try:
         _m, loginfo = inspect_log(args.log_dir, name, 120)
     except Exception as exc:  # noqa: BLE001
         check(False, f"日志检查异常（{type(exc).__name__}: {str(exc)[:60]}）")
         loginfo = {}
-    check(loginfo.get("fresh") is True, f"日志新鲜 age={loginfo.get('age_sec')}s")
-    check(loginfo.get("boot_marker") is True, "日志 boot 标记")
+    hard, soft, passes = evaluate_preflight(cap, loginfo, args.recovery_mode)
+    for msg in passes:
+        check(True, msg)
+    for msg in soft:
+        print(f"  [info] {msg}（恢复模式：不否决）")
+    for msg in hard:
+        check(False, msg)
 
     # 4. 板卡身份（主证据）：统一恢复流程（停录制→持端口锁→read_mac→run→
     #    重启录制→新 boot 证据）。读 MAC 的两个独立条件：端口锁 + 操作者声明。
@@ -157,16 +192,17 @@ def main():
         ok_flow, ev = PI.read_mac_flow(
             args.port, args.log_dir, str(Path(args.evidence_dir) / "mac_record_gate.json"),
             capture_ctl=args.capture_ctl, evidence_dir=args.evidence_dir,
-            strict_restore=not args.skip_restore, run_id=run_id,
+            strict_restore=not (args.skip_restore or args.recovery_mode), run_id=run_id,
             external_holder_attested=True,
             attestation_note=args.attest_no_external_holder.strip(),
-            evidence_dir_prepared=True)
+            evidence_dir_prepared=True, require_chain=not args.recovery_mode)
         restore_info = ev
         check(ok_flow, "MAC 读取 + 恢复流程（stop→lock→mac→run→start→new boot）")
         # 强制消费端门禁：最终证据必须唯一属于本轮且结论 ok（不以首份快照为准）
         fin_ok, fin_reasons, _fin = PI.validate_final_evidence(
             args.evidence_dir, run_id, args.port, EXPECT_MAC,
-            require_restore=not args.skip_restore)
+            require_restore=True,
+            require_new_boot=not (args.skip_restore or args.recovery_mode))
         for why in fin_reasons:
             print(f"  [info] 最终证据：{why}")
         check(fin_ok, f"最终证据唯一属于本轮（run_id={run_id}）")

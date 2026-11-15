@@ -15,6 +15,7 @@
 """
 
 import fcntl
+import hashlib
 import json
 import os
 import subprocess
@@ -216,8 +217,8 @@ def test_read_mac_flow(tmp):
        and ev["port_free_proven"] is False,
        f"{ok} {ev.get('errors')} {ev.get('port_lock')}")
     fin_ok, fin_why, _ = PI.validate_final_evidence(
-        str(tmp / "ev_b1"), ev["run_id"], "/dev/ttyUSB1", require_restore=False,
-        expected_lock_path=str(tmp / "lk_b1"))
+        str(tmp / "ev_b1"), ev["run_id"], "/dev/ttyUSB1", require_restore=True,
+        require_new_boot=False, expected_lock_path=str(tmp / "lk_b1"))
     ck("B1 证据可被消费端校验通过", fin_ok, str(fin_why))
 
     # B11 记录与证据同落在**尚不存在**的证据目录（门禁默认形态）→ 仍成功
@@ -543,6 +544,149 @@ def test_final_evidence(tmp):
        (not ok) and reason_has(rs, "端口锁路径不符"), str(rs))
 
 
+def test_recovery_path(tmp):
+    print("[F] 恢复路径：FI 不可启动时的门禁放宽与烧录互斥")
+    import rollback_gate as RG
+
+    CHAIN_OK = {k: True for k in RG.CHAIN_KEYS}
+    LOG_OK = {"fresh": True, "boot_marker": True, "age_sec": 1}
+    cap_bad = {k: False for k in RG.CHAIN_KEYS}
+    log_bad = {"fresh": False, "boot_marker": False, "age_sec": 9999}
+
+    hard, soft, passes = RG.evaluate_preflight(CHAIN_OK, LOG_OK, False)
+    ck("F1 正常模式全满足 → 无否决",
+       not hard and not soft and len(passes) == len(RG.CHAIN_KEYS) + 2,
+       f"hard={hard} passes={len(passes)}")
+
+    hard, soft, passes = RG.evaluate_preflight(cap_bad, log_bad, False)
+    ck("F2 正常模式：链/日志不满足 → 硬否决",
+       len(hard) == len(RG.CHAIN_KEYS) + 2 and not soft, f"hard={len(hard)}")
+
+    hard, soft, passes = RG.evaluate_preflight(cap_bad, log_bad, True)
+    ck("F3 恢复模式：不满足项全部转软记录，不否决",
+       not hard and len(soft) == len(RG.CHAIN_KEYS) + 2 and not passes,
+       f"hard={len(hard)} soft={len(soft)}")
+
+    # F4/F5 require_chain 语义（用 fake，不碰串口）
+    class States:
+        def __init__(self, seq):
+            self.seq = list(seq)
+        def __call__(self):
+            st = self.seq.pop(0) if self.seq else PI.RUNNING
+            return (st, {"port": "/dev/ttyUSB1", "port_lock": {"reason": "test"}})
+
+    def chain_bad(log_dir, name):
+        return {k: False for k in RG.CHAIN_KEYS}
+
+    def ctl_writer(path):
+        p = Path(path)
+        p.write_text("#!/bin/sh\nexit 0\n")
+        os.chmod(p, 0o755)
+        return str(p)
+
+    L2 = str(tmp / "logs2"); Path(L2).mkdir(parents=True, exist_ok=True)
+    (Path(L2) / "serial_ttyUSB1.log").write_text("x")
+    mac_ok = lambda port: (True, "10:97:bd:d3:65:d8")   # noqa: E731
+    run_ok = lambda port: (True, "ran")                  # noqa: E731
+
+    calls = {"n": 0}
+    def mac_count(port):
+        calls["n"] += 1
+        return (True, "10:97:bd:d3:65:d8")
+
+    ok, ev = PI.read_mac_flow(
+        "/dev/ttyUSB1", L2, str(tmp / "f4.json"),
+        capture_ctl=ctl_writer(tmp / "f4.sh"), evidence_dir=str(tmp / "ev_f4"),
+        lock_path=str(tmp / "lk_f4"), read_mac=mac_ok, run_app=run_ok,
+        strict_restore=False, chain_check=chain_bad, state_fn=States(
+            [PI.COOPERATING_STOPPED, PI.RUNNING]),
+        external_holder_attested=True, attestation_note="test",
+        require_chain=False)
+    ck("F4 恢复模式：链不完整仍读 MAC（互斥由端口锁保证）",
+       ok and ev["mac_ok"] is True and ev["port_lock"]["acquired"] is True,
+       f"{ok} {ev.get('errors')}")
+
+    ok, ev = PI.read_mac_flow(
+        "/dev/ttyUSB1", L2, str(tmp / "f5.json"),
+        capture_ctl=ctl_writer(tmp / "f5.sh"), evidence_dir=str(tmp / "ev_f5"),
+        lock_path=str(tmp / "lk_f5"), read_mac=mac_count, run_app=run_ok,
+        strict_restore=False, chain_check=chain_bad, state_fn=States([PI.RUNNING]),
+        external_holder_attested=True, attestation_note="test",
+        require_chain=True)
+    ck("F5 正常模式：链不完整 → 不读 MAC、不取锁",
+       (not ok) and calls["n"] == 0 and ev["port_lock"]["acquired"] is False,
+       f"calls={calls['n']} {ev.get('port_lock')}")
+
+    # F6 flash_frozen.sh 自带端口锁守卫（静态守卫；行为验证见运行手册）
+    txt = (ROOT / "tools" / "flash_frozen.sh").read_text(encoding="utf-8")
+    ck("F6 flash_frozen.sh 在 esptool 之前取端口锁并拒绝占用",
+       "flock -n 9" in txt and "exit 6" in txt
+       and txt.index("flock -n 9") < txt.index("-m esptool --chip"))
+
+
+def test_gate_recovery_wiring(tmp):
+    print("[G] rollback_gate 恢复模式接线（monkeypatch，不碰串口）")
+    import rollback_gate as RG
+
+    def write_bin():
+        p = Path(tmp) / "rb.bin"; p.write_bytes(b"\x00" * 64)
+        return str(p), hashlib.sha256(p.read_bytes()).hexdigest()
+
+    def write_anchor(mac="10:97:bd:d3:65:d8"):
+        p = Path(tmp) / "anchor.json"
+        p.write_text(json.dumps({
+            "version": 1, "port": "/dev/ttyUSB1",
+            "log_dir": str(tmp / "logs3"), "mac": mac, "mac_ok": True,
+            "checked_at_unix": int(time.time())}))
+        return str(p)
+
+    (Path(tmp) / "logs3").mkdir(parents=True, exist_ok=True)
+
+    seen = []
+
+    def fake_flow(*a, **kw):
+        seen.append(kw)
+        return (True, {"mac": "10:97:bd:d3:65:d8", "port": "/dev/ttyUSB1",
+                       "run_id": kw.get("run_id"), "errors": []})
+
+    orig = (RG.inspect_capture, RG.inspect_log, RG.PI.read_mac_flow,
+            RG.PI.validate_final_evidence, RG.usb_events_since, sys.argv)
+    try:
+        RG.inspect_capture = lambda *a, **k: {x: False for x in RG.CHAIN_KEYS}
+        RG.inspect_log = lambda *a, **k: ({}, {"fresh": False, "boot_marker": False,
+                                               "age_sec": 9999})
+        RG.PI.read_mac_flow = fake_flow
+        RG.PI.validate_final_evidence = lambda *a, **k: (True, [], {})
+        RG.usb_events_since = lambda *a, **k: (True, "none")
+        binp, bsha = write_bin()
+        anchor = write_anchor()
+
+        # G1 正常模式：链/日志不满足 → rc=1 且根本不调用 read_mac_flow
+        sys.argv = ["rollback_gate.py", "--port", "/dev/ttyUSB1",
+                    "--log-dir", str(tmp / "logs3"), "--anchor-file", anchor,
+                    "--bin", binp, "--expect-bin-sha256", bsha,
+                    "--evidence-dir", str(tmp / "g1_ev"),
+                    "--attest-no-external-holder", "test"]
+        rc = RG.main()
+        ck("G1 正常模式链不合格 → rc=1 且不读 MAC",
+           rc == 1 and not seen, f"rc={rc} seen={len(seen)}")
+
+        # G2 恢复模式：同样不合格 → rc=0，且 require_chain/strict_restore 被放宽
+        sys.argv = ["rollback_gate.py", "--port", "/dev/ttyUSB1",
+                    "--log-dir", str(tmp / "logs3"), "--anchor-file", anchor,
+                    "--bin", binp, "--expect-bin-sha256", bsha,
+                    "--evidence-dir", str(tmp / "g2_ev"),
+                    "--attest-no-external-holder", "test", "--recovery-mode"]
+        rc = RG.main()
+        kw = seen[-1] if seen else {}
+        ck("G2 恢复模式 → rc=0 且 require_chain=False / strict_restore=False",
+           rc == 0 and kw.get("require_chain") is False
+           and kw.get("strict_restore") is False, f"rc={rc} kw={kw}")
+    finally:
+        (RG.inspect_capture, RG.inspect_log, RG.PI.read_mac_flow,
+         RG.PI.validate_final_evidence, RG.usb_events_since, sys.argv) = orig
+
+
 def test_evidence_dir(tmp):
     print("[E] 证据目录全新性（read / rollback_gate 共用同一函数）")
     d = str(tmp / "e_new" / "nested")
@@ -573,6 +717,8 @@ def main():
         test_read_mac_flow(tmp)
         test_anchor_and_record(tmp)
         test_final_evidence(tmp)
+        test_recovery_path(tmp)
+        test_gate_recovery_wiring(tmp)
         test_evidence_dir(tmp)
     finally:
         for p in FAKE_PORTS:
