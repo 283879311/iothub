@@ -16,7 +16,7 @@
 | **ELF SHA-256** | `55c00628f9bba2edc2246a4967dc29f6df1de9770654a357c16081c6cfdfe41b` |
 | 内嵌 build_sha | `55c00628f` |
 | 编译开关 | `-DAPP_WIFI_FAULT_INJECT=ON` |
-| **源码提交** | **`bc6d362`**（`cleanup_hold` 可中断版 + harness 修正） |
+| **源码提交** | **`bc6d362`**（`cleanup_hold` 可中断版 + harness 修正；**仅 FI 镜像构建于此提交**） |
 
 ## 2. 功能回滚镜像（阶段 B 结束回滚对象）
 
@@ -35,7 +35,9 @@
   （SHA-256 `1c70e3068c81a8822da51fa4379a875548844027a9da6cfb1f471570012ad811`）
   → 解码证实 `ota_0, app, 0x10000, 1920K`
 - `CONFIG_IDF_TARGET=esp32`；flash 4MB；esptool v5.6.0
-- 两镜像同源（`bc6d362` 的 `main/wifi.c`），仅 `APP_WIFI_FAULT_INJECT` 开关不同
+- 源码来源：**FI 镜像构建于 `bc6d362`**（FI=ON，含 `restart_wake_fail`/`cleanup_hold`）；
+  **功能回滚镜像构建于 `856c669`**（FI=OFF，S6 修复逻辑相同、当时无 FI 注入）——
+  两者**不是同一次构建**，回滚件用于恢复设备到阶段 A 已验证的状态
 
 ## 4. 校验方式
 
