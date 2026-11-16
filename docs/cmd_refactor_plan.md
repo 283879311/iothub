@@ -18,7 +18,7 @@
 | ID | 优先级 | 项目 | 状态 | 验收要求 |
 |---|---|---|---|---|
 | CMD-01 | P0 | `io.get` Wi-Fi runtime 状态读取加锁快照 | TEST_PENDING | 最小代码修改已在 `add93e7`；待 ESP-IDF 构建及 BLE/MQTT 入口回归，未通过前不标 PASS |
-| CMD-02 | P0 | `s_net_async` 逐字段所有权与读点收口 | CODE_DONE | 七处读点已按 §1.3 实施（`28f9090`）；`git diff --check` 与 `syntax_check --strict` 通过，全量读写点复核无新增无锁读。**PASS 待 ESP-IDF 构建 + 受理/重复幂等/apply/cancel/expire 回归**（未授权） |
+| CMD-02 | P0 | `s_net_async` 逐字段所有权与读点收口 | TEST_PENDING | 七处读点已按 §1.3 实施（`28f9090`）；联合验证阶段 1 构建与阶段 2 host tests 按执行报告通过。**PASS 仍待阶段 3 设备回归**（未授权） |
 | CMD-03 | P0 | operation/job 锁序、callback 时序及 expiring 窄窗口 | IN_PROGRESS | Phase A host 测试已实施：S1–S5 ×50 ×10 轮全过（A1 100/100、A2 100/100、A3 100/100、A4/A5/A7 50/50），变异体在 A1 失败（可证伪）；见 `CMD-03_窄窗口竞态_测试设计_2026-11-15.md` 附录 A。Phase B（cmd 层 store_trial 守卫）需代码授权；Phase C 需设备授权 |
 | CMD-04 | P1 | network/device status 改为快照后构造 JSON | TODO | 锁持有期间无 cJSON 分配；字段兼容 |
 | CMD-05 | P1 | 复核 config lock 与 Wi-Fi profile lock 全局锁序 | REVIEWED | 静态审查完成（`CMD-05_config_profile锁序审查_2026-11-15.md`）：偏序 `J → C → P`、未发现反向边；风险为 C 跨 NVS 长持锁与 C/P 递归契约；CMD-06 前置约束见 §4 |
@@ -31,14 +31,14 @@
 | CMD-12 | P2 | 全仓检索 HTTP source/owner、旧 wrapper、测试 hook 及命名清理 | TODO | 逐项列调用者；确认后才删除；包含三项 owner/domain/password helper 收敛评估 |
 | CMD-13 | P2 | 收敛 `cmd.c` 为入口、policy、分发和统一收尾 | TODO | 无业务状态全局变量泄漏；入口可读且测试通过 |
 | CMD-14 | P1 | 记录 `apply_async` 持 job 锁跨 NVS 的持锁预算，评估是否需要缩短锁区 | TODO | 先形成测量方法和证据；**未完成评估前不得缩短锁区** |
-| CMD-15 | P1 | MQTT 运行态读取 `s_config` 的锁/一致性收口 | CODE_DONE | R1/R2（`999db00`）+ R4（`8d7d768`）已实施：C 内快照、backend 原子缓存、token 静态副本、四处 `s_wifi` 改 W 快照（含 DISCONNECTED 条件调用）。`diff --check`/`syntax_check --strict` 通过，`s_wifi.` 仅剩快照函数（W 内）。**PASS 待构建/回归**；R3/R5 未授权 |
+| CMD-15 | P1 | MQTT 运行态读取 `s_config` 的锁/一致性收口 | TEST_PENDING | R1/R2（`999db00`）+ R4（`8d7d768`）已实施；联合验证阶段 1 构建与阶段 2 host tests 按执行报告通过。**PASS 仍待阶段 3 设备回归**；R3/R5 未授权 |
 
 ## 3. 分阶段实施
 
 ### 阶段 A：锁与快照，不移动业务代码
 
 - [x] CMD-01：已修复 `io.get` 对 `s_wifi.sta_has_ip` / `s_wifi.sta_ip` 的读取边界；锁内复制快照，锁外构造 JSON。代码提交：`add93e7`。静态检查通过；构建与 BLE/MQTT 入口回归尚未执行。
-- [x] CMD-02：七处 `s_net_async` 读点已按 §1.3 实施（`28f9090`），当前 `CODE_DONE`；构建与受理/幂等/apply/cancel/expire 回归仍待联合验证，未通过前不标 PASS。
+- [x] CMD-02：七处 `s_net_async` 读点已按 §1.3 实施（`28f9090`）；联合验证阶段 1 构建与阶段 2 host tests 按执行报告通过，当前 `TEST_PENDING`；受理/幂等/apply/cancel/expire 设备回归仍待单独授权，未通过前不标 PASS。
 - [x] CMD-03：锁序/回调静态审查完成（同上 §2）；测试设计完成；**Phase A host 测试已实施并通过**（`tests/operation_host/`，附录 A：A1 100/100、可证伪性检查 OK）。Phase B 未授权。
 - [x] CMD-05：静态审查完成（`CMD-05_config_profile锁序审查_2026-11-15.md`）；未改代码。
 - [ ] 更新本计划和审查报告中的结论、证据及未决项。
@@ -126,18 +126,18 @@
 
 - 当前产品源码审查/验证基线：`5104a3b0b3266f6afe22404d24ca89d41253cb63`（包含 CMD-02 `28f9090`、CMD-15 R1/R2 `999db00`、R4 `8d7d768`；其后截至 `cbe6a20` 的提交仅为文档）。每轮开工仍必须重新读取当前 `main` HEAD；该 SHA 是产品代码基线，不是本轮构建 HEAD。
 - CMD-01：代码改动已存在（`add93e7`），构建和 BLE/MQTT 入口回归未完成，状态 `TEST_PENDING`。
-- CMD-02：七处读点已实施（`28f9090`），状态 `CODE_DONE`；静态检查与全量读写点复核已有记录；ESP-IDF 构建和受理/重复幂等/apply/cancel/expire 回归尚未执行。
+- CMD-02：七处读点已实施（`28f9090`）；联合验证阶段 1 构建与阶段 2 host tests 按执行报告通过，状态 `TEST_PENDING`，等待独立授权的阶段 3 设备回归。
 - CMD-03：静态审查、测试设计、**Phase A host 测试**均完成（5 场景 ×50 ×10 轮全过；变异体检查通过）。Phase B（cmd 层 store_trial 守卫）与 Phase C（设备）未授权。
 - CMD-05：config/profile 锁序静态审查完成，状态 `REVIEWED`。
-- CMD-15：R1/R2（`999db00`）与 R4（`8d7d768`）已实施，状态 `CODE_DONE`；R3/R5 未授权。
-- CMD-02 + CMD-15 联合验证申请已修订至 v5 并获批阶段 1（ESP-IDF fullclean/build）+ 阶段 2（host tests）；两阶段截至本次同步尚未执行。阶段 3 设备回归不在批准范围。
-- 当前仍没有 CMD-02/CMD-15 联合构建与 host 验证证据，也没有对应设备验收证据；不得标 `PASS`。
+- CMD-15：R1/R2（`999db00`）与 R4（`8d7d768`）已实施；联合验证阶段 1 构建与阶段 2 host tests 按执行报告通过，状态 `TEST_PENDING`，等待独立授权的阶段 3 设备回归；R3/R5 仍未授权。
+- CMD-02 + CMD-15 联合验证阶段 1（ESP-IDF fullclean/build）与阶段 2（host tests）已于 2026-11-16 按执行报告通过；阶段 3 设备回归不在批准范围，尚未执行、未授权。
+- 当前已有 CMD-02/CMD-15 联合构建与 host 验证报告及本地证据目录；尚无设备验收证据，因此不得标 `PASS`。
 
 ### 7.2 唯一推进队列
 
 按依赖顺序推进，不并行混改：
 
-1. **CMD-02 + CMD-15 联合验证（当前唯一执行事项）：**本轮已批准阶段 1 ESP-IDF 构建、阶段 2 host tests；先构建、后 host。严格执行 `CMD-02_15_联合验证授权申请_2026-11-15.md` 的 HEAD/工作区/源码差异门禁；阶段 2 的 `.venv-bleak/bin/python` 缺失或不可执行时，记录环境缺失并 STOP 整个阶段 2，不创建、不跳过、不报通过。构建或任一测试失败即停止并报告，不自行修改产品代码/测试断言。
+1. **CMD-02 + CMD-15 联合验证：**阶段 1 ESP-IDF 构建与阶段 2 host tests 已按执行报告通过（详见 §8.5）；本窗口已结束。阶段 3 设备回归需单独立项和授权，不得由本次结果推定获批。
 2. **CMD-01：**联合构建若可复用，仅在单独核对入口回归范围并取得相应授权后，安排 BLE/MQTT 入口回归；不能把 CMD-02/15 的 host 结果替代设备入口回归。
 3. **CMD-03 Phase B 决策：**Phase A 已完成；是否修改 cmd 层 `store_trial` 守卫、是否抽取 `cmd_net_guard`，必须单独设计评审和代码授权。当前不执行。
 4. **CMD-05：**锁序静态审查已完成（`REVIEWED`）；未测持锁时长。
@@ -447,7 +447,7 @@
 
 ## 8. CMD-02 + CMD-15 联合验证窗口（唯一执行口径）
 
-> **状态：APPROVED（阶段 1 + 阶段 2；待执行）**。本节是当前执行入口；原始批准文本与完整门禁细节保存在 [历史批准记录](archive/2026-11/CMD-02_15_联合验证授权申请_2026-11-15_历史批准记录.md)。本节与归档记录共同构成可审计授权链；任何扩大范围必须重新申请。
+> **状态：阶段 1 + 阶段 2 已执行并按报告通过；阶段 3 未授权、未执行。**本节是当前执行入口；原始批准文本与完整门禁细节保存在 [历史批准记录](archive/2026-11/CMD-02_15_联合验证授权申请_2026-11-15_历史批准记录.md)。本节与归档记录共同构成可审计授权链；任何扩大范围必须重新申请。
 
 ### 8.1 基线与执行前门禁
 
@@ -476,10 +476,13 @@
 
 ### 8.4 当前结果与下一步
 
-- 当前记录状态：**待执行**。文档审查通过不等于构建或测试通过。
-- CMD-02、CMD-15 仍为 `CODE_DONE`，不得提前标记 `PASS`。
-- 本台账维护时只更新当前状态和证据链接；历史批准范围、门禁和审批结论保留在归档原文，不因后续文档整理而改写。
-- 下一唯一动作：阶段 1 `idf.py fullclean` + `idf.py build`；成功后才进入阶段 2。
+- 阶段 1（ESP-IDF `fullclean` + `build`）和阶段 2（批准清单内 host tests）已于 2026-11-16 按执行报告完成并通过各自判据；详见 §8.5。
+- CMD-02、CMD-15 当前状态均为 `TEST_PENDING`：构建与 host 验证完成，但阶段 3 设备回归尚未授权/执行，因此不得标记 `PASS`。
+- 阶段 1 的 4 条警告均位于 `main/uart.c`，属于未使用静态函数警告；`main/cmd.c`、`main/mqtt.c` 无警告。逐条披露并留待后续评估，本窗口不处理。
+- 执行方式差异：阶段 1 由一次性脚本执行，使用 `PIPESTATUS[0]` 判定 `fullclean/build` 命令退出码；日志先写入 `stage1_*.log`，再复制到批准路径 `build/{fullclean,build}.log`，报告称两份内容逐字节一致。该差异如实记录，不表述为原命令直接写入批准路径。
+- 证据目录 `artifacts/cmd02_cmd15_verify_20261115/` 被 `.gitignore:50` 忽略，证据仅在执行环境本地；本次纯文档回写不上传证据包、不改变忽略规则。
+- 本次执行报告称仓库 HEAD 保持 `31fe59e`、工作区干净，未修改源码、测试、`sdkconfig` 或分区表；未烧录、未连接设备、未操作串口/BLE。
+- 下一唯一动作：如需设备回归，另行提交阶段 3 方案并申请授权；本次授权窗口不自动延伸。
 
 
 ### 7.21 文档体系收敛（2026-11-16）
@@ -501,3 +504,18 @@
 - 验证：本次文档修订不执行构建、host 测试或任何设备操作；新活动申请重新成为 HEAD 最后提交后，执行者须在本地重新实测全部四项 HEAD/内容/路径/工作区门禁。
 - 下一唯一动作：门禁更新提交后，重新核验四项门禁；全部通过才可按原批准执行阶段 1。
 
+
+### 7.23 交接记录 · 2026-11-16 · CMD-02 + CMD-15 阶段 1/2 执行结果回写
+
+- 日期：2026-11-16
+- 执行基线：报告记录 main HEAD = 31fe59ec12224ff365cb25d88b5ac70794002ce6；产品源码基线仍为 5104a3b0b3266f6afe22404d24ca89d41253cb63。
+- 本轮 CMD：CMD-02 + CMD-15 联合验证阶段 1、阶段 2。
+- 状态变化：联合验证窗口由 APPROVED（阶段 1+2，待执行）转为阶段 1/2 已执行并按报告通过；CMD-02、CMD-15 由 CODE_DONE 调整为 TEST_PENDING，等待阶段 3 设备回归。
+- 阶段 1：报告记录 ESP-IDF v6.0.3-707-gdac489c6718；fullclean/build rc 均为 0，0 error、4 warning；4 条 warning 全在 main/uart.c（未使用静态函数），cmd.c/mqtt.c 为 0 warning。报告记录 BIN/ELF/compile_commands.json 均存在；BIN 1,175,968 bytes，SHA256 056d84ea24b2b18cf4f25e5e0ddebf106586f9e74d5a8704253d4ea7c2f56ddd；ELF 11,568,624 bytes，SHA256 898994559f354a0d517da3dbdc884c46d6d1e5ad9b7b73dec5ed8f994a0ce373；sdkconfig 前后哈希一致（报告摘要 f55fff99…cc1c）；HEAD 未变、工作区干净。
+- 阶段 1 执行方式差异：一次性脚本以 PIPESTATUS[0] 判定构建命令退出码；日志先写 stage1_*.log，再复制到批准路径 build/{fullclean,build}.log，报告称内容逐字节一致。此处保留差异，不称为原申请固定命令直接产生日志。
+- 阶段 2：10 项全部 rc=0：token_store 58/0；netcheck PASS；wifi_owner 59/0；cmd_context 85/0；operation_host RESULT: PASS；falsify rc=0 且含 [FALSIFY] OK（变异体在 A1 失败）；strict syntax cmd.c、mqtt.c 2/2；S6 gate 141/0；audit_cs PASS；check_v1_only PASS。
+- 证据：报告给出的本地忽略目录 artifacts/cmd02_cmd15_verify_20261115/；run_id=cmd02_cmd15_20261116T143039Z。目录被 .gitignore:50 忽略，证据未随本次提交上传。
+- 未完成/风险：无阶段 3 设备回归证据；CMD-02 检查-动作非原子边界及 CMD-15 运行时一致性仍需设备/运行时验证；uart.c 4 条警告待后续单独评估。
+- 授权边界：本轮已执行=阶段 1 + 阶段 2；未授权/未执行=阶段 3、烧录、设备、串口、BLE、CMD-03 Phase B、CMD-06、CMD-15 R3/R5；未修改产品源码、测试代码、sdkconfig 或分区表。
+- 证据口径：本记录依据执行方在 2026-11-16 提供的执行报告回写；当前文档维护者未独立读取执行环境本地日志或重跑测试。
+- 下一唯一动作：如需阶段 3，另行提交设备回归设计与授权申请；本窗口不自动扩权。
