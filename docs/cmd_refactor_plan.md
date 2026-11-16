@@ -519,3 +519,10 @@
 - 授权边界：本轮已执行=阶段 1 + 阶段 2；未授权/未执行=阶段 3、烧录、设备、串口、BLE、CMD-03 Phase B、CMD-06、CMD-15 R3/R5；未修改产品源码、测试代码、sdkconfig 或分区表。
 - 证据口径：本记录依据执行方在 2026-11-16 提供的执行报告回写；当前文档维护者未独立读取执行环境本地日志或重跑测试。
 - 下一唯一动作：如需阶段 3，另行提交设备回归设计与授权申请；本窗口不自动扩权。
+### 8.5 执行结果摘要与证据索引
+
+- 阶段 1：ESP-IDF v6.0.3-707-gdac489c6718；fullclean/build rc=0，0 error、4 warning；warning 均在 main/uart.c，cmd.c/mqtt.c 为 0 warning。BIN/ELF/compile_commands.json 均存在；产物 SHA256、大小、sdkconfig 哈希摘要及执行方式差异见 §7.23。
+- 阶段 2：批准清单 10 项全部 rc=0；token_store 58、wifi_owner 59、cmd_context 85、S6 gate 141；netcheck、operation_host、falsify、strict syntax、audit_cs、check_v1_only 均符合各自契约。逐项结果见 §7.23。
+- 证据目录：artifacts/cmd02_cmd15_verify_20261115/（本地 .gitignore 忽略目录）；run_id=cmd02_cmd15_20261116T143039Z。证据未上传至仓库。
+- 证据性质：以上为执行方报告，本台账如实转录；文档维护者未独立读取本地日志或重跑测试。
+- 结论：阶段 1/2 按报告通过；CMD-02/CMD-15 为 TEST_PENDING，阶段 3 未授权、未执行，不得标 PASS。
