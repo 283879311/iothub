@@ -31,7 +31,7 @@
 - [CMD-03 窄窗口竞态测试设计](CMD-03_窄窗口竞态_测试设计_2026-11-15.md)：Phase A/B/C 分界与可证伪测试。
 - [CMD-05 config/profile 锁序审查](CMD-05_config_profile锁序审查_2026-11-15.md)：J/C/P 锁序及 CMD-06 前置约束。
 - [CMD-04 status 快照设计](CMD-04_status快照方案_2026-11-14.md)：总方案；a/b/c 清单是执行细节。
-- [CMD-15 MQTT 运行态与 config 同步复核](MQTT运行态与config同步复核_2026-11-15.md)：R1/R2/R4 CODE_DONE，R3/R5 未授权。
+- [CMD-15 MQTT 运行态与 config 同步复核](MQTT运行态与config同步复核_2026-11-15.md)：R1/R2/R4 为 TEST_PENDING（阶段 1/2 按执行报告通过，阶段 3 设备回归未授权/未执行）；R3/R5 未授权。
 
 ### BLE / MQTT / Wi-Fi
 
