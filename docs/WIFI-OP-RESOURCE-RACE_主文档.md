@@ -85,3 +85,26 @@
 ### 7.5 N03/N07 时序注入缺口
 
 旧 MQTT v1 真机回归的 38/40、0 FAIL、2 SKIP 中，N03/N07 因静态 IP 锁条件按预期跳过；底层路径有当时真机证据，但 harness 尚不能完成对应时序注入闭环。此项属于低优先级测试工具能力缺口，不得改写为产品功能 FAIL，也不得把 SKIP 计为 PASS。重新执行须按当前镜像、设备和授权建立新记录。
+
+### 7.6 静态 IP 配置剩余运行时语义与可观察性
+
+本节从当前 `main/config_apply.c`、`main/wifi.c`、`main/cmd.c` 复核，替代 2026-11-02 旧专项清单中已过时的 v0 接口描述。以下是代码事实与待验证边界，不代表设备验收结果。
+
+| 项目 | 当前源码事实 | 结论 |
+|---|---|---|
+| 静态字段空串 | `sta_static_ip/gateway/netmask/dns1/dns2` 字段仍设置 `empty_keeps=true`；空串在 apply 时保留旧值 | 不能用空串清除单个静态字段；尚无对应的字段级清除语义 |
+| DHCP client 停止 | `app_configure_sta_static_ip()` 对 `esp_netif_dhcpc_stop()` 的失败（除 ALREADY_STOPPED）会中止静态应用并进入 M1 恢复决策 | 旧清单“只告警继续”已过时 |
+| DNS 设置 | 非空 DNS 才调用 `esp_netif_set_dns_info()`，调用返回值未检查；空 DNS 不显式清除 MAIN/BACKUP | 设置失败未形成明确错误路径；DNS 空值/静态↔DHCP 切换残留仍需专项验证 |
+| 静态 IP 冲突检测 | GOT_IP 后启动 ARP 探测；内部结果只有 bool。若读取自身 MAC 失败但 ARP 有应答，当前代码仍置 conflict=true | 无法区分真实冲突与检测不完整，需引入 unknown/clear/conflict 语义 |
+| 冲突状态输出 | 当前 `config.get` 输出持久化静态配置，但未输出 `sta_ip_conflict`；没有可供客户端判断检测结果的三态字段 | 旧注释所称“状态接口透出”与实际输出不符 |
+| 静态模式 tryconnect | `app_cmd_static_switch_blocked()` 已拒绝静态模式下切换到不同 SSID 或请求 DHCP trial（返回 `static_ip_pinned`） | 旧清单中“缺少 tryconnect 互锁”已由当前实现覆盖 |
+
+**仍需独立验证/评审：**
+
+1. DNS MAIN/BACKUP 的空值清理策略，以及静态↔DHCP 切换后实际 DNS 是否残留；不能仅由当前“非空才设置”的代码推断具体 netif 行为。
+2. `esp_netif_set_dns_info()` 失败时是否应中止配置、进入 M1 恢复，还是允许降级；需要明确产品语义并测试。
+3. ARP 冲突检测应区分检测未完成、无冲突和确认冲突；自身 MAC 获取失败不得直接等价于确认冲突。
+4. 冲突结果是否进入只读状态接口，以及客户端提示/恢复动作如何定义，需单独评审。
+5. 静态字段清除应通过明确的专用清除字段/操作定义，不应复用空串的“保持原值”语义。
+
+以上属于 M2/运行时可观察性和配置语义的剩余审查范围；本轮只迁移证据，不修改源码、Contract 或设备状态。
