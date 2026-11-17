@@ -64,7 +64,7 @@
 - MQTT RPC 上下文由已建立的 ThingsBoard 设备连接提供，命令执行仍走 v1 注册表和策略层。
 - `config.set` 对 MQTT 来源拒绝网络、MQTT、蓝牙、UART、管理员认证等本地/身份相关配置域；GPIO 和 data route 按当前代码策略处理。
 - `auth.admin.set`、`provisioning.pin.set`、`uart.send`、`data.loopback` 等本地维护命令不允许 MQTT 来源。
-- 网络事务命令的 MQTT 支持由 `APP_CMD_MQTT_NET_TXN_ENABLE` 控制；当前 CMake 产品构建显式定义为 `1`。即使启用，仍受 operation owner 限制：MQTT 只能查询/取消其自身拥有的 operation，不能接管 BLE operation。
+- 网络事务命令的 MQTT 支持由 `APP_CMD_MQTT_NET_TXN_ENABLE` 控制；当前 `main/cmd_policy.h` 在未由构建参数覆盖时将宏默认定义为 `1`；`main/CMakeLists.txt` 另有仅供测试构建使用的显式定义选项。默认源码策略因此允许 MQTT 发起网络事务，但实际镜像仍应以其编译宏/`device.info` 构建变体为准。MQTT 只能操作其自身拥有的 operation，不能接管 BLE operation。
 - MQTT 的网络试连受理路径会先完成响应投递协调，再进入可能导致链路中断的 Wi-Fi 操作；不得把“命令已接受”误解为“网络切换已完成”。
 
 ## 4. 网络命令策略与 operation 所有权
@@ -95,7 +95,7 @@ operation 查询对 MQTT/HTTP 按 owner 隔离；BLE 本地 token 可按现行�
 本轮源码对照发现以下差异，登记为后续契约审查项；本次文档迁移不修正代码或 Contract：
 
 - `cmd_v1.c` 生产注册表为 26 项，而 `contract/v1/commands.json` 当前列出的命令集合并未覆盖全部注册命令；源码独有命令包括 `gpio.status`、`uart.runtime`、`io.get`、`io.set`、`led.set`、`led.toggle`、`relay.set`、`relay.toggle`、`network.reconnect`、`auth.admin.set`、`provisioning.pin.set`、`uart.send`。
-- `contract/v1/commands.json` 与 `contract/v1/errors.json` 的 firmware baseline 字段彼此不一致；二者目前均为 `1.1-draft`，不能直接作为已统一的固件基线声明。
+- `contract/v1/commands.json` 的 firmware baseline 为 `1.3-9e1d6c5 / build_sha 8cc566bd0 (2026-11-10)`；`contract/v1/errors.json` 为 `1.3-2ef2a38 / build_sha 98f2465cb (2026-11-10)`。二者均为 `1.1-draft`，基线彼此不一致，不能直接作为已统一的固件基线声明。
 - BLE 协议规范说明了当前 BLE v1 wire 入口；MQTT 透传 v1 payload 的实际命令覆盖和逐命令设备验收，不能仅由注册表存在推导为已通过。
 - MQTT 网络事务构建开关当前为 ON，但该构建事实不替代 MQTT 真实链路、断连响应投递和 operation owner 的设备回归证据。
 
@@ -117,7 +117,7 @@ operation 查询对 MQTT/HTTP 按 owner 隔离；BLE 本地 token 可按现行�
 - [CMD-15 MQTT 运行态与 config 同步复核](MQTT运行态与config同步复核_2026-11-15.md)
 - [协议契约整改方案](协议契约整改方案_2026-11-10.md)
 
-## 8. 网络试连失败收尾的历史审计边界
+## 9. 网络试连失败收尾的历史审计边界
 
 2026-11-05 对旧 `run_fn` 自然失败恢复疑点做过只读源码审查和一次真机验证：试连非 OK 收尾会恢复旧 Wi-Fi 配置并调度重连；唯一记录到的 `store_trial` 失败条件是 BLE 来源且 BLE 会话已断开，该场景依赖 BLE disconnect 路径先触发取消/cleanup。该证据支持当时关闭“run_fn 失败后设备必然滞留候选网络”的独立缺陷判断，但不应外推为任意未来失败路径均安全。
 
