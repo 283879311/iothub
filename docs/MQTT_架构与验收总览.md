@@ -100,4 +100,5 @@
 
 - P6 operation 终态 stages 快照化及 Wi-Fi observer generation/结果写入的锁内原子性已在当前源码实现，不再作为未完成 backlog 项；后续状态以源码和 CMD 主台账为准。
 - `MQTT_EVENT_PUBLISHED` 日志中的 `total_published` 实际按 telemetry 计数（`is_telemetry` 才递增），名称可能让人误以为统计全部发布。属于低优先级日志语义清理候选，不影响发布行为，不得把该标签直接当作全量 PUBACK 计数。
+- 旧 backlog 记录 `app_wifi_sta_config_updated()` 无调用者；当前仍需由 CMD-12 源码清理审查完成全仓调用者核验。本轮未将其定性为死代码，也未删除函数；在审查闭环前保持 UNKNOWN。
 - 历史小程序评审中的客户端修复建议只代表当时跨仓快照；当前客户端实现状态须回到 `wx-ble-provision` 仓库核验，不作为本固件仓的 T4 PASS 证据。
