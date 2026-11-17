@@ -47,7 +47,7 @@
 - 早期 G0/G2/G3、命令配置依赖盘点、旧网络事务设计与源码核验。
 - netcheck 设计/实现记录、静态 IP M1/reapply P0/P1 过程材料。
 - 6h soak 报告保留；包含 Web/HTTP/SPP 旧产品路径的全开 soak 计划已清理。
-- 旧 v0 删除记录、token store 设计、旧 backlog 与 broker 迁移记录。
+- 旧 v0 删除记录、token store 设计与 Broker 迁移运维记录保留为历史证据；已迁移的 2026-11-05 backlog 和静态 IP 专项问题清单已从归档目录删除，当前事项分别以 CMD、BLE、MQTT、Wi-Fi 专题为准。
 
 
 ### 测试取证事故与串口采集
