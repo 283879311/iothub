@@ -24,13 +24,13 @@
 
 | 项 | 结果 | 不能宣称的内容 |
 |---|---|---|
-| R1 config snapshot | CODE_DONE | 未构建/未真机回归，不能 PASS |
-| R2 telemetry/state snapshot | CODE_DONE | 同上 |
-| R4 Wi-Fi status snapshot | CODE_DONE | C/W 快照先后独立取得，不构成跨域原子快照 |
+| R1 config snapshot | TEST_PENDING | 联合验证阶段 1 构建、阶段 2 host tests 按执行报告通过；阶段 3 设备回归未授权/未执行 |
+| R2 telemetry/state snapshot | TEST_PENDING | 联合验证阶段 1 构建、阶段 2 host tests 按执行报告通过；阶段 3 设备回归未授权/未执行 |
+| R4 Wi-Fi status snapshot | TEST_PENDING | 阶段 1/2 按执行报告通过；C/W 快照先后独立取得，不构成跨域原子快照；阶段 3 设备回归未执行 |
 | R3 pending/deferred 可观测字段 | 未授权/未实施 | 不得认为已有新字段 |
 | R5 esp-mqtt 凭据复制语义验证 | 未授权/未实施 | 不得声称已通过构建/源码/运行时验证 |
 
-截至本总览更新，CMD-15 R1/R2/R4 为 **CODE_DONE，验证待执行**。具体当前任务状态只在 [cmd_refactor_plan.md](cmd_refactor_plan.md) 维护；如与历史专项文档标题状态冲突，以主台账最新状态及后续证据为准。
+截至 2026-11-17，CMD-15 R1/R2/R4 为 **TEST_PENDING**：联合验证阶段 1 ESP-IDF 构建和阶段 2 host tests 已按执行方报告通过；阶段 3 设备回归尚未授权/执行，因此不能标记 PASS。执行方报告与证据位置、未独立读取本地日志的限制见 [cmd_refactor_plan.md §7.23/§8.5](cmd_refactor_plan.md)。具体任务状态只在该主台账维护。
 
 ## 4. 已闭环历史缺陷（证据保留）
 
@@ -45,7 +45,7 @@
 
 ## 5. 当前验收缺口
 
-1. CMD-15 R1/R2/R4 尚未完成批准的 ESP-IDF 构建与 host regression；状态仍 CODE_DONE，不是 PASS。
+1. CMD-15 R1/R2/R4 的构建与 host regression 已按执行报告通过；阶段 3 设备回归未授权/未执行，当前仍为 TEST_PENDING，不是 PASS。
 2. R3/R5 不在当前授权范围内；需要重新审查和申请。
 3. 旧 38/40 MQTT 真机报告不能替代新版本的构建/回归。
 4. MQTT broker 地址、端口、设备 token 等部署参数应从实际部署配置核验，不从历史报告复制。
