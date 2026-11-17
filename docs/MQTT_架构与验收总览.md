@@ -70,3 +70,16 @@
 | Base64 语义 | 文档边界待补齐 | 明确编码层、字节内容和解码责任，不把任意字符串默认解释为 Base64 |
 
 这些是 MQTT/ThingsBoard 数据边界的当前验收缺口，不改变 `contract/v1/` 中既有命令语义。状态只在本专题和对应测试记录更新；未完成验证前不得标记 PASS。
+
+
+### 7.1 BLE↔MQTT 数据管道端到端边界（旧 1.3-07）
+
+`data_pipe` 当前具备 UART1、BLE、MQTT 三端口路由；队列深度为 16，数据面是 best-effort，不提供应用层 ACK/序号/重传/背压保证。源码存在不等于 BLE↔MQTT 真实端到端验收完成。后续测试须覆盖双向路由、队列满/丢帧计数、MQTT 断连/恢复及实体归属；不得把 UART/BLE 局部功能测试等同于三端 E2E PASS。
+
+### 7.2 MQTT 数据面与 QoS
+
+旧 1.3-82 的 `enqueue` QoS0/store=false 漏发问题已有修复记录：改为 QoS1/store=true，历史 6 分钟 1KB/s 测试报告 0 丢失、outbox 0、2,140 PUBACK。该结果只适用于当时镜像、负载与测试窗口；当前回归仍应确认 enqueue/encode/not-connected/flush 分项计数。
+
+### 7.3 网络试连与命令边界（旧 1.3-37）
+
+当前网络试连由 v1 命令 `network.tryconnect` 等事务接口承载，不再依赖旧 Web 向导。后续验证应覆盖错误密码、目标 AP 不可见、取消/超时、profile 持久化与 owner 清理；状态和授权以 CMD 台账及 Wi-Fi 专题为准。
