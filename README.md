@@ -159,22 +159,23 @@ GPIO 默认值由 `main/Kconfig.projbuild` 配置并写入 `sdkconfig`：继电�
 
 ```text
 main/             ESP-IDF 固件源码（命令、BLE、Wi-Fi、MQTT、UART、data_pipe、operation、OTA 等）
+contract/         当前 v1 协议契约（字段、命令、错误码）
 tools/            构建入口、BLE/主机侧工具、测试与证据采集脚本（不编入固件）
 tests/            宿主侧单元/门禁测试
-docs/             架构审查、测试方案、验收报告和证据索引
-问题与版本优化.md 版本演进与问题主记录
+docs/             当前架构总览、专项审查、验收状态与历史证据导航
 ```
 
-- **版本/问题主记录**：`问题与版本优化.md`。
-- **BLE 专题总览**：[`docs/BLE_架构与验收总览.md`](docs/BLE_架构与验收总览.md)，解释需求、v1 协议、T3/T4/T5 验收边界。
+- **当前产品与构建入口**：本 README；产品事实以当前源码和对应构建基线为准。
+- **BLE 专题总览**：[`docs/BLE_架构与验收总览.md`](docs/BLE_架构与验收总览.md)，说明当前 BLE 架构、安全边界及 T3/T4/T5 验收状态。
 - **MQTT 专题总览**：[`docs/MQTT_架构与验收总览.md`](docs/MQTT_架构与验收总览.md)，说明 ThingsBoard MQTT 职责、权限和 CMD-15 状态。
+- **CMD 架构与权限**：[`docs/CMD共享命令架构与权限边界.md`](docs/CMD共享命令架构与权限边界.md)；任务状态以 [`docs/cmd_refactor_plan.md`](docs/cmd_refactor_plan.md) 为准。
 - **Wi-Fi owner fencing**：[`docs/WIFI-OP-RESOURCE-RACE_主文档.md`](docs/WIFI-OP-RESOURCE-RACE_主文档.md)，当前 owner/cleanup 并发专项入口。
+- **OTA 与启动回滚**：[`docs/OTA_架构与验收总览.md`](docs/OTA_架构与验收总览.md)，区分启动回滚与尚未接入的 OTA 传输链路。
 - **S6 现场验收总览**：[`docs/S6_现场验收总览.md`](docs/S6_现场验收总览.md)，当前轮次、设备身份、事故和待批准事项。
-- **命令层审查**：[`docs/cmd.c_review_2026-11-14.md`](docs/cmd.c_review_2026-11-14.md)。
-- **项目执行台账**：[`docs/cmd_refactor_plan.md`](docs/cmd_refactor_plan.md)，CMD 任务、当前授权与下一步的唯一入口。
-- **近期变更（2026-11-14~15）**：[`docs/近期变更记录_2026-11-14至11-15.md`](docs/近期变更记录_2026-11-14至11-15.md)（CMD-04 合并窗口 / S6 固件缺陷 / 阶段 A / 阶段 B 门禁工具链 / 身份采集）。
-- **项目文档导航**：[`docs/README.md`](docs/README.md)，按 CMD、BLE、MQTT、Wi-Fi fencing、S6 和历史证据分类；归档规则见 [`docs/archive/README.md`](docs/archive/README.md)。
-- 原始日志和历史证据见 `docs/archive/` 与 `docs/evidence/`；计划状态和硬件实测状态以各专项文档为准。
+- **当前命令层审查**：[`docs/cmd.c_review_2026-11-14.md`](docs/cmd.c_review_2026-11-14.md) 与 [`docs/CMD-02_03_并发静态审查_2026-11-15.md`](docs/CMD-02_03_并发静态审查_2026-11-15.md)。
+- **近期变更记录**：[`docs/近期变更记录_2026-11-14至11-15.md`](docs/近期变更记录_2026-11-14至11-15.md)，仅作变更摘要，不替代专项状态或授权。
+- **项目文档导航**：[`docs/README.md`](docs/README.md)；历史文档保留规则见 [`docs/archive/README.md`](docs/archive/README.md)。
+- 原始日志和历史验收证据见 `docs/archive/` 与 `docs/evidence/`；历史 PASS 仅适用于原文记录的设备、镜像和测试范围。
 
 ## 已知限制与安全提示
 
