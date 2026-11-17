@@ -71,9 +71,9 @@ BLE CMD 与 ThingsBoard MQTT RPC 使用项目自己的 v1 JSON envelope：
 
 
                     数据面
-    UART1              BLE NUS Data            MQTT data topics
-  UART driver          6E400002 / 003          iothub/<MAC>/data/*
-       |                    |                       |
+    UART1              BLE NUS Data          MQTT data plane
+  UART driver          6E400002 / 003        TB: telemetry / shared attrs
+       |                    |                custom: iothub/<MAC>/data/*
        +--------------------+-----------------------+
                             |
                          data_pipe
@@ -175,6 +175,7 @@ docs/             当前架构总览、专项审查、验收状态与历史证�
 - **当前命令层审查**：[`docs/cmd.c_review_2026-11-14.md`](docs/cmd.c_review_2026-11-14.md) 与 [`docs/CMD-02_03_并发静态审查_2026-11-15.md`](docs/CMD-02_03_并发静态审查_2026-11-15.md)。
 - **阶段变更摘要（2026-11-14 至 11-15）**：[`docs/近期变更记录_2026-11-14至11-15.md`](docs/近期变更记录_2026-11-14至11-15.md)，仅作历史阶段摘要，不代表 11-17 的完整变更清单，也不替代专项状态或授权。
 - **项目文档导航**：[`docs/README.md`](docs/README.md)；历史文档保留规则见 [`docs/archive/README.md`](docs/archive/README.md)。
+- **固件 1.3 文档冻结基线**：[`docs/固件1.3文档基线_2026-11-17.md`](docs/固件1.3文档基线_2026-11-17.md)，记录六个入口的冻结 Blob SHA、源码基线和状态解释。
 - 原始日志和历史验收证据见 `docs/archive/` 与 `docs/evidence/`；历史 PASS 仅适用于原文记录的设备、镜像和测试范围。
 
 ## 已知限制与安全提示
