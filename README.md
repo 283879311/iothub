@@ -25,7 +25,7 @@ Web/HTTP 与 Classic Bluetooth/SPP 的移除是面向有限 RAM/heap 的产品�
 - **设备与状态读取**：`device.info`、`device.status`、`network.status`、`gpio.status`、`uart.runtime`。
 - **配置管理**：`config.get`、`config.set`；读取按 domain 过滤并脱敏。写入走配置应用/事务路径，不由 BLE 或 MQTT 传输代码直接写 NVS。
 - **GPIO 控制**：`io.get`、`io.set`、`led.set/toggle`、`relay.set/toggle`。触摸输入事件复用同一设备控制逻辑；引脚默认值来自 Kconfig。
-- **网络管理**：`network.status`、`network.scan`、`network.profile.list/delete`、`network.reconnect`、`network.tryconnect/apply/cancel`、`operation.get`。扫描、profile 管理和手动重连为 BLE 本地管理能力；MQTT 远程网络事务受独立编译门禁保护，默认构建不应视为已开放远程换网。
+- **网络管理**：`network.status`、`network.scan`、`network.profile.list/delete`、`network.reconnect`、`network.tryconnect/apply/cancel`、`operation.get`。扫描、profile 管理和手动重连为 BLE 本地管理能力；MQTT 的 tryconnect/apply/cancel 受 `APP_CMD_MQTT_NET_TXN_ENABLE` 控制。当前源码头文件默认值为 `1`，因此默认策略允许 MQTT 网络事务，但只能操作 MQTT 自身拥有的 operation；实际镜像仍须核对编译宏/构建变体及设备回归证据。
 - **UART**：`uart.send`、`uart.runtime`；UART1 是工业数据端口，不作为第二条独立命令解析通道。UART RX 必须遵守单一读者原则。
 - **链路诊断**：`data.loopback` 用于 BLE 数据通道诊断，不是 MQTT 远程控制功能。
 - **恢复出厂**：BOOT(GPIO0) 长按触发本地恢复流程；现场恢复能力不依赖 Web 门户。
@@ -94,7 +94,7 @@ BLE CMD 与 ThingsBoard MQTT RPC 使用项目自己的 v1 JSON envelope：
 - MQTT 设备 client ID 由 STA MAC 派生。
 - 数据面 MQTT 主题独立于命令 RPC：`iothub/<MAC>/data/up`（设备上行）和 `iothub/<MAC>/data/down`（设备下行）；数据内容按数据面编码约定处理，不与 RPC JSON 混用。
 - 周期遥测与低优先级 attributes 会在资源/ outbox 积压时让路；RPC 响应不经过低优先级状态合并路径。
-- MQTT 网络事务命令默认受 `APP_CMD_MQTT_NET_TXN_ENABLE` 编译门禁控制；仅在明确的测试/授权构建中启用，不要把规划稿中的远程换网能力当成默认产品能力。
+- MQTT 网络事务命令受 `APP_CMD_MQTT_NET_TXN_ENABLE` 编译门禁控制；当前 `main/cmd_policy.h` 未被构建参数覆盖时默认值为 `1`。因此默认源码策略允许 MQTT 发起 tryconnect/apply/cancel，但 owner 校验仍限制其只能操作 MQTT 自身的 operation。若部署策略不允许云端换网，必须在目标构建中显式关闭该宏，并核验最终镜像构建变体；不得仅凭旧规划稿判断开关状态。
 
 ## OTA 与分区
 
@@ -173,7 +173,7 @@ docs/             当前架构总览、专项审查、验收状态与历史证�
 - **OTA 与启动回滚**：[`docs/OTA_架构与验收总览.md`](docs/OTA_架构与验收总览.md)，区分启动回滚与尚未接入的 OTA 传输链路。
 - **S6 现场验收总览**：[`docs/S6_现场验收总览.md`](docs/S6_现场验收总览.md)，当前轮次、设备身份、事故和待批准事项。
 - **当前命令层审查**：[`docs/cmd.c_review_2026-11-14.md`](docs/cmd.c_review_2026-11-14.md) 与 [`docs/CMD-02_03_并发静态审查_2026-11-15.md`](docs/CMD-02_03_并发静态审查_2026-11-15.md)。
-- **近期变更记录**：[`docs/近期变更记录_2026-11-14至11-15.md`](docs/近期变更记录_2026-11-14至11-15.md)，仅作变更摘要，不替代专项状态或授权。
+- **阶段变更摘要（2026-11-14 至 11-15）**：[`docs/近期变更记录_2026-11-14至11-15.md`](docs/近期变更记录_2026-11-14至11-15.md)，仅作历史阶段摘要，不代表 11-17 的完整变更清单，也不替代专项状态或授权。
 - **项目文档导航**：[`docs/README.md`](docs/README.md)；历史文档保留规则见 [`docs/archive/README.md`](docs/archive/README.md)。
 - 原始日志和历史验收证据见 `docs/archive/` 与 `docs/evidence/`；历史 PASS 仅适用于原文记录的设备、镜像和测试范围。
 
