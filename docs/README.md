@@ -8,6 +8,7 @@
 |---|---|
 | 当前固件能力、架构、构建和运行边界 | [项目 README](../README.md) |
 | CMD 重构任务、状态、授权与下一步 | [CMD 重构主台账](cmd_refactor_plan.md) |
+| 当前共享命令架构与来源权限 | [CMD 共享命令架构与权限边界](CMD共享命令架构与权限边界.md) |
 | BLE 架构、T3/T4/T5 关系与限制 | [BLE 架构与验收总览](BLE_架构与验收总览.md) |
 | BLE v1 wire 命令 | [BLE 命令协议规范](BLE命令协议规范.md) + `contract/v1/` |
 | MQTT 职责、当前实现与验收 | [MQTT 架构与验收总览](MQTT_架构与验收总览.md) |
@@ -24,6 +25,7 @@
 
 ### CMD 命令层
 
+- [CMD 共享命令架构与权限边界](CMD共享命令架构与权限边界.md)：当前 v1 注册表、BLE/MQTT 来源策略、operation owner 与维护边界。
 - [cmd_refactor_plan.md](cmd_refactor_plan.md)：唯一任务台账，含 CMD-01～CMD-15 状态、授权边界和当前执行窗口。
 - [CMD-02/03 并发静态审查](CMD-02_03_并发静态审查_2026-11-15.md)：`s_net_async` 所有权与锁序。
 - [CMD-03 窄窗口竞态测试设计](CMD-03_窄窗口竞态_测试设计_2026-11-15.md)：Phase A/B/C 分界与可证伪测试。
