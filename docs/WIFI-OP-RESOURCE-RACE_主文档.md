@@ -23,6 +23,9 @@
 | [fencing 最终复审](WIFI-OP-RESOURCE-RACE-fencing复审材料_2026-11-14.md) | 代码差量 `0eb30ce47795cff5201388793f926cc4302b5dd8` 的逐 hunk 复审；实际父提交 `ebba25c`；主机 owner 测试申报 59/0 |
 | [S6-OWNER-STUCK 修复记录](S6-OWNER-STUCK固件修复_2026-11-15.md) | 后续发现的 owner 记账/唤醒失败路径修正与 FI 注入 |
 | [S6 阶段 A 回归结果](S6阶段A回归结果_R1R2R3R5_2026-11-15.md) | 功能镜像上 R1/R2/R3/R5 真机结果 |
+| [CMD 共享命令架构与权限边界](CMD共享命令架构与权限边界.md) | network.* 命令入口、来源白名单与 operation owner 策略 |
+| [MQTT 架构与验收总览](MQTT_架构与验收总览.md) | MQTT 发起网络事务的来源约束及 CMD-15 状态 |
+| [项目 README](../README.md) | 当前产品边界、构建入口与整体架构导航 |
 
 旧的六问分析、补丁申请、早期实现记录和 fencing 差量记录已归档；它们保留过程证据，不再作为当前独立维护入口。
 
