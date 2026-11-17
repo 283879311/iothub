@@ -92,7 +92,7 @@ BLE CMD 与 ThingsBoard MQTT RPC 使用项目自己的 v1 JSON envelope：
 
 - ThingsBoard 后端使用标准遥测、attributes 和 RPC topic；自定义 MQTT 后端使用项目自定义 topic。
 - MQTT 设备 client ID 由 STA MAC 派生。
-- 数据面 MQTT 主题独立于命令 RPC：`iothub/<MAC>/data/up`（设备上行）和 `iothub/<MAC>/data/down`（设备下行）；数据内容按数据面编码约定处理，不与 RPC JSON 混用。
+- 数据面与命令 RPC 分离，但主题随后端而异：**ThingsBoard** 上行使用 `v1/devices/me/telemetry`，载荷为 `{"data":"<Base64>"}`；下行通过 `v1/devices/me/attributes`（实时更新）及 `v1/devices/me/attributes/response/+`（初始同步响应）读取 `data` / `shared.data` 并 Base64 解码后送入 `data_pipe`。**自定义 MQTT 后端**使用 `iothub/<MAC>/data/up`（上行）和 `iothub/<MAC>/data/down`（下行）主题。两种后端的数据面都不与 RPC 命令 JSON 混用。
 - 周期遥测与低优先级 attributes 会在资源/ outbox 积压时让路；RPC 响应不经过低优先级状态合并路径。
 - MQTT 网络事务命令受 `APP_CMD_MQTT_NET_TXN_ENABLE` 编译门禁控制；当前 `main/cmd_policy.h` 未被构建参数覆盖时默认值为 `1`。因此默认源码策略允许 MQTT 发起 tryconnect/apply/cancel，但 owner 校验仍限制其只能操作 MQTT 自身的 operation。若部署策略不允许云端换网，必须在目标构建中显式关闭该宏，并核验最终镜像构建变体；不得仅凭旧规划稿判断开关状态。
 
