@@ -18,6 +18,9 @@
 | [MQTT 运行态与 config 同步复核](MQTT运行态与config同步复核_2026-11-15.md) | CMD-15 R1/R2/R4 实施、锁序、未完成项 | 当前专项主审查 |
 | [CMD 重构主台账](cmd_refactor_plan.md) | CMD-15 的任务状态和后续依赖 | 唯一任务状态入口 |
 | `contract/v1/` | MQTT/BLE 共用 v1 命令字段、状态、错误码和来源权限契约 | wire 语义权威来源 |
+| [CMD 共享命令架构与权限边界](CMD共享命令架构与权限边界.md) | 命令注册、BLE/MQTT 来源白名单与 operation owner | 共享命令架构入口 |
+| [BLE 架构与验收总览](BLE_架构与验收总览.md) | 本地管理通道、认证与 DATA 边界 | BLE 专题入口 |
+| [Wi-Fi owner fencing 主文档](WIFI-OP-RESOURCE-RACE_主文档.md) | 网络事务 owner、cleanup 与静态 IP 验收边界 | Wi-Fi 专题入口 |
 | [本总览](MQTT_架构与验收总览.md) | MQTT 职责、历史缺陷和验收状态导航 | 专题入口 |
 
 ## 3. 当前代码状态（CMD-15）
