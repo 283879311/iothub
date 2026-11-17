@@ -11,6 +11,7 @@
 - 健康确认任务先等待至少 15 秒，再在最长 120 秒窗口内检查 STA 是否取得 IP 或 MQTT 是否已连接；满足任一条件即调用 `esp_ota_mark_app_valid_cancel_rollback()`。
 - 窗口耗尽则调用 `esp_ota_mark_app_invalid_rollback_and_reboot()`；确认任务创建失败时保持 PENDING_VERIFY，预期在后续重启时由 bootloader 回滚。
 - 以上是启动后的镜像健康确认/回滚机制，不是固件下载或升级传输。
+- 当前健康判定实际只检查 STA 是否取得 IP 或 MQTT 是否连接；`main/ota.c` 超时日志仍残留 `ap_up` 字样，与 AP/Web 已移除后的真实判定不一致。该项仅是诊断文本陈旧，不代表代码仍以 AP 为健康条件；源码清理应单独处理。
 
 ## 2. 当前未接入/未验收
 
