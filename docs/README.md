@@ -12,6 +12,7 @@
 | BLE v1 wire 命令 | [BLE 命令协议规范](BLE命令协议规范.md) + `contract/v1/` |
 | MQTT 职责、当前实现与验收 | [MQTT 架构与验收总览](MQTT_架构与验收总览.md) |
 | Wi-Fi owner fencing 并发专项 | [WIFI-OP-RESOURCE-RACE 主文档](WIFI-OP-RESOURCE-RACE_主文档.md) |
+| OTA 传输与启动回滚边界 | [OTA 与启动回滚总览](OTA_架构与验收总览.md) |
 | S6 现场轮次、设备与授权状态 | [S6 现场验收总览](S6_现场验收总览.md) |
 | 网络联网验收 | [R-NET 设备验收报告](R-NET设备验收报告_2026-11-07.md) |
 | 命令层函数拆分审查 | [cmd.c 第一轮逐函数审查](cmd.c_review_2026-11-14.md) |
