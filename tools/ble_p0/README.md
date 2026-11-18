@@ -150,7 +150,7 @@ IOTHUB_WIFI_PASSWORD='<WIFI_PASSWORD>' \
 - `--data-max-write` 是单次 DATA 边界写；MTU23 传 20，MTU256 可传 240；
 - `--no-require-opget-during` 仅用于 MTU256 复核：长响应约 100ms，opget 请求通常落在结束后，严格 MTU23 验收不要关闭该要求。
 
-MTU23 测试构建：临时改 `sdkconfig` 的 `CONFIG_BT_NIMBLE_ATT_PREFERRED_MTU=23` 和 `main/bt_gatts_nimble.c` 的 `ble_att_set_preferred_mtu(23)`，构建/烧录后跑脚本；完成后恢复两处为 256，重新 build/flash。T3 文档：`docs/T3_BLE数据通道验收_2026-10-23.md`。
+MTU23 测试构建：临时改 `sdkconfig` 的 `CONFIG_BT_NIMBLE_ATT_PREFERRED_MTU=23` 和 `main/bt_gatts_nimble.c` 的 `ble_att_set_preferred_mtu(23)`，构建/烧录后跑脚本；完成后恢复两处为 256，重新 build/flash。T3 历史测试范围与当前 BLE 产品边界请以 [BLE 架构与验收总览](../../docs/architecture/BLE_架构与验收总览.md) 为准；原 T3 过程稿不属于当前维护入口。
 
 2026-10-23 结果：MTU23 `t3_ble_channels_20261023_234439.json` 功能 15/15 PASS（CMD 通知 20B；DATA 200B/600B 回环一致；`operation.get` 在长响应期间发出）；MTU256 恢复复核 `235335` 功能 15/15（CMD 253B、DATA 240B 边界）。**DATA 是 best-effort 字节管道，无应用 ACK/序号/重传/帧重组/流控；断连无显式 `data_pipe` flush。** 不能据此宣称端到端可靠。AP schema 清理后 T3 smoke `t3_ble_channels_20261024_000822.json` 仍 15/15，`config.get` 长响应降为 1107B。
 
@@ -158,7 +158,7 @@ MTU23 测试构建：临时改 `sdkconfig` 的 `CONFIG_BT_NIMBLE_ATT_PREFERRED_M
 
 小程序侧完整协议（扫描/订阅顺序、20B 写入、CMD 分片重组、登录/token、配网 operation、错误码、DATA 边界、iOS/Android 测试矩阵）：
 
-[`docs/BLE微信小程序交互协议_T4_2026-10-24.md`](../../docs/BLE微信小程序交互协议_T4_2026-10-24.md)
+[`docs/BLE微信小程序交互协议_T4_2026-10-24.md`](../../docs/protocol/BLE微信小程序交互协议_T4_2026-10-24.md)
 
 关键约束：先订阅 CMD TX 再发命令；20B 保守分片；`config.get` 长响应按 JSON 边界重组；token 600s 且断连失效；`operation.get` 轮询到终态；apply 后等 `sta_has_ip`/MQTT；DATA 无应用 ACK。T4 需 iOS/Android 各一台真机。
 
@@ -228,4 +228,4 @@ T1 写入 `tools/ble_p0/results/success_path_<timestamp>.json`，包含：
 
 静态 IP 写入 `tools/ble_p0/results/static_ip_<timestamp>.json`；P0-4 回归写入 `p0_4_regression_<timestamp>.json`；T2 写入 `t2_slot_reclaim_<timestamp>.json`；T3 写入 `t3_ble_channels_<timestamp>.json`；AP schema 写入 `config_schema_<timestamp>.json`。修复前的回滚 FAIL 证据保留在 `rollback_after_success_20261023_200845.json`。6.0.3 全量结果见 `p0_20261023_204921.json`；全量后 `no_slot` 证据见 `success_path_20261023_205143.json`；BLE 救援 FAIL 见 `ble_rescue_20261023_210816.json`；AP 状态恢复见 `success_path_20261023_211113.json`；T2 PASS 见 `t2_slot_reclaim_20261023_232220.json`；T3 MTU23 PASS 见 `t3_ble_channels_20261023_234439.json`，MTU256 恢复见 `t3_ble_channels_20261023_235335.json`，AP schema 后 T3 smoke 见 `t3_ble_channels_20261024_000822.json`；AP schema 见 `config_schema_20261024_001220.json`。
 
-完整验收记录与问题清单：`docs/P0_BLE验收记录_2026-10-23.md`。
+以上 P0 结果文件是 2026-10-23 原设备/原镜像的历史记录；当前 BLE 验收状态以 [BLE 架构与验收总览](../../docs/architecture/BLE_架构与验收总览.md) 为准。原 P0 汇总过程稿不属于当前维护入口。
