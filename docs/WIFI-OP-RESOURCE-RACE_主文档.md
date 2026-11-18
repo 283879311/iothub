@@ -32,9 +32,11 @@ owner 状态：
 1. owner 由统一仲裁锁保护；TRYX/AUTO/APPLY 释放时若已有 cleanup 请求，直接移交 CLEANUP。
 2. cleanup 在 owner 空闲时直接取得 CLEANUP；owner 忙时登记请求，等待当前持有者在释放点移交。
 3. CLEANUP 持有期间完成恢复配置，不在中途释放后重新 claim APPLY。
-4. cleanup 按既定有限重试执行；失败、watchdog 在安全点中止、或 cleanup 唤醒失败，均不得伪装成 NONE，必须进入 `CLEANUP_FAILED`。
-5. `CLEANUP_FAILED` 阻止 AUTO/TRYX 发起 STA 操作；需显式配置重配并重启或受控物理重启恢复。不得由后台自动连接清除。
-6. 活动 operation 登记按 operation_id 匹配清除，旧 worker 不得清掉新 operation 的登记。
+4. CLEANUP 持有期间完成恢复配置，不在中途释放后重新 claim APPLY；最多执行 3 次，失败退避为 0.5s / 1s / 2s。
+5. watchdog 在 CLEANUP 超过 12s 时重通知；超过 25s 只置 abort 请求，不夺取 owner。restart 任务仅在 `apply_cfg()` 已返回、没有在飞驱动调用的安全点消费 abort。
+6. cleanup 三次失败、watchdog 安全中止或 cleanup 唤醒失败，均不得伪装成 NONE，必须进入 `CLEANUP_FAILED`。
+7. `CLEANUP_FAILED` 阻止 AUTO/TRYX 发起 STA 操作；TRYX 返回 `cleanup_failed`。仅显式 `config.set`（effect=reboot）后重启或受控物理重启可清除，不得由后台自动连接清除。
+8. 活动 operation 登记按 operation_id 匹配清除，旧 worker 不得清掉新 operation 的登记。异步任务使用调度/受理时捕获的 caller、op_id、generation，不得在执行时重读变化后的上下文。
 
 ## 3. 并发路径与保护边界
 
