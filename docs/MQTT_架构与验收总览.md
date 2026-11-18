@@ -1,107 +1,58 @@
 # MQTT 架构与验收总览
 
-> **状态：ACTIVE（MQTT 专题唯一导航与状态总览）**  
-> 更新：2026-11-17。当前实现以 `main/mqtt.c`、`main/cmd_v1.c`、`contract/v1/` 和本文件关联的最新专项复核为准。
+> **状态：ACTIVE（MQTT 唯一维护入口）**  
+> 固件基线：1.3。当前行为以源码、`contract/v1/` 和本文件链接的专项证据为准。
 
-## 1. 当前职责与边界
+## 1. 职责与边界
 
-- 设备云端链路使用 ThingsBoard MQTT；负责遥测、属性/状态同步和受限 RPC。
-- 命令协议采用 v1；旧 v0 `method/params` 入口已删除。历史报告中 v0 报文仅作为拒绝路径证据。
-- MQTT 命令受 source policy 限制。MQTT 不获得 BLE 专属的本地网络配置/管理权限；`config.set` 对 NET/MQTT/BT/UART/WEB_AUTH 等受限域有明确禁止规则（以当前 command contract 和实现为准）。
-- MQTT 连接状态、Wi-Fi STA/IP 状态、配置持久化状态必须分开表达；配置保存成功不代表 MQTT 已切换或已连接。
-- MQTT 的运行态配置读取通过配置快照（C 锁）和 Wi-Fi 状态快照（W 锁）隔离；不得把两个快照误写成原子跨域事务。
+- 云端链路使用 ThingsBoard MQTT，承载遥测、共享属性/状态同步和受限 RPC。
+- 命令仅使用 v1；旧 v0 `method/params` 入口已删除。历史 v0 报文只作为拒绝路径证据。
+- MQTT 来源遵循 command source policy，不拥有 BLE 专属的本地网络管理权限；配置域允许范围以 `contract/v1/` 和当前实现为准。
+- 配置持久化成功、Wi-Fi STA/IP 状态、MQTT 运行态连接状态是不同事实，不能互相替代。
+- MQTT 配置读取通过 C 锁快照，Wi-Fi 运行态通过 W 锁快照；两份快照先后独立取得，**不构成跨域原子快照**。
 
-## 2. 当前权威文档
+## 2. 当前维护入口
 
-| 文档 | 用途 | 状态 |
-|---|---|---|
-| [MQTT 运行态与 config 同步复核](MQTT运行态与config同步复核_2026-11-15.md) | CMD-15 R1/R2/R4 实施、锁序、未完成项 | 当前专项主审查 |
-| [CMD 重构主台账](cmd_refactor_plan.md) | CMD-15 的任务状态和后续依赖 | 唯一任务状态入口 |
-| `contract/v1/` | MQTT/BLE 共用 v1 命令字段、状态、错误码和来源权限契约 | wire 语义权威来源 |
-| [CMD 共享命令架构与权限边界](CMD共享命令架构与权限边界.md) | 命令注册、BLE/MQTT 来源白名单与 operation owner | 共享命令架构入口 |
-| [BLE 架构与验收总览](BLE_架构与验收总览.md) | 本地管理通道、认证与 DATA 边界 | BLE 专题入口 |
-| [Wi-Fi owner fencing 主文档](WIFI-OP-RESOURCE-RACE_主文档.md) | 网络事务 owner、cleanup 与静态 IP 验收边界 | Wi-Fi 专题入口 |
-| [本总览](MQTT_架构与验收总览.md) | MQTT 职责、历史缺陷和验收状态导航 | 专题入口 |
+| 内容 | 权威入口 |
+|---|---|
+| MQTT 职责、边界与当前缺口 | 本文 |
+| MQTT 配置/运行态快照实施证据 | [运行态与 config 同步复核](MQTT运行态与config同步复核_2026-11-15.md) |
+| CMD-15 任务状态、验收阶段与授权边界 | [CMD 当前任务台账](cmd_refactor_plan.md) |
+| v1 字段、状态、错误码、来源权限 | `contract/v1/` |
+| 命令注册、来源白名单与 operation owner | [CMD 共享命令架构与权限边界](CMD共享命令架构与权限边界.md) |
+| 网络事务、Wi-Fi owner 与静态 IP | [Wi-Fi owner fencing 主文档](WIFI-OP-RESOURCE-RACE_主文档.md) |
+| BLE 本地管理通道 | [BLE 架构与验收总览](BLE_架构与验收总览.md) |
 
-## 3. 当前代码状态（CMD-15）
+## 3. 当前运行态快照与 CMD-15
 
-| 项 | 结果 | 不能宣称的内容 |
-|---|---|---|
-| R1 config snapshot | TEST_PENDING | 联合验证阶段 1 构建、阶段 2 host tests 按执行报告通过；阶段 3 设备回归未授权/未执行 |
-| R2 telemetry/state snapshot | TEST_PENDING | 联合验证阶段 1 构建、阶段 2 host tests 按执行报告通过；阶段 3 设备回归未授权/未执行 |
-| R4 Wi-Fi status snapshot | TEST_PENDING | 阶段 1/2 按执行报告通过；C/W 快照先后独立取得，不构成跨域原子快照；阶段 3 设备回归未执行 |
-| R3 pending/deferred 可观测字段 | 未授权/未实施 | 不得认为已有新字段 |
-| R5 esp-mqtt 凭据复制语义验证 | 未授权/未实施 | 不得声称已通过构建/源码/运行时验证 |
+- **R1/R2**：MQTT 配置读取集中到 `app_mqtt_cfg_snapshot()`，在 C 锁内复制，锁外构造 URI、属性和状态数据。
+- **R4**：Wi-Fi 的 `sta_has_ip/sta_ip` 读取集中到 `app_mqtt_wifi_snapshot()`，在 W 锁内复制。
+- C 与 W 不嵌套；按顺序分别取快照。既有 `M→W` 路径不变，不新增 `W→M`。
+- 交给 esp-mqtt 的 token 使用模块静态快照缓冲 `s_token_snap`，不直接指向可被配置更新覆盖的全局配置字段。
+- R3（pending/deferred 可观测字段）未实施；R5（esp-mqtt 凭据字符串复制语义专项确认）未授权/未完成。
+- R1/R2/R4 当前为 **TEST_PENDING**：联合验证阶段 1 构建、阶段 2 host tests 按执行方报告通过；阶段 3 设备回归未授权/未执行。不得写成整体验收 PASS。
 
-截至 2026-11-17，CMD-15 R1/R2/R4 为 **TEST_PENDING**：联合验证阶段 1 ESP-IDF 构建和阶段 2 host tests 已按执行方报告通过；阶段 3 设备回归尚未授权/执行，因此不能标记 PASS。执行方报告与证据位置、未独立读取本地日志的限制见 [cmd_refactor_plan.md §7.23/§8.5](cmd_refactor_plan.md)。具体任务状态只在该主台账维护。
+具体任务状态、报告限制和后续授权依赖只在 CMD 主台账维护，避免在 MQTT 文档重复维护第二份任务表。
 
-## 4. 已闭环历史缺陷（证据保留）
+## 4. ThingsBoard 属性与数据面边界
 
-以下是历史专项，不是当前 MQTT 配置同步问题的替代实现：
+- 共享属性下行仍需验证 `data` 非字符串、空值、超长值、重复下发、实体归属不匹配及 Base64 语义；初始同步的实体归属缺口已有修复记录，但不能外推为所有输入边界均已验收。
+- `data_pipe` 支持 UART1、BLE、MQTT 三端口路由；队列深度 16，数据面为 best-effort，不提供应用层 ACK、序号、重传或背压保证。源码具备路由能力不等于 BLE↔MQTT 端到端验收完成。
+- 历史 QoS0/store=false 漏发问题已有修复记录，改为 QoS1/store=true；历史 6 分钟、1KB/s 测试报告 0 丢失、outbox 0、2,140 PUBACK。该结果仅适用于当时镜像和负载，不代表当前版本回归。
+- MQTT 发布计数需区分 telemetry 与全部发布：历史 `total_published` 实际只在 telemetry 分支递增，不能当作全量 PUBACK 计数。
 
-- DEF-MQTT-001/002：受理回包与 operation 过期任务问题，历史状态追踪及 E1/E3 报告已归档。
-- DEF-MQTT-003：孤儿 cleanup 后恢复持久配置问题，设备报告记录 R1–R4 PASS。
-- MQTT v1 真机回归：旧测试镜像下 38/40 PASS、0 FAIL、2 SKIP（N03/N07 为静态 IP 锁预期跳过）；此结果只代表当时测试范围和镜像，不等于当前 CMD-15 回归。
-- MQTT 网络配置控制阶段 0：接口治理、owner/cancel、配置互斥和 profile 不变量历史实现记录；不得把早期阶段 0 设计稿中的“未实现/待实现”描述当作当前代码事实。
+上述未验收边界不得标记 PASS；测试范围和结论以对应报告为准。
 
-早期设计稿、评审稿和重复实现过程记录不再作为维护文档；必要的原始测试与风险报告保留原始结果。当前实现以源码和本总览为准。
+## 5. 仍需保留的风险与证据
 
-## 5. 当前验收缺口
-
-1. CMD-15 R1/R2/R4 的构建与 host regression 已按执行报告通过；阶段 3 设备回归未授权/未执行，当前仍为 TEST_PENDING，不是 PASS。
-2. R3/R5 不在当前授权范围内；需要重新审查和申请。
-3. 旧 38/40 MQTT 真机报告不能替代新版本的构建/回归。
-4. MQTT broker 地址、端口、设备 token 等部署参数应从实际部署配置核验，不从历史报告复制。
+- **F2 stop 位来源：UNKNOWN**。现有 R-NET 证据未闭合 stop 位完整来源链；不能推断为已定位缺陷或当前必然复现。后续取证需单独授权。
+- **测试 Broker 安全结论仅属历史环境**：2026-11-06 曾发现匿名连接、公网主题读写及 Dashboard 暴露风险；不能据此断言该主机当前仍暴露或由本项目控制。原始探测记录保留在归档目录。测试 Broker 不具备 ThingsBoard token、设备主题隔离和属性响应语义，不能替代 TB 验证。
+- `app_wifi_sta_config_updated()` 是否无调用者仍由 CMD-12 全仓审查闭环；在完成前保持 UNKNOWN，不据旧 backlog 删除函数。
+- 旧 MQTT v1 真机 38/40 报告、DEF-MQTT-003 R1–R4 报告及 DEF-MQTT-001/002 r2b 报告均是历史镜像证据，不代表当前固件 1.3 的整体 PASS。
 
 ## 6. 维护规则
 
-- MQTT 协议字段与权限只在 `contract/v1/` 维护。
-- 当前代码/测试状态只在 CMD 主台账和最新专项审查中更新。
-- 缺陷关闭后归档原始立案、实现与验收记录；保留镜像 SHA、设备身份、原始证据和失败/回滚事实。
-- 不因文档整理授权任何 MQTT 配置写入、设备操作或 broker 变更。
-
-
-## 7. 1.3 当前 ThingsBoard 共享属性边界
-
-旧推进表 1.3-57 的初始同步缺口和实体归属问题已有修复记录；这不等于所有下行输入边界均已验收。当前仍需保留以下验证范围：
-
-| 输入/场景 | 当前状态 | 验收要求 |
-|---|---|---|
-| `data` 非字符串、空值、超长值 | 待边界验证 | 明确拒绝/忽略策略、日志脱敏和资源上限；不得崩溃或无限分配 |
-| 重复下发/重复重发 | 待验证 | 确认幂等行为、重复消息不会导致重复副作用 |
-| 实体归属不匹配 | 初始同步缺口已有修复与设备记录 | 当前代码路径仍需纳入回归，禁止跨实体应用属性 |
-| Base64 语义 | 文档边界待补齐 | 明确编码层、字节内容和解码责任，不把任意字符串默认解释为 Base64 |
-
-这些是 MQTT/ThingsBoard 数据边界的当前验收缺口，不改变 `contract/v1/` 中既有命令语义。状态只在本专题和对应测试记录更新；未完成验证前不得标记 PASS。
-
-
-### 7.1 BLE↔MQTT 数据管道端到端边界（旧 1.3-07）
-
-`data_pipe` 当前具备 UART1、BLE、MQTT 三端口路由；队列深度为 16，数据面是 best-effort，不提供应用层 ACK/序号/重传/背压保证。源码存在不等于 BLE↔MQTT 真实端到端验收完成。后续测试须覆盖双向路由、队列满/丢帧计数、MQTT 断连/恢复及实体归属；不得把 UART/BLE 局部功能测试等同于三端 E2E PASS。
-
-### 7.2 MQTT 数据面与 QoS
-
-旧 1.3-82 的 `enqueue` QoS0/store=false 漏发问题已有修复记录：改为 QoS1/store=true，历史 6 分钟 1KB/s 测试报告 0 丢失、outbox 0、2,140 PUBACK。该结果只适用于当时镜像、负载与测试窗口；当前回归仍应确认 enqueue/encode/not-connected/flush 分项计数。
-
-### 7.3 网络试连与命令边界（旧 1.3-37）
-
-当前网络试连由 v1 命令 `network.tryconnect` 等事务接口承载，不再依赖旧 Web 向导。后续验证应覆盖错误密码、目标 AP 不可见、取消/超时、profile 持久化与 owner 清理；状态和授权以 CMD 台账及 Wi-Fi 专题为准。
-
-## 8. 历史风险与未闭环证据（1.3）
-
-### 8.1 F2 stop 位来源：UNKNOWN
-
-[R-NET 设备验收报告](R-NET设备验收报告_2026-11-07.md) 保留了 F2 疑点：restart worker 曾观察到 stop 位导致任务退出，但现有证据未闭合 stop 位的完整来源链。当前结论维持 **UNKNOWN**，不是已定位缺陷，也不是已关闭事项；不得从历史现象推断当前必然复现。后续若继续取证，需记录 setter、调用上下文和设备侧原始时间线，并遵循独立操作授权。
-
-### 8.2 测试 Broker 安全边界（历史环境，不是当前部署说明）
-
-- 2026-11-06 的历史连通性探测曾确认当时测试 EMQX 存在匿名连接、公网主题可读写及 Dashboard 暴露风险；该结论只描述当时探测到的环境，**不能推断该主机当前仍暴露或仍由本项目控制**。原始证据保留于 [Broker 1883 连通性探测](archive/2026-11/Broker_1883连通性探测_2026-11-06.md)。
-- 测试 Broker 不具备 ThingsBoard token 校验、设备私有 `v1/devices/me/...` 命名空间、遥测入库和属性响应语义；多设备连接时可能出现相同字面主题串扰。因此它只能用于隔离的 MQTT 协议/设备回归，不能替代真实 ThingsBoard 验证。
-- 旧迁移运维记录中的 IP、端口、匿名认证、安全组及 TLS 操作步骤全部属于历史环境，不得复制为当前部署配置；任何测试 Broker 均须先确认归属、访问控制和网络隔离，禁止将匿名公网 Broker 用作生产链路。
-
-### 8.3 历史 backlog 对照：已修复项与待清理项
-
-- P6 operation 终态 stages 快照化及 Wi-Fi observer generation/结果写入的锁内原子性已在当前源码实现，不再作为未完成 backlog 项；后续状态以源码和 CMD 主台账为准。
-- `MQTT_EVENT_PUBLISHED` 日志中的 `total_published` 实际按 telemetry 计数（`is_telemetry` 才递增），名称可能让人误以为统计全部发布。属于低优先级日志语义清理候选，不影响发布行为，不得把该标签直接当作全量 PUBACK 计数。
-- 旧 backlog 记录 `app_wifi_sta_config_updated()` 无调用者；当前仍需由 CMD-12 源码清理审查完成全仓调用者核验。本轮未将其定性为死代码，也未删除函数；在审查闭环前保持 UNKNOWN。
-- 历史小程序评审中的客户端修复建议只代表当时跨仓快照；当前客户端实现状态须回到 `wx-ble-provision` 仓库核验，不作为本固件仓的 T4 PASS 证据。
+- MQTT 命令协议、字段和权限只在 `contract/v1/` 维护。
+- CMD-15 的任务状态只在 CMD 主台账维护；MQTT 本文只保留当前模块边界和验收缺口。
+- 历史设备结果必须连同原设备、镜像、用例范围解释，不得外推。
+- 文档整理不授权配置写入、设备操作、broker 变更或新的 MQTT 验收。
