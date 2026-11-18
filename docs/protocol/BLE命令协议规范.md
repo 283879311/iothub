@@ -1,5 +1,5 @@
 # BLE 命令协议规范（v1-only，2026-11-04）
-> **状态**：ACTIVE（v1 wire 协议规范；语义以 contract/v1 为准）（文档状态标定 2026-11-14，定义与索引见 [docs/README.md](README.md)）
+> **状态**：ACTIVE（v1 wire 协议规范；语义以 contract/v1 为准）（文档状态标定 2026-11-14，定义与索引见 [docs/README.md](../README.md)）
 
 
 > 适用：iothub 固件 BLE CMD 通道、微信小程序/App BLE 客户端。

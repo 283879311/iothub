@@ -66,13 +66,13 @@ owner 状态：
 - 任一身份 UNKNOWN、端口/镜像不符或证据链不完整，立即 STOP。申请不等于批准，旧授权不延续。
 
 必要证据入口：
-- [S6 当前状态与现场操作边界](S6_现场验收总览.md)
-- [阶段 A R1/R2/R3/R5 真机结果](S6阶段A回归结果_R1R2R3R5_2026-11-15.md)
-- [阶段 B FI 操作授权申请](S6阶段B操作授权申请_2026-11-16.md)
-- [阶段 A 烧录事故与身份门禁](S6烧录事故记录_2026-11-15.md)
-- [阶段 A 分区表证据](evidence/S6_stageA/README.md)
-- [阶段 B 镜像 manifest](evidence/S6_stageB/images_manifest.md)
-- [阶段 B 六维身份采集边界](evidence/S6_stageB/identity_2026-11-15/README.md)
+- [S6 当前状态与现场操作边界](../validation/S6_现场验收总览.md)
+- [阶段 A R1/R2/R3/R5 真机结果](../reports/S6阶段A回归结果_R1R2R3R5_2026-11-15.md)
+- [阶段 B FI 操作授权申请](../validation/S6阶段B操作授权申请_2026-11-16.md)
+- [阶段 A 烧录事故与身份门禁](../reports/S6烧录事故记录_2026-11-15.md)
+- [阶段 A 分区表证据](../evidence/S6_stageA/README.md)
+- [阶段 B 镜像 manifest](../evidence/S6_stageB/images_manifest.md)
+- [阶段 B 六维身份采集边界](../evidence/S6_stageB/identity_2026-11-15/README.md)
 
 ## 6. 1.3 当前 Wi-Fi 相关验收边界
 
@@ -89,7 +89,7 @@ owner 状态：
 - **M1 核心已进入当前源码**：`main/wifi.c` 已包含 `app_wifi_boot_apply_or_recover()`、`app_wifi_recover_from_apply_failure()`、RAM LKG、DHCP rescue、offline gate/quiesce 等路径。早期 M1 PR 草案中“未实施/待合并”的状态已过时；历史测试矩阵可用于追踪覆盖面，但不能据此宣称 M1-01～M1-10 全部设备验收 PASS。
 - **M2 静态参数语义校验仍有缺口**：当前 `main/config_apply.c` 的 `cfg_validate_static_ip_cross()` 检查 IP/网关/掩码字段存在、IPv4 格式合法且非 0.0.0.0、DNS 非空时格式合法；尚未检查掩码连续性、IP 与网关同子网、网络/广播地址、IP 与网关相同等约束。非法组合可能通过当前交叉校验，需单独评审并补充测试。
 - **M4 持久化两阶段提交/回滚尚未实现**：当前 RAM LKG 与 DHCP rescue 是运行期启动恢复，不等于 NVS VALID/PENDING 两段提交；救援不会自动修正持久化静态配置，后续启动仍可能再次进入救援路径。M4 是否纳入 1.3 交付范围须单独决策，不在本次文档整理中扩展实现。
-- M1 板级故障注入和恢复覆盖以 [静态 reapply P0 设备验收报告](archive/2026-11/静态reapply_P0设备验收报告_2026-11-05.md) 与 [P1 设备验收报告](archive/2026-11/静态reapply_P1设备验收报告_2026-11-05.md) 的原始镜像、设备和场景为边界；源码存在、历史局部 PASS 或计划矩阵均不等于完整 M1 验收通过。
+- M1 板级故障注入和恢复覆盖以 [静态 reapply P0 设备验收报告](../archive/2026-11/静态reapply_P0设备验收报告_2026-11-05.md) 与 [P1 设备验收报告](../archive/2026-11/静态reapply_P1设备验收报告_2026-11-05.md) 的原始镜像、设备和场景为边界；源码存在、历史局部 PASS 或计划矩阵均不等于完整 M1 验收通过。
 
 ### 6.4 N03/N07 时序注入缺口
 

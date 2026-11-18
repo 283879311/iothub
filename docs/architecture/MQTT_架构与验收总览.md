@@ -16,8 +16,8 @@
 | 内容 | 权威入口 |
 |---|---|
 | MQTT 职责、边界与当前缺口 | 本文 |
-| MQTT 配置/运行态快照实施证据 | [运行态与 config 同步复核](MQTT运行态与config同步复核_2026-11-15.md) |
-| CMD-15 任务状态、验收阶段与授权边界 | [CMD 当前任务台账](cmd_refactor_plan.md) |
+| MQTT 配置/运行态快照实施证据 | [运行态与 config 同步复核](../validation/MQTT运行态与config同步复核_2026-11-15.md) |
+| CMD-15 任务状态、验收阶段与授权边界 | [CMD 当前任务台账](../validation/cmd_refactor_plan.md) |
 | v1 字段、状态、错误码、来源权限 | `contract/v1/` |
 | 命令注册、来源白名单与 operation owner | [CMD 共享命令架构与权限边界](CMD共享命令架构与权限边界.md) |
 | 网络事务、Wi-Fi owner 与静态 IP | [Wi-Fi owner fencing 主文档](WIFI-OP-RESOURCE-RACE_主文档.md) |
@@ -48,7 +48,7 @@
 - **F2 stop 位来源：UNKNOWN**。现有 R-NET 证据未闭合 stop 位完整来源链；不能推断为已定位缺陷或当前必然复现。后续取证需单独授权。
 - **测试 Broker 安全结论仅属历史环境**：2026-11-06 曾发现匿名连接、公网主题读写及 Dashboard 暴露风险；不能据此断言该主机当前仍暴露或由本项目控制。原始探测记录保留在归档目录。测试 Broker 不具备 ThingsBoard token、设备主题隔离和属性响应语义，不能替代 TB 验证。
 - `app_wifi_sta_config_updated()` 是否无调用者仍由 CMD-12 全仓审查闭环；在完成前保持 UNKNOWN，不据旧 backlog 删除函数。
-- 历史证据：[MQTT v1 38/40 真机回归](archive/2026-11/MQTT_v1_真机回归报告_2026-11-05.md)、[DEF-MQTT-003 R1–R4 设备报告](archive/2026-11/DEF-MQTT-003_设备验收报告_2026-11-05.md)、[DEF-MQTT-001/002 r2b 设备报告](archive/2026-11/MQTT受理回包竞态_设备验收报告_r2_2026-11-05.md) 均限定于原镜像和用例范围，不代表当前固件 1.3 的整体 PASS。
+- 历史证据：[MQTT v1 38/40 真机回归](../archive/2026-11/MQTT_v1_真机回归报告_2026-11-05.md)、[DEF-MQTT-003 R1–R4 设备报告](../archive/2026-11/DEF-MQTT-003_设备验收报告_2026-11-05.md)、[DEF-MQTT-001/002 r2b 设备报告](../archive/2026-11/MQTT受理回包竞态_设备验收报告_r2_2026-11-05.md) 均限定于原镜像和用例范围，不代表当前固件 1.3 的整体 PASS。
 
 ## 6. 维护规则
 
