@@ -19,16 +19,14 @@
 - [BLE v1 命令协议规范](protocol/BLE命令协议规范.md)：命令字段、请求/响应和协议边界；语义以 `contract/v1/` 为准。
 - [BLE 微信小程序交互参考](protocol/BLE微信小程序交互协议_T4_2026-10-24.md)：客户端连接、订阅、分片与交互；不是固件 wire contract。
 
-## 验证、待办与操作门禁
+## 当前任务与验收状态
 
-- [CMD 当前任务台账](validation/cmd_refactor_plan.md)
-- [CMD-02/03 并发静态审查](validation/CMD-02_03_并发静态审查_2026-11-15.md)
-- [CMD-04 status 快照方案](validation/CMD-04_status快照方案_2026-11-14.md)，以及 [04a](validation/CMD-04a_operation_status快照清单与判定表_2026-11-14.md)、[04b](validation/CMD-04b_network_status快照清单与判定表_2026-11-14.md)、[04c](validation/CMD-04c_execute_method内联快照清单与判定表_2026-11-14.md) 实施清单
-- [CMD-05 锁序审查](validation/CMD-05_config_profile锁序审查_2026-11-15.md)
-- [MQTT 运行态与 config 同步实施证据](validation/MQTT运行态与config同步复核_2026-11-15.md)
+- [CMD 当前任务台账](validation/cmd_refactor_plan.md)：CMD 唯一任务状态入口；专项审查和设计文件只作为该台账引用的证据/约束，不单独维护状态。
 - [S6 现场验收状态与操作边界](validation/S6_现场验收总览.md)
 - [S6 阶段 B 一次性操作授权申请](validation/S6阶段B操作授权申请_2026-11-16.md)：申请材料不是操作授权，实际操作仍需明确批准。
 
+CMD-02/03、CMD-04a/b/c、CMD-05 的专项材料由 CMD 台账按需引用，不在总导航中平铺为并列入口。其内容分别承担历史静态审查、待实施设计、已实施部分的审查证据和锁序约束；当前状态以台账为准。
+ 
 ## 设备报告
 
 - [R-NET 设备验收报告](reports/R-NET设备验收报告_2026-11-07.md)
