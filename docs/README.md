@@ -26,7 +26,6 @@
 - [CMD-04 status 快照方案](validation/CMD-04_status快照方案_2026-11-14.md)，以及 [04a](validation/CMD-04a_operation_status快照清单与判定表_2026-11-14.md)、[04b](validation/CMD-04b_network_status快照清单与判定表_2026-11-14.md)、[04c](validation/CMD-04c_execute_method内联快照清单与判定表_2026-11-14.md) 实施清单
 - [CMD-05 锁序审查](validation/CMD-05_config_profile锁序审查_2026-11-15.md)
 - [MQTT 运行态与 config 同步实施证据](validation/MQTT运行态与config同步复核_2026-11-15.md)
-- [BLE T5 韧性验收方案](validation/BLE常态化韧性验收_T5_2026-10-24.md)
 - [S6 现场验收状态与操作边界](validation/S6_现场验收总览.md)
 - [S6 阶段 B 一次性操作授权申请](validation/S6阶段B操作授权申请_2026-11-16.md)：申请材料不是操作授权，实际操作仍需明确批准。
 
