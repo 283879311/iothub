@@ -161,7 +161,7 @@ GPIO 默认值由 `main/Kconfig.projbuild` 配置并写入 `sdkconfig`：继电�
 
 - **架构**：[BLE](docs/architecture/BLE_架构与验收总览.md) · [CMD](docs/architecture/CMD共享命令架构与权限边界.md) · [MQTT](docs/architecture/MQTT_架构与验收总览.md) · [Wi-Fi](docs/architecture/WIFI-OP-RESOURCE-RACE_主文档.md) · [OTA](docs/architecture/OTA_架构与验收总览.md)
 - **协议**：[BLE v1 命令协议](docs/protocol/BLE命令协议规范.md) · [微信小程序交互参考](docs/protocol/BLE微信小程序交互协议_T4_2026-10-24.md)
-- **验证与待办**：[CMD 台账](docs/validation/cmd_refactor_plan.md) · [BLE T5 方案](docs/validation/BLE常态化韧性验收_T5_2026-10-24.md) · [S6 现场验收状态](docs/validation/S6_现场验收总览.md)
+- **验证与待办**：[CMD 台账](docs/validation/cmd_refactor_plan.md) · [S6 现场验收状态](docs/validation/S6_现场验收总览.md)
 - **设备报告**：[R-NET](docs/reports/R-NET设备验收报告_2026-11-07.md) · [S6 阶段 A](docs/reports/S6阶段A回归结果_R1R2R3R5_2026-11-15.md)
 - **文档基线**：[固件 1.3 文档基线](docs/baseline/固件1.3文档基线_2026-11-18.md)
 
