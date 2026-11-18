@@ -2,7 +2,7 @@
 
 > **状态：REVIEWED**（静态审查；本轮未改代码、未构建、未上机）
 > **基线**：`main/cmd.c` / `config.c` / `config_apply.c` / `wifi.c`（提交 `04e9584` 时点；CMD-02 已 CODE_DONE）
-> **关联**：`docs/cmd_refactor_plan.md` CMD-05；CMD-06 迁移依赖本结论
+> **关联**：`docs/validation/cmd_refactor_plan.md` CMD-05；CMD-06 迁移依赖本结论
 
 ---
 
