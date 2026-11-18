@@ -1,528 +1,67 @@
-# `cmd.c` 优化跟进计划
+# CMD 当前任务台账（固件 1.3）
 
-> 状态基线：2026-11-15；本文是 CMD 重构唯一执行台账，文档版本随 `main` 前进，不在此固定容易过期的 HEAD SHA。每轮开工先读取当前 `main`，并核对专项审查、验证申请和实际代码。每项完成后同步更新状态、证据和对应提交。不得将“静态审查完成”“代码已移动”直接视为“行为等价已验收”。
+> 当前源码基线：`5104a3b0b3266f6afe22404d24ca89d41253cb63`。文档提交可继续前进，不将某个文档 HEAD 固定为源码基线。
+>
+> 本文只维护 CMD 当前任务状态、未完成事项、关键实现约束和必要验证证据。历史交接、申请修订过程和重复审查叙述不在此累计。当前命令行为以源码及 `contract/v1/` 为准；Contract 仍为 `1.1-draft`。
 
-## 1. 原则与验收规则
+## 1. 当前任务状态
 
-- 保持 ESP-IDF/FreeRTOS/NimBLE/ThingsBoard MQTT 现有技术栈，不引入新框架。
-- 小步提交；先锁与并发边界，后模块迁移，再做重复逻辑合并。
-- 拆分提交与行为变化提交分开。
-- 命令名称、v1 envelope、参数兼容、响应字段、错误码和权限规则默认保持不变。
-- 网络事务的 generation、owner、幂等、TTL、cleanup、rollback 和 restart 顺序是保护契约。
-- 每次迁移前后对照 diff；完成构建和对应回归后才能标记 PASS。
+状态含义：`TODO` 未开始；`REVIEWED` 静态审查完成；`IN_PROGRESS` 有未关闭的实施/验证工作；`TEST_PENDING` 代码已改但指定验证未完成；`PASS` 必须有对应代码、测试和验收证据；`DEFERRED` 经明确决策暂缓。
 
-## 2. 跟进总表
-
-状态口径（必须区分工作阶段）：`TODO` 未开始；`REVIEWED` 静态审查完成；`DESIGN_READY` 设计完成待实施；`IN_PROGRESS` 正在实施；`CODE_DONE` 代码已修改但未完成验证；`TEST_PENDING` 等待指定测试/构建；`BLOCKED` 有明确阻塞；`PASS` 代码、测试和验收证据齐全；`DEFERRED` 经明确决策暂缓。一个任务可在备注中同时记录多个子阶段，但总表状态取当前未关闭的最高风险阶段。
-
-| ID | 优先级 | 项目 | 状态 | 验收要求 |
+| ID | 优先级 | 当前事项 | 状态 | 当前结论 / 关闭条件 |
 |---|---|---|---|---|
-| CMD-01 | P0 | `io.get` Wi-Fi runtime 状态读取加锁快照 | TEST_PENDING | 最小代码修改已在 `add93e7`；待 ESP-IDF 构建及 BLE/MQTT 入口回归，未通过前不标 PASS |
-| CMD-02 | P0 | `s_net_async` 逐字段所有权与读点收口 | TEST_PENDING | 七处读点已按 §1.3 实施（`28f9090`）；联合验证阶段 1 构建与阶段 2 host tests 按执行报告通过。**PASS 仍待阶段 3 设备回归**（未授权） |
-| CMD-03 | P0 | operation/job 锁序、callback 时序及 expiring 窄窗口 | IN_PROGRESS | Phase A host 测试已实施：S1–S5 ×50 ×10 轮全过（A1 100/100、A2 100/100、A3 100/100、A4/A5/A7 50/50），变异体在 A1 失败（可证伪）；见 `CMD-03_窄窗口竞态_测试设计_2026-11-15.md` 附录 A。Phase B（cmd 层 store_trial 守卫）需代码授权；Phase C 需设备授权 |
-| CMD-04 | P1 | network/device status 改为快照后构造 JSON | TODO | 锁持有期间无 cJSON 分配；字段兼容 |
-| CMD-05 | P1 | 复核 config lock 与 Wi-Fi profile lock 全局锁序 | REVIEWED | 静态审查完成（`CMD-05_config_profile锁序审查_2026-11-15.md`）：偏序 `J → C → P`、未发现反向边；风险为 C 跨 NVS 长持锁与 C/P 递归契约；CMD-06 前置约束见 §4 |
-| CMD-06 | P1 | 将网络异步事务整体迁移到 `cmd_net_txn.c` | TODO | 阶段 A 关闭后再实施；事务语义不变；接口不暴露可写全局状态 |
-| CMD-07 | P1 | 普通网络命令迁移到 `cmd_net.c` | TODO | scan/profile/reconnect/status 兼容 |
-| CMD-08 | P1 | 状态构造函数迁移到 `cmd_status.c` | TODO | device/network/gpio/uart JSON 字段一致 |
-| CMD-09 | P2 | GPIO 控制分支抽取共享执行 helper | TODO | 五个旧命令全部保持原行为 |
-| CMD-10 | P2 | 配置命令迁移到 `cmd_config.c` | TODO | domain/patch/effect/权限/事务 guard 一致 |
-| CMD-11 | P2 | UART/IO/data 命令迁移到 `cmd_device.c` | TODO | 命令协议与错误码兼容 |
-| CMD-12 | P2 | 全仓检索 HTTP source/owner、旧 wrapper、测试 hook 及命名清理 | TODO | 逐项列调用者；确认后才删除；包含三项 owner/domain/password helper 收敛评估 |
-| CMD-13 | P2 | 收敛 `cmd.c` 为入口、policy、分发和统一收尾 | TODO | 无业务状态全局变量泄漏；入口可读且测试通过 |
-| CMD-14 | P1 | 记录 `apply_async` 持 job 锁跨 NVS 的持锁预算，评估是否需要缩短锁区 | TODO | 先形成测量方法和证据；**未完成评估前不得缩短锁区** |
-| CMD-15 | P1 | MQTT 运行态读取 `s_config` 的锁/一致性收口 | TEST_PENDING | R1/R2（`999db00`）+ R4（`8d7d768`）已实施；联合验证阶段 1 构建与阶段 2 host tests 按执行报告通过。**PASS 仍待阶段 3 设备回归**；R3/R5 未授权 |
-
-## 3. 分阶段实施
-
-### 阶段 A：锁与快照，不移动业务代码
-
-- [x] CMD-01：已修复 `io.get` 对 `s_wifi.sta_has_ip` / `s_wifi.sta_ip` 的读取边界；锁内复制快照，锁外构造 JSON。代码提交：`add93e7`。静态检查通过；构建与 BLE/MQTT 入口回归尚未执行。
-- [x] CMD-02：七处 `s_net_async` 读点已按 §1.3 实施（`28f9090`）；联合验证阶段 1 构建与阶段 2 host tests 按执行报告通过，当前 `TEST_PENDING`；受理/幂等/apply/cancel/expire 设备回归仍待单独授权，未通过前不标 PASS。
-- [x] CMD-03：锁序/回调静态审查完成（同上 §2）；测试设计完成；**Phase A host 测试已实施并通过**（`tests/operation_host/`，附录 A：A1 100/100、可证伪性检查 OK）。Phase B 未授权。
-- [x] CMD-05：静态审查完成（`CMD-05_config_profile锁序审查_2026-11-15.md`）；未改代码。
-- [ ] 更新本计划和审查报告中的结论、证据及未决项。
-
-**阶段 A 验收门槛：**锁契约和字段所有权明确；不改变 operation 状态机和网络行为；构建通过；相关并发回归通过。
-
-### 阶段 B：抽离网络异步事务
-
-- [ ] CMD-06：迁移 job/trial/operation/cleanup/stage snapshot 相关实现。
-- [ ] 仅通过函数 API 暴露 tryconnect/apply/cancel/query/断连处理。
-- [ ] 保持递归 job lock、generation 检查、owner 和幂等行为。
-- [ ] 核对内部 apply 再入路径，不复制同步提交逻辑。
-
-**必测：**正常试连与提交、重复 tryconnect、不同 owner 查询/取消、BLE 断连、operation expire、验证失败、apply 与 cancel 竞争、配置保存失败、cleanup 失败、旧 worker 与槽位复用。
-
-### 阶段 C：状态构造与普通网络命令
-
-- [ ] CMD-04 / CMD-08：状态读取改为快照采集与 JSON 生成分离。
-- [ ] CMD-07：迁移 scan、profile list/delete、reconnect 等普通网络命令。
-- [ ] 确认 scan gate 与事务模块的所有权和接口边界。
-
-### 阶段 D：设备控制和配置命令
-
-- [ ] CMD-09：抽取 GPIO 共享执行 helper，保持旧命令名。
-- [ ] CMD-10：迁移 config.get/set、domain、patch、权限和 effect。
-- [ ] CMD-11：迁移 UART、IO、loopback 命令。
-- [ ] 验证配置事务 guard 与命令来源权限。
-
-### 阶段 E：清理与收口
-
-- [ ] CMD-12：全仓确认 HTTP source/owner、旧 wrapper 和测试 hook 是否仍被使用。
-- [ ] 只删除有全仓无调用证据的代码。
-- [ ] CMD-13：收敛入口文件，更新 README 架构图/目录说明和本文状态。
-- [ ] 完成最终构建、协议回归和设备验证。
-
-## 4. 回归证据模板
-
-每个实施 PR 至少记录：
-
-| 项 | 记录 |
-|---|---|
-| 基线 commit | 待填写 |
-| 实施 commit / PR | 待填写 |
-| ESP-IDF 版本 / target | 待填写 |
-| 构建结果 | PASS / FAIL + 日志 |
-| 命令兼容 | 命令、参数、响应字段、错误码差异 |
-| 并发用例 | try/apply/cancel/expire/disconnect 等 |
-| 资源指标 | free heap / largest block / stack HWM（适用时） |
-| 真机 | 板型、固件 SHA、测试结果 |
-| 未解决项 | 明确列出，不以“后续观察”代替结论 |
-
-## 5. 文档同步规则
-
-1. 每次代码行为变化，同步更新本计划对应 ID 和证据。
-2. 每次接口或模块边界变化，同步更新 `docs/cmd.c_review_2026-11-14.md` 的函数职责/调用关系/锁契约。
-3. 只有实际代码结构已经变化后才更新 README 的目录结构；计划中的目标文件不能写成现状。
-4. README 只保留稳定架构概览和文档导航；详细审查、任务状态和测试证据留在 `docs/`。
-5. 若审查结论被后续代码/测试推翻，保留历史记录并追加更正，不静默覆盖。
-
-## 6. 当前状态摘要
-
-- [x] 第一轮 `cmd.c` 静态审查完成。
-- [x] 形成函数职责、调用关系、锁关系、重复逻辑和拆分建议文档。
-- [x] 建立代码级并发专项审查证据（CMD-02/03）。
-- [ ] 阶段 A 尚未整体关闭：CMD-01 已实施但构建/入口回归待验证；CMD-02 已 `CODE_DONE`、待联合构建与 host 验证；CMD-03 Phase A host 已完成但 Phase B/C 未授权；CMD-05 已 `REVIEWED`；CMD-15 R1/R2/R4 已 `CODE_DONE`、待联合验证。
-- [x] `cmd.c` 已有 CMD-01 最小代码修改（`add93e7`）；尚未执行 ESP-IDF 编译或真机验收。
-
----
-
-## 5. 2026-11-15 复核增量（基线 d09f355）
-
-- 附录 A（`cmd.c_review_2026-11-14.md`）补齐 49 个函数的行号锚点与锁清单；后续函数数及行号以 2026-11-15 复核结果为准。
-- 新增 CMD-14：`apply_async` 持 `s_net_job_lock` 跨内层 `execute_method`（含 NVS 写），属 R2-P0 的刻意设计；先测持锁时长，再讨论是否缩短。
-- 新增待办（未编号，随 CMD-12 一并处理）：`app_cmd_verify_web_password` 改名；`k_config_domains` 与 `app_cmd_domain_known` 合并；`cmd.c:43` 与 `cmd_policy.c:13` 的 owner 映射合并。
-- 本文档中的阶段 A/B/C 划分不变；本轮未移动任何代码。
-
-- 2026-11-15：CMD-02/CMD-03 静态审查完成（`CMD-02_03_并发静态审查_2026-11-15.md`）；未改代码，修复项待排期。
-
-- 2026-11-15：窄窗口测试设计已出（`CMD-03_窄窗口竞态_测试设计_2026-11-15.md`）；Phase A（operation 层 host）不涉产品代码，Phase B 需代码授权。
-
-
-## 7. 当前执行状态与唯一推进队列（2026-11-15；产品源码基线 = `5104a3b`；后续验证申请/计划/索引提交均为文档变更）
-
-### 7.1 当前事实（不要把计划当成已实施）
-
-- 当前产品源码审查/验证基线：`5104a3b0b3266f6afe22404d24ca89d41253cb63`（包含 CMD-02 `28f9090`、CMD-15 R1/R2 `999db00`、R4 `8d7d768`；其后截至 `cbe6a20` 的提交仅为文档）。每轮开工仍必须重新读取当前 `main` HEAD；该 SHA 是产品代码基线，不是本轮构建 HEAD。
-- CMD-01：代码改动已存在（`add93e7`），构建和 BLE/MQTT 入口回归未完成，状态 `TEST_PENDING`。
-- CMD-02：七处读点已实施（`28f9090`）；联合验证阶段 1 构建与阶段 2 host tests 按执行报告通过，状态 `TEST_PENDING`，等待独立授权的阶段 3 设备回归。
-- CMD-03：静态审查、测试设计、**Phase A host 测试**均完成（5 场景 ×50 ×10 轮全过；变异体检查通过）。Phase B（cmd 层 store_trial 守卫）与 Phase C（设备）未授权。
-- CMD-05：config/profile 锁序静态审查完成，状态 `REVIEWED`。
-- CMD-15：R1/R2（`999db00`）与 R4（`8d7d768`）已实施；联合验证阶段 1 构建与阶段 2 host tests 按执行报告通过，状态 `TEST_PENDING`，等待独立授权的阶段 3 设备回归；R3/R5 仍未授权。
-- CMD-02 + CMD-15 联合验证阶段 1（ESP-IDF fullclean/build）与阶段 2（host tests）已于 2026-11-16 按执行报告通过；阶段 3 设备回归不在批准范围，尚未执行、未授权。
-- 当前已有 CMD-02/CMD-15 联合构建与 host 验证报告及本地证据目录；尚无设备验收证据，因此不得标 `PASS`。
-
-### 7.2 唯一推进队列
-
-按依赖顺序推进，不并行混改：
-
-1. **CMD-02 + CMD-15 联合验证：**阶段 1 ESP-IDF 构建与阶段 2 host tests 已按执行报告通过（详见 §8.5）；本窗口已结束。阶段 3 设备回归需单独立项和授权，不得由本次结果推定获批。
-2. **CMD-01：**联合构建若可复用，仅在单独核对入口回归范围并取得相应授权后，安排 BLE/MQTT 入口回归；不能把 CMD-02/15 的 host 结果替代设备入口回归。
-3. **CMD-03 Phase B 决策：**Phase A 已完成；是否修改 cmd 层 `store_trial` 守卫、是否抽取 `cmd_net_guard`，必须单独设计评审和代码授权。当前不执行。
-4. **CMD-05：**锁序静态审查已完成（`REVIEWED`）；未测持锁时长。
-5. **CMD-14：**设计并执行适当的持锁时间测量；测量前不缩短 job 锁区，测量本身按其风险另行授权。
-6. **阶段 B 及以后：**CMD-06 仍未开始；只有阶段 A 的锁契约、读点修复和关键并发验证收口后，才另行立项/授权；CMD-06 不在本轮授权内。
-
-> 队列顺序是默认推进顺序。若新证据改变风险或依赖，必须先更新本节和总表，再切换任务；不得在聊天中临时跳过依赖。
-
-### 7.3 Agent 持续进度维护规则（每轮必做）
-
-1. **开工前读取：**先读取本计划、对应专项审查文档和当前 `main` HEAD；确认工作树/远端基线，不沿用过期会话记忆。
-2. **先报当前状态：**开始工作时说明当前基线、目标 CMD、状态、前置依赖、授权边界和本轮不做事项。
-3. **一次聚焦一个可验收增量：**避免把 CMD-02 修复、CMD-03 守卫、CMD-06 模块迁移混在一个提交。
-4. **完成后回写：**由项目协调者负责把开发/agent 提交的可核验证据回写到本计划、专项报告和 `docs/README.md` 索引；更新状态、阶段勾选、提交 SHA、测试结果、未决风险和下一唯一事项。开发/agent 提供事实与证据，不以聊天口头报告替代文档同步。
-5. **状态升级规则：**审查完成不等于代码完成；代码完成不等于测试通过；host 测试不等于 ESP-IDF 构建或真机验收；无对应证据不得标 `PASS`。申请获批只表示授权窗口开放，不表示已执行或通过。
-6. **授权边界：**代码修改、构建、host 测试、设备操作分别按用户明确授权执行；设备、串口、BLE、FI/烧录及阶段 B 等高风险操作不得从一般性“继续推进”中推定授权。
-7. **冲突处理：**若当前 main 已前进、源码与文档基线不一致、测试设计与实现不符，先暂停实施并重新取证；不得静默覆盖或按旧行号修改。
-8. **交接格式：**每轮结束必须输出“本轮完成 / 未完成 / 新发现 / 风险与授权 / 当前基线 / 下一唯一动作”，并确保与本计划、专项报告、文档索引一致。
-9. **文档同步责任：**项目协调者负责主分支上的文档终态与一致性；每次任务状态、授权范围、验证结果或下一推进项变化，至少同步本计划与对应专项/申请文件，新增或状态变化的文档同步 `docs/README.md`。不把文档修订责任留给开发者；开发者负责提供真实、可复核的实施证据。
-
-### 7.4 每轮交接记录模板
-
-```markdown
-- 日期：
-- main HEAD / 源码基线：
-- 本轮 CMD：
-- 本轮变更（文件/提交）：
-- 状态变化（旧状态 -> 新状态）：
-- 验证（命令、结果、证据位置）：
-- 未完成项 / 风险：
-- 授权边界（已授权 / 未授权）：
-- 下一唯一动作：
-```
-
-
-### 7.5 交接记录 · 2026-11-15 · CMD-03 Phase A
-
-- 日期：2026-11-15
-- main HEAD / 源码基线：写入时 `31d19f6`（源码 `d0dbf71` 起未变）
-- 本轮 CMD：CMD-03 Phase A
-- 本轮变更：新增 `tests/operation_host/`（stub/shim/S1–S5/Makefile/check_falsifiable.sh）；更新本计划与 `CMD-03_窄窗口竞态_测试设计_2026-11-15.md` 附录 A；**未改 `main/`**
-- 状态变化：CMD-03 `DESIGN_READY -> IN_PROGRESS`
-- 验证：`make -C tests/operation_host`（0 warning）；`run` 5 场景 ×50 ×10 轮 = 10/10 `RESULT: PASS`；A1 100/100、A2 100/100、A3 100/100、A4/A5/A5h/A7 各 50/50；`falsify` 变异体（expiring 闸 2 处置空）在 A1 失败
-- 未完成项 / 风险：Phase B（cmd 层 `store_trial` 未覆盖）；host 语义不等于真机；`app_operation_status_t` 不暴露 `expiring`（测试以 A3 间接验证）
-- 授权边界：已授权=host 测试新增/编译/运行；未授权=产品代码、构建固件、设备/串口/BLE/NVS/烧录
-- 下一唯一动作：CMD-02 七处读点的最小补丁设计（逐项读写者/锁/局部副本/行为影响），待批准后实施
-
-
-### 7.6 交接记录 · 2026-11-15 · CMD-02 最小补丁设计
-
-- 日期：2026-11-15
-- main HEAD / 源码基线：设计基于产品源码未变的 d0dbf714e138499209cce43fdce92f35ba71a598；文档提交以当前 main HEAD 为准。
-- 本轮 CMD：CMD-02 七处无锁/解锁后读点最小补丁设计；并收口 CMD-03 Phase A 文档状态。
-- 本轮变更：CMD-02_03_并发静态审查_2026-11-15.md §1.3 增补逐点读写者、锁内快照、行为影响和实施约束；CMD-03_窄窗口竞态_测试设计_2026-11-15.md 顶部状态与 Phase A/Phase B 授权状态同步；本计划状态与队列同步。未修改 main/cmd.c。
-- 状态变化：CMD-02 REVIEWED -> DESIGN_READY；CMD-03 保持 IN_PROGRESS（Phase A 完成，Phase B 未授权）。
-- 验证：基于当前 main 的 cmd.c 重新读取受影响代码区间；设计覆盖 723–726、811、1033、2667/2757/2863、555/567–569；确认锁内只做快照，不在新增锁区调用 cJSON、operation/Wi-Fi API 或阻塞函数。
-- 未完成项 / 风险：7 处读点仍在产品代码中；设计未经过代码实施与编译回归；CMD-03 Phase B 的 cmd 层 trial 重写缺口仍未验证/修复。
-- 授权边界：已完成=静态审查与文档设计；未授权=修改 main/cmd.c、新增 cmd_net_guard、ESP-IDF 固件构建、设备/串口/BLE/FI/烧录。
-- 下一唯一动作：用户审阅并决定是否批准 CMD-02 最小补丁实施。
-
-
-### 7.6 交接记录 · 2026-11-15 · CMD-02 设计边界补充
-
-- 日期：2026-11-15
-- main HEAD / 源码基线：写入时 `e895d3f`（`main/cmd.c` 未变）
-- 本轮 CMD：CMD-02（仅文档）
-- 本轮变更：`CMD-02_03_并发静态审查_2026-11-15.md` §1.3 增 C1–C3；本计划 CMD-02 行与推进队列同步
-- 状态变化：CMD-02 保持 `DESIGN_READY`（设计通过，源码未授权）
-- 验证：无代码变更；未运行测试/构建
-- 未完成项 / 风险：C1 所述"快照后仍非原子"需在实现注释中保留；C3 的 `PASS` 依赖构建与回归
-- 授权边界：已授权=文档补写；未授权=`main/cmd.c` 修改、构建、设备操作
-- 下一唯一动作：用户明确批准后实施 §1.3 七处最小修改（不含 `cmd_net_guard`/`store_trial`/迁移）
-
-
-### 7.7 交接记录 · 2026-11-15 · CMD-02 七处读点实施
-
-- 日期：2026-11-15
-- main HEAD / 源码基线：`28f9090`（父 `e741b1f`）
-- 本轮 CMD：CMD-02
-- 本轮变更：`main/cmd.c` 七处读点（+89/−33）；专项审查 §1.3 追加实施记录；本计划状态同步
-- 状态变化：CMD-02 `DESIGN_READY -> CODE_DONE`
-- 验证：`git diff --check` 通过；`tests/syntax_check.py --strict main/cmd.c` OK；
-  `grep s_net_async` 全量复核（剩余访问均在 J 内或 dispatcher 单任务）；未执行构建/回归
-- 未完成项 / 风险：`PASS` 依赖 ESP-IDF 构建 + 四类回归；C1 的非原子边界仍成立；
-  CMD-03 `store_trial` 窄窗口未修复
-- 授权边界：已授权=七处源码修改；未授权=构建、设备回归、Phase B、模块迁移
-- 下一唯一动作：等待构建/回归授权后执行 CMD-02 验证；或按队列进入 CMD-05 静态审查
-
-
-### 7.8 交接记录 · 2026-11-15 · CMD-05 锁序审查
-
-- 日期：2026-11-15
-- main HEAD / 源码基线：`04e9584`（CMD-02 CODE_DONE）
-- 本轮 CMD：CMD-05
-- 本轮变更：新增 `CMD-05_config_profile锁序审查_2026-11-15.md`；台账 CMD-05 → REVIEWED
-- 状态变化：CMD-05 `TODO -> REVIEWED`
-- 验证：静态搜索 `main/{cmd,config,config_apply,wifi,mqtt,cmd_cfg_txn,bt,auth,state}.c` 的嵌套获取；
-  未运行构建/测试
-- 结论：偏序 `J → C → P`（及 `J → P`）一致，未发现 `P/C → J`、`P → C` 等反向边；风险为长持锁与递归契约
-- 未完成项 / 风险：未测持锁时长；`s_config` 无锁读者与 data_pipe 路由位图读者另案
-- 授权边界：已授权=只读审查；未授权=代码修改、构建、设备
-- 下一唯一动作：按队列评估 CMD-01 构建/回归或 CMD-06 前置条件；CMD-02 的 PASS 仍待构建/回归授权
-
-
-### 7.9 交接记录 · 2026-11-15 · MQTT 运行态与 config 同步复核
-
-- 日期：2026-11-15
-- main HEAD / 源码基线：`07b08cc`（CMD-05 REVIEWED）
-- 本轮 CMD：新增 CMD-15（MQTT 配置一致性）
-- 本轮变更：新增 `MQTT运行态与config同步复核_2026-11-15.md`；台账增 CMD-15 → REVIEWED；索引同步
-- 状态变化：CMD-15 新增，`REVIEWED`
-- 验证：只读源码追踪（mqtt.c/config_apply.c/cmd.c）；未运行构建/测试
-- 结论：陈旧窗口有界（defer 15s + heap 5s + ack 1.2s + stop ≤20s，最坏 ~41s）；
-  **P1 数据竞争**：telemetry/restart 无 C 读 `s_config`，与 C 内整结构 memcpy 并发；
-  `is_pending/deferred` 仅日志、未暴露给客户端
-- 未完成项 / 风险：窗口长度未实测；esp-mqtt 字符串拷贝语义未验证；`app_mqtt_stop` 在 Wi-Fi 事件任务内同步执行
-- 授权边界：已授权=只读复核；未授权=代码修改、构建、设备
-- 下一唯一动作：等用户决定 CMD-15 的修复授权或 CMD-02 构建/回归授权；两项目前均未获批
-
-
-### 7.10 交接记录 · 2026-11-15 · CMD-15 R1/R2 实施
-
-- 日期：2026-11-15
-- main HEAD / 源码基线：`999db00`（父 `1165d23`）
-- 本轮 CMD：CMD-15（R1/R2）
-- 本轮变更：`main/mqtt.c`（快照结构/helper、apply_config、两处 payload、backend 原子缓存、token 静态副本）
-- 状态变化：CMD-15 `REVIEWED -> CODE_DONE`
-- 验证：`git diff --check` 通过；`syntax_check.py --strict main/mqtt.c` OK；全量 grep 确认 `s_config.` 仅在快照函数（持 C）
-- 未完成项 / 风险：R3/R4/R5 未授权；`s_wifi.sta_has_ip/sta_ip` 仍无 W 读；esp-mqtt 字符串拷贝语义未验证；未构建/未回归
-- 授权边界：已授权=R1/R2；未授权=R3/R4/R5、构建、设备、CMD-02 回归、Phase B、CMD-06
-- 下一唯一动作：等 CMD-15 R3/R4 或 CMD-02 构建/回归的单独授权；否则按队列进入下一个只读项
-
-
-### 7.11 交接记录 · 2026-11-15 · CMD-15 R4 设计
-
-- 日期：2026-11-15
-- main HEAD / 源码基线：`e3fdd84`（代码 `999db00`）
-- 本轮 CMD：CMD-15 R4（仅设计）
-- 本轮变更：复核文档 §10；台账 CMD-15 备注更新
-- 状态变化：CMD-15 保持 `CODE_DONE`；R4 设计待授权
-- 验证：无代码变更；未运行测试/构建
-- 结论：4 处 `s_wifi` 无 W 读点（653/709/1451/1709）；设计为新增 wifi 快照 helper，
-  C 与 W 顺序取用不嵌套，保留既有 M→W，不新增 C→W
-- 未完成项 / 风险：W 持有时长未测；R3/R5 未授权
-- 授权边界：已授权=设计文档；未授权=R4 代码、构建、设备
-- 下一唯一动作：用户审阅并授权 R4 后实施（范围仅四处读取点）
-
-
-### 7.12 交接记录 · 2026-11-15 · CMD-15 R4 实施
-
-- 日期：2026-11-15
-- main HEAD / 源码基线：`8d7d768`（父 `43cc0d6`）
-- 本轮 CMD：CMD-15 R4
-- 本轮变更：`main/mqtt.c`（wifi 快照 helper、四处替换、DISCONNECTED 条件调用、非原子注释）
-- 状态变化：CMD-15 仍 `CODE_DONE`；R4 已实施
-- 验证：`git diff --check` 通过；`syntax_check.py --strict main/mqtt.c` OK；
-  `grep s_wifi.` 仅 helper 内两行（W 内）+ 一处历史注释
-- 未完成项 / 风险：R3/R5 未授权；W 持有时长未测；未构建/未回归
-- 授权边界：已授权=R4 四处；未授权=R3/R5、构建、设备、CMD-02 回归、Phase B、CMD-06
-- 下一唯一动作：等待 CMD-02 构建+回归授权（一并验证 CMD-15），或按队列进入下一个只读项
-
-
-### 7.13 交接记录 · 2026-11-15 · CMD-15 文字一致性收口
-
-- 日期：2026-11-15
-- main HEAD / 源码基线：`6a52503`（代码 `8d7d768`）
-- 本轮 CMD：CMD-15（仅注释/文档）
-- 本轮变更：`main/mqtt.c` 一条历史注释（不再暗示存在无锁 `s_wifi` 读取，改为说明 M→W 锁序）；
-  复核文档 §10 删除"未改代码"旧说明、§10.1 标注为实施前基线并说明现由 helper 覆盖
-- 状态变化：无（CMD-15 保持 `CODE_DONE`）
-- 验证：`git diff --check` 通过；`syntax_check.py --strict main/mqtt.c` OK；无行为变化
-- 未完成项 / 风险：R3/R5 未授权；构建/回归未授权
-- 授权边界：已授权=文字一致性修正；未授权=构建、设备、R3/R5、Phase B、CMD-06
-- 下一唯一动作：待用户批准 CMD-02 + CMD-15 联合构建与回归窗口（区分构建/主机测试/设备回归三阶段）
-
-
-### 7.14 交接记录 · 2026-11-15 · CMD-02 + CMD-15 联合验证窗口申请
-
-- 日期：2026-11-15
-- main HEAD / 源码基线：`5104a3b`（代码 `28f9090` + `999db00` + `8d7d768`）
-- 本轮 CMD：CMD-02 + CMD-15（验证申请，仅文档）
-- 本轮变更：新增 `CMD-02_15_联合验证授权申请_2026-11-15.md`
-- 状态变化：无（CMD-02/CMD-15 保持 `CODE_DONE`；验证窗口 `PLANNED` 待批）
-- 验证：未执行构建/测试
-- 申请范围：阶段 1 ESP-IDF 构建（fullclean+build，0 error，改动文件 0 warning）、
-  阶段 2 全部 host 套件（含 operation_host/falsify、s6_gate 141、syntax_check）
-- 明确不申请：阶段 3 设备回归（需先烧录含改动固件，与 65D8 `a7e04b6a9` 及阶段 B 边界冲突）、
-  烧录/设备/串口/BLE、Phase B、CMD-06、R3/R5
-- 授权边界：已授权=无（等待批准）；未授权=构建、host 测试、设备
-- 下一唯一动作：用户批准阶段 1+2 后执行并回写证据；批准前不执行任何构建
-
-
-### 7.15 交接记录 · 2026-11-15 · 联合验证申请 v2 修订（退回后）
-
-- 日期：2026-11-15
-- main HEAD / 源码基线：`b323ce8`（源码基线 `5104a3b`；差异仅文档）
-- 本轮 CMD：CMD-02 + CMD-15（申请修订，仅文档）
-- 退回原因与修订：
-  1. v1 列出的 `tests/cmd_policy`、`tests/cmd_cfg_txn`、`tests/cmd_error` 在本机存在但被
-     `.gitignore:51`（`tests/cmd_*/`）忽略，**从未进入仓库**；`main` 上不存在。v2 改为只运行
-     仓库内实际存在的 5 个 Makefile 入口（token_store/netcheck/wifi_owner/cmd_context/operation_host），
-     并注明 `tests/README.md` 的对应条目属已知陈旧文本、不作执行依据。
-  2. 构建命令补 `set -euo pipefail`（防 tee 掩盖失败）、`mkdir -p` 日志目录、
-     执行前记录 HEAD/`git status --short`/`idf.py --version`；`fullclean` 也落日志。
-  3. 明确区分"构建 HEAD `b323ce8`"与"产品源码基线 `5104a3b`"，并设工作区干净/HEAD 校验，
-     不符先 STOP。
-  4. 边界保持：阶段 3、烧录/设备、Phase B、CMD-06、R3/R5 均不申请。
-- 状态变化：无（CMD-02/CMD-15 保持 `CODE_DONE`；窗口仍 `PLANNED`）
-- 验证：未执行构建/测试
-- 新发现（记录，不处理）：`tests/cmd_*/` 被 gitignore 的三套测试无法从仓库复现；
-  是否提交这些测试需单独立项，不得在本窗口顺手加入。
-- 授权边界：已授权=文档修订；未授权=构建、host 测试、设备
-- 下一唯一动作：用户按 v2 申请重新审查；批准后执行阶段 1+2
-
-
-### 7.16 交接记录 · 2026-11-15 · 联合验证申请 v3 修订（第二次退回后）
-
-- 日期：2026-11-15
-- main HEAD / 源码基线：修订提交后的 HEAD（源码基线仍为 `5104a3b`；差异仅文档）
-- 本轮 CMD：CMD-02 + CMD-15（申请修订，仅文档）
-- 退回原因与修订：
-  1. v2 把构建 HEAD 写死为 `b323ce8`（上一提交），且 v1/v2/v3 每次修订都会使其过期。
-     v3 改为四条可验证条件：HEAD == 申请书所在提交、申请书与 HEAD 一致、
-     `5104a3b..HEAD` 仅 docs、工作区干净；任一不满足先 STOP，不得放宽。
-  2. 阶段 2 原 `set -uo pipefail` 无 `-e`，失败不停止。v3 增加 `run_zero`（PIPESTATUS[0]
-     判 rc，非零即 STOP）与 `run_falsify`（预期非零 + 必须含 `[FALSIFY] OK`），逐条 `|| exit $?`，
-     每条原始输出单独落盘。
-- 状态变化：无（CMD-02/CMD-15 保持 `CODE_DONE`；窗口仍 `PLANNED`）
-- 验证：未执行构建/测试
-- 授权边界：已授权=文档修订；未授权=构建、host 测试、设备、阶段 3
-- 下一唯一动作：用户按 v3 重新审查；批准后执行阶段 1+2
-
-
-### 7.17 交接记录 · 2026-11-15 · 联合验证申请 v4 修订（第三次退回后）
-
-- 日期：2026-11-15
-- main HEAD / 源码基线：修订提交后的 HEAD（源码基线仍为 `5104a3b`；差异仅文档）
-- 本轮 CMD：CMD-02 + CMD-15（申请修订，仅文档）
-- 退回原因与修订：
-  1. **falsify 契约写反（阻断）**：`check_falsifiable.sh` 成功路径为 rc=0 + `[FALSIFY] OK`；
-     v3 误写"预期非零"。v4 改为"rc=0 且日志含 `[FALSIFY] OK`"，并实测确认 `falsify rc=0`。
-  2. `run_zero` 只检查 PIPESTATUS[0]，忽略 tee；v4 改为 `run_pipe` 同时检查命令与 tee，
-     任一非零即 STOP。
-  3. 阶段 2 `mkdir -p` 未判失败；v4 增加 `|| { echo STOP; exit 1; }`。
-  4. 源码门禁原用 `grep -q`（pipefail 下可能提前关闭管道触发 SIGPIPE）；v4 改为
-     `awk 'index($0,"docs/")!=1'` 全量读取后再判断。
-- 状态变化：无（CMD-02/CMD-15 保持 `CODE_DONE`；窗口仍 `PLANNED`）
-- 验证：未执行构建；`falsify rc=0` 为契约核对时的本地实测
-- 授权边界：已授权=文档修订；未授权=构建、host 测试、设备、阶段 3
-- 下一唯一动作：用户按 v4 复核；批准后执行阶段 1+2
-
-
-### 7.18 交接记录 · 2026-11-15 · 联合验证申请 v4 文档清理
-
-- 日期：2026-11-15
-- main HEAD / 源码基线：修订提交后的 HEAD（源码基线仍为 `5104a3b`；差异仅 docs/）
-- 本轮 CMD：CMD-02 + CMD-15（申请清理，仅文档）
-- 修订：删除 §3 代码块后残留的 v3 旧说明（引用已不存在的 `run_zero`、错误声称"tee 永远成功"，
-  与 v4 双端检查矛盾）；保留唯一的 v4 契约说明。
-- 状态变化：无（CMD-02/CMD-15 保持 `CODE_DONE`；窗口仍 `PLANNED`）
-- 验证：未执行构建/测试
-- 授权边界：已授权=文档清理；未授权=构建、host 测试、设备、阶段 3
-- 下一唯一动作：用户复核后批准阶段 1+2；批准前不执行构建或测试
-
-
-### 7.19 交接记录 · 2026-11-15 · 联合验证申请 v4 venv 契约统一
-
-- 日期：2026-11-15
-- main HEAD / 源码基线：修订提交后的 HEAD（源码基线仍为 `5104a3b`；差异仅 docs/）
-- 本轮 CMD：CMD-02 + CMD-15（申请修订，仅文档）
-- 退回原因与修订：文档写"venv 缺失记录环境缺失"，但脚本无条件执行 `$PY` 命令，实际会 127 STOP。
-  统一为 **fail-closed**：阶段 2 开始前 `[ -x .venv-bleak/bin/python ]` 检查，缺失即
-  "记录环境缺失 + STOP 整个阶段 2"（不跳过两项、不创建 venv、不声称通过）；命令改用 `"$PY"`。
-- 状态变化：无（CMD-02/CMD-15 保持 `CODE_DONE`；窗口仍 `PLANNED`）
-- 验证：未执行构建/测试
-- 授权边界：已授权=文档修订；未授权=构建、host 测试、设备、阶段 3
-- 下一唯一动作：用户复核后批准阶段 1+2
-
-
-### 7.20 交接记录 · 2026-11-15 · 项目统筹状态同步与联合验证批准
-
-- 日期：2026-11-15
-- main 基线：本轮开始时 `cbe6a2041fdec90fcc0438e686249f8ffc744a0b`；产品源码基线仍为 `5104a3b0b3266f6afe22404d24ca89d41253cb63`，比较范围内只有 docs/ 变更。
-- 本轮 CMD：CMD-02 + CMD-15 联合验证；同步校正 CMD 重构总计划与文档索引。
-- 本轮变更：校正阶段 A、当前状态摘要、§7.1 事实和唯一推进队列中的过期描述；明确 CMD-02/CMD-15 `CODE_DONE`、CMD-03 Phase B/C 与 CMD-06 未授权；补充项目协调者承担主分支文档同步责任。
-- 状态变化：CMD-02/CMD-15 仍 `CODE_DONE`；联合验证窗口 `PLANNED -> APPROVED（阶段 1 + 阶段 2，待执行）`。这不是测试通过，也不改变阶段 3 状态。
-- 验证：只核对 GitHub 当前 main 文档、提交差异和申请脚本文本；未执行 ESP-IDF 构建、host tests、设备/串口/BLE 操作。
-- 授权边界：已批准=阶段 1 ESP-IDF fullclean/build、阶段 2 申请列出的 host tests（按申请书门禁与失败即停）；未授权=阶段 3、烧录、设备、串口、BLE、CMD-03 Phase B、CMD-06、CMD-15 R3/R5。
-- 下一唯一动作：执行阶段 1；仅在阶段 1 成功后进入阶段 2；若 `.venv-bleak/bin/python` 不存在或不可执行，记录环境缺失并 STOP 阶段 2。
-
-
-### 7.21 交接记录 · 2026-11-15 · 台账残留清理归并与源码门禁 quotepath 修正
-
-- 日期：2026-11-15
-- main HEAD / 源码基线：修订提交后的 HEAD（源码基线 `5104a3b`）
-- 本轮 CMD：文档维护（无代码）
-- 台账残留：`764735a`/`3ec3461`（v5 统筹同步）已把阶段 A、§6 摘要、§7.1 的旧描述改为实际进度；
-  我本地同内容的重复修改已丢弃（未推送），避免重复 §7.20。
-- 新发现并修正（执行阻断）：联合验证申请书源码门禁用 `git diff --name-only` 默认 quotepath，
-  中文路径会被输出成 `"docs/..._\350..."`，`index($0,"docs/")!=1` 判为非文档 → 门禁**误停**（实测复现）。
-  已改为 `git -c core.quotepath=false diff --name-only`，并在申请书中注明原因。
-- 状态变化：无（CMD-02/CMD-15 `CODE_DONE`；联合验证窗口保持 `APPROVED（阶段 1+2，待执行）`）
-- 验证：仅检查 git 输出与门禁脚本文本；未执行构建/测试
-- 授权边界：已批准=阶段 1+2（按申请书门禁）；未授权=阶段 3、设备、Phase B、CMD-06、R3/R5
-- 下一唯一动作：执行阶段 1（idf.py fullclean + build）
-
-
-## 8. CMD-02 + CMD-15 联合验证窗口（唯一执行口径）
-
-> **状态：阶段 1 + 阶段 2 已执行并按报告通过；阶段 3 未授权、未执行。**本节是当前执行状态与授权范围的唯一维护入口；阶段 1/2 的执行结果按本节及执行报告记录，阶段 3 仍未授权。历史申请过程不再作为日常维护文档；任何扩大范围必须重新申请。
-
-### 8.1 基线与执行前门禁
-
-- 批准源码基线：`5104a3b0b3266f6afe22404d24ca89d41253cb63`。执行时必须打印实际 `HEAD`、`git status --short`、ESP-IDF 版本及源码差异；不得把文档提交 SHA 当作固件版本。
-- 工作区必须干净；相对批准基线只允许 `docs/` 下的文件及仓库根目录精确路径 `README.md`；除此之外任何路径（包括其他根目录文件）均视为非文档变更并 STOP。产品源码、测试代码、`sdkconfig`、分区表不得变化。
-- 原批准门禁要求申请入口文件必须是 HEAD 最后一个提交（`HEAD == git log -1 --format=%H -- "$APP"`）；该条件属于已批准执行前置，不因文档合并而取消。原路径保留为精简门禁入口，详细计划与执行口径以本节为准；任何后续提交都会使该门禁失效，须重新核对并更新入口后再执行。
-- 中文路径差异检查必须使用 `git -c core.quotepath=false`，避免默认转义导致误判。门禁 3 的唯一允许路径集合为 `docs/` 下文件 + 根目录精确路径 `README.md`；实现时使用 `awk 'index($0, "docs/") != 1 && $0 != "README.md"'`（或等价的逐路径白名单判断）。不得扩展为其他根目录文件/目录。
-- 任一门禁不满足即 STOP，不得自行放宽。
-
-### 8.2 已批准范围
-
-| 阶段 | 允许事项 | 进入条件 | 结束条件 |
-|---|---|---|---|
-| 1 | ESP-IDF `fullclean` + `build`；保存完整日志、实际 HEAD、IDF 版本及构建产物身份 | §8.1 全部通过 | 构建成功并完成证据归档；失败立即停止 |
-| 2 | 批准申请列明的 host tests、`operation_host falsify`、strict syntax、S6 gate、critical-section audit、v1-only 检查 | 阶段 1 成功；`.venv-bleak/bin/python` 存在且可执行 | 全部命令及日志管道退出码符合申请契约；任一失败立即停止 |
-
-阶段 2 的执行范围与结果以本节和对应执行报告为准，不再依赖历史申请稿作为当前执行入口。若 `.venv-bleak/bin/python` 缺失或不可执行，只记录环境缺失并 STOP 阶段 2；不得创建虚拟环境、跳过检查或宣称通过。
-
-### 8.3 明确不在本次授权内
-
-- 阶段 3 的 BLE/MQTT/设备回归；任何烧录、复位、Flash、串口、BLE 设备操作。
-- CMD-03 Phase B、CMD-06、CMD-15 R3/R5。
-- 修改产品源码、测试代码、测试断言、`sdkconfig` 或分区表。
-
-上述事项均须独立审查和授权。本次批准只覆盖阶段 1、阶段 2，且阶段 2 必须在阶段 1 成功后执行。
-
-### 8.4 当前结果与下一步
-
-- 阶段 1（ESP-IDF `fullclean` + `build`）和阶段 2（批准清单内 host tests）已于 2026-11-16 按执行报告完成并通过各自判据；详见 §8.5。
-- CMD-02、CMD-15 当前状态均为 `TEST_PENDING`：构建与 host 验证完成，但阶段 3 设备回归尚未授权/执行，因此不得标记 `PASS`。
-- 阶段 1 的 4 条警告均位于 `main/uart.c`，属于未使用静态函数警告；`main/cmd.c`、`main/mqtt.c` 无警告。逐条披露并留待后续评估，本窗口不处理。
-- 执行方式差异：阶段 1 由一次性脚本执行，使用 `PIPESTATUS[0]` 判定 `fullclean/build` 命令退出码；日志先写入 `stage1_*.log`，再复制到批准路径 `build/{fullclean,build}.log`，报告称两份内容逐字节一致。该差异如实记录，不表述为原命令直接写入批准路径。
-- 证据目录 `artifacts/cmd02_cmd15_verify_20261115/` 被 `.gitignore:50` 忽略，证据仅在执行环境本地；本次纯文档回写不上传证据包、不改变忽略规则。
-- 本次执行报告称仓库 HEAD 保持 `31fe59e`、工作区干净，未修改源码、测试、`sdkconfig` 或分区表；未烧录、未连接设备、未操作串口/BLE。
-- 下一唯一动作：如需设备回归，另行提交阶段 3 方案并申请授权；本次授权窗口不自动延伸。
-
-
-### 7.21 文档体系收敛（2026-11-16）
-
-- 专题总入口新增：`BLE_架构与验收总览.md`、`MQTT_架构与验收总览.md`、`WIFI-OP-RESOURCE-RACE_主文档.md`、`S6_现场验收总览.md`。
-- 文档入口收敛为根 README 与 `docs/README.md`，专题只保留当前架构、接口、维护台账和必要验收状态。
-- 已被当前实现取代的历史方案稿、评审稿、申请稿及重复过程记录不再维护；必要的原始测试结果仍保留，不改写、不外推。
-- 历史编号、历史归档导航和过期过程入口不再作为固件 1.3 的日常维护负担。
-- 文档整理不改变任何源码、测试、烧录、串口、Flash 或设备操作授权。
-- 后续维护责任：专题开发者更新实现记录，测试执行者提交原始证据；项目统筹者负责审查状态一致性、维护专题主文档/索引并直接同步 `main`。
-
-### 7.22 交接记录 · 2026-11-16 · 联合验证门禁 3 精确允许根 README
-
-- 日期：2026-11-16
-- 本轮 CMD：CMD-02 + CMD-15 联合验证申请门禁复核（仅文档）。
-- 决策：批准门禁 3 在原允许 `docs/` 的基础上，额外允许仓库根目录精确路径 `README.md`。理由是该文件本轮仅承载项目架构概览与文档导航；不将其他根目录文件或目录纳入例外。
-- 执行口径：`git -c core.quotepath=false diff --name-only 5104a3b..HEAD` 的每个路径必须满足“以 `docs/` 开头”或“完全等于 `README.md`”；其他路径一律 STOP。
-- 授权边界：仅修订门禁文档；原阶段 1 + 阶段 2 批准范围不变。阶段 1 尚未执行；阶段 2 仍须阶段 1 成功后执行；阶段 3、烧录、设备/串口/BLE、CMD-03 Phase B、CMD-06、CMD-15 R3/R5 仍未授权。
-- 验证：本次文档修订不执行构建、host 测试或任何设备操作；新活动申请重新成为 HEAD 最后提交后，执行者须在本地重新实测全部四项 HEAD/内容/路径/工作区门禁。
-- 下一唯一动作：门禁更新提交后，重新核验四项门禁；全部通过才可按原批准执行阶段 1。
-
-
-### 7.23 交接记录 · 2026-11-16 · CMD-02 + CMD-15 阶段 1/2 执行结果回写
-
-- 日期：2026-11-16
-- 执行基线：报告记录 main HEAD = 31fe59ec12224ff365cb25d88b5ac70794002ce6；产品源码基线仍为 5104a3b0b3266f6afe22404d24ca89d41253cb63。
-- 本轮 CMD：CMD-02 + CMD-15 联合验证阶段 1、阶段 2。
-- 状态变化：联合验证窗口由 APPROVED（阶段 1+2，待执行）转为阶段 1/2 已执行并按报告通过；CMD-02、CMD-15 由 CODE_DONE 调整为 TEST_PENDING，等待阶段 3 设备回归。
-- 阶段 1：报告记录 ESP-IDF v6.0.3-707-gdac489c6718；fullclean/build rc 均为 0，0 error、4 warning；4 条 warning 全在 main/uart.c（未使用静态函数），cmd.c/mqtt.c 为 0 warning。报告记录 BIN/ELF/compile_commands.json 均存在；BIN 1,175,968 bytes，SHA256 056d84ea24b2b18cf4f25e5e0ddebf106586f9e74d5a8704253d4ea7c2f56ddd；ELF 11,568,624 bytes，SHA256 898994559f354a0d517da3dbdc884c46d6d1e5ad9b7b73dec5ed8f994a0ce373；sdkconfig 前后哈希一致（报告摘要 f55fff99…cc1c）；HEAD 未变、工作区干净。
-- 阶段 1 执行方式差异：一次性脚本以 PIPESTATUS[0] 判定构建命令退出码；日志先写 stage1_*.log，再复制到批准路径 build/{fullclean,build}.log，报告称内容逐字节一致。此处保留差异，不称为原申请固定命令直接产生日志。
-- 阶段 2：10 项全部 rc=0：token_store 58/0；netcheck PASS；wifi_owner 59/0；cmd_context 85/0；operation_host RESULT: PASS；falsify rc=0 且含 [FALSIFY] OK（变异体在 A1 失败）；strict syntax cmd.c、mqtt.c 2/2；S6 gate 141/0；audit_cs PASS；check_v1_only PASS。
-- 证据：报告给出的本地忽略目录 artifacts/cmd02_cmd15_verify_20261115/；run_id=cmd02_cmd15_20261116T143039Z。目录被 .gitignore:50 忽略，证据未随本次提交上传。
-- 未完成/风险：无阶段 3 设备回归证据；CMD-02 检查-动作非原子边界及 CMD-15 运行时一致性仍需设备/运行时验证；uart.c 4 条警告待后续单独评估。
-- 授权边界：本轮已执行=阶段 1 + 阶段 2；未授权/未执行=阶段 3、烧录、设备、串口、BLE、CMD-03 Phase B、CMD-06、CMD-15 R3/R5；未修改产品源码、测试代码、sdkconfig 或分区表。
-- 证据口径：本记录依据执行方在 2026-11-16 提供的执行报告回写；当前文档维护者未独立读取执行环境本地日志或重跑测试。
-- 下一唯一动作：如需阶段 3，另行提交设备回归设计与授权申请；本窗口不自动扩权。
-### 8.5 执行结果摘要与证据索引
-
-- 阶段 1：ESP-IDF v6.0.3-707-gdac489c6718；fullclean/build rc=0，0 error、4 warning；warning 均在 main/uart.c，cmd.c/mqtt.c 为 0 warning。BIN/ELF/compile_commands.json 均存在；产物 SHA256、大小、sdkconfig 哈希摘要及执行方式差异见 §7.23。
-- 阶段 2：批准清单 10 项全部 rc=0；token_store 58、wifi_owner 59、cmd_context 85、S6 gate 141；netcheck、operation_host、falsify、strict syntax、audit_cs、check_v1_only 均符合各自契约。逐项结果见 §7.23。
-- 证据目录：artifacts/cmd02_cmd15_verify_20261115/（本地 .gitignore 忽略目录）；run_id=cmd02_cmd15_20261116T143039Z。证据未上传至仓库。
-- 证据性质：以上为执行方报告，本台账如实转录；文档维护者未独立读取本地日志或重跑测试。
-- 结论：阶段 1/2 按报告通过；CMD-02/CMD-15 为 TEST_PENDING，阶段 3 未授权、未执行，不得标 PASS。
+| CMD-01 | P0 | `io.get` Wi-Fi runtime 读取快照 | TEST_PENDING | 最小改动已实施（`add93e7`）；仍缺构建及 BLE/MQTT 入口回归 |
+| CMD-02 | P0 | `s_net_async` 字段所有权与读点 | TEST_PENDING | 七处读点已实施（`28f9090`）；联合构建和 host tests 按执行报告通过；阶段 3 设备回归未执行、未授权 |
+| CMD-03 | P0 | operation 锁序、回调时序及 expiring 窄窗口 | IN_PROGRESS | Phase A host 测试通过；worker 在 cleanup 窗口可能重新写入 trial 的风险仍待专门动态验证/设计决策；Phase B 代码修改和设备测试均未授权 |
+| CMD-04 | P1 | status 响应快照化 | TODO | 04c 内联快照已实施并有代码审查/本地验证记录；04a operation_status 与 04b network_status 快照仍待实施和验收 |
+| CMD-05 | P1 | config/profile 全局锁序 | REVIEWED | 静态审查确认偏序 `J → C → P`；未测持锁时长，CMD-06 必须遵守递归锁和锁序约束 |
+| CMD-06 | P1 | 网络异步事务迁移到 `cmd_net_txn.c` | TODO | 等待阶段 A 相关风险与验证收口；迁移不得改变状态机、owner、generation、cleanup 和锁序 |
+| CMD-07 | P1 | 普通网络命令迁移到 `cmd_net.c` | TODO | scan/profile/reconnect/status 行为及权限保持一致 |
+| CMD-08 | P1 | 状态构造迁移到 `cmd_status.c` | TODO | device/network/gpio/uart 字段及快照语义保持一致 |
+| CMD-09 | P2 | GPIO 控制共享 helper | TODO | 旧命令行为保持一致 |
+| CMD-10 | P2 | 配置命令迁移到 `cmd_config.c` | TODO | domain/patch/effect/权限/事务 guard 保持一致 |
+| CMD-11 | P2 | UART/IO/data 命令迁移到 `cmd_device.c` | TODO | 命令协议、错误码和来源权限保持一致 |
+| CMD-12 | P2 | CMD 内部重复 helper 与旧 wrapper 清理 | TODO | 先核对全仓调用者；再评估 owner 映射、domain 白名单、管理员密码校验命名等重复点；无调用证据前不删除 |
+| CMD-13 | P2 | 收敛 `cmd.c` 入口职责 | TODO | 仅保留 context、policy、分发和统一收尾；以实际代码结构为准更新 README |
+| CMD-14 | P1 | 测量 `apply_async` 持 job 锁跨 NVS 的时间 | TODO | 先定义测量方法并取得相应授权；测量前不得缩短锁区 |
+| CMD-15 | P1 | MQTT 运行态读取 `s_config` 的一致性 | TEST_PENDING | R1/R2（`999db00`）及 R4（`8d7d768`）已实施；联合构建和 host tests 按执行报告通过；阶段 3 设备回归未执行、未授权；R3/R5 未授权 |
+
+## 2. 当前未关闭事项与推进依赖
+
+1. **CMD-02 / CMD-15**：阶段 1 ESP-IDF fullclean/build 和阶段 2 host tests 于 2026-11-16 按执行报告通过；阶段 3 设备回归没有执行，也没有授权。执行方报告及本地忽略目录中的证据未上传仓库，因此不能标记 PASS。
+2. **CMD-01**：构建和 BLE/MQTT 入口回归仍缺；不能用 CMD-02/15 的联合 host 结果替代。
+3. **CMD-03**：Phase A host 测试已通过，变异体检查可证伪；仍需决定是否设计并实施 cmd 层 `store_trial` 守卫。不得直接修改 `expiring` 状态语义。Phase B 和设备验证须单独授权。
+4. **CMD-04**：04a/04b 设计材料仍是待实施方案；04c 已实施的部分不代表整个 CMD-04 关闭。04c 中同步 tryconnect 分支已确认不属于当前 v1 wire 可达路径，不得把它写成 wire 真机验收 PASS；apply dispatcher 的 trial patch 路径仍需按 async apply 全流程理解。
+5. **CMD-05 / CMD-14**：锁序静态审查完成，但长持锁尚未实测。CMD-14 测量前不得因“看起来持锁过久”直接缩短临界区。
+6. **CMD-06 及后续模块迁移**：须等待相关锁契约、所有权边界和必要验证收口，再单独评审实施；不得把文件迁移与行为变化混在同一增量中。
+
+## 3. 必须保持的实现约束
+
+- 命令名称、v1 envelope、参数、响应字段、错误码、来源白名单及权限行为默认不变；Contract 差异先报告，单独评审和授权。
+- 网络事务的 owner、generation、幂等、TTL、cleanup、rollback、restart 顺序和状态迁移是保护契约。
+- operation 的 `s_ops_mux` 临界区保持短小；回调在锁外执行；`expiring`、generation 和 running 回收闸不得在普通重构中改变。
+- 网络 job 锁 `J`、配置锁 `C`、profile 锁 `P` 的已知偏序为 `J → C → P`（另有 `J → P`）；禁止引入 `C/P → J` 反向边。
+- `J`、`C`、`P` 的递归属性是现有代码依赖；不得直接替换为普通 mutex。
+- `config_apply_domain_apply()` 必须在配置锁释放后执行；不得在持有 profile 锁时调用会获取 config 锁的函数。
+- `apply_async` 持 job 锁跨 NVS 写的持锁预算尚未测量；测量前不缩短锁区。
+- 快照改造必须同时检查锁内分配、锁外字段完整性、失败路径、敏感字段生命周期、栈/堆资源和协议兼容；“锁内零 cJSON”不能替代完整响应验收。
+- `device.status` 顶层字段与内嵌 network 段来自独立快照时，不承诺同一时刻原子一致；不得在文档中暗示更强保证。
+
+## 4. 必要证据入口
+
+- [CMD 架构与权限边界](CMD共享命令架构与权限边界.md)：当前模块职责、生产注册表、来源白名单及认证/授权边界。
+- [CMD-02/03 并发静态审查](CMD-02_03_并发静态审查_2026-11-15.md)：字段所有权、operation 并发模型、expiring 窄窗口及未决项。
+- [CMD-04 快照方案](CMD-04_status快照方案_2026-11-14.md)：04a/04b/04c 的范围和总体约束。
+- [CMD-04a operation_status 快照清单](CMD-04a_operation_status快照清单与判定表_2026-11-14.md)：待实施设计和分支/资源验收要求。
+- [CMD-04b network_status 快照清单](CMD-04b_network_status快照清单与判定表_2026-11-14.md)：待实施设计、skew 和资源验收要求。
+- [CMD-04c execute_method 快照记录](CMD-04c_execute_method内联快照清单与判定表_2026-11-14.md)：已实施部分的字段/失败语义、敏感副本擦除及 P0 回归修正证据。
+- [CMD-05 config/profile 锁序审查](CMD-05_config_profile锁序审查_2026-11-15.md)：CMD-06 必须遵守的锁序和递归锁约束。
+- [MQTT 运行态与 config 同步复核](MQTT运行态与config同步复核_2026-11-15.md)：CMD-15 R1/R2/R4 及未决项。
+
+## 5. 授权与验证边界
+
+- 静态审查、代码修改、host tests、ESP-IDF 构建、设备/串口/BLE、烧录和 Flash 操作是不同授权范围；不得从“继续推进”推定高风险操作获批。
+- 静态审查不等于行为验证；host tests 不等于 ESP-IDF 构建或真机验收；构建通过不等于设备回归通过。
+- 每次实施只做一个可验收增量；提交前核对当前 `main`、源码基线、调用者和工作区。
+- 只有对应范围的原始证据齐全，才能把任务标为 PASS。执行方报告与仓库可复核日志应明确区分。
+- 文档整理不修改源码、Contract、测试代码、设备状态或既有测试结论。
