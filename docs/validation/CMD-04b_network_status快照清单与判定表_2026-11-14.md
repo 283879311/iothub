@@ -1,4 +1,5 @@
-> **状态**：ACTIVE（CMD-04b 设计清单与判定表·第二轮修订；评审通过前不改代码）
+> **材料性质：PENDING DESIGN（待实施设计依据）**
+> 本文定义 network_status 分域快照与验收要求；是否实施及当前状态只见 [CMD 当前任务台账](cmd_refactor_plan.md)。不得将设计清单描述为已实现或已验收。
 
 # CMD-04b · `app_cmd_build_network_status` 快照清单与判定表（2026-11-14，第二轮修订）
 
