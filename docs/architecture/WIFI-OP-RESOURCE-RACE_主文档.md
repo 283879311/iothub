@@ -1,7 +1,7 @@
 # Wi-Fi 网络与 owner fencing
 
 > **状态：ACTIVE（当前 Wi-Fi 架构、限制与验收入口）**
-> 更新：2026-11-18。产品行为以当前源码和 `contract/v1/` 为准；设备验收结论必须限定到对应设备、镜像和报告。
+> 更新：2026-11-19。产品行为以当前源码和 `contract/v1/` 为准；设备验收结论必须限定到对应设备、镜像和报告。
 
 ## 1. 范围与核心原则
 
@@ -31,7 +31,6 @@ owner 状态：
 
 1. owner 由统一仲裁锁保护；TRYX/AUTO/APPLY 释放时若已有 cleanup 请求，直接移交 CLEANUP。
 2. cleanup 在 owner 空闲时直接取得 CLEANUP；owner 忙时登记请求，等待当前持有者在释放点移交。
-3. CLEANUP 持有期间完成恢复配置，不在中途释放后重新 claim APPLY。
 4. CLEANUP 持有期间完成恢复配置，不在中途释放后重新 claim APPLY；最多执行 3 次，失败退避为 0.5s / 1s / 2s。
 5. watchdog 在 CLEANUP 超过 12s 时重通知；超过 25s 只置 abort 请求，不夺取 owner。restart 任务仅在 `apply_cfg()` 已返回、没有在飞驱动调用的安全点消费 abort。
 6. cleanup 三次失败、watchdog 安全中止或 cleanup 唤醒失败，均不得伪装成 NONE，必须进入 `CLEANUP_FAILED`。
@@ -58,21 +57,9 @@ owner 状态：
 - 纯状态机 host tests 曾由执行方报告 59 passed / 0 failed；该结果只证明相应状态机断言，不代替 ESP-IDF 构建或设备并发验收。
 - 不得把代码复审、host tests、构建成功写成真机并发 PASS。
 
-## 5. S6 现场验收状态
+## 5. 现场验收证据入口
 
-- **阶段 A**：设备 65D8，功能镜像 build_sha `a7e04b6a9`，BIN SHA-256 `047e4726455db505a5433bd3cb90a94022144add78361d6d8a52548e79f0ea41`；R1/R2/R3/R5 PASS，R6 未测。结论只适用于该设备、镜像和报告。
-- **阶段 B**：FI 镜像 R4a/R4b/R6 尚未执行；当前为待批准申请，不是授权。须按申请文件重新核验设备、镜像、端口、boot 会话和采集链。
-- 曾发生端口映射误烧和镜像身份漂移；烧录前后必须以设备身份、完整 BIN SHA-256、build_sha 反证和连续采集证据构成门禁。
-- 任一身份 UNKNOWN、端口/镜像不符或证据链不完整，立即 STOP。申请不等于批准，旧授权不延续。
-
-必要证据入口：
-- [S6 当前状态与现场操作边界](../validation/S6_现场验收总览.md)
-- [阶段 A R1/R2/R3/R5 真机结果](../reports/S6阶段A回归结果_R1R2R3R5_2026-11-15.md)
-- [阶段 B FI 操作授权申请](../validation/S6阶段B操作授权申请_2026-11-16.md)
-- [阶段 A 烧录事故与身份门禁](../reports/S6烧录事故记录_2026-11-15.md)
-- [阶段 A 分区表证据](../evidence/S6_stageA/README.md)
-- [阶段 B 镜像 manifest](../evidence/S6_stageB/images_manifest.md)
-- [阶段 B 六维身份采集边界](../evidence/S6_stageB/identity_2026-11-15/README.md)
+S6 当前状态、设备身份门禁、阶段 A/B 结论及操作授权边界统一见 [S6 现场验收总览](../validation/S6_现场验收总览.md)。本架构文档不重复维护设备验收状态；原始报告、烧录事故记录和镜像身份材料仍按该总览引用。不得将申请视为授权，也不得把局部 host/build 结果外推为真机并发 PASS。
 
 ## 6. 1.3 当前 Wi-Fi 相关验收边界
 
