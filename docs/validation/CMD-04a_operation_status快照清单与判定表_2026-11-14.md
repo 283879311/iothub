@@ -1,4 +1,5 @@
-> **状态**：ACTIVE（CMD-04a 字段快照清单与分支判定表；随最小 diff 一并提交）
+> **材料性质：PENDING DESIGN（待实施设计依据）**
+> 本文定义 operation_status 快照字段、分支与验收要求；是否实施及当前状态只见 [CMD 当前任务台账](cmd_refactor_plan.md)。不得将设计清单描述为已实现或已验收。
 
 # CMD-04a · `app_cmd_net_operation_status` 快照清单与分支判定表（2026-11-14）
 
