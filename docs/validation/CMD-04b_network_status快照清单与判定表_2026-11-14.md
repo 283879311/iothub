@@ -1,14 +1,10 @@
 > **材料性质：PENDING DESIGN（待实施设计依据）**
 > 本文定义 network_status 分域快照与验收要求；是否实施及当前状态只见 [CMD 当前任务台账](cmd_refactor_plan.md)。不得将设计清单描述为已实现或已验收。
 
-# CMD-04b · `app_cmd_build_network_status` 快照清单与判定表（2026-11-14，第二轮修订）
+# CMD-04b · `app_cmd_build_network_status` 快照清单与判定表（2026-11-14）
 
 > 基线：`e1d2058`（network_status 自 fencing 后无变更）。范围：四段锁内构建
 > （runtime/config/mqtt/job-trial）分域快照化 + 构建移锁外；nc_tcp、rssi 段已合规保持现状。
-> **第二轮修订（2026-11-14 评审）**：① sizeof 296B→**312B（目标编译器探针实测）**；
-> ② cfg_state 收编的跨域 skew 变化如实写明；③ 删除无依据的 +250B 净栈增量结论，
-> 改为待测（-fstack-usage + 烧录窗口逐任务 HWM）；④ trial_ready 清理副作用
-> 触发条件保持原样（trial 对象创建成功才执行）。
 
 ## 0. 目标编译器探针实测（kaboom 法，真实头文件 wifi.h/mqtt.h/esp_wifi.h）
 
