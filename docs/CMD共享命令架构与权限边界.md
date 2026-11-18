@@ -3,7 +3,7 @@
 > **状态：ACTIVE（当前代码架构说明）**
 > 本文记录当前 1.3 命令层的分层、入口、来源授权与维护边界；不另立一套协议契约。
 > BLE wire 格式以 [BLE 命令协议规范](BLE命令协议规范.md) 为准；命令字段、参数和错误码以 `contract/v1/` 为准（当前仍为 `1.1-draft`，不得把 draft 误称正式冻结）。
-> CMD 重构任务状态只以 [CMD 重构主台账](cmd_refactor_plan.md) 为准。
+> CMD 重构任务状态只以 [CMD 当前任务台账](cmd_refactor_plan.md) 为准。
 
 ## 1. 当前架构
 
@@ -64,7 +64,7 @@
 - MQTT RPC 上下文由已建立的 ThingsBoard 设备连接提供，命令执行仍走 v1 注册表和策略层。
 - `config.set` 对 MQTT 来源拒绝网络、MQTT、蓝牙、UART、管理员认证等本地/身份相关配置域；GPIO 和 data route 按当前代码策略处理。
 - `auth.admin.set`、`provisioning.pin.set`、`uart.send`、`data.loopback` 等本地维护命令不允许 MQTT 来源。
-- 网络事务命令的 MQTT 支持由 `APP_CMD_MQTT_NET_TXN_ENABLE` 控制；当前 `main/cmd_policy.h` 在未由构建参数覆盖时将宏默认定义为 `1`；`main/CMakeLists.txt` 另有仅供测试构建使用的显式定义选项。默认源码策略因此允许 MQTT 发起网络事务，但实际镜像仍应以其编译宏/`device.info` 构建变体为准。MQTT 只能操作其自身拥有的 operation，不能接管 BLE operation。
+- 网络事务命令的 MQTT 支持由 `APP_CMD_MQTT_NET_TXN_ENABLE` 控制；当前 `main/cmd_policy.h` 在未由构建参数覆盖时将宏默认定义为 `1`；`main/CMakeLists.txt` 另有仅供测试构建使用的显式定义选项。默认源码策略因此允许 MQTT 发起网络事务，但实际镜像仍应以其编译宏/ `device.info` 构建变体为准。MQTT 只能操作其自身拥有的 operation，不能接管 BLE operation。
 - MQTT 的网络试连受理路径会先完成响应投递协调，再进入可能导致链路中断的 Wi-Fi 操作；不得把“命令已接受”误解为“网络切换已完成”。
 
 ## 4. 网络命令策略与 operation 所有权
@@ -87,7 +87,7 @@ operation 查询对 MQTT/HTTP 按 owner 隔离；BLE 本地 token 可按现行�
 3. **配置写入走统一配置应用路径**：字段归属、校验、持久化和运行态应用应核对 `cmd_cfg_txn.c`、`config_apply.c` 与相应领域模块；不能在 BLE/MQTT handler 里各自写 NVS。
 4. **网络操作走 operation 状态机**：受理、运行、终态、取消、超时、owner 隔离及清理由 operation 机制管理；不能用传输连接存活代替 operation 生命周期。
 5. **敏感信息不回显、不进日志**：Wi-Fi 密码、MQTT token、管理员凭据及 provisioning PIN 不得通过配置读取、错误 details、日志或命令回包泄露；UART 数据也可能携带外部凭据。
-6. **协议语义不由本文定义**：请求外壳、字段、错误码、operation 状态及兼容要求按 BLE 规范和 `contract/v1/` 核对。任何契约差异先登记，单独评审授权；不得借文档迁移顺手修改协议。
+6. **协议语义不由本文定义**：请求外壳、字段、错误码、operation 状态及兼容要求按 BLE 规范和 `contract/v1/` 核对。任何契约差异先报告，单独评审授权；不得借文档迁移顺手修改协议。
 7. **验证分层**：源码注册/静态检查、host tests、ESP-IDF 构建、BLE 实机、MQTT 实机是不同证据。某一通道通过不能写成跨通道完成。
 
 ## 6. 当前事实与契约差异
@@ -99,7 +99,7 @@ operation 查询对 MQTT/HTTP 按 owner 隔离；BLE 本地 token 可按现行�
 - BLE 协议规范说明了当前 BLE v1 wire 入口；MQTT 透传 v1 payload 的实际命令覆盖和逐命令设备验收，不能仅由注册表存在推导为已通过。
 - MQTT 网络事务构建开关当前为 ON，但该构建事实不替代 MQTT 真实链路、断连响应投递和 operation owner 的设备回归证据。
 
-差异的正式登记、评审与状态归属遵循 [协议契约整改方案](协议契约整改方案_2026-11-10.md) 和 [CMD 重构主台账](cmd_refactor_plan.md)。
+差异的正式登记应在 Contract 维护范围内单独评审和授权；当前不依赖已不存在的整改方案文档作为入口。
 
 ## 7. 变更门禁与状态入口
 
@@ -110,7 +110,7 @@ operation 查询对 MQTT/HTTP 按 owner 隔离；BLE 本地 token 可按现行�
 
 ## 8. 关联文档
 
-- [CMD 重构主台账](cmd_refactor_plan.md)
+- [CMD 当前任务台账](cmd_refactor_plan.md)
 - [BLE 命令协议规范](BLE命令协议规范.md)
 - [MQTT 架构与验收总览](MQTT_架构与验收总览.md)
 - [Wi-Fi owner fencing 主文档](WIFI-OP-RESOURCE-RACE_主文档.md)
@@ -118,10 +118,3 @@ operation 查询对 MQTT/HTTP 按 owner 隔离；BLE 本地 token 可按现行�
 - [项目 README](../README.md)
 - [CMD-02/03 并发静态审查](CMD-02_03_并发静态审查_2026-11-15.md)
 - [CMD-15 MQTT 运行态与 config 同步复核](MQTT运行态与config同步复核_2026-11-15.md)
-- [协议契约整改方案](协议契约整改方案_2026-11-10.md)
-
-## 9. 网络试连失败收尾的历史审计边界
-
-2026-11-05 对旧 `run_fn` 自然失败恢复疑点做过只读源码审查和一次真机验证：试连非 OK 收尾会恢复旧 Wi-Fi 配置并调度重连；唯一记录到的 `store_trial` 失败条件是 BLE 来源且 BLE 会话已断开，该场景依赖 BLE disconnect 路径先触发取消/cleanup。该证据支持当时关闭“run_fn 失败后设备必然滞留候选网络”的独立缺陷判断，但不应外推为任意未来失败路径均安全。
-
-当前维护约束：若新增绕过 BLE disconnect cleanup 的候选事务清理路径，或改变 `store_trial` 失败/取消顺序，必须重新审查该前置条件，并增加可注入时序测试；不得仅凭 `run_fn` 直接置 FAILED/CANCELLED 的代码形态断言设备必然未恢复。
