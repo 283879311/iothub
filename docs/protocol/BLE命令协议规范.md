@@ -97,7 +97,7 @@
 | `network.profile.delete` | `{"ssid"}` | 普通删除；最后一个 profile 返回 `last_profile`；仅 BLE |
 | `network.reconnect` | `{}` | 用当前正式配置重连；仅 BLE |
 | `network.tryconnect` | `{"ssid","password"?,"idempotency_key"?,"ip_mode"?}` | 异步；返回 `operation_id`、`state:"accepted"` |
-| `operation.get` | `{"operation_id"}` | 查询状态；MQTT 只能查 MQTT-owned，HTTP 只能查 HTTP-owned；BLE 可查全部 |
+| `operation.get` | `{"operation_id"}` | 查询状态；BLE 可查全部 operation，MQTT 仅可查 MQTT-owned。当前 v1 命令入口只有 BLE/MQTT；源码保留的 HTTP owner 枚举不代表 HTTP 命令通道仍存在 |
 | `network.apply` | `{"operation_id"}` | 提交 GOT_IP 事务；owner 必须匹配 |
 | `network.cancel` | `{"operation_id"}` | 取消事务；BLE 可跨 owner，MQTT 只能取消 MQTT-owned |
 
