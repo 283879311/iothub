@@ -40,6 +40,7 @@
 - [S6 阶段 A 分区证据](evidence/S6_stageA/README.md)
 - [S6 阶段 B 镜像 manifest](evidence/S6_stageB/images_manifest.md)
 - [S6 阶段 B 身份采集](evidence/S6_stageB/identity_2026-11-15/README.md)
+- [T5 首轮 50 轮 soak 历史报告](reports/T5_2026-10-24_50轮_mixed_serial.md)：仅供追溯原设备、原镜像和原测试范围，不代表当前固件验收。
 - `evidence/` 保存身份、镜像、分区和哈希等原始证据；`archive/` 保存仍有追溯价值的历史材料，不属于当前维护入口。
 
 ## 仓库其他入口
