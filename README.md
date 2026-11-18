@@ -83,7 +83,7 @@ BLE CMD 与 ThingsBoard MQTT RPC 使用项目自己的 v1 JSON envelope：
 - **BLE**：正常产品运行固定为 Peripheral。设备提供 NUS 服务，Data RX/TX 使用 `6E400002/003`，CMD RX/TX 使用 `6E400004/005`。源码仍保留 Central/GATTC 兼容和 A/B 测试代码，但当前产品启动流程强制收敛为 Peripheral，Central 不是正常运行模式。
 - **启动顺序**：加载配置和 operation 基础设施后先启动 BLE，再启动 Wi-Fi；因此 Wi-Fi 启动/连接故障不应阻断现场 BLE 救援。
 - **Wi-Fi 事务**：`network.tryconnect` 由异步 operation 执行，按 owner、trial、operation ID 和 cleanup 生命周期管理；不会把“STA 已关联”直接当作提交成功。
-- **联网验证**：DEF-NET-001 在候选拿到 IP 后验证 Broker TCP 路径和 MQTT 会话。当前 `got_ip` 是试连流程的联网验证就绪阶段，不只是 Wi-Fi 关联或 DHCP 成功；验证失败会进入失败清理/恢复路径。详情见网络验收报告。
+- **联网验证**：DEF-NET-001 在候选拿到 IP 后验证 Broker TCP 路径和 MQTT 会话。当前 `got_ip` 是试连流程的联网验证就绪阶段，不只是 Wi-Fi 关联或 DHCP 成功；验证失败会进入失败清理/恢复路径。详情见 [R-NET 设备验收报告](docs/reports/R-NET设备验收报告_2026-11-07.md)。
 - **配置面**：配置结构、Wi-Fi profile、配置应用和事务 guard 分层管理；传输层不得绕过 `config_apply` 直接改写配置。
 - **数据面**：UART1、BLE Data 和 MQTT 作为三个数据端口，由 `data_pipe` 按 NVS 路由配置转发。队列有界；队列满时允许丢帧并记录统计，不能把它描述为无损传输。MQTT 数据面发布使用 QoS 1 和 outbox 入队机制；这不代表设备侧所有前置队列都绝不丢帧。
 - **资源约束**：默认构建针对 4 MB Flash、无 PSRAM 的 ESP32。任务栈、队列、JSON 缓冲、MQTT outbox、BLE host/GATT 和 largest free block 都是需要持续审查的资源；不要为了加功能重新引入已移除的 Web/AP 门户或 SPP 常驻负担。
