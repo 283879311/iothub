@@ -155,28 +155,15 @@ GPIO 默认值由 `main/Kconfig.projbuild` 配置并写入 `sdkconfig`：继电�
 4. 使用 `config.get` 读取允许的配置域，使用 `config.set` 并在 `args.patch` 中提交配置变更。密码/token 只返回是否已设置，不回显明文。
 5. Wi-Fi 配置或 MQTT 配置变更后，分别确认 STA 网络、MQTT 会话和设备状态；不要把“配置已保存”误认为“远程连接已恢复”。
 
-## 目录结构与文档导航
+## 文档
 
-```text
-main/             ESP-IDF 固件源码（命令、BLE、Wi-Fi、MQTT、UART、data_pipe、operation、OTA 等）
-contract/         当前 v1 协议契约（字段、命令、错误码）
-tools/            构建入口、BLE/主机侧工具、测试与证据采集脚本（不编入固件）
-tests/            宿主侧单元/门禁测试
-docs/             当前架构总览、专项审查、验收状态与历史证据导航
-```
-
-- **当前产品与构建入口**：本 README；产品事实以当前源码和对应构建基线为准。
-- **BLE 专题总览**：[`docs/BLE_架构与验收总览.md`](docs/BLE_架构与验收总览.md)，说明当前 BLE 架构、安全边界及 T3/T4/T5 验收状态。
-- **MQTT 专题总览**：[`docs/MQTT_架构与验收总览.md`](docs/MQTT_架构与验收总览.md)，说明 ThingsBoard MQTT 职责、权限和 CMD-15 状态。
-- **CMD 架构与权限**：[`docs/CMD共享命令架构与权限边界.md`](docs/CMD共享命令架构与权限边界.md)；任务状态以 [`docs/cmd_refactor_plan.md`](docs/cmd_refactor_plan.md) 为准。
-- **Wi-Fi owner fencing**：[`docs/WIFI-OP-RESOURCE-RACE_主文档.md`](docs/WIFI-OP-RESOURCE-RACE_主文档.md)，当前 owner/cleanup 并发专项入口。
-- **OTA 与启动回滚**：[`docs/OTA_架构与验收总览.md`](docs/OTA_架构与验收总览.md)，区分启动回滚与尚未接入的 OTA 传输链路。
-- **S6 现场验收总览**：[`docs/S6_现场验收总览.md`](docs/S6_现场验收总览.md)，当前轮次、设备身份、事故和待批准事项。
-- **当前命令层审查**：[`docs/cmd.c_review_2026-11-14.md`](docs/cmd.c_review_2026-11-14.md) 与 [`docs/CMD-02_03_并发静态审查_2026-11-15.md`](docs/CMD-02_03_并发静态审查_2026-11-15.md)。
-- **阶段变更摘要（2026-11-14 至 11-15）**：[`docs/近期变更记录_2026-11-14至11-15.md`](docs/近期变更记录_2026-11-14至11-15.md)，仅作历史阶段摘要，不代表 11-17 的完整变更清单，也不替代专项状态或授权。
-- **项目文档导航**：[`docs/README.md`](docs/README.md)；历史文档保留规则见 [`docs/archive/README.md`](docs/archive/README.md)。
-- **固件 1.3 文档冻结基线**：[`docs/固件1.3文档基线_2026-11-17.md`](docs/固件1.3文档基线_2026-11-17.md)，记录六个入口的冻结 Blob SHA、源码基线和状态解释。
-- 原始日志和历史验收证据见 `docs/archive/` 与 `docs/evidence/`；历史 PASS 仅适用于原文记录的设备、镜像和测试范围。
+- **BLE**：[架构与验收](docs/BLE_架构与验收总览.md) · [v1 命令协议](docs/BLE命令协议规范.md) · `contract/v1/`
+- **CMD**：[架构与权限](docs/CMD共享命令架构与权限边界.md) · [任务台账](docs/cmd_refactor_plan.md)
+- **MQTT**：[ThingsBoard MQTT 总览](docs/MQTT_架构与验收总览.md)
+- **Wi-Fi**：[网络与 owner fencing 总览](docs/WIFI-OP-RESOURCE-RACE_主文档.md)
+- **OTA**：[启动确认、回滚与传输边界](docs/OTA_架构与验收总览.md)
+- **现场验收**：[S6 当前状态](docs/S6_现场验收总览.md)
+- **全部文档入口**：[docs/README.md](docs/README.md)
 
 ## 已知限制与安全提示
 
