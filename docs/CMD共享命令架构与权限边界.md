@@ -106,6 +106,7 @@ operation 查询对 MQTT/HTTP 按 owner 隔离；BLE 本地 token 可按现行�
 - 新增/修改命令：先检查 Contract 字段和错误码，再检查注册表、来源白名单、策略与内部授权；不允许只加 handler。
 - 修改来源权限：必须同时审查 BLE token、MQTT 设备身份、operation owner 和敏感配置边界。
 - 修改配置事务或网络 operation：必须核对锁序、回调时序、cancel/expire 清理和资源预算；CMD-01～CMD-15 状态以主台账为准。
+- 既有失败收尾审计依赖 BLE disconnect 路径先触发取消/cleanup；若新增绕过该路径的候选事务清理方式，或改变 `store_trial` 失败/取消顺序，必须重新审查前置条件并增加可注入时序测试。旧审计结论不外推为所有未来失败路径均安全。
 - 本文不是任务台账，不记录逐项完成状态，也不授予构建、host 测试、设备、串口、烧录或 Flash 操作权限。
 
 ## 8. 关联文档
