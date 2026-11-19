@@ -42,4 +42,4 @@
 - #22–#24 的 App 端：Android 微信真机；iOS 无设备 BLOCKED。
 - #13 DATA 断连、#14 无 AP 救援、#25：现有记录不足以还原验收条件，**不猜**，待验收中心给出明确步骤后再执行。
 - #15 Android 权限/MTU：待手机手工记录；PC 侧 MTU 256 结果不能替代微信 `wx.setBLEMTU` 行为。
-- 角色互换：HTTP 入口已删除，N/A（见 `docs/soak_test_plan.md` §2.5）。
+- 角色互换：HTTP 入口已删除，N/A（原 soak_test_plan 过程稿已不在当前仓库；HTTP 入口移除后的 N/A 结论仅属当时测试环境）。
