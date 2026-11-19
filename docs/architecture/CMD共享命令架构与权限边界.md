@@ -1,9 +1,9 @@
 # CMD 共享命令架构与权限边界（固件 1.3）
 
-> **状态：ACTIVE（当前代码架构说明）**
+> **文档状态：CURRENT（当前代码架构说明）**
 > 本文记录当前 1.3 命令层的分层、入口、来源授权与维护边界；不另立一套协议契约。
 > BLE wire 格式以 [BLE 命令协议规范](../protocol/BLE命令协议规范.md) 为准；命令字段、参数和错误码以 `contract/v1/` 为准（当前仍为 `1.1-draft`，不得把 draft 误称正式冻结）。
-> CMD 重构任务状态只以 [CMD 当前任务台账](../validation/cmd_refactor_plan.md) 为准。
+> CMD 重构任务状态只以 [CMD 当前任务台账](../status/CMD任务台账.md) 为准。
 
 ## 1. 当前架构
 
@@ -117,5 +117,5 @@ operation 查询对 MQTT/HTTP 按 owner 隔离；BLE 本地 token 可按现行�
 - [Wi-Fi owner fencing 主文档](WIFI-OP-RESOURCE-RACE_主文档.md)
 - [OTA 与启动回滚总览](OTA_架构与验收总览.md)
 - [项目 README](../../README.md)
-- [CMD-02/03 并发静态审查](../validation/CMD-02_03_并发静态审查_2026-11-15.md)
-- [CMD-15 MQTT 运行态与 config 同步复核](../validation/MQTT运行态与config同步复核_2026-11-15.md)
+- [CMD-02/03 并发静态审查](../reviews/CMD/CMD-02_03_并发静态审查_2026-11-15.md)
+- [CMD-15 MQTT 运行态与 config 同步复核](../reviews/MQTT/MQTT运行态与config同步复核_2026-11-15.md)
