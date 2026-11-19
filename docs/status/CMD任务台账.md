@@ -1,6 +1,6 @@
 # CMD 当前任务台账（固件 1.3）
 
-> 当前源码基线：`5104a3b0b3266f6afe22404d24ca89d41253cb63`。文档提交可继续前进，不将某个文档 HEAD 固定为源码基线。
+> 文档状态：CURRENT。源码核对基线见 [固件 1.3 文档维护基线](../baseline/固件1.3文档基线_2026-11-18.md)，不在任务台账重复维护 SHA。
 >
 > 本文只维护 CMD 当前任务状态、未完成事项、关键实现约束和必要验证证据。历史交接、申请修订过程和重复审查叙述不在此累计。当前命令行为以源码及 `contract/v1/` 为准；Contract 仍为 `1.1-draft`。
 > **状态唯一性：** 本文是 CMD 任务状态、优先级和关闭条件的唯一维护入口。CMD-02/03、CMD-04 系列、CMD-05 等专项文件只保存其对应的设计/审查/验证证据，不得另行维护当前任务状态；如与本文状态描述冲突，以本文为准。
@@ -51,13 +51,13 @@
 ## 4. 必要证据入口
 
 - [CMD 架构与权限边界](../architecture/CMD共享命令架构与权限边界.md)：当前模块职责、生产注册表、来源白名单及认证/授权边界。
-- [CMD-02/03 并发静态审查](CMD-02_03_并发静态审查_2026-11-15.md)：字段所有权、operation 并发模型、expiring 窄窗口及未决项。
-- [CMD-04 快照方案](CMD-04_status快照方案_2026-11-14.md)：04a/04b/04c 的范围和总体约束。
-- [CMD-04a operation_status 快照清单](CMD-04a_operation_status快照清单与判定表_2026-11-14.md)：待实施设计和分支/资源验收要求。
-- [CMD-04b network_status 快照清单](CMD-04b_network_status快照清单与判定表_2026-11-14.md)：待实施设计、skew 和资源验收要求。
-- [CMD-04c execute_method 快照记录](CMD-04c_execute_method内联快照清单与判定表_2026-11-14.md)：已实施部分的字段/失败语义、敏感副本擦除及 P0 回归修正证据。
-- [CMD-05 config/profile 锁序审查](CMD-05_config_profile锁序审查_2026-11-15.md)：CMD-06 必须遵守的锁序和递归锁约束。
-- [MQTT 运行态与 config 同步复核](MQTT运行态与config同步复核_2026-11-15.md)：CMD-15 R1/R2/R4 及未决项。
+- [CMD-02/03 并发静态审查](../reviews/CMD/CMD-02_03_并发静态审查_2026-11-15.md)：字段所有权、operation 并发模型、expiring 窄窗口及未决项。
+- [CMD-04 快照方案](../design/CMD/CMD-04_status快照方案_2026-11-14.md)：04a/04b/04c 的范围和总体约束。
+- [CMD-04a operation_status 快照清单](../design/CMD/CMD-04a_operation_status快照清单与判定表_2026-11-14.md)：待实施设计和分支/资源验收要求。
+- [CMD-04b network_status 快照清单](../design/CMD/CMD-04b_network_status快照清单与判定表_2026-11-14.md)：待实施设计、skew 和资源验收要求。
+- [CMD-04c execute_method 快照记录](../reviews/CMD/CMD-04c_execute_method内联快照清单与判定表_2026-11-14.md)：已实施部分的字段/失败语义、敏感副本擦除及 P0 回归修正证据。
+- [CMD-05 config/profile 锁序审查](../reviews/CMD/CMD-05_config_profile锁序审查_2026-11-15.md)：CMD-06 必须遵守的锁序和递归锁约束。
+- [MQTT 运行态与 config 同步复核](../reviews/MQTT/MQTT运行态与config同步复核_2026-11-15.md)：CMD-15 R1/R2/R4 及未决项。
 
 ## 5. 授权与验证边界
 
