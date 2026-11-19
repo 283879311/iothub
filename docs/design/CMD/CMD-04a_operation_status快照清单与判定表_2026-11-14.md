@@ -1,5 +1,5 @@
-> **文档状态：PENDING（待实施设计）
-> 材料性质：PENDING DESIGN（待实施设计依据）**
+> **文档状态：PENDING（待实施设计）**
+> 材料性质：PENDING DESIGN（待实施设计依据）
 > 本文定义 operation_status 快照字段、分支与验收要求；是否实施及当前状态只见 [CMD 当前任务台账](../../status/CMD任务台账.md)。不得将设计清单描述为已实现或已验收。
 
 # CMD-04a · `app_cmd_net_operation_status` 快照清单与分支判定表（2026-11-14）
