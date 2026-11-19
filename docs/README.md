@@ -1,50 +1,69 @@
 # 固件 1.3 文档导航
 
-产品能力与构建说明见[根 README](../README.md)。当前行为以源码和 `contract/v1/` 为准；本索引只列日常开发、维护和验收仍会用到的文档。历史材料不作为当前实现依据。
+产品能力与构建说明见[根 README](../README.md)。当前产品事实以源码和 `contract/v1/` 为准；本导航按文档职责分类，不把历史过程稿列为当前维护入口。
 
-## 当前基线
+## 当前维护入口
 
 - [固件 1.3 文档维护基线](baseline/固件1.3文档基线_2026-11-18.md)
-
-## 架构与维护边界
-
-- [BLE 当前状态与维护边界](architecture/BLE_架构与验收总览.md)
+- [BLE 当前架构与验收边界](architecture/BLE_架构与验收总览.md)
 - [CMD 共享命令架构与权限边界](architecture/CMD共享命令架构与权限边界.md)
 - [ThingsBoard MQTT 架构与验收总览](architecture/MQTT_架构与验收总览.md)
-- [Wi-Fi 网络与 owner fencing](architecture/WIFI-OP-RESOURCE-RACE_主文档.md)
+- [Wi-Fi / Operation owner fencing](architecture/WIFI-OP-RESOURCE-RACE_主文档.md)
 - [OTA 与启动回滚边界](architecture/OTA_架构与验收总览.md)
+- [BLE v1 命令协议](protocol/BLE命令协议规范.md)
+- [BLE 微信小程序交互参考](protocol/BLE微信小程序交互协议_T4_2026-10-24.md)
 
-## 协议
+## 状态台账
 
-- [BLE v1 命令协议规范](protocol/BLE命令协议规范.md)：命令字段、请求/响应和协议边界；语义以 `contract/v1/` 为准。
-- [BLE 微信小程序交互参考](protocol/BLE微信小程序交互协议_T4_2026-10-24.md)：客户端连接、订阅、分片与交互；不是固件 wire contract。
+- [CMD 唯一任务台账](status/CMD任务台账.md)
+- [S6 现场验收状态与操作边界](status/S6现场验收总览.md)
 
-## 当前任务与验收状态
+## 设计与审查依据
 
-- [CMD 当前任务台账](validation/cmd_refactor_plan.md)：CMD 唯一任务状态入口；专项审查和设计文件只作为该台账引用的证据/约束，不单独维护状态。
-- [S6 现场验收状态与操作边界](validation/S6_现场验收总览.md)
-- [S6 阶段 B 一次性操作授权申请](validation/S6阶段B操作授权申请_2026-11-16.md)：申请材料不是操作授权，实际操作仍需明确批准。
+- [CMD-04 快照方案总纲](design/CMD/CMD-04_status快照方案_2026-11-14.md)
+- [CMD-04a operation_status 设计](design/CMD/CMD-04a_operation_status快照清单与判定表_2026-11-14.md)
+- [CMD-04b network_status 设计](design/CMD/CMD-04b_network_status快照清单与判定表_2026-11-14.md)
+- [CMD-02/03 并发静态审查（历史基线）](reviews/CMD/CMD-02_03_并发静态审查_2026-11-15.md)
+- [CMD-04c 已实施部分审查证据](reviews/CMD/CMD-04c_execute_method内联快照清单与判定表_2026-11-14.md)
+- [CMD-05 config/profile 锁序审查](reviews/CMD/CMD-05_config_profile锁序审查_2026-11-15.md)
+- [MQTT 运行态与 config 同步实施证据](reviews/MQTT/MQTT运行态与config同步复核_2026-11-15.md)
 
-CMD-02/03、CMD-04a/b/c、CMD-05 的专项材料由 CMD 台账按需引用，不在总导航中平铺为并列入口。其内容分别承担历史静态审查、待实施设计、已实施部分的审查证据和锁序约束；当前状态以台账为准。
- 
-## 设备报告
+设计文件说明设计约束，审查文件保存限定时点的证据；任务状态只在对应台账维护，专项材料不另行维护状态。
 
-- [R-NET 设备验收报告](reports/R-NET设备验收报告_2026-11-07.md)
+## 操作授权
+
+- [S6 阶段 B 一次性操作授权申请](authorization/S6阶段B操作授权申请_2026-11-16.md)：当前为待批准申请，不是操作授权。未取得明确批准前不得进行设备操作。
+
+## 设备报告与原始证据
+
 - [S6 阶段 A owner 回归结果](reports/S6阶段A回归结果_R1R2R3R5_2026-11-15.md)
 - [S6 阶段 A 烧录事故记录](reports/S6烧录事故记录_2026-11-15.md)
-
-## 原始证据与历史材料
-
 - [S6 阶段 A 分区证据](evidence/S6_stageA/README.md)
 - [S6 阶段 B 镜像 manifest](evidence/S6_stageB/images_manifest.md)
 - [S6 阶段 B 身份采集](evidence/S6_stageB/identity_2026-11-15/README.md)
-- [T5 首轮 50 轮 soak 历史报告](reports/T5_2026-10-24_50轮_mixed_serial.md)：仅供追溯原设备、原镜像和原测试范围，不代表当前固件验收。
-- `evidence/` 保存身份、镜像、分区和哈希等原始证据；`archive/` 保存仍有追溯价值的历史材料，不属于当前维护入口。
 
-## 仓库其他入口
+## 历史材料
 
+- [R-NET 设备验收报告](archive/2026-11/R-NET设备验收报告_2026-11-07.md)：原设备、原镜像和原测试范围的历史证据。
+- [T5 首轮 50 轮 soak](archive/2026-10/T5_2026-10-24_50轮_mixed_serial.md)：仅供追溯，不代表当前固件验收。
+- [BLE T5 常态化韧性计划](archive/2026-10/BLE常态化韧性验收_T5_2026-10-24.md)：历史方案，不是当前执行计划或设备授权。
+- `archive/` 保存已退出当前维护集但仍有追溯价值的材料；不因归档而改变原始证据。
+
+## 仓库级测试与工具
+
+- [主机测试入口](../tests/README.md)
+- [BLE P0 harness 与结果索引](../tools/ble_p0/README.md)
+- [BLE P0 历史过程材料索引](../tools/ble_p0/results/README.md)
 - 协议契约：`../contract/v1/`
-- 测试说明：[`tests/README.md`](../tests/README.md)
-- BLE 测试工具：[`tools/ble_p0/README.md`](../tools/ble_p0/README.md)
 
-专题文档中的历史测试结论必须限定原设备、原镜像和原测试范围，不得外推为当前固件 1.3 整体验收 PASS。
+## 文档状态约定
+
+文档状态字段统一使用以下值：
+
+- `CURRENT`：当前维护的权威说明或状态台账。
+- `PENDING`：尚待实施、评审或授权的设计/申请材料。
+- `HISTORICAL`：历史方案、审查、验收或事故证据；不代表当前功能状态。
+- `RETIRED`：已被替代或明确不再使用的材料。
+
+`ACTIVE` 统一改为 `CURRENT`；`ARCHIVED` 是存储位置，不是文档状态；`FROZEN` 的历史快照以 `HISTORICAL` 标识并保留不可变性说明；`CODE_DONE` 属于任务实施状态，不作为文档生命周期状态。任务台账中的 TODO、IN_PROGRESS、TEST_PENDING、PASS、DEFERRED 等仍按各自任务语义解释，不与文档状态混用。
+
