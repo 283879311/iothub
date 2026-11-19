@@ -42,7 +42,7 @@
 | 双 BLE 并发连接 + 跨设备 token 隔离 | 要证明 A 的 token 在 B 上被拒、B 的 token 在 A 上被拒；单设备无法构造 | **PASS（仅限已覆盖的稳态 dual）**：每个 dual 阶段 A→B、B→A 均为 `unauthorized` |
 | 双 Wi-Fi/MQTT 共存 | 两台同时在同一 AP/同一 broker 下保持在线，才能看到身份、client_id、topic 是否互串 | **PASS**：6h 状态采样 `sta_connected/mqtt_connected` 全 true，无 MQTT 断开 |
 | 双 UART0 长跑取证 | 单台只能看到一台的复位/panic/WDT/heap；双台同时抓才能覆盖并发负载 | **PASS**：两台各只有一次 POWERON，无运行期复位/panic/WDT |
-| BLE 角色互换 A/B 双向 | 需要一块板切 central、另一块保持 peripheral | **N/A（本版本不可执行）**：`role_swap.py` 依赖 `/api/v1/config/bluetooth` HTTP 接口，当前固件无 HTTP server；`docs/soak_test_plan.md` §2.5 已于 2026-11-02 标记为历史失效 |
+| BLE 角色互换 A/B 双向 | 需要一块板切 central、另一块保持 peripheral | **N/A（本版本不可执行）**：`role_swap.py` 依赖 `/api/v1/config/bluetooth` HTTP 接口，当前固件无 HTTP server；原 soak_test_plan 过程稿已不在当前仓库；HTTP 入口移除后的 N/A 结论仅属当时测试环境 |
 | 同一 Android 微信同时连 A/B | 设备侧双链路不等于微信 App 侧并发连接能力 | **NOT RUN**：本轮用 PC BlueZ 做双 central 代理；Android 真机并发未验证，不能替代 T4-A |
 | 双设备同时断 Wi-Fi，验证 120s fast-path | 要同时观察两台在 BLE 保持连接时是否只试正式 SSID、120s 一次 | **NOT RUN**：6h 内 Wi-Fi 一直在线；单台 A-policy 已在现场通过，但双设备同时掉线未测 |
 | 双设备 MQTT broker 断连/恢复 | 需要同时观察两台的重连退避和 outbox | **NOT RUN**：本轮没有停 broker |
