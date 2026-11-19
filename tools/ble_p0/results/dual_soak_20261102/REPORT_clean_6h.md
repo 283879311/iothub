@@ -9,7 +9,7 @@
 | **双 Wi-Fi/MQTT 共存 6h** | **NOT SIGNED** | TQ2018 于 08:32:20 左右消失；两台 Wi-Fi/MQTT 只在线约 10 分钟 |
 | **完整双设备 6h（BLE+Wi-Fi+MQTT）** | **NOT SIGNED** | 本轮 BLE 干净但 AP 丢失；首轮 Wi-Fi/MQTT 6h 但 BLE 有超时。两轮各自只覆盖一部分 |
 | **120s fast-path / D1** | **未覆盖** | 短 BLE 会话反复 link up/down，120s 计时器被重置；`cycle=0`，D1 未触发 |
-| **角色互换** | **N/A** | HTTP 配置入口已删除（见 `docs/soak_test_plan.md` §2.5） |
+| **角色互换** | **N/A** | HTTP 配置入口已删除（原 soak_test_plan 过程稿已不在当前仓库；HTTP 入口移除后的 N/A 结论仅属当时测试环境） |
 
 > 定位：`Clean single-run BLE 6h soak — PASS`；`Full dual-device 6h soak — NOT SIGNED`。  
 > 这不是把首轮和本轮拼成一个 PASS：正式验收仍要求同一独立 run 内 Wi-Fi/MQTT 与 BLE 都稳定。
