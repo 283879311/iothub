@@ -1,5 +1,7 @@
 # P0 BLE 验收 harness
 
+> 文档状态：CURRENT（工具使用说明；历史结果索引独立维护）
+
 PC 侧 BlueZ + bleak 充当 BLE central，模拟微信小程序的 NUS 命令面，验证：
 
 1. 按 NUS Service UUID 过滤扫描（`services` 的 BlueZ 等价物）；
