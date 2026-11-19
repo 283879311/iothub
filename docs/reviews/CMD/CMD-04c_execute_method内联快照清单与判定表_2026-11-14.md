@@ -1,5 +1,5 @@
-> **文档状态：HISTORICAL
-> 材料性质：HISTORICAL IMPLEMENTATION REVIEW（已实施部分的审查与验收边界记录）**
+> **文档状态：HISTORICAL**
+> 材料性质：HISTORICAL IMPLEMENTATION REVIEW（已实施部分的审查与验收边界记录）
 > 本文保留字段完整性、失败语义、敏感副本生命周期及不可达路径的审查证据；当前实施/验证状态统一见 [CMD 当前任务台账](../../status/CMD任务台账.md)。不得将本文中的历史验收记录外推为当前固件整体验收结论。
 
 # CMD-04c · `app_cmd_execute_method` 内联两段快照清单与判定表（2026-11-14）
