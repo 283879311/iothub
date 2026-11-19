@@ -2,7 +2,7 @@
 
 基于 ESP-IDF 6.0.x、面向经典 ESP32（4 MB Flash、无 PSRAM）的物联网控制与现场数据网关。当前产品以 **BLE NUS 本地管理 + ThingsBoard MQTT 远程管理/上报 + UART1 工业数据接入** 为核心；控制命令与原始字节数据分属两个平面。
 
-> 当前源码核对基线：`5104a3b0b3266f6afe22404d24ca89d41253cb63`（CMD-15 R4 一致性修订后的源码基线；其后 `main` 仅有文档维护）。每轮执行前仍须核对实际 `main` HEAD 与源码差异。固件版本由构建时 Git 描述串生成：`1.3-<git短SHA>[-dirty]`；无 Git 元数据时为 `1.3-unknown`。
+> 当前源码核对基线见[固件 1.3 文档维护基线](docs/baseline/固件1.3文档基线_2026-11-18.md)；该文件是完整源码 SHA 的唯一维护位置。每轮执行前仍须核对实际 `main` HEAD 与源码差异。固件版本由构建时 Git 描述串生成：`1.3-<git短SHA>[-dirty]`；无 Git 元数据时为 `1.3-unknown`。
 
 ## 当前产品边界
 
@@ -83,7 +83,7 @@ BLE CMD 与 ThingsBoard MQTT RPC 使用项目自己的 v1 JSON envelope：
 - **BLE**：正常产品运行固定为 Peripheral。设备提供 NUS 服务，Data RX/TX 使用 `6E400002/003`，CMD RX/TX 使用 `6E400004/005`。源码仍保留 Central/GATTC 兼容和 A/B 测试代码，但当前产品启动流程强制收敛为 Peripheral，Central 不是正常运行模式。
 - **启动顺序**：加载配置和 operation 基础设施后先启动 BLE，再启动 Wi-Fi；因此 Wi-Fi 启动/连接故障不应阻断现场 BLE 救援。
 - **Wi-Fi 事务**：`network.tryconnect` 由异步 operation 执行，按 owner、trial、operation ID 和 cleanup 生命周期管理；不会把“STA 已关联”直接当作提交成功。
-- **联网验证**：DEF-NET-001 在候选拿到 IP 后验证 Broker TCP 路径和 MQTT 会话。当前 `got_ip` 是试连流程的联网验证就绪阶段，不只是 Wi-Fi 关联或 DHCP 成功；验证失败会进入失败清理/恢复路径。详情见 [R-NET 设备验收报告](docs/reports/R-NET设备验收报告_2026-11-07.md)。
+- **联网验证**：DEF-NET-001 在候选拿到 IP 后验证 Broker TCP 路径和 MQTT 会话。当前 `got_ip` 是试连流程的联网验证就绪阶段，不只是 Wi-Fi 关联或 DHCP 成功；验证失败会进入失败清理/恢复路径。历史设备验收证据见 [R-NET 设备验收报告](docs/archive/2026-11/R-NET设备验收报告_2026-11-07.md)，不得外推为当前设备状态。
 - **配置面**：配置结构、Wi-Fi profile、配置应用和事务 guard 分层管理；传输层不得绕过 `config_apply` 直接改写配置。
 - **数据面**：UART1、BLE Data 和 MQTT 作为三个数据端口，由 `data_pipe` 按 NVS 路由配置转发。队列有界；队列满时允许丢帧并记录统计，不能把它描述为无损传输。MQTT 数据面发布使用 QoS 1 和 outbox 入队机制；这不代表设备侧所有前置队列都绝不丢帧。
 - **资源约束**：默认构建针对 4 MB Flash、无 PSRAM 的 ESP32。任务栈、队列、JSON 缓冲、MQTT outbox、BLE host/GATT 和 largest free block 都是需要持续审查的资源；不要为了加功能重新引入已移除的 Web/AP 门户或 SPP 常驻负担。
@@ -161,8 +161,8 @@ GPIO 默认值由 `main/Kconfig.projbuild` 配置并写入 `sdkconfig`：继电�
 
 - **架构**：[BLE](docs/architecture/BLE_架构与验收总览.md) · [CMD](docs/architecture/CMD共享命令架构与权限边界.md) · [MQTT](docs/architecture/MQTT_架构与验收总览.md) · [Wi-Fi](docs/architecture/WIFI-OP-RESOURCE-RACE_主文档.md) · [OTA](docs/architecture/OTA_架构与验收总览.md)
 - **协议**：[BLE v1 命令协议](docs/protocol/BLE命令协议规范.md) · [微信小程序交互参考](docs/protocol/BLE微信小程序交互协议_T4_2026-10-24.md)
-- **验证与待办**：[CMD 台账](docs/validation/cmd_refactor_plan.md) · [S6 现场验收状态](docs/validation/S6_现场验收总览.md)
-- **设备报告**：[R-NET](docs/reports/R-NET设备验收报告_2026-11-07.md) · [S6 阶段 A](docs/reports/S6阶段A回归结果_R1R2R3R5_2026-11-15.md)
+- **验证与待办**：[CMD 台账](docs/status/CMD任务台账.md) · [S6 现场验收状态](docs/status/S6现场验收总览.md)
+- **设备报告**：[R-NET（历史）](docs/archive/2026-11/R-NET设备验收报告_2026-11-07.md) · [S6 阶段 A](docs/reports/S6阶段A回归结果_R1R2R3R5_2026-11-15.md)
 - **文档基线**：[固件 1.3 文档基线](docs/baseline/固件1.3文档基线_2026-11-18.md)
 
 ## 已知限制与安全提示
