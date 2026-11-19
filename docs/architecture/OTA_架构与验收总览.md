@@ -1,6 +1,6 @@
 # OTA 与启动回滚架构及验收边界
 
-> **状态：ACTIVE（当前 1.3 OTA 能力边界）**
+> **文档状态：CURRENT（当前 1.3 OTA 能力边界）**
 > 本文只描述当前代码中已存在的启动回滚确认机制，以及尚未接入的固件传输能力。实现事实以 `main/ota.c`、`partitions.csv` 和 `sdkconfig.defaults` 为准。
 
 ## 1. 当前已实现
