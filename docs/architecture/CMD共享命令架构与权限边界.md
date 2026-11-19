@@ -111,7 +111,7 @@ operation 查询对 MQTT/HTTP 按 owner 隔离；BLE 本地 token 可按现行�
 
 ## 8. 关联文档
 
-- [CMD 当前任务台账](../validation/cmd_refactor_plan.md)
+- [CMD 当前任务台账](../status/CMD任务台账.md)
 - [BLE 命令协议规范](../protocol/BLE命令协议规范.md)
 - [MQTT 架构与验收总览](MQTT_架构与验收总览.md)
 - [Wi-Fi owner fencing 主文档](WIFI-OP-RESOURCE-RACE_主文档.md)
