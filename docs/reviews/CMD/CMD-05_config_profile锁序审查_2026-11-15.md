@@ -1,7 +1,7 @@
 # CMD-05 · config / profile 锁序静态审查（2026-11-15）
 
-> **文档状态：HISTORICAL
-> 材料性质：LOCK-ORDER REVIEW（锁序静态审查依据）**
+> **文档状态：HISTORICAL**
+> 材料性质：LOCK-ORDER REVIEW（锁序静态审查依据）
 > 本文保存锁清单、调用偏序和递归锁依赖的审查依据；当前任务状态以 [CMD 当前任务台账](../../status/CMD任务台账.md) 为准。本文不证明持锁时长、优先级反转或设备运行时行为已经验收。
 > **基线**：`main/cmd.c` / `config.c` / `config_apply.c` / `wifi.c`（提交 `04e9584` 时点；CMD-02 已 CODE_DONE）
 > **关联**：`docs/status/CMD任务台账.md` CMD-05；CMD-06 迁移依赖本结论
