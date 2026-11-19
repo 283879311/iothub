@@ -229,3 +229,9 @@ T1 写入 `tools/ble_p0/results/success_path_<timestamp>.json`，包含：
 静态 IP 写入 `tools/ble_p0/results/static_ip_<timestamp>.json`；P0-4 回归写入 `p0_4_regression_<timestamp>.json`；T2 写入 `t2_slot_reclaim_<timestamp>.json`；T3 写入 `t3_ble_channels_<timestamp>.json`；AP schema 写入 `config_schema_<timestamp>.json`。修复前的回滚 FAIL 证据保留在 `rollback_after_success_20261023_200845.json`。6.0.3 全量结果见 `p0_20261023_204921.json`；全量后 `no_slot` 证据见 `success_path_20261023_205143.json`；BLE 救援 FAIL 见 `ble_rescue_20261023_210816.json`；AP 状态恢复见 `success_path_20261023_211113.json`；T2 PASS 见 `t2_slot_reclaim_20261023_232220.json`；T3 MTU23 PASS 见 `t3_ble_channels_20261023_234439.json`，MTU256 恢复见 `t3_ble_channels_20261023_235335.json`，AP schema 后 T3 smoke 见 `t3_ble_channels_20261024_000822.json`；AP schema 见 `config_schema_20261024_001220.json`。
 
 以上 P0 结果文件是 2026-10-23 原设备/原镜像的历史记录；当前 BLE 验收状态以 [BLE 架构与验收总览](../../docs/architecture/BLE_架构与验收总览.md) 为准。原 P0 汇总过程稿不属于当前维护入口。
+
+
+## 历史结果与过程材料
+
+- [P0 results 原始材料索引](results/README.md)：集中导航 45 份历史 Markdown 过程/说明文档；原始 JSON、日志、补丁和二进制证据保持原路径。
+- 当前 BLE 产品状态以 [BLE 架构与验收总览](../../docs/architecture/BLE_架构与验收总览.md) 为准；results 中的历史方案和执行卡不构成当前计划或设备操作授权。
