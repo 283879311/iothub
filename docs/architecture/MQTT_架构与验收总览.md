@@ -1,6 +1,6 @@
 # MQTT 架构与验收总览
 
-> **状态：ACTIVE（MQTT 唯一维护入口）**  
+> **文档状态：CURRENT（MQTT 唯一维护入口）**  
 > 固件基线：1.3。当前行为以源码、`contract/v1/` 和本文件链接的专项证据为准。
 
 ## 1. 职责与边界
@@ -16,8 +16,8 @@
 | 内容 | 权威入口 |
 |---|---|
 | MQTT 职责、边界与当前缺口 | 本文 |
-| MQTT 配置/运行态快照实施证据 | [运行态与 config 同步复核](../validation/MQTT运行态与config同步复核_2026-11-15.md) |
-| CMD-15 任务状态、验收阶段与授权边界 | [CMD 当前任务台账](../validation/cmd_refactor_plan.md) |
+| MQTT 配置/运行态快照实施证据 | [运行态与 config 同步复核](../reviews/MQTT/MQTT运行态与config同步复核_2026-11-15.md) |
+| CMD-15 任务状态、验收阶段与授权边界 | [CMD 当前任务台账](../status/CMD任务台账.md) |
 | v1 字段、状态、错误码、来源权限 | `contract/v1/` |
 | 命令注册、来源白名单与 operation owner | [CMD 共享命令架构与权限边界](CMD共享命令架构与权限边界.md) |
 | 网络事务、Wi-Fi owner 与静态 IP | [Wi-Fi owner fencing 主文档](WIFI-OP-RESOURCE-RACE_主文档.md) |
