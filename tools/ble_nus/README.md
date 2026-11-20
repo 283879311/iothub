@@ -3,7 +3,7 @@
 PC 侧充当 **BLE central**(`bleak` + BlueZ),对设备的 NUS 服务做写入 / 回显 / 长压测,
 并用设备 `/api/v1/device/status` 的 `data_pipe` **累计计数差值**做断言(不依赖绝对值)。
 
-> 本目录**不进固件**(与 `tools/form_url/` 同约定),只用于上机验收。
+> 本目录**不进固件**（主机侧验收 harness），只用于上机验收。
 
 ## 前置条件
 
