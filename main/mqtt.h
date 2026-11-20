@@ -11,7 +11,7 @@ esp_err_t app_mqtt_apply_config(void);
 void app_mqtt_stop(void);
 void app_mqtt_restart_task(void *arg);
 bool app_mqtt_schedule_restart(void);
-/* MQTT 是否正在做连接尝试(页面流避让用,见 问题与版本优化.md 1.3-36) */
+/* MQTT 是否正在做连接尝试(页面流避让用) */
 bool app_mqtt_connecting(void);
 /* 清除致命错误位(配置变更入口调用,1.3-43) */
 void app_mqtt_clear_fatal(void);

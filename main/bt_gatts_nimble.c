@@ -3,7 +3,7 @@
  *
  * 1.3-56(NimBLE 迁移 Step 2):与 bt_gatts.c(Bluedroid 实现)同 facade、
  * 同 NUS 服务形态(4 特征值,RX/TX/CMD RX/CMD TX),全部 NimBLE API。
- * 差异要点(见 问题与版本优化.md 附录 A A.2):
+ * 差异要点:
  *   - 服务表:ble_gatt_svc_def(CCCD 由栈自动生成,不手写)
  *   - 写回调:每特征 access_cb(BLE_GATT_ACCESS_OP_WRITE_CHR,数据在 os_mbuf)
  *   - notify:ble_gatts_notify_custom + os_msys_get_pkthdr(分片按 ble_att_mtu-3)

@@ -16,7 +16,7 @@
  *   - CMD RX(6E400004):Write ← 命令帧(JSON 行,行重组后走命令分发器,1.3-32)
  *   - CMD TX(6E400005):Notify → 命令回包(与数据特征物理隔离)
  *
- * 注:BLE 配网(protocomm)已按 问题与版本优化.md 第 44 项退役(改走 SoftAP 门户),
+ * 注:BLE 配网(protocomm)已退役；当前产品不使用 SoftAP 门户,
  *   本数据服务是 BLE 侧唯一注册的 GATT 服务。
  *
  * 硬约束(GATT API 官方说明):回调内不得做耗时操作 → 本模块回调只做

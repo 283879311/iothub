@@ -524,7 +524,7 @@ esp_err_t app_config_save(const app_config_t *config)
         err = nvs_commit(nvs_handle);
     }
     nvs_close(nvs_handle);
-    /* 观测(问题与版本优化.md 1.3-10 ②):NVS 写是在**配置锁内**完成的 —— 这是刻意的,
+    /* 观测:NVS 写是在**配置锁内**完成的 —— 这是刻意的,
      * 用于防"读-改-写"丢更新(若解锁后再写,另一写者的新值可能被本次旧快照覆盖)。
      * 锁是递归锁,且只有"确有变化"才会走到这里(上面已与 NVS 现值比对),故真实开销
      * 只发生在**改配置**时。这里把"到底多久"变成可见数字:若频繁 >50ms,再按
@@ -780,7 +780,7 @@ esp_err_t app_config_save_wifi_profile(const char *ssid, const char *password)
     }
     app_config_load_wifi_profiles_blob(nvs_handle, &s_blob);
 
-    /* 护栏(问题与版本优化.md 1.3-20):空口令**不得**覆盖已存的非空口令。
+    /* 护栏:空口令**不得**覆盖已存的非空口令。
      * 否则一次空写(如某个调用点拿到空 profile 口令)就会永久抹掉可用凭据,
      * 且会被 IP_EVENT_STA_GOT_IP 的回写路径自我强化。 */
     if (password[0] == '\0') {

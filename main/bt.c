@@ -34,7 +34,7 @@ static portMUX_TYPE s_bt_status_mux = portMUX_INITIALIZER_UNLOCKED;
 /* 蓝牙协议栈是否真实启动过。mode=off 时 app_bt_release_unused_memory() 已把
  * 整个 _bt_bss 段(含 libbt 的全部状态变量,如 bluedroid 的 s_bt_host_state)
  * 还给堆,此后任何 libbt/controller 的状态查询读到的都是垃圾值,
- * 必须以本标记为准决定是否触碰栈 API,否则会在 OFF 首配时崩溃(见 问题与版本优化.md 第 19 项)。 */
+ * 必须以本标记为准决定是否触碰栈 API,否则会在 OFF 首配时崩溃。 */
 static bool s_stack_started = false;
 
 static void app_bt_status_set_mode(uint8_t mode)
@@ -414,7 +414,7 @@ static void app_bt_stop(void)
     app_bt_cleanup_stack();
 
     app_bt_status_set_mode(BT_MODE_OFF);
-    /* 不在此处清空 last_error:启动失败路径的错误信息靠它带出(问题与版本优化.md 第 23 项) */
+    /* 不在此处清空 last_error:启动失败路径的错误信息靠它带出 */
 }
 
 static esp_err_t app_bt_start_ble(void)
@@ -599,7 +599,7 @@ esp_err_t app_bt_apply_config(void)
  * OFF 释放 BTDM 全部;BLE 无需释放(BLE 已是构建期唯一保留的栈)。
  * Classic/SPP 自 v1.2 起整体移除(CONFIG_BT_CLASSIC_ENABLED=n),被释放的
  * 模式在本上电周期内不可再启用;任何蓝牙配置修改一律保存后整机重启,不做
- * 运行期热重配(问题与版本优化.md 第 21 项)。 */
+ * 运行期热重配。 */
 void app_bt_release_unused_memory(void)
 {
     static bool s_released = false;
@@ -713,7 +713,7 @@ static esp_err_t app_bt_init_stack(esp_bt_mode_t bt_mode)
 
     /* esp_bt_controller_enable(mode) 要求 mode 与 init 时的 cfg->mode 一致
      * (IDF bt.c 历史约束);BTDM 构建的默认模板是 ESP_BT_MODE_BTDM,
-     * 不按目标模式覆写则 enable 恒返回 ESP_ERR_INVALID_ARG(问题与版本优化.md 第 23 项) */
+     * 不按目标模式覆写则 enable 恒返回 ESP_ERR_INVALID_ARG */
     bt_cfg.mode = bt_mode;
 
     /* Bluedroid 把连接完成/嗅探切换等正常生命周期事件以 W 级打印,压到 ERROR
@@ -877,7 +877,7 @@ static void app_bt_stop(void)
     app_bt_cleanup_stack();
 
     app_bt_status_set_mode(BT_MODE_OFF);
-    /* 不在此处清空 last_error:启动失败路径的错误信息靠它带出(问题与版本优化.md 第 23 项) */
+    /* 不在此处清空 last_error:启动失败路径的错误信息靠它带出 */
 }
 
 static esp_err_t app_bt_start_ble(void)

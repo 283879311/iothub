@@ -17,10 +17,10 @@ esp_err_t app_bt_stack_ensure(void);
 void app_bt_stack_teardown(void);
 
 /* 开机在配置加载后、app_bt_apply_config 前调用一次:释放未选模式的栈内存。
- * 任何蓝牙配置修改均整机重启生效——栈不支持运行期热重配(问题与版本优化.md 第 21 项)。 */
+ * 任何蓝牙配置修改均整机重启生效——栈不支持运行期热重配。 */
 void app_bt_release_unused_memory(void);
 
-/* 显式重启 BLE 广播(问题与版本优化.md 1.3-03 加固)。
+/* 显式重启 BLE 广播。
  * 背景:Bluedroid 建立连接时会停止广播、断开后**理论上**自动恢复;实测存在断开后
  * 未恢复、设备彻底不可见的情形(手机侧 App 崩溃导致 REMOTE_USER_TERMINATED=0x13 断链)。
  * 故在 GATTS 断开事件里显式重启一次;未配置广播(非 BLE 模式)或已在广播时按正常处理。 */

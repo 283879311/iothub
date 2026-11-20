@@ -666,7 +666,7 @@ bool config_apply_domain_wired(cfg_domain_t domain)
     case CFG_DOMAIN_GPIO:
     case CFG_DOMAIN_BT: /* 蓝牙为重启生效:仅落盘,由调用方按 effect 重启 */
     case CFG_DOMAIN_MQTT:
-    case CFG_DOMAIN_NET: /* B3(问题与版本优化.md 1.3-09):网络为重启生效,仅落盘 */
+    case CFG_DOMAIN_NET: /* B3:网络为重启生效,仅落盘 */
     case CFG_DOMAIN_WEB_AUTH: /* B6:仅用户名走字段表(口令是盐+SHA256 的专用接口) */
     case CFG_DOMAIN_DATAPIPE: /* 1.3-07:数据面路由,立即生效 */
         return true;
@@ -696,7 +696,7 @@ esp_err_t config_apply_domain_apply(cfg_domain_t domain)
         return ESP_OK;
 
     case CFG_DOMAIN_NET:
-        /* B3(问题与版本优化.md 1.3-09):网络配置为整机重启生效,本层只负责落盘;
+        /* B3:网络配置为整机重启生效,本层只负责落盘;
          * 是否提示/触发重启由调用方按 effect_out 决定(HTTP handler 返回 restart_required) */
         return ESP_OK;
 

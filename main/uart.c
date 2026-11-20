@@ -438,7 +438,7 @@ static esp_err_t app_uart_apply_config_values(uint32_t baudrate, uint8_t data_bi
         gpio_pulldown_dis(app_uart_rx_gpio());
 
         /* CONFIG_UART_ISR_IN_IRAM=y 时 ISR 必须驻留 IRAM;显式带上 flag,
-         * 否则驱动会打印 "flag not set ... flag updated" 警告(问题与版本优化.md 第 31 项) */
+         * 否则驱动会打印 "flag not set ... flag updated" 警告 */
         err = uart_driver_install(UART_PORT, UART_RX_BUFFER_SIZE * 2, UART_DRV_TX_BUF_SIZE, 0, NULL,
                                   ESP_INTR_FLAG_IRAM);
         if (err != ESP_OK) {

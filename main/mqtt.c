@@ -1237,7 +1237,7 @@ static bool app_mqtt_schedule_boost(void)
     return true;
 }
 
-/* ---- 问题与版本优化.md 1.3-10:应用层重连退避 ----
+/* ---- 应用层重连退避 ----
  * 关闭 esp-mqtt 内建固定 5s 自动重连后,由 mqtt_restart 任务按指数退避重连:
  * 连接正常时的配置变更仅等 200ms(step=0);连续失败 1s→2→4→8→16→30s。
  * s_restart_backoff_step 仅该任务自增、由 MQTT_EVENT_CONNECTED 复位(单写者,无需加锁)。 */
@@ -1437,7 +1437,7 @@ static void app_mqtt_event_handler(void *handler_args, esp_event_base_t base, in
         s_mqtt.connected_gen = app_wifi_link_generation();
         app_mqtt_unlock();
         app_copy_string(s_mqtt.last_error, sizeof(s_mqtt.last_error), "");
-        s_restart_backoff_step = 0;   /* 连上即复位退避(问题与版本优化.md 1.3-10) */
+        s_restart_backoff_step = 0;   /* 连上即复位退避 */
         esp_mqtt_client_subscribe(event->client, app_mqtt_rpc_topic(), 1);
         esp_mqtt_client_subscribe(event->client, app_mqtt_shared_attr_response_topic(), 1);
         if (app_mqtt_is_thingsboard_backend()) {
@@ -1466,7 +1466,7 @@ static void app_mqtt_event_handler(void *handler_args, esp_event_base_t base, in
         app_copy_string(s_mqtt.last_error, sizeof(s_mqtt.last_error), "disconnected");
         ESP_LOGW(TAG, "MQTT_EVENT_DISCONNECTED%s",
                  is_current_client ? "" : " (stale client, ignored)");
-        /* 已关闭客户端内建自动重连 → 由应用层按退避重连(问题与版本优化.md 1.3-10)。
+        /* 已关闭客户端内建自动重连 → 由应用层按退避重连。
          * 仅在 STA 仍有 IP 时才调度:STA 掉线的情况由 WIFI_EVENT 处理器统一处理,
          * 避免"网络已断还在猛重连"的风暴。 */
         if (is_current_client) {
@@ -1749,7 +1749,7 @@ esp_err_t app_mqtt_apply_config(void)
     app_mqtt_ensure_dp_flush_task();   /* 1.3-76:256B 聚合的定时兜底 flush */
 
     mqtt_cfg.broker.address.uri = s_mqtt.uri;
-    /* 问题与版本优化.md 1.3-10:keepalive 15→45s(减少 PINGREQ 与"无响应断连"概率,
+    /* keepalive 15→45s(减少 PINGREQ 与"无响应断连"概率,
      * 仍在 ThingsBoard 默认 60s 限制内);重连改由**应用层 mqtt_restart 任务**承担 ——
      * 关掉客户端内建的固定 5s 自动重连,改为**指数退避**(200ms→1→2→4→8→16→30s,
      * 连上即复位),避免 broker 不可达时的重连风暴占 socket/堆 */
@@ -1851,7 +1851,7 @@ static void app_mqtt_restart_task_fn(void *arg)
             ESP_LOGW(TAG, "mqtt fatal error: auto reconnect paused (waiting config change)");
             continue;
         }
-        /* 指数退避(问题与版本优化.md 1.3-10):连上后 step 复位为 0 → 配置变更类重启仅等 200ms;
+        /* 指数退避:连上后 step 复位为 0 → 配置变更类重启仅等 200ms;
          * 连续失败则 1s→2→4→8→16→30s,避免"断网/ broker 不可达"时的重连风暴。
          * DEF-NET-001 F1(2026-11-07):整段 vTaskDelay 期间 poke(归零)与 stop 位都
          * 感知不到 —— churn 后高退避档(20/30s)会吞掉 netcheck 的验证窗口。
