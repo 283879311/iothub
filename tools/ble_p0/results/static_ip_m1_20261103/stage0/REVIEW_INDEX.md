@@ -8,7 +8,7 @@
 
 - 设计过程稿：未保留在当前仓库；本目录仅保留补丁与执行证据，不把缺失的设计文件作为维护入口。
   - SHA-256：`ef29919c3721b70b7d1a717ec92e3dfd1f4e8a9b173cafd9bbb3d39d5948075c`
-- 当前实现与任务状态：以 [MQTT 架构与验收总览](../../../../../docs/architecture/MQTT_架构与验收总览.md) 和 [CMD 任务台账](../../../../../../docs/status/CMD任务台账.md) 为准。
+- 当前实现与任务状态：以 [MQTT 架构与验收总览](../../../../../docs/architecture/MQTT_架构与验收总览.md) 和 [CMD 任务台账](../../../../../docs/status/CMD任务台账.md) 为准。
   - SHA-256：`e13833ba51f268856ee3050f7a909e5bf6dddf25a3da56e90a3f45e930d42fd9`
 
 ## Diff

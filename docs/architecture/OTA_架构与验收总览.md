@@ -29,7 +29,7 @@
 
 ## 4. 当前状态入口
 
-- CMD 与设备命令状态：[`cmd_refactor_plan.md`](../status/CMD任务台账.md)。
+- CMD 与设备命令状态：[`CMD任务台账.md`](../status/CMD任务台账.md)。
 - BLE 设备侧与 NimBLE 兼容性：[`BLE_架构与验收总览.md`](BLE_架构与验收总览.md)。
 - MQTT 控制面与数据面：[`MQTT_架构与验收总览.md`](MQTT_架构与验收总览.md)。
 - Wi-Fi 启动与 owner 事务边界：[`WIFI-OP-RESOURCE-RACE_主文档.md`](WIFI-OP-RESOURCE-RACE_主文档.md)。

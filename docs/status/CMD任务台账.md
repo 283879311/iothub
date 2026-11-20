@@ -29,7 +29,7 @@
 
 ## 2. 当前未关闭事项与推进依赖
 
-1. **CMD-02 / CMD-15**：阶段 1 ESP-IDF fullclean/build 和阶段 2 host tests 于 2026-11-16 按执行报告通过；阶段 3 设备回归没有执行，也没有授权。执行方报告及本地忽略目录中的证据未上传仓库，因此不能标记 PASS。
+1. **CMD-02 / CMD-15**：阶段 1 ESP-IDF fullclean/build 和阶段 2 host tests 于 2026-11-16 按执行报告通过；阶段 3 设备回归没有执行，也没有授权。执行方报告及本地忽略目录中的证据未上传仓库，因此不能标记 PASS。执行事实（BIN/ELF SHA256、run_id、warning 清单）见 [执行记录](../reports/CMD-02_15_执行记录_2026-11-16.md)。
 2. **CMD-01**：构建和 BLE/MQTT 入口回归仍缺；不能用 CMD-02/15 的联合 host 结果替代。
 3. **CMD-03**：Phase A host 测试已通过，变异体检查可证伪；仍需决定是否设计并实施 cmd 层 `store_trial` 守卫。不得直接修改 `expiring` 状态语义。Phase B 和设备验证须单独授权。
 4. **CMD-04**：04a/04b 设计材料仍是待实施方案；04c 已实施的部分不代表整个 CMD-04 关闭。04c 中同步 tryconnect 分支已确认不属于当前 v1 wire 可达路径，不得把它写成 wire 真机验收 PASS；apply dispatcher 的 trial patch 路径仍需按 async apply 全流程理解。

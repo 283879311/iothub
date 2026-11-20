@@ -38,6 +38,7 @@
 
 - [S6 阶段 A owner 回归结果](reports/S6阶段A回归结果_R1R2R3R5_2026-11-15.md)
 - [S6 阶段 A 烧录事故记录](reports/S6烧录事故记录_2026-11-15.md)
+- [CMD-02/15 联合验证执行记录](reports/CMD-02_15_执行记录_2026-11-16.md)：阶段 1/2 执行事实；阶段 3 未授权。
 - [S6 阶段 A 分区证据](evidence/S6_stageA/README.md)
 - [S6 阶段 B 镜像 manifest](evidence/S6_stageB/images_manifest.md)
 - [S6 阶段 B 身份采集](evidence/S6_stageB/identity_2026-11-15/README.md)
