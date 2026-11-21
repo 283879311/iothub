@@ -1,7 +1,7 @@
 /* ============================================================================
  * bt_gatts_nimble.c — BLE 数据面 GATT 服务(peripheral 侧)的 NimBLE 实现
  *
- * 1.3-56(NimBLE 迁移 Step 2):与 bt_gatts.c(Bluedroid 实现)同 facade、
+ * 1.3-56(NimBLE 迁移 Step 2):BLE 数据面 GATT 服务的唯一实现,
  * 同 NUS 服务形态(4 特征值,RX/TX/CMD RX/CMD TX),全部 NimBLE API。
  * 差异要点:
  *   - 服务表:ble_gatt_svc_def(CCCD 由栈自动生成,不手写)
@@ -51,7 +51,7 @@ static const ble_uuid128_t nus_cmd_tx_uuid = BLE_UUID128_INIT(
     0x9E, 0xCA, 0xDC, 0x24, 0x0E, 0xE5, 0xA9, 0xE0,
     0x93, 0xF3, 0xA3, 0xB5, 0x05, 0x00, 0x40, 0x6E);
 
-/* 单次写入落地容量(必须 ≥ DATA_PIPE_CHUNK_MAX,与 Bluedroid 侧同一不变量) */
+/* 单次写入落地容量(必须 ≥ DATA_PIPE_CHUNK_MAX) */
 #define NUS_RX_VALUE_MAX 256
 _Static_assert(NUS_RX_VALUE_MAX >= DATA_PIPE_CHUNK_MAX,
                "RX 属性值容量必须 ≥ 数据面单块上限,否则大帧在 GATT 写层被拒");
@@ -106,7 +106,7 @@ static int nus_write_common(struct ble_gatt_access_ctxt *ctxt, bool is_cmd)
     int rc;
 
     if (ctxt->op != BLE_GATT_ACCESS_OP_WRITE_CHR) {
-        return 0;   /* 只处理写;读请求返回长度 0(与 Bluedroid 侧行为一致) */
+        return 0;   /* 只处理写;读请求返回长度 0 */
     }
     len = OS_MBUF_PKTLEN(ctxt->om);
     if (len == 0) {
@@ -160,7 +160,7 @@ static int nus_cmd_rx_access_cb(uint16_t conn_handle, uint16_t attr_handle,
  * 服务表(CCCD 由 NimBLE 自动生成;句柄由栈在 add_svcs 后回填 val_handle)
  * ------------------------------------------------------------------------- */
 /* 本 fork 的 ble_gatts_chr_is_sane 要求每个特征都有 access_cb(notify-only 也要):
- * 给个空实现(读返回空、无写权限),与 Bluedroid 侧"TX 读返回 0 字节"行为一致 */
+ * 给个空实现(读返回空、无写权限),即 TX 读返回 0 字节 */
 static int nus_tx_access_cb(uint16_t conn_handle, uint16_t attr_handle,
                             struct ble_gatt_access_ctxt *ctxt, void *arg)
 {
@@ -300,7 +300,7 @@ void app_ble_gatts_nimble_on_connect(uint16_t conn_handle)
     } else {
         ESP_LOGI(TAG, "central connected (conn_handle=%u) peer=unknown", (unsigned)conn_handle);
     }
-    /* 主动请求更耐受 WiFi 共存的连接参数(与 Bluedroid 侧 1.3-24 同参):
+    /* 主动请求更耐受 WiFi 共存的连接参数(1.3-24):
      * 30-50ms / latency 0 / timeout 6s;central 可拒绝,无副作用 */
     cp.itvl_min = 24;                /* 24 × 1.25ms = 30ms */
     cp.itvl_max = 40;                /* 40 × 1.25ms = 50ms */

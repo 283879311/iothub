@@ -7,7 +7,7 @@ option(APP_WIFI_FAULT_INJECT "Fault-injection hooks (apply/stop fail, connect ho
 option(APP_CMD_MQTT_NET_TXN_TEST_BUILD "Enable MQTT network-transaction test build (default OFF)" OFF)
 
 idf_component_register(
-    SRCS "main.c" "auth.c" "auth_token.c" "ble_cmd.c" "bootstrap.c" "bt.c" "bt_gattc.c" "bt_gattc_nimble.c" "bt_gatts.c" "bt_gatts_nimble.c" "cmd.c" "cmd_context.c" "cmd_policy.c" "cmd_cfg_txn.c" "cmd_v1.c" "cmd_error.c" "common.c" "config.c" "config_apply.c" "data_pipe.c" "diag.c" "identity.c" "mem_guard.c" "mqtt.c" "netcheck.c" "netcheck_policy.c" "operation.c" "operation_state.c" "ota.c" "prov_pin.c" "state.c" "transport_ble.c" "uart.c" "wifi.c" "wifi_op_owner.c"
+    SRCS "main.c" "auth.c" "auth_token.c" "ble_cmd.c" "bootstrap.c" "bt.c" "bt_gattc_nimble.c" "bt_gatts_nimble.c" "cmd.c" "cmd_context.c" "cmd_policy.c" "cmd_cfg_txn.c" "cmd_v1.c" "cmd_error.c" "common.c" "config.c" "config_apply.c" "data_pipe.c" "diag.c" "identity.c" "mem_guard.c" "mqtt.c" "netcheck.c" "netcheck_policy.c" "operation.c" "operation_state.c" "ota.c" "prov_pin.c" "state.c" "transport_ble.c" "uart.c" "wifi.c" "wifi_op_owner.c"
     INCLUDE_DIRS "."
     REQUIRES
         app_update

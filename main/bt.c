@@ -3,11 +3,6 @@
 #include <string.h>
 
 #include "esp_bt.h"
-#if !CONFIG_BT_NIMBLE_ENABLED
-#include "esp_bt_defs.h"
-#include "esp_bt_main.h"
-#include "esp_gap_ble_api.h"
-#endif
 #include "esp_check.h"
 #include "esp_log.h"
 #include "esp_system.h"
@@ -32,7 +27,7 @@ static char s_bt_last_error[64] = "";
 static portMUX_TYPE s_bt_status_mux = portMUX_INITIALIZER_UNLOCKED;
 
 /* 蓝牙协议栈是否真实启动过。mode=off 时 app_bt_release_unused_memory() 已把
- * 整个 _bt_bss 段(含 libbt 的全部状态变量,如 bluedroid 的 s_bt_host_state)
+ * 整个 _bt_bss 段(含主机栈与 controller 的全部状态变量)
  * 还给堆,此后任何 libbt/controller 的状态查询读到的都是垃圾值,
  * 必须以本标记为准决定是否触碰栈 API,否则会在 OFF 首配时崩溃。 */
 static bool s_stack_started = false;
@@ -102,7 +97,7 @@ static void app_bt_adv_watchdog_tick(void)
     static uint32_t s_silent_ticks = 0;
     static uint32_t s_next_retry_s = 0;
 
-    /* OFF/未启动:看门狗不干预(含 Bluedroid ADV 失败置 OFF 的既有语义) */
+    /* OFF/未启动:看门狗不干预(ADV 失败会置 OFF) */
     if (!s_stack_started || app_bt_status_get_mode() != BT_MODE_BLE) {
         s_silent_ticks = 0;
         s_next_retry_s = 0;
@@ -145,8 +140,7 @@ void app_bt_get_status(uint8_t *runtime_mode, char *last_error_buf, size_t last_
  *   + 全局 GAP 回调(ble_hs_cfg.gap_cb)统一收发连接/订阅/MTU/广播事件,
  *     转发给 bt_gatts_nimble(central 侧 Step 3 再接 bt_gattc_nimble)。
  * ============================================================================ */
-/* 广播状态:Bluedroid 由 GAP START/STOP 事件维护,NimBLE 由
- * ADV_COMPLETE/adv_start 返回值维护(两分支共用,1.3-03) */
+/* 广播状态:NimBLE 由 ADV_COMPLETE/adv_start 返回值维护(1.3-03) */
 static bool s_adv_active = false;
 /* NimBLE:广播只能在 host sync 之后开启(host 启动流程 ble_hs_start →
  * ble_gatts_start 要求"无活动 GAP 过程",先开广播会触发 assert 崩溃,1.3-56 实测) */
@@ -154,7 +148,6 @@ static bool s_adv_requested = false;
 /* 1.3-58:host sync 后走 peripheral(GATTS+广播)还是 central(GATTC 扫描) */
 static bool s_central_mode = false;
 
-#if CONFIG_BT_NIMBLE_ENABLED
 
 #include "esp_bt.h"
 
@@ -169,7 +162,7 @@ extern const ble_uuid128_t g_ble_nus_svc_uuid;
 static struct ble_gap_adv_params s_nimble_adv_params = {
     .conn_mode = BLE_GAP_CONN_MODE_UND,
     .disc_mode = BLE_GAP_DISC_MODE_GEN,
-    .itvl_min = 0x20,      /* 32 × 0.625ms = 20ms(与 Bluedroid 侧同参) */
+    .itvl_min = 0x20,      /* 32 × 0.625ms = 20ms */
     .itvl_max = 0x40,      /* 40 × 0.625ms = 25ms */
     .channel_map = 0,      /* 三信道 */
 };
@@ -482,7 +475,7 @@ esp_err_t app_bt_restart_advertising(void)
     /* P0-6 路径4:早退只认权威广播态(ble_gap_adv_active),不认 s_adv_active ——
      * 标志卡 true 时这里曾静默 no-op,设备从此不可见。 */
     if (app_bt_adv_authoritative()) {
-        /* 对齐 Bluedroid 语义:已在广播 = 正常;顺手清掉残留的 adv 错误,
+        /* 已在广播 = 正常;顺手清掉残留的 adv 错误,
          * 消灭"广播活着但 last_error 还挂着"的不一致(如上次 adv_restart:15)。 */
         ESP_LOGI(TAG, "advertising already active (restart skipped, last_writer=%s)",
                  s_adv_last_writer);
@@ -593,377 +586,3 @@ esp_err_t app_bt_apply_config(void)
     return app_bt_start_ble();
 }
 
-#else
-
-/* 开机一次性:按配置的蓝牙模式释放“永不使用”的栈内存。
- * OFF 释放 BTDM 全部;BLE 无需释放(BLE 已是构建期唯一保留的栈)。
- * Classic/SPP 自 v1.2 起整体移除(CONFIG_BT_CLASSIC_ENABLED=n),被释放的
- * 模式在本上电周期内不可再启用;任何蓝牙配置修改一律保存后整机重启,不做
- * 运行期热重配。 */
-void app_bt_release_unused_memory(void)
-{
-    static bool s_released = false;
-    uint8_t bt_mode;
-    uint8_t bt_role;
-    size_t free_before;
-    size_t free_after;
-    esp_err_t err;
-
-    if (s_released) {
-        return;
-    }
-    s_released = true;
-
-    app_config_lock();
-    bt_mode = s_config.bt_mode;
-    bt_role = s_config.bt_role;
-    app_config_unlock();
-
-    /* BLE 常态开启：peripheral 或兼容 BLE 模式都不能释放 BTDM。
-     * 旧 off/central 配置已由 app_config_force_ble_peripheral() 收敛。 */
-    if (bt_mode == BT_MODE_BLE || bt_role == BT_ROLE_PERIPHERAL) {
-        ESP_LOGI(TAG, "BT memory release skipped (mode=%s role=%u, BLE always-on)",
-                 app_bt_mode_to_string(bt_mode), (unsigned)bt_role);
-        return;
-    }
-
-    free_before = (size_t)esp_get_free_heap_size();
-    /* OFF(或历史遗留值)统一释放整个 BT 栈内存;esp_bt_mem_release 只有传
-     * ESP_BT_MODE_BTDM 才会真正回收 BSS/Data 段(BLE_ONLY 构建下同样适用) */
-    err = esp_bt_mem_release(ESP_BT_MODE_BTDM);
-    free_after = (size_t)esp_get_free_heap_size();
-
-    if (err == ESP_OK) {
-        ESP_LOGI(TAG, "BT unused-mode memory released (mode=%s, heap +%u bytes)",
-                 app_bt_mode_to_string(bt_mode),
-                 (unsigned)(free_after - free_before));
-    } else {
-        ESP_LOGW(TAG, "BT mem release skipped (mode=%s): %s",
-                 app_bt_mode_to_string(bt_mode), esp_err_to_name(err));
-    }
-}
-
-static bool s_ble_adv_configured = false;
-
-static esp_ble_adv_params_t s_ble_adv_params = {
-    .adv_int_min = 0x20,
-    .adv_int_max = 0x40,
-    .adv_type = ADV_TYPE_IND,
-    .own_addr_type = BLE_ADDR_TYPE_PUBLIC,
-    .channel_map = ADV_CHNL_ALL,
-    .adv_filter_policy = ADV_FILTER_ALLOW_SCAN_ANY_CON_ANY,
-};
-
-static esp_ble_adv_data_t s_ble_adv_data = {
-    .set_scan_rsp = false,
-    .include_name = true,
-    .include_txpower = true,
-    .min_interval = 0x20,
-    .max_interval = 0x40,
-    .appearance = 0x00,
-    .manufacturer_len = 0,
-    .p_manufacturer_data = NULL,
-    .service_data_len = 0,
-    .p_service_data = NULL,
-    .service_uuid_len = 0,
-    .p_service_uuid = NULL,
-    .flag = ESP_BLE_ADV_FLAG_GEN_DISC | ESP_BLE_ADV_FLAG_BREDR_NOT_SPT,
-};
-
-static void app_ble_gap_cb(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *param)
-{
-    switch (event) {
-    case ESP_GAP_BLE_ADV_DATA_SET_COMPLETE_EVT:
-        s_ble_adv_configured = true;
-        esp_ble_gap_start_advertising(&s_ble_adv_params);
-        break;
-    /* 连接参数更新结果回显(1.3-24 后续):`bt_gatts` 在连接时主动请求 30-50ms / timeout 6s 的参数,
-     * 这里打印**实际生效值** —— 用于判定 central 是否接受了请求(拒绝时会回显手机原来的参数)。 */
-    case ESP_GAP_BLE_UPDATE_CONN_PARAMS_EVT:
-        ESP_LOGI(TAG, "conn params: status=%d int=%ums latency=%u timeout=%ums",
-                 (int)param->update_conn_params.status,
-                 (unsigned)param->update_conn_params.conn_int,
-                 (unsigned)param->update_conn_params.latency,
-                 (unsigned)param->update_conn_params.timeout * 10u);
-        break;
-    case ESP_GAP_BLE_ADV_START_COMPLETE_EVT:
-        s_adv_active = (param->adv_start_cmpl.status == ESP_BT_STATUS_SUCCESS);
-        app_bt_adv_note_writer(s_adv_active ? "adv_start_ok" : "adv_start_fail");
-        if (param->adv_start_cmpl.status == ESP_BT_STATUS_SUCCESS) {
-            ESP_LOGI(TAG, "BLE advertising started");
-            app_bt_status_set_error("");
-        } else {
-            ESP_LOGE(TAG, "BLE advertising start failed: %d", param->adv_start_cmpl.status);
-            app_bt_status_set_errorf("adv_start:%d", param->adv_start_cmpl.status);
-            app_bt_status_set_mode(BT_MODE_OFF);
-        }
-        break;
-    default:
-        break;
-    }
-}
-
-static esp_err_t app_bt_init_stack(esp_bt_mode_t bt_mode)
-{
-    esp_bt_controller_config_t bt_cfg = BT_CONTROLLER_INIT_CONFIG_DEFAULT();
-    esp_bluedroid_config_t bluedroid_cfg = BT_BLUEDROID_INIT_CONFIG_DEFAULT();
-    esp_bt_controller_status_t ctrl_status;
-    esp_bluedroid_status_t bluedroid_status;
-    esp_err_t err;
-
-    /* esp_bt_controller_enable(mode) 要求 mode 与 init 时的 cfg->mode 一致
-     * (IDF bt.c 历史约束);BTDM 构建的默认模板是 ESP_BT_MODE_BTDM,
-     * 不按目标模式覆写则 enable 恒返回 ESP_ERR_INVALID_ARG */
-    bt_cfg.mode = bt_mode;
-
-    /* Bluedroid 把连接完成/嗅探切换等正常生命周期事件以 W 级打印,压到 ERROR
-     * 只留真实异常;应用层事件由 app_bt 自身的 INFO 日志覆盖 */
-    esp_log_level_set("BT_HCI", ESP_LOG_ERROR);
-    esp_log_level_set("BT_APPL", ESP_LOG_ERROR);
-
-    ctrl_status = esp_bt_controller_get_status();
-    if (ctrl_status == ESP_BT_CONTROLLER_STATUS_IDLE) {
-        err = esp_bt_controller_init(&bt_cfg);
-        if (err != ESP_OK) {
-            return err;
-        }
-        ctrl_status = esp_bt_controller_get_status();
-    }
-    if (ctrl_status != ESP_BT_CONTROLLER_STATUS_ENABLED) {
-        err = esp_bt_controller_enable(bt_mode);
-        if (err != ESP_OK) {
-            esp_bt_controller_deinit();
-            return err;
-        }
-    }
-
-    bluedroid_status = esp_bluedroid_get_status();
-    if (bluedroid_status == ESP_BLUEDROID_STATUS_UNINITIALIZED) {
-        err = esp_bluedroid_init_with_cfg(&bluedroid_cfg);
-        if (err != ESP_OK) {
-            esp_bt_controller_disable();
-            esp_bt_controller_deinit();
-            return err;
-        }
-        bluedroid_status = esp_bluedroid_get_status();
-    }
-    if (bluedroid_status != ESP_BLUEDROID_STATUS_ENABLED) {
-        err = esp_bluedroid_enable();
-        if (err != ESP_OK) {
-            esp_bluedroid_deinit();
-            esp_bt_controller_disable();
-            esp_bt_controller_deinit();
-            return err;
-        }
-    }
-    s_stack_started = true;
-    return ESP_OK;
-}
-
-static void app_bt_cleanup_stack(void)
-{
-    esp_bluedroid_status_t bluedroid_status;
-    esp_bt_controller_status_t controller_status;
-
-    /* 栈从未启动(OFF 首配):_bt_bss 已被释放,状态查询与任何栈 API 都不可触碰 */
-    if (!s_stack_started) {
-        return;
-    }
-    s_stack_started = false;
-
-    bluedroid_status = esp_bluedroid_get_status();
-    controller_status = esp_bt_controller_get_status();
-
-    if (bluedroid_status == ESP_BLUEDROID_STATUS_ENABLED) {
-        esp_bluedroid_disable();
-    }
-    if (bluedroid_status != ESP_BLUEDROID_STATUS_UNINITIALIZED) {
-        esp_bluedroid_deinit();
-    }
-    if (controller_status == ESP_BT_CONTROLLER_STATUS_ENABLED) {
-        esp_bt_controller_disable();
-    }
-    if (controller_status != ESP_BT_CONTROLLER_STATUS_IDLE) {
-        esp_bt_controller_deinit();
-    }
-}
-
-esp_err_t app_bt_restart_advertising(void)
-{
-    esp_err_t err;
-
-    if (!s_ble_adv_configured) {
-        return ESP_ERR_INVALID_STATE;   /* 广播数据未配置(非 BLE 模式):无需处理 */
-    }
-    err = esp_ble_gap_start_advertising(&s_ble_adv_params);
-    if (err == ESP_ERR_INVALID_STATE) {
-        /* 已经在广播(栈可能已自动恢复)→ 视为正常 */
-        ESP_LOGI(TAG, "advertising already active");
-        app_bt_status_set_error("");
-        return ESP_OK;
-    }
-    if (err != ESP_OK) {
-        ESP_LOGW(TAG, "advertising restart failed: %s (free=%u)",
-                 esp_err_to_name(err), (unsigned)esp_get_free_heap_size());
-        return err;
-    }
-    app_bt_adv_note_writer("restart");
-    ESP_LOGI(TAG, "advertising restart requested (after disconnect)");
-    return ESP_OK;
-}
-
-bool app_bt_advertising(void)
-{
-    return s_adv_active;
-}
-
-/* Bluedroid:BTA 不暴露 adv-active 权威查询,标志就是唯一事实源(1.3-92);
- * restart 的 INVALID_STATE 容忍已兜住"标志错报已停"的情形 */
-static bool app_bt_adv_authoritative(void)
-{
-    return s_adv_active;
-}
-
-/* Bluedroid 看门狗 tick_impl:无 desync 检测(权威=标志,永不 desync)、
- * 无 sync 判断(BTA 自带状态机) */
-static void app_bt_adv_watchdog_tick_impl(uint32_t *silent_ticks, uint32_t *next_retry_s)
-{
-    bool connected = app_ble_gatts_connected() || app_ble_gattc_connected();
-
-    if (connected || app_bt_adv_authoritative()) {
-        *silent_ticks = 0;
-        *next_retry_s = 0;
-        return;
-    }
-    (*silent_ticks)++;
-    if (*silent_ticks <= APP_ADV_WATCHDOG_SILENT_LIMIT_S) {
-        return;
-    }
-    if (*next_retry_s > 0) {
-        (*next_retry_s)--;
-        return;
-    }
-    {
-        uint32_t attempt = ++s_adv_retry_count;
-        esp_err_t err = app_bt_restart_advertising();
-
-        if (err == ESP_OK) {
-            ESP_LOGW(TAG, "adv watchdog: advertising recovered (attempt=%u, last_writer=%s)",
-                     (unsigned)attempt, s_adv_last_writer);
-            *silent_ticks = 0;
-            *next_retry_s = 0;
-            return;
-        }
-        ESP_LOGW(TAG, "adv watchdog retry #%u failed: %s",
-                 (unsigned)attempt, esp_err_to_name(err));
-        /* 规格序列 2/4/8/16/30s(1.3-92):16 后直达封顶,不再回到 CAP-2 */
-        *next_retry_s = (*next_retry_s == 0) ? 2
-                       : (*next_retry_s < 16) ? (*next_retry_s * 2)
-                       : APP_ADV_WATCHDOG_RETRY_CAP_S;
-    }
-}
-
-static void app_bt_stop(void)
-{
-    uint8_t runtime_mode = app_bt_status_get_mode();
-
-    app_ble_dataplane_reset();
-
-    if (runtime_mode == BT_MODE_BLE && s_ble_adv_configured) {
-        esp_ble_gap_stop_advertising();
-        s_ble_adv_configured = false;
-    }
-
-    app_bt_cleanup_stack();
-
-    app_bt_status_set_mode(BT_MODE_OFF);
-    /* 不在此处清空 last_error:启动失败路径的错误信息靠它带出 */
-}
-
-static esp_err_t app_bt_start_ble(void)
-{
-    esp_err_t err;
-
-    err = app_bt_init_stack(ESP_BT_MODE_BLE);
-    if (err != ESP_OK) {
-        app_bt_status_set_errorf("bt_stack:%s", esp_err_to_name(err));
-        app_bt_stop();
-        return err;
-    }
-    /* BLE 数据面 GATT 服务(NUS 兼容 UUID;与配网特征不同 UUID,可同栈共存) */
-    if (app_ble_dataplane_start() != ESP_OK) {
-        ESP_LOGW(TAG, "BLE data plane start failed (continue without data plane)");
-    }
-    err = esp_ble_gap_register_callback(app_ble_gap_cb);
-    if (err != ESP_OK) {
-        app_bt_status_set_errorf("gap_callback:%s", esp_err_to_name(err));
-        app_bt_stop();
-        return err;
-    }
-    err = esp_ble_gap_set_device_name(s_config.bt_device_name);
-    if (err != ESP_OK) {
-        app_bt_status_set_errorf("set_name:%s", esp_err_to_name(err));
-        app_bt_stop();
-        return err;
-    }
-    err = esp_ble_gap_config_adv_data(&s_ble_adv_data);
-    if (err != ESP_OK) {
-        app_bt_status_set_errorf("adv_config:%s", esp_err_to_name(err));
-        app_bt_stop();
-        return err;
-    }
-    app_bt_status_set_mode(BT_MODE_BLE);
-    app_bt_status_set_error("ble_starting");
-    return ESP_OK;
-}
-
-static esp_err_t app_bt_start_central(void) __attribute__((unused));
-static esp_err_t app_bt_start_central(void)
-{
-    esp_err_t err;
-
-    err = app_bt_init_stack(ESP_BT_MODE_BLE);
-    if (err != ESP_OK) {
-        app_bt_status_set_errorf("bt_stack:%s", esp_err_to_name(err));
-        app_bt_stop();
-        return err;
-    }
-    /* 主角色:数据面出站 = 写对端 RX 特征;GAP 扫描回调由 bt_gattc 独占
-     * (本模式下 bt.c 不注册自有 GAP 回调、不广播) */
-    if (app_ble_dataplane_start_central() != ESP_OK) {
-        ESP_LOGW(TAG, "BLE central data plane start failed");
-    }
-    s_stack_started = true;
-    app_bt_status_set_mode(BT_ROLE_CENTRAL);
-    app_bt_status_set_error("central_scanning");
-    return ESP_OK;
-}
-
-/* ---------------------------------------------------------------------------
- * 栈底座:供配网 / 数据面复用的唯一触碰蓝牙栈的入口
- * ------------------------------------------------------------------------- */
-esp_err_t app_bt_stack_ensure(void)
-{
-    /* 幂等:app_bt_init_stack 内部按控制器/主机状态判断,重复调用安全 */
-    return app_bt_init_stack(ESP_BT_MODE_BLE);
-}
-
-void app_bt_stack_teardown(void)
-{
-    app_bt_stop();
-}
-
-esp_err_t app_bt_apply_config(void)
-{
-    app_bt_stop();
-
-    /* 产品基线：BLE 始终为 Peripheral。central/off 仅保留代码兼容，
-     * 不在运行时生效；旧配置由 config 层收敛并持久化。 */
-    app_config_force_ble_peripheral();
-    if (s_config.bt_role != BT_ROLE_PERIPHERAL) {
-        ESP_LOGE(TAG, "BLE role could not be forced to peripheral (role=%u)",
-                 (unsigned)s_config.bt_role);
-    }
-    return app_bt_start_ble();
-}
-#endif /* CONFIG_BT_NIMBLE_ENABLED */

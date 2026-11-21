@@ -18,7 +18,7 @@
 #   tools/idfbuild.sh monitor
 #   tools/idfbuild.sh cache-guard     # 只清理被污染的 build/ 缓存
 #   tools/idfbuild.sh version         # 打印环境定位结果
-#   IDF_BUILD_DIR=build-bluedroid tools/idfbuild.sh build   # Bluedroid 回退 profile
+#   IDF_BUILD_DIR=build-alt tools/idfbuild.sh build         # 备用构建目录(NimBLE)
 # 可覆盖环境: IDF_PATH / IDF_TOOLS_PATH / IDF_BUILD_DIR
 # ============================================================================
 set -euo pipefail
@@ -26,26 +26,6 @@ set -euo pipefail
 PROJ_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BUILD_DIR="${IDF_BUILD_DIR:-$PROJ_DIR/build}"
 TOOLS="${IDF_TOOLS_PATH:-$HOME/.espressif/tools}"
-
-# ---- 1.3-62 profile 护栏:默认 NimBLE;build-bluedroid = Bluedroid 回退 ----
-# 默认 build/ 使用项目根 sdkconfig(NimBLE,1.3-62 起按稳定性优先切换)。
-# 非默认目录仅允许 build-bluedroid:以 sdkconfig.bluedroid 为种子(保留 1.3-39/47
-# 的 ACL=1/SMP 关/GATT profiles=4 等裁剪),构建结束恢复根 sdkconfig,
-# 避免 idf.py 把默认 NimBLE 配置写回/污染。
-if [ -n "${IDF_BUILD_DIR:-}" ] && [ "$BUILD_DIR" != "$PROJ_DIR/build" ]; then
-    if [ "$(basename "$BUILD_DIR")" != "build-bluedroid" ]; then
-        echo "!! 默认 profile 已是 NimBLE;非默认目录仅支持 build-bluedroid(Bluedroid 回退)" >&2
-        exit 2
-    fi
-    if [ ! -f "$PROJ_DIR/sdkconfig.bluedroid" ]; then
-        echo "!! 缺少 sdkconfig.bluedroid(Bluedroid 回退 profile 种子)" >&2
-        exit 1
-    fi
-    SDKCONFIG_BACKUP="$(mktemp "$PROJ_DIR/.sdkconfig.XXXXXX")"
-    cp "$PROJ_DIR/sdkconfig" "$SDKCONFIG_BACKUP"
-    cp "$PROJ_DIR/sdkconfig.bluedroid" "$PROJ_DIR/sdkconfig"
-    trap 'cp "$SDKCONFIG_BACKUP" "$PROJ_DIR/sdkconfig"; rm -f "$SDKCONFIG_BACKUP"' EXIT
-fi
 
 # ---- 1) 定位 ESP-IDF ----
 IDF_ROOT="${IDF_PATH:-}"

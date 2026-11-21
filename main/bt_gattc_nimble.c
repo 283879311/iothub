@@ -1,6 +1,6 @@
 /* 1.3-58(NimBLE 迁移 Step 3):central / 主角色实现。
  *
- * 行为对齐 bt_gattc.c(Bluedroid):按名字前缀扫描 → 连接 → 发现 NUS RX/TX
+ * 行为要点:按名字前缀扫描 → 连接 → 发现 NUS RX/TX
  * 特征 → 订阅 TX(写 CCCD)→ 通知只入队;出站按 MTU 分片写对端 RX。
  * 生命周期与 bt.c 的 NimBLE 分支共用:host sync 后才允许扫描。
  */
@@ -102,7 +102,7 @@ static int64_t s_test_cmd_last_sent_ms;
 static char s_seen_names[GATTC_SEEN_NAME_MAX][32];
 static uint8_t s_seen_count;
 
-/* 扫描参数:主动扫描;interval 50ms / window 30ms(与 Bluedroid 侧 0x50/0x30 对齐) */
+/* 扫描参数:主动扫描;interval 50ms / window 30ms */
 static const struct ble_gap_disc_params s_disc_params = {
     .itvl = 0x50,
     .window = 0x30,
@@ -435,7 +435,7 @@ static int app_ble_gattc_gap_cb(struct ble_gap_event *event, void *arg)
             s_conn = event->connect.conn_handle;
             app_bt_status_clear_error();   /* 1.3-64:已连上,清掉 central_scanning */
             ESP_LOGI(TAG, "connected (conn=%u), negotiating mtu", s_conn);
-            /* NimBLE 不会自动交换 MTU(Bluedroid 侧是 send_mtu_req),必须显式发起 */
+            /* NimBLE 不会自动交换 MTU,必须显式发起 */
             rc = ble_gattc_exchange_mtu(s_conn, app_ble_gattc_mtu_cb, NULL);
             if (rc != 0) {
                 ESP_LOGW(TAG, "mtu exchange start failed: %d (mtu=%u)",
@@ -493,7 +493,7 @@ static int app_ble_gattc_gap_cb(struct ble_gap_event *event, void *arg)
                 app_ble_gattc_peer_cmd_rx(buf, n);
             }
 #else
-            /* 回调只入队,绝不阻塞(与 Bluedroid 侧同一纪律) */
+            /* 回调只入队,绝不阻塞 */
             app_ble_dataplane_on_write(buf, n);
 #endif
         }

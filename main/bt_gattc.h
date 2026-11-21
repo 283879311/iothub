@@ -26,7 +26,5 @@ bool app_ble_gattc_write(const uint8_t *data, size_t len, void *ctx);
 
 bool app_ble_gattc_connected(void);
 
-#if CONFIG_BT_NIMBLE_ENABLED
 /* NimBLE:host sync 后由 bt.c 转发调用,开始扫描(扫描不能在 sync 前启动) */
 void app_ble_gattc_nimble_on_sync(void);
-#endif
