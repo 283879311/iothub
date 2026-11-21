@@ -51,7 +51,7 @@ typedef enum {
     CFG_DOMAIN_UART,     /* 预留(B4 评审结论:不迁移) */
     CFG_DOMAIN_BT,       /* 已接线(B6):重启生效 */
     CFG_DOMAIN_NET,      /* 已接线(B3):重启生效 */
-    CFG_DOMAIN_WEB_AUTH, /* 已接线(B6) */
+    CFG_DOMAIN_AUTH, /* 已接线(B6) */
     CFG_DOMAIN_DATAPIPE, /* 已接线(1.3-07):数据面路由,立即生效 */
     CFG_DOMAIN_MAX,
 } cfg_domain_t;

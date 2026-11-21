@@ -6,7 +6,7 @@
 #include "constants.h"
 #include "common.h"
 
-void app_web_hash_password(const uint8_t *salt, size_t salt_len,
+void app_auth_hash_password(const uint8_t *salt, size_t salt_len,
                            const char *password, uint8_t *out_hash)
 {
     psa_hash_operation_t op = PSA_HASH_OPERATION_INIT;

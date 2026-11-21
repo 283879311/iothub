@@ -1707,7 +1707,7 @@ static bool app_cmd_patch_allowed(app_cmd_source_t source, const cJSON *params)
         if (f != NULL &&
             (f->domain == CFG_DOMAIN_NET || f->domain == CFG_DOMAIN_MQTT ||
              f->domain == CFG_DOMAIN_BT || f->domain == CFG_DOMAIN_UART ||
-             f->domain == CFG_DOMAIN_WEB_AUTH)) {
+             f->domain == CFG_DOMAIN_AUTH)) {
             ESP_LOGW(TAG, "remote patch rejected (guard): field '%s' domain=%d",
                      item->string, (int)f->domain);
             return false;
@@ -1717,7 +1717,7 @@ static bool app_cmd_patch_allowed(app_cmd_source_t source, const cJSON *params)
 #endif
 }
 
-static bool app_cmd_verify_web_password(const char *password)
+static bool app_cmd_verify_auth_password(const char *password)
 {
     uint8_t salt[16];
     uint8_t stored[32];
@@ -1729,10 +1729,10 @@ static bool app_cmd_verify_web_password(const char *password)
         return false;
     }
     app_config_lock();
-    memcpy(salt, s_config.web_pass_salt, sizeof(salt));
-    memcpy(stored, s_config.web_pass_hash, sizeof(stored));
+    memcpy(salt, s_config.auth_pass_salt, sizeof(salt));
+    memcpy(stored, s_config.auth_pass_hash, sizeof(stored));
     app_config_unlock();
-    app_web_hash_password(salt, sizeof(salt), password, calc);
+    app_auth_hash_password(salt, sizeof(salt), password, calc);
     for (i = 0; i < sizeof(calc); i++) {
         diff |= (uint8_t)(calc[i] ^ stored[i]);
     }
@@ -1913,7 +1913,7 @@ static cJSON *app_cmd_build_get_config(const cJSON *domains)
 
     sec = cJSON_AddObjectToObject(root, "web");
     if (sec != NULL) {
-        cJSON_AddStringToObject(sec, "username", cfg.web_username);
+        cJSON_AddStringToObject(sec, "username", cfg.auth_username);
     }
 
     if (domains != NULL) {
@@ -2451,7 +2451,7 @@ esp_err_t app_cmd_execute_method(const app_cmd_context_t *ctx, const char *metho
             if (source == APP_CMD_SOURCE_MQTT) {
                 err = "guard_rejected";
             } else if (!cJSON_IsString(old_item) || old_item->valuestring == NULL ||
-                       !app_cmd_verify_web_password(old_item->valuestring)) {
+                       !app_cmd_verify_auth_password(old_item->valuestring)) {
                 err = "invalid_old_password";
             } else if (!cJSON_IsString(new_item) || new_item->valuestring == NULL ||
                        (strlen(new_item->valuestring) < 8 &&
@@ -2468,11 +2468,11 @@ esp_err_t app_cmd_execute_method(const app_cmd_context_t *ctx, const char *metho
                 esp_fill_random(salt, sizeof(salt));
                 app_config_lock();
                 if (new_user != NULL && new_user[0] != '\0') {
-                    app_copy_string(s_config.web_username, sizeof(s_config.web_username), new_user);
+                    app_copy_string(s_config.auth_username, sizeof(s_config.auth_username), new_user);
                 }
-                memcpy(s_config.web_pass_salt, salt, sizeof(salt));
-                app_web_hash_password(salt, sizeof(salt), new_item->valuestring,
-                                      s_config.web_pass_hash);
+                memcpy(s_config.auth_pass_salt, salt, sizeof(salt));
+                app_auth_hash_password(salt, sizeof(salt), new_item->valuestring,
+                                      s_config.auth_pass_hash);
                 save_err = app_config_save(&s_config);
                 app_config_unlock();
                 app_cmd_cfg_txn_guard_exit();
@@ -2509,7 +2509,7 @@ esp_err_t app_cmd_execute_method(const app_cmd_context_t *ctx, const char *metho
                        !app_prov_pin_is_valid(pin_item->valuestring)) {
                 err = "invalid_param";
             } else if (!cJSON_IsString(pass_item) || pass_item->valuestring == NULL ||
-                       !app_cmd_verify_web_password(pass_item->valuestring)) {
+                       !app_cmd_verify_auth_password(pass_item->valuestring)) {
                 err = "unauthorized";
             } else {
                 save_err = app_prov_pin_set(pin_item->valuestring);

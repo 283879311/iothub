@@ -28,5 +28,5 @@ EventGroupHandle_t app_event_group_ensure(EventGroupHandle_t *handle,
                                           portMUX_TYPE *mux);
 
 /* Web 登录口令哈希:SHA-256(salt || password),盐 16 字节,输出 32 字节 */
-void app_web_hash_password(const uint8_t *salt, size_t salt_len,
+void app_auth_hash_password(const uint8_t *salt, size_t salt_len,
                            const char *password, uint8_t *out_hash);

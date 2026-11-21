@@ -48,9 +48,9 @@ typedef struct {
     char mqtt_host[64];
     char mqtt_token[128];
     /* v7 新增,追加在末尾:v6 blob 是 v7 的字节前缀,迁移按前缀保留 */
-    char web_username[33];
-    uint8_t web_pass_salt[16];
-    uint8_t web_pass_hash[32];
+    char auth_username[33];
+    uint8_t auth_pass_salt[16];
+    uint8_t auth_pass_hash[32];
     /* v8 新增,追加在末尾(同上:v7 blob 是 v8 的字节前缀):
      * 蓝牙角色(权威字段) —— 0=off / 1=peripheral(从) / 2=central(主)。
      * 旧 v7 的 bt_mode 保留为兼容字段(0=off,1=ble),迁移时用于推导 bt_role。 */

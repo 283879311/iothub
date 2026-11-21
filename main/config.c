@@ -68,7 +68,7 @@ static app_config_snapshot_blob_t s_config_snapshot;
  *       fully described inside config without the hard-coded 8N1 assumption
  *
  *   v7 (APP_CONFIG_VERSION = 7):
- *     + appends web 登录凭据(web_username/web_pass_salt/web_pass_hash)到结构体末尾;
+ *     + appends web 登录凭据(auth_username/auth_pass_salt/auth_pass_hash)到结构体末尾;
  *       全部为 1 字节对齐成员,因此 v6 blob 是 v7 的字节前缀——迁移时读入前缀、
  *       保留 set_defaults 生成的默认凭据即可
  *
@@ -419,10 +419,10 @@ void app_config_set_defaults(app_config_t *config)
     app_copy_string(config->mqtt_host, sizeof(config->mqtt_host), "demo.thingsboard.io");
     /* Web 登录凭据:每台设备随机盐 + 出厂默认用户名/口令(可按部署批次经
      * Kconfig 配置)的哈希,明文口令不落在 NVS 或固件编译产物之外 */
-    app_copy_string(config->web_username, sizeof(config->web_username), CONFIG_WEB_DEFAULT_USERNAME);
-    esp_fill_random(config->web_pass_salt, sizeof(config->web_pass_salt));
-    app_web_hash_password(config->web_pass_salt, sizeof(config->web_pass_salt),
-                          CONFIG_WEB_DEFAULT_PASSWORD, config->web_pass_hash);
+    app_copy_string(config->auth_username, sizeof(config->auth_username), CONFIG_WEB_DEFAULT_USERNAME);
+    esp_fill_random(config->auth_pass_salt, sizeof(config->auth_pass_salt));
+    app_auth_hash_password(config->auth_pass_salt, sizeof(config->auth_pass_salt),
+                          CONFIG_WEB_DEFAULT_PASSWORD, config->auth_pass_hash);
 }
 
 bool app_config_scrub_legacy_ap(app_config_t *config)

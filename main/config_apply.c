@@ -524,10 +524,10 @@ static const cfg_field_t s_fields[] = {
      .size = CFG_LEN(bt_device_name),
      .domain = CFG_DOMAIN_BT, .effect = CFG_EFFECT_REBOOT, .empty_keeps = true},
 
-    /* ---------- Web 管理员账号:口令走专用接口(盐+哈希),此处仅登记用户名(B6) ---------- */
-    {.field = "web_username", .type = CFG_T_STR, .offset = CFG_OFF(web_username),
-     .size = CFG_LEN(web_username),
-     .domain = CFG_DOMAIN_WEB_AUTH, .effect = CFG_EFFECT_NONE, .empty_keeps = true},
+    /* ---------- 本地管理员账号（BLE 认证）:口令走专用接口(盐+哈希),此处仅登记用户名(B6) ---------- */
+    {.field = "web_username", .type = CFG_T_STR, .offset = CFG_OFF(auth_username),
+     .size = CFG_LEN(auth_username),
+     .domain = CFG_DOMAIN_AUTH, .effect = CFG_EFFECT_NONE, .empty_keeps = true},
 
     /* ---------- 数据面三边路由(1.3-07):立即生效 ---------- */
     {.field = "data_route_uart1", .type = CFG_T_U32, .offset = CFG_OFF(data_route_uart1),
@@ -667,7 +667,7 @@ bool config_apply_domain_wired(cfg_domain_t domain)
     case CFG_DOMAIN_BT: /* 蓝牙为重启生效:仅落盘,由调用方按 effect 重启 */
     case CFG_DOMAIN_MQTT:
     case CFG_DOMAIN_NET: /* B3:网络为重启生效,仅落盘 */
-    case CFG_DOMAIN_WEB_AUTH: /* B6:仅用户名走字段表(口令是盐+SHA256 的专用接口) */
+    case CFG_DOMAIN_AUTH: /* B6:仅用户名走字段表(口令是盐+SHA256 的专用接口) */
     case CFG_DOMAIN_DATAPIPE: /* 1.3-07:数据面路由,立即生效 */
         return true;
     default:
@@ -700,7 +700,7 @@ esp_err_t config_apply_domain_apply(cfg_domain_t domain)
          * 是否提示/触发重启由调用方按 effect_out 决定(HTTP handler 返回 restart_required) */
         return ESP_OK;
 
-    case CFG_DOMAIN_WEB_AUTH:
+    case CFG_DOMAIN_AUTH:
         /* B6:用户名即时生效(effect=NONE),无需运行时动作;
          * 口令是"盐+SHA256"派生值、不是普通字段,保留专用接口 PUT /api/v1/config/web */
         return ESP_OK;

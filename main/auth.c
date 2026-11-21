@@ -20,15 +20,15 @@ bool app_auth_check_credentials(const char *username, const char *password)
         return false;
     }
     app_config_lock();
-    app_copy_string(stored_username, sizeof(stored_username), s_config.web_username);
-    memcpy(salt, s_config.web_pass_salt, sizeof(salt));
-    memcpy(stored, s_config.web_pass_hash, sizeof(stored));
+    app_copy_string(stored_username, sizeof(stored_username), s_config.auth_username);
+    memcpy(salt, s_config.auth_pass_salt, sizeof(salt));
+    memcpy(stored, s_config.auth_pass_hash, sizeof(stored));
     app_config_unlock();
 
     if (stored_username[0] == '\0' || strcmp(username, stored_username) != 0) {
         return false;
     }
-    app_web_hash_password(salt, sizeof(salt), password, calc);
+    app_auth_hash_password(salt, sizeof(salt), password, calc);
     for (i = 0; i < sizeof(calc); i++) {
         diff |= (uint8_t)(calc[i] ^ stored[i]);
     }
