@@ -130,12 +130,7 @@ tools/idfbuild.sh cache-guard  # 检查/清理生成器不匹配的 build 缓存
 tools/idfbuild.sh version      # 显示使用的 ESP-IDF 版本
 ```
 
-当前根 `sdkconfig` 使用 NimBLE。仓库保留独立 `build-bluedroid` profile 作为构建回退路径；它不是默认产品运行配置。使用回退 profile：
-
-```bash
-IDF_BUILD_DIR=build-bluedroid tools/idfbuild.sh build
-IDF_BUILD_DIR=build-bluedroid tools/idfbuild.sh flash -p /dev/ttyUSB0
-```
+当前根 `sdkconfig` 使用 NimBLE，且它是唯一的构建目标。原 Bluedroid 回退 profile 已于 2026-11-21 退役（`sdkconfig.bluedroid` 与对应实现已删除），不再作为受支持的构建路径。
 
 等价原生命令（需自行激活 ESP-IDF 环境并确保 Ninja 在 PATH 中）：
 
