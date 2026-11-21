@@ -19,7 +19,7 @@ $(BIN): $(SRCS) ../../main/cmd_v1_id.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ $(SRCS) $(LDLIBS)
 
 # 第三方 cJSON 用自己的告警口径：不套项目的 -Werror（否则第三方风格差异会挡测试）
-cjson.o: $(CJSON_DIR)/cJSON.c
+cjson.o: $(CJSON_DIR)/cJSON.c $(CJSON_DIR)/cJSON.h
 	$(CC) -std=c11 -O2 -w -I$(CJSON_DIR) -c -o $@ $(CJSON_DIR)/cJSON.c
 
 $(JSON_BIN): $(JSON_SRCS) ../../main/cmd_v1_id.h ../../main/cmd_v1_id_json.h $(CJSON_DIR)/cJSON.h
