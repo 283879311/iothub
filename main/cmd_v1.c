@@ -176,45 +176,5 @@ bool app_cmd_v1_execute(const app_cmd_context_t *ctx, const char *cmd,
     return ok;
 }
 
-bool app_cmd_v1_id_from_root(const cJSON *root, app_cmd_v1_id_t *out)
-{
-    const cJSON *item;
-
-    if (out == NULL) {
-        return false;
-    }
-    app_cmd_v1_id_reset(out);
-    if (root == NULL) {
-        return false;
-    }
-    item = cJSON_GetObjectItemCaseSensitive(root, "id");
-    if (cJSON_IsString(item) && item->valuestring != NULL) {
-        return app_cmd_v1_id_set_string(out, item->valuestring);
-    }
-    if (cJSON_IsNumber(item)) {
-        return app_cmd_v1_id_set_number(out, item->valuedouble);
-    }
-    return false;
-}
-
-bool app_cmd_v1_id_add(cJSON *root, const app_cmd_v1_id_t *id)
-{
-    cJSON *added;
-
-    if (root == NULL || id == NULL) {
-        return false;
-    }
-    switch (id->kind) {
-    case APP_CMD_V1_ID_STRING:
-        added = cJSON_AddStringToObject(root, "id", id->text);
-        break;
-    case APP_CMD_V1_ID_NUMBER:
-        added = cJSON_AddNumberToObject(root, "id", id->number);
-        break;
-    case APP_CMD_V1_ID_NONE:
-        return true;
-    default:
-        return false;
-    }
-    return added != NULL;
-}
+/* v1 请求 id 的解析/写出实现见 cmd_v1_id_json.c（依赖 cJSON，单独成文件便于
+ * host 测试）。声明经 cmd_v1.h 转出，调用方（ble_cmd.c / mqtt.c）不需要改。 */

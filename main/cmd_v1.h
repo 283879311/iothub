@@ -6,6 +6,7 @@
 #include "cmd.h"
 #include "cmd_context.h"
 #include "cmd_v1_id.h"
+#include "cmd_v1_id_json.h"
 
 /* 2026-11-05:v0 协议已彻底删除,不再有 APP_CMD_V0_COMPAT 回退开关。 */
 
@@ -30,6 +31,4 @@ const char *app_cmd_v1_internal_method(const char *cmd);
  * 本函数不做 \u0000 扫描;调用方必须先对原始 payload 扫描。 */
 bool app_cmd_v1_id_from_root(const cJSON *root, app_cmd_v1_id_t *out);
 
-/* 把 id 写入响应对象:STRING/NUMBER 按原类型;NONE 为成功的 no-op。
- * id 为 NULL、未知 kind 或 cJSON 添加失败返回 false。 */
-bool app_cmd_v1_id_add(cJSON *root, const app_cmd_v1_id_t *id);
+/* 写出：见 cmd_v1_id_json.h（依赖 cJSON，单独成文件便于 host 测试）。 */
