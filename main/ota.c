@@ -21,8 +21,8 @@
 static const char *TAG = "ota";
 
 #if CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE
-/* 回滚确认的健康窗口:纯 STA 模式 90s 连不上会自动降级为 AP 并持久化,
- * 所以正常固件在窗口内必然拿到 sta_ip 或 ap_up;窗口耗尽说明 WiFi 栈整体失效,回滚。 */
+/* 回滚确认的健康窗口:窗口内等待 STA 取得 IP 或 MQTT 建立连接(见下方健康判定);
+ * 当前固件只运行 STA 模式,不提供 SoftAP/AP 回退。窗口耗尽说明网络栈整体失效,回滚。 */
 #define APP_OTA_CONFIRM_MIN_DELAY_MS 15000
 #define APP_OTA_CONFIRM_WINDOW_MS 120000
 #define APP_OTA_CONFIRM_POLL_MS 1000
@@ -112,7 +112,7 @@ static void app_ota_confirm_task(void *arg)
         vTaskDelay(pdMS_TO_TICKS(APP_OTA_CONFIRM_POLL_MS));
         waited_ms += APP_OTA_CONFIRM_POLL_MS;
     }
-    ESP_LOGE(TAG, "OTA image unhealthy: no sta_ip/ap_up/mqtt within %us, rolling back",
+    ESP_LOGE(TAG, "OTA image unhealthy: no sta_ip/mqtt within %us, rolling back",
              (unsigned)(APP_OTA_CONFIRM_WINDOW_MS / 1000));
     esp_ota_mark_app_invalid_rollback_and_reboot();
 }
