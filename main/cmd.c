@@ -2455,7 +2455,7 @@ esp_err_t app_cmd_execute_method(const app_cmd_context_t *ctx, const char *metho
                 err = "invalid_old_password";
             } else if (!cJSON_IsString(new_item) || new_item->valuestring == NULL ||
                        (strlen(new_item->valuestring) < 8 &&
-                        strcmp(new_item->valuestring, CONFIG_WEB_DEFAULT_PASSWORD) != 0)) {
+                        strcmp(new_item->valuestring, CONFIG_AUTH_DEFAULT_PASSWORD) != 0)) {
                 err = "password_too_short";
             } else if (new_user != NULL && new_user[0] != '\0' &&
                        strchr(new_user, ':') != NULL) {

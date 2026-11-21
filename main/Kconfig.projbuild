@@ -1,23 +1,24 @@
 menu "Iothub Configuration"
 
-    config WEB_DEFAULT_USERNAME
-        string "Factory default web admin username"
+    config AUTH_DEFAULT_USERNAME
+        string "Factory default local admin username"
         default "admin"
         help
-            Factory default username for the web config page.
-            Only takes effect when NVS has no credentials yet or after a
-            factory reset; it can be changed anytime from the config page.
+            Factory default username for BLE local administrator
+            authentication (auth.login). Only takes effect when NVS has no
+            credentials yet or after a factory reset; it can be changed by an
+            authenticated local client afterwards.
 
-    config WEB_DEFAULT_PASSWORD
-        string "Factory default web admin password"
+    config AUTH_DEFAULT_PASSWORD
+        string "Factory default local admin password"
         default "123456"
         help
-            Factory default password for the web config page (paired with the
-            default username above). Only takes effect when NVS has no
-            credentials yet or after a factory reset; the password can be
-            changed anytime from the config page and is stored as a salted
-            SHA-256 hash (never in plaintext).
-            Recommend a different value per deployment batch.
+            Factory default password for BLE local administrator
+            authentication (paired with the default username above). Only
+            takes effect when NVS has no credentials yet or after a factory
+            reset; the password can be changed by an authenticated local
+            client and is stored as a salted SHA-256 hash (never in
+            plaintext). Recommend a different value per deployment batch.
 
     menu "GPIO pin assignment"
         config RELAY_GPIO
