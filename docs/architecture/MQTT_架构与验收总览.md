@@ -43,6 +43,20 @@
 
 上述未验收边界不得标记 PASS；测试范围和结论以对应报告为准。
 
+### 4.1 连接与主题命名空间（以 `main/mqtt.c` 为准）
+
+| 项 | 实现事实 | 位置 |
+| --- | --- | --- |
+| client_id | `iothub-<STA MAC 12 位大写十六进制>` | `main/mqtt.c:369` |
+| keepalive | **45 s**（由 15 s 上调，减少 PINGREQ 与无响应断连） | `main/mqtt.c:1756` |
+| 遥测上行 | `iothub/telemetry` | `main/mqtt.c:276` |
+| RPC | `iothub/rpc`（订阅同一自定义 topic） | `main/mqtt.c:284`、`:1009` |
+| 共享属性 | `iothub/attributes`；响应 `iothub/attributes/response/+` | `main/mqtt.c:292`、`:300` |
+| 数据面上行 / 下行 | `iothub/{mac}/data/up` / `iothub/{mac}/data/down` | `main/mqtt.c:393`、`:396` |
+
+- `{mac}` 与 client_id 使用同一 STA MAC；主题按设备隔离，不等同于租户隔离。
+- 本节记录的是**实现事实**；对外字段、错误码与权限仍以 `contract/v1/` 为准。两者不一致时先登记差异，不在本文单方修改。
+
 ## 5. 仍需保留的风险与证据
 
 - **F2 stop 位来源：UNKNOWN**。现有 R-NET 证据未闭合 stop 位完整来源链；不能推断为已定位缺陷或当前必然复现。后续取证需单独授权。

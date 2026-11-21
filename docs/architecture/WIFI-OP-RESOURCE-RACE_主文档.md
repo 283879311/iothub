@@ -49,6 +49,17 @@ owner 状态：
 
 修改上述任一路径、STA 驱动调用点、owner 状态迁移、锁序或异步任务生命周期时，必须重新检查所有调用点的 owner 覆盖、失败出口和释放后的剩余栈路径。旧调用图使用固件 1.3-2ef2a38 行号，已不作为当前代码导航。
 
+### 3.1 代码定位（以当前源码为准）
+
+| 机制 | 符号与位置 |
+| --- | --- |
+| 配置锁（C） | `app_config_lock()` / `app_config_unlock()` — `main/config.c:211` |
+| Wi-Fi 运行态锁（W） | `app_wifi_runtime_lock()` / `app_wifi_runtime_unlock()` — `main/config.c:225` |
+| profile 锁（P） | `app_wifi_profiles_lock()` / `app_wifi_profiles_unlock()` — `main/config.c:239` |
+| owner 仲裁与状态迁移 | `main/wifi_op_owner.c`（193 行） |
+
+行号只用于快速定位；代码变化后以符号名为准，不把行号当契约。
+
 ## 4. 当前实现与风险结论
 
 - B1–B5/C1–C3 的核心 fencing 规则已进入实现：释放即交接、CLEANUP_FAILED 粘性保护、AUTO 不得抢占 cleanup、worker 使用捕获的 caller/op_id/generation。
