@@ -918,7 +918,7 @@ static void app_mqtt_publish_command_response(const char *topic, cJSON *resp)
     cJSON_free(body);
 }
 
-static cJSON *app_mqtt_v1_error(const char *id, const char *code, const char *message)
+static cJSON *app_mqtt_v1_error(const app_cmd_v1_id_t *id, const char *code, const char *message)
 {
     cJSON *root = cJSON_CreateObject();
     cJSON *error;
@@ -926,7 +926,9 @@ static cJSON *app_mqtt_v1_error(const char *id, const char *code, const char *me
     if (root == NULL) {
         return NULL;
     }
-    cJSON_AddStringToObject(root, "id", id != NULL ? id : "");
+    if (id != NULL && !app_cmd_v1_id_add(root, id)) {
+        ESP_LOGW(TAG, "v1 error response: id add failed");
+    }
     cJSON_AddBoolToObject(root, "ok", false);
     error = cJSON_AddObjectToObject(root, "error");
     if (error != NULL) {
@@ -936,7 +938,7 @@ static cJSON *app_mqtt_v1_error(const char *id, const char *code, const char *me
     return root;
 }
 
-static cJSON *app_mqtt_v1_ok(const char *id, cJSON *result)
+static cJSON *app_mqtt_v1_ok(const app_cmd_v1_id_t *id, cJSON *result)
 {
     cJSON *root = cJSON_CreateObject();
 
@@ -944,7 +946,9 @@ static cJSON *app_mqtt_v1_ok(const char *id, cJSON *result)
         cJSON_Delete(result);
         return NULL;
     }
-    cJSON_AddStringToObject(root, "id", id != NULL ? id : "");
+    if (id != NULL && !app_cmd_v1_id_add(root, id)) {
+        ESP_LOGW(TAG, "v1 response: id add failed");
+    }
     cJSON_AddBoolToObject(root, "ok", true);
     if (result != NULL) {
         cJSON_AddItemToObject(root, "data", result);
@@ -952,37 +956,18 @@ static cJSON *app_mqtt_v1_ok(const char *id, cJSON *result)
     return root;
 }
 
-static const char *app_mqtt_v1_id_string(const cJSON *id_item, char *buf, size_t buf_size)
+/* MQTT v1 adapter: shared registry; transport keeps only framing/auth.
+ * id 已在校验/限频/版本判断中统一使用,这里不再从 root 重新提取。 */
+static cJSON *app_mqtt_execute_v1(const cJSON *root, const app_cmd_v1_id_t *id)
 {
-    if (cJSON_IsString(id_item) && id_item->valuestring != NULL) {
-        snprintf(buf, buf_size, "%s", id_item->valuestring);
-        return buf;
-    }
-    if (cJSON_IsNumber(id_item)) {
-        snprintf(buf, buf_size, "%lld", (long long)id_item->valuedouble);
-        return buf;
-    }
-    buf[0] = '\0';
-    return buf;
-}
-
-/* MQTT v1 adapter: shared registry; transport keeps only framing/auth. */
-static cJSON *app_mqtt_execute_v1(const cJSON *root)
-{
-    const cJSON *id_item = cJSON_GetObjectItemCaseSensitive(root, "id");
     const cJSON *cmd_item = cJSON_GetObjectItemCaseSensitive(root, "cmd");
     const cJSON *args_item = cJSON_GetObjectItemCaseSensitive(root, "args");
-    char id_buf[65];
-    const char *id = app_mqtt_v1_id_string(id_item, id_buf, sizeof(id_buf));
     const char *cmd;
     app_cmd_context_t ctx = app_cmd_ctx_entry(APP_CMD_SOURCE_MQTT);
     app_cmd_result_t out = {0};
     cJSON *result = NULL;
     const char *err = NULL;
 
-    if (id_item == NULL || (!cJSON_IsString(id_item) && !cJSON_IsNumber(id_item))) {
-        return app_mqtt_v1_error("", "invalid_argument", "id required");
-    }
     if (!cJSON_IsString(cmd_item) || cmd_item->valuestring == NULL ||
         !cJSON_IsObject(args_item)) {
         return app_mqtt_v1_error(id, "invalid_argument", "cmd/args required");
@@ -1011,22 +996,21 @@ static void app_mqtt_apply_command(const char *topic, const char *payload, int d
     bool is_custom_rpc = (topic != NULL && strcmp(topic, custom_rpc_topic) == 0);
     bool wants_response = is_rpc || is_custom_rpc;
     char response_topic[128];
-    cJSON *root = cJSON_ParseWithLength(payload, data_len < 0 ? (payload ? strlen(payload) : 0) : (size_t)data_len);
+    size_t payload_len = (data_len < 0) ? (payload != NULL ? strlen(payload) : 0)
+                                        : (size_t)data_len;
+    cJSON *root = cJSON_ParseWithLength(payload, payload_len);
     const cJSON *version_item = NULL;
     bool v1_envelope = false;
+    app_cmd_v1_id_t id = {0};
 
     if (root == NULL) {
-        int preview_len;
-        if (data_len < 0) {
-            preview_len = payload ? (int)strlen(payload) : 0;
-        } else {
-            preview_len = data_len;
-        }
+        int preview_len = (int)payload_len;
+
         if (preview_len > 96) {
             preview_len = 96;
         }
-        ESP_LOGW(TAG, "JSON parse failed, len=%d payload_preview='%.*s'",
-                 data_len, preview_len, payload ? payload : "");
+        ESP_LOGW(TAG, "JSON parse failed, len=%u payload_preview='%.*s'",
+                 (unsigned)payload_len, preview_len, payload ? payload : "");
         return;
     }
 
@@ -1066,6 +1050,31 @@ static void app_mqtt_apply_command(const char *topic, const char *payload, int d
         snprintf(response_topic, sizeof(response_topic), "%s/resp", custom_rpc_topic);
     }
 
+    /* PROTO-ID-01:cJSON 已解析成功且确认为 v1 envelope;先看原始字节再碰 id。
+     * 命中 \u0000 或 id 非法时 invalid_argument 不占 200ms 配额
+     * (s_last_cmd_ms 只在通过本段后更新)。 */
+    if (app_cmd_v1_raw_has_nul_escape(payload, payload_len)) {
+        cJSON *v1resp = app_mqtt_v1_error(NULL, "invalid_argument",
+                                          "request contains U+0000");
+
+        if (wants_response && v1resp != NULL) {
+            app_mqtt_publish_command_response(response_topic, v1resp);
+        }
+        cJSON_Delete(v1resp);
+        cJSON_Delete(root);
+        return;
+    }
+    if (!app_cmd_v1_id_from_root(root, &id)) {
+        cJSON *v1resp = app_mqtt_v1_error(NULL, "invalid_argument", "id required");
+
+        if (wants_response && v1resp != NULL) {
+            app_mqtt_publish_command_response(response_topic, v1resp);
+        }
+        cJSON_Delete(v1resp);
+        cJSON_Delete(root);
+        return;
+    }
+
     /* 限频:5 次/秒(2026-10-15 用户决策:TB 界面连点会命中 1 次/秒,放宽仍可挡洪水)
      * —— 只对 RPC 主题生效;attributes 响应等其它入站消息不占用也不触发限频。 */
     if (is_rpc || is_custom_rpc) {
@@ -1075,13 +1084,7 @@ static void app_mqtt_apply_command(const char *topic, const char *payload, int d
             cJSON *resp;
 
             ESP_LOGW(TAG, "cloud cmd rate limited (last=%lldms)", (long long)s_last_cmd_ms);
-            {
-                char id_buf[65];
-                const cJSON *id_item = cJSON_GetObjectItemCaseSensitive(root, "id");
-
-                resp = app_mqtt_v1_error(app_mqtt_v1_id_string(id_item, id_buf, sizeof(id_buf)),
-                                         "rate_limited", "rate_limited");
-            }
+            resp = app_mqtt_v1_error(&id, "rate_limited", "rate_limited");
             if (wants_response && resp != NULL) {
                 app_mqtt_publish_command_response(response_topic, resp);
             }
@@ -1096,9 +1099,9 @@ static void app_mqtt_apply_command(const char *topic, const char *payload, int d
         cJSON *v1resp;
 
         if (strcmp(version_item->valuestring, "1.0") != 0) {
-            v1resp = app_mqtt_v1_error("", "unsupported_version", version_item->valuestring);
+            v1resp = app_mqtt_v1_error(&id, "unsupported_version", version_item->valuestring);
         } else {
-            v1resp = app_mqtt_execute_v1(root);
+            v1resp = app_mqtt_execute_v1(root, &id);
         }
         if (wants_response && v1resp != NULL) {
             app_mqtt_publish_command_response(response_topic, v1resp);

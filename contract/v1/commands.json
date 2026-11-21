@@ -3,9 +3,10 @@
   "firmware_baseline": "1.3-9e1d6c5 / build_sha 8cc566bd0 (2026-11-10)",
   "$comment": "命令表（单一事实源候选）。args 命名冻结：ssid/password/operation_id/idempotency_key。改任何既有字段名=破坏性变更。",
   "envelope": {
-    "request": { "id": "string|number（回显必须一致）", "version": "1.0", "cmd": "string", "args": "object" },
-    "success": { "id": "echo", "ok": true, "data": "object" },
-    "error": { "id": "echo", "ok": false, "error": { "code": "string", "message": "string" } }
+    "request": { "id": "必填。string（非空、1–64 字节、严格 UTF-8）或有限 number（NaN/Infinity 非法）；回显必须一致", "version": "1.0", "cmd": "string", "args": "object" },
+    "success": { "id": "echo：与请求同类型同值；string 原样，number 为 JSON number（按数值语义，不回显 null、不截断小数）", "ok": true, "data": "object" },
+    "error": { "id": "echo；id 缺失、类型不支持、空串、超长、非法 UTF-8 或非法 number 时，响应不含 id 字段", "ok": false, "error": { "code": "string", "message": "string" } },
+    "payload_rule": "v1 请求：cJSON 解析成功后，原始 JSON 文本中任意字符串（含对象键与值）出现有效 \\u0000 转义时，返回 invalid_argument，响应省略 id"
   },
   "commands": {
     "device.info": {

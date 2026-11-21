@@ -27,6 +27,7 @@ artifacts/scan_v2/r41_report.json(41 例的请求形态与设备实响应)重建
 
 用例覆盖(与 r41_report.json 对齐):
   T01-T08 envelope 校验(v0 壳/版本/缺字段/未知命令/非 JSON 静默/限流)
+  T09-T24 id 语义与 PROTO-ID-01 规则(类型/长度/UTF-8/\\u0000/限频配额)
   P01-P12 命令面正路径(只读为主;P06 config.set 仅 gpio/data_route 域)
   F01-F10 BLE-only 命令经 MQTT 一律 forbidden
   N01-N07 网络事务(N03/N07 需注入时序,默认 SKIP;N06 真实换网,
@@ -133,6 +134,11 @@ def err_is(resp, code):
     return code_of(resp) == code
 
 
+def no_id(resp) -> bool:
+    """PROTO-ID-01:id 缺失/非法时响应必须不带 id 字段(不是 id:"")。"""
+    return resp is not None and "id" not in resp
+
+
 def build_cases(h: MqttV1, opts):
     """用例表:与 artifacts/scan_v2/r41_report.json 的判据一一对应。"""
     cases = []
@@ -148,18 +154,69 @@ def build_cases(h: MqttV1, opts):
              h.send({"id": 4242, "cmd": "device.info", "args": {}})))
     case("T02", "version=2.0→unsupported_version",
          lambda: (lambda r: err_is(r[0], "unsupported_version"))(h.send({"id": "t02", "version": "2.0", "cmd": "device.info", "args": {}})))
-    case("T03", "缺id→invalid_argument",
-         lambda: (lambda r: err_is(r[0], "invalid_argument"))(h.send({"version": "1.0", "cmd": "device.info", "args": {}})))
+    case("T03", "缺id→invalid_argument,响应无id",
+         lambda: (lambda r: err_is(r[0], "invalid_argument") and no_id(r[0]))(h.send({"version": "1.0", "cmd": "device.info", "args": {}})))
     case("T04", "缺cmd→invalid_argument",
          lambda: (lambda r: err_is(r[0], "invalid_argument"))(h.send({"id": "t04", "version": "1.0", "args": {}})))
     case("T05", "args非对象→invalid_argument",
          lambda: (lambda r: err_is(r[0], "invalid_argument"))(h.send({"id": "t05", "version": "1.0", "cmd": "device.info", "args": "x"})))
-    case("T06", "未知命令→unknown_command",
-         lambda: (lambda r: err_is(r[0], "unknown_command"))(h.send({"id": "t06", "version": "1.0", "cmd": "no.such.cmd", "args": {}})))
+    case("T06", "未知命令→unknown_command(错误响应回显原id)",
+         lambda: (lambda r: err_is(r[0], "unknown_command") and r[0].get("id") == "t06")(h.send({"id": "t06", "version": "1.0", "cmd": "no.such.cmd", "args": {}})))
     case("T07", "非JSON静默丢弃(无响应)",
          lambda: (lambda r: r[0] is None)(h.send(b"\xde\xad not json", wait=3.0)))
     case("T08", "200ms内连发第二发→rate_limited",
          lambda: _rate_limit(h))
+
+    # ---- T09-T24:id 语义与 PROTO-ID-01 验收 ----
+    case("T09", "数字id 12.5→回显 number 12.5(不截断为12)",
+         lambda: (lambda r: ok(r[0]) and isinstance(r[0].get("id"), float) and r[0].get("id") == 12.5)(
+             h.send({"id": 12.5, "version": "1.0", "cmd": "device.info", "args": {}})))
+    case("T10", "空串id→invalid_argument,响应无id",
+         lambda: (lambda r: err_is(r[0], "invalid_argument") and no_id(r[0]))(
+             h.send({"id": "", "version": "1.0", "cmd": "device.info", "args": {}})))
+    case("T11", "64字节id→ok且原样回显",
+         lambda: (lambda r: ok(r[0]) and r[0].get("id") == "x" * 64)(
+             h.send({"id": "x" * 64, "version": "1.0", "cmd": "device.info", "args": {}})))
+    case("T12", "65字节id→invalid_argument,响应无id",
+         lambda: (lambda r: err_is(r[0], "invalid_argument") and no_id(r[0]))(
+             h.send({"id": "x" * 65, "version": "1.0", "cmd": "device.info", "args": {}})))
+    case("T13", "字面\\\\u0000(双重转义)→不误拒",
+         lambda: (lambda r: ok(r[0]) and r[0].get("id") == "\\u0000")(
+             h.send({"id": "\\u0000", "version": "1.0", "cmd": "device.info", "args": {}})))
+    case("T14", "id 含真实\\u0000→invalid_argument,响应无id",
+         lambda: (lambda r: err_is(r[0], "invalid_argument") and no_id(r[0]))(
+             h.send({"id": "a\u0000b", "version": "1.0", "cmd": "device.info", "args": {}})))
+    case("T15", "args 值含\\u0000→invalid_argument,响应无id",
+         lambda: (lambda r: err_is(r[0], "invalid_argument") and no_id(r[0]))(
+             h.send({"id": "t15", "version": "1.0", "cmd": "device.info",
+                     "args": {"k": "a\u0000b"}})))
+    case("T16", "对象键含\\u0000→invalid_argument,响应无id",
+         lambda: (lambda r: err_is(r[0], "invalid_argument") and no_id(r[0]))(
+             h.send({"id": "t16", "version": "1.0", "cmd": "device.info",
+                     "args": {"a\u0000b": 1}})))
+    case("T17", "id:null→invalid_argument,响应无id",
+         lambda: (lambda r: err_is(r[0], "invalid_argument") and no_id(r[0]))(
+             h.send({"id": None, "version": "1.0", "cmd": "device.info", "args": {}})))
+    case("T18", "id:true→invalid_argument,响应无id",
+         lambda: (lambda r: err_is(r[0], "invalid_argument") and no_id(r[0]))(
+             h.send({"id": True, "version": "1.0", "cmd": "device.info", "args": {}})))
+    case("T19", "id:[]→invalid_argument,响应无id",
+         lambda: (lambda r: err_is(r[0], "invalid_argument") and no_id(r[0]))(
+             h.send({"id": [], "version": "1.0", "cmd": "device.info", "args": {}})))
+    case("T20", "id:{}→invalid_argument,响应无id",
+         lambda: (lambda r: err_is(r[0], "invalid_argument") and no_id(r[0]))(
+             h.send({"id": {}, "version": "1.0", "cmd": "device.info", "args": {}})))
+    case("T21", "非法UTF-8 id→invalid_argument,响应无id",
+         lambda: (lambda r: err_is(r[0], "invalid_argument") and no_id(r[0]))(
+             h.send(b'{"id":"\xff","version":"1.0","cmd":"device.info","args":{}}')))
+    case("T22", "id:1e999→invalid_argument,响应无id",
+         lambda: (lambda r: err_is(r[0], "invalid_argument") and no_id(r[0]))(
+             h.send(b'{"id":1e999,"version":"1.0","cmd":"device.info","args":{}}')))
+    case("T23", "id 2^53+1→回显 double 语义 9007199254740992",
+         lambda: (lambda r: ok(r[0]) and r[0].get("id") == 9007199254740992)(
+             h.send({"id": 9007199254740993, "version": "1.0", "cmd": "device.info", "args": {}})))
+    case("T24", "65字节id不占配额:紧随合法id不被限频",
+         lambda: _id_quota(h))
 
     # ---- P 组:命令面正路径(MQTT 走 broker 认证,无 payload token) ----
     case("P01", "device.info→ok+data",
@@ -183,8 +240,8 @@ def build_cases(h: MqttV1, opts):
     case("P06", "config.set(gpio/data_route域)→ok",
          lambda: (lambda r: ok(r[0]))(h.send({"id": "P06", "version": "1.0", "cmd": "config.set",
                                               "args": {"patch": {"led_power_policy": 1}}})))
-    case("P12", "数字id回包为字符串'777'",
-         lambda: (lambda r: ok(r[0]) and r[0].get("id") == "777")(
+    case("P12", "数字id 777→回显 number 777",
+         lambda: (lambda r: ok(r[0]) and isinstance(r[0].get("id"), int) and r[0].get("id") == 777)(
              h.send({"id": 777, "version": "1.0", "cmd": "device.info", "args": {}})))
     case("P11", "自定义主题 iothub/rpc(TB backend 预期无响应)",
          lambda: (lambda r: r[0] is None and not ok(r[0]))(h.send({"id": "P11", "version": "1.0", "cmd": "device.info", "args": {}}, custom=True, wait=3.0)))
@@ -242,6 +299,16 @@ def _rate_limit(h: MqttV1):
     time.sleep(0.02)
     r2, _ = h.send({"id": "t08b", "version": "1.0", "cmd": "device.info", "args": {}}, wait=3.0)
     return err_is(r2, "rate_limited")
+
+
+def _id_quota(h: MqttV1):
+    """A12:无效 id 不写 s_last_cmd_ms;紧随其后的合法请求不得被限频。
+    主循环已在本用例前静置 0.25s,两次发送之间不额外等待。"""
+    r1, _ = h.send({"id": "x" * 65, "version": "1.0", "cmd": "device.info", "args": {}})
+    if not (err_is(r1, "invalid_argument") and no_id(r1)):
+        return False
+    r2, _ = h.send({"id": "quota-ok", "version": "1.0", "cmd": "device.info", "args": {}})
+    return ok(r2) and not err_is(r2, "rate_limited")
 
 
 def _n02(h: MqttV1, opts):
@@ -323,7 +390,7 @@ def main() -> int:
     if opts.selftest:
         # 离线:每例可构造、id/name 唯一、分类函数对记录样本判对
         ids = [c["id"] for c in cases]
-        assert len(ids) == len(set(ids)) and len(ids) == 41, f"case 数 {len(ids)}"
+        assert len(ids) == len(set(ids)) and len(ids) == 57, f"case 数 {len(ids)}"
         samples = [
             ({"id": "t01", "success": False, "error": "unsupported_version"}, "unsupported_version"),
             ({"id": "t08b", "ok": False, "error": {"code": "rate_limited", "message": "rate_limited"}}, "rate_limited"),

@@ -316,7 +316,7 @@ static bool app_ble_cmd_v1_allowed(const char *cmd)
     return allowed;
 }
 
-static void app_ble_cmd_wrap_v1(cJSON **resp, const char *id, bool has_id)
+static void app_ble_cmd_wrap_v1(cJSON **resp, const app_cmd_v1_id_t *id)
 {
     cJSON *r = resp != NULL ? *resp : NULL;
     cJSON *outer;
@@ -347,8 +347,8 @@ static void app_ble_cmd_wrap_v1(cJSON **resp, const char *id, bool has_id)
             *resp = NULL;
             return;
         }
-        if (has_id) {
-            cJSON_AddStringToObject(err_obj, "id", id != NULL ? id : "");
+        if (id != NULL && !app_cmd_v1_id_add(err_obj, id)) {
+            ESP_LOGW(TAG, "v1 error response: id add failed");
         }
         cJSON_AddBoolToObject(err_obj, "ok", false);
         cJSON_AddStringToObject(error, "code", app_cmd_v1_error_code(v0));
@@ -365,8 +365,8 @@ static void app_ble_cmd_wrap_v1(cJSON **resp, const char *id, bool has_id)
         *resp = NULL;
         return;
     }
-    if (has_id) {
-        cJSON_AddStringToObject(outer, "id", id != NULL ? id : "");
+    if (id != NULL && !app_cmd_v1_id_add(outer, id)) {
+        ESP_LOGW(TAG, "v1 response: id add failed");
     }
     cJSON_AddBoolToObject(outer, "ok", true);
     cJSON_AddItemToObject(outer, "data", r);
@@ -383,8 +383,7 @@ static void app_ble_cmd_handle_line(const char *line, size_t len)
     const cJSON *args_item = NULL;
     bool v1_envelope = false;
     bool v1 = false;
-    bool v1_has_id = false;
-    char v1_id[65] = {0};
+    app_cmd_v1_id_t v1_id = {0};
     app_cmd_result_t out = {0};
     const char *err = NULL;
     bool reboot_after_response = false;
@@ -407,15 +406,6 @@ static void app_ble_cmd_handle_line(const char *line, size_t len)
     }
 
     id_item = cJSON_GetObjectItemCaseSensitive(frame, "id");
-    if (v1_envelope) {
-        if (cJSON_IsString(id_item) && id_item->valuestring != NULL) {
-            snprintf(v1_id, sizeof(v1_id), "%s", id_item->valuestring);
-            v1_has_id = true;
-        } else if (cJSON_IsNumber(id_item)) {
-            snprintf(v1_id, sizeof(v1_id), "%lld", (long long)id_item->valuedouble);
-            v1_has_id = true;
-        }
-    }
     /* v0 协议入口已彻底删除(2026-11-05):缺 version 一律拒绝。
      * 拒绝壳保留 v0 形状并回带数值 id(旧客户端可定位是哪个请求被拒);
      * 这条路径不进 v1 包装,直接发送。 */
@@ -442,7 +432,17 @@ static void app_ble_cmd_handle_line(const char *line, size_t len)
             }
             goto wrap;
         }
-        if (!v1_has_id) {
+        /* PROTO-ID-01:版本错误优先于 id 检查(与既有 BLE 行为一致);
+         * 扫描仍在使用 id 之前,且只看原始行字节。 */
+        if (app_cmd_v1_raw_has_nul_escape(line, len)) {
+            resp = cJSON_CreateObject();
+            if (resp != NULL) {
+                cJSON_AddBoolToObject(resp, "ok", false);
+                cJSON_AddStringToObject(resp, "error", "invalid_argument");
+            }
+            goto wrap;
+        }
+        if (!app_cmd_v1_id_from_root(frame, &v1_id)) {
             resp = cJSON_CreateObject();
             if (resp != NULL) {
                 cJSON_AddBoolToObject(resp, "ok", false);
@@ -466,7 +466,11 @@ static void app_ble_cmd_handle_line(const char *line, size_t len)
             goto wrap;
         }
 
-        ESP_LOGI(TAG, "rx v1 cmd=%s id=%s", cmd_item->valuestring, v1_id);
+        if (v1_id.kind == APP_CMD_V1_ID_STRING) {
+            ESP_LOGI(TAG, "rx v1 cmd=%s id=%s", cmd_item->valuestring, v1_id.text);
+        } else {
+            ESP_LOGI(TAG, "rx v1 cmd=%s id=%g", cmd_item->valuestring, v1_id.number);
+        }
     }
 
     /* 限频:5 次/秒(与 MQTT RPC 同决策,2026-10-15)。
@@ -569,7 +573,7 @@ static void app_ble_cmd_handle_line(const char *line, size_t len)
     reboot_after_response = out.reboot_after_response;
 
 wrap:
-    app_ble_cmd_wrap_v1(&resp, v1_id, v1_has_id);
+    app_ble_cmd_wrap_v1(&resp, &v1_id);
     app_ble_cmd_send(resp);
 
     if (reboot_after_response) {
