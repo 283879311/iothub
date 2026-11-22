@@ -132,4 +132,12 @@ typedef struct app_cmd_net_job_port {
 #ifdef APP_CMD_NET_JOB_TEST
 /* host 测试入口：按值复制 port；仅测试构建可见。 */
 esp_err_t app_cmd_net_job_init_with_port(const app_cmd_net_job_port_t *port);
+
+/* 测试 hook：仅 APP_CMD_NET_JOB_TEST 构建存在；point 为冻结设计中的
+ * trial_before_lock / netcheck_before_lock / stages_before_lock /
+ * clear_before_lock / cleanup_after_claim / cleanup_before_complete。 */
+typedef void (*app_cmd_net_job_test_hook_fn)(const char *point,
+                                             app_operation_t *op,
+                                             uint32_t expected_gen);
+void app_cmd_net_job_test_hook_set(app_cmd_net_job_test_hook_fn fn);
 #endif

@@ -56,6 +56,29 @@ static bool s_apply_internal;
 static app_cmd_net_job_port_t s_port;
 static bool s_inited;
 
+#ifdef APP_CMD_NET_JOB_TEST
+static app_cmd_net_job_test_hook_fn s_test_hook;
+
+void app_cmd_net_job_test_hook_set(app_cmd_net_job_test_hook_fn fn)
+{
+    s_test_hook = fn;
+}
+
+static void net_test_hook(const char *point, app_operation_t *op, uint32_t expected_gen)
+{
+    if (s_test_hook != NULL) {
+        s_test_hook(point, op, expected_gen);
+    }
+}
+#else
+static void net_test_hook(const char *point, app_operation_t *op, uint32_t expected_gen)
+{
+    (void)point;
+    (void)op;
+    (void)expected_gen;
+}
+#endif
+
 static bool app_cmd_net_job_owned_by_locked(const app_operation_t *op, uint32_t expected_gen);
 static bool app_cmd_net_trial_ready_locked(const char *trial_id);
 static void app_cmd_net_job_clear_impl_locked(void);
@@ -212,6 +235,8 @@ bool app_cmd_net_job_clear_if_owned(const app_operation_t *op, uint32_t expected
 {
     bool owned;
 
+    net_test_hook("clear_before_lock", (app_operation_t *)op, expected_gen);
+
     app_cmd_net_job_lock();
     owned = app_cmd_net_job_owned_by_locked(op, expected_gen);
     if (owned) {
@@ -260,6 +285,8 @@ bool app_cmd_net_job_set_netcheck_gen(const app_operation_t *op, uint32_t expect
 {
     bool owned;
 
+    net_test_hook("netcheck_before_lock", (app_operation_t *)op, expected_gen);
+
     app_cmd_net_job_lock();
     owned = app_cmd_net_job_owned_by_locked(op, expected_gen);
     if (owned) {
@@ -273,6 +300,8 @@ bool app_cmd_net_job_set_stages(const app_operation_t *op, uint32_t expected_gen
                                 bool wifi, bool ip, bool inet, bool mqtt)
 {
     bool owned;
+
+    net_test_hook("stages_before_lock", (app_operation_t *)op, expected_gen);
 
     app_cmd_net_job_lock();
     owned = app_cmd_net_job_owned_by_locked(op, expected_gen);
@@ -344,6 +373,7 @@ app_cmd_net_trial_store_result_t app_cmd_net_trial_store(
     if (ssid == NULL || password == NULL) {
         return APP_CMD_NET_TRIAL_REJECTED;
     }
+    net_test_hook("trial_before_lock", (app_operation_t *)op, 0);
     app_cmd_net_job_lock();
     if (op != NULL && (!s_job.active || s_job.op != op)) {
         result = s_job.active ? APP_CMD_NET_TRIAL_STALE_OP
@@ -582,6 +612,8 @@ bool app_cmd_net_cleanup_run(app_operation_t *op, void *ctx)
     app_cmd_net_job_clear_impl_locked();
     app_cmd_net_job_unlock();
 
+    net_test_hook("cleanup_after_claim", op, expected_gen);
+
     if (s_port.netcheck_cancel != NULL) {
         s_port.netcheck_cancel(nc_gen);
     }
@@ -596,6 +628,7 @@ bool app_cmd_net_cleanup_run(app_operation_t *op, void *ctx)
             ESP_LOGE(TAG, "rescue=restore_persistent failed (cleanup request) op=%s", op_id);
         }
     }
+    net_test_hook("cleanup_before_complete", op, expected_gen);
     app_operation_cleanup_complete(op, expected_gen, ok);
     if (ok) {
         ESP_LOGI(TAG, "CLEANUP_DONE_OK op=%s", op_id);
