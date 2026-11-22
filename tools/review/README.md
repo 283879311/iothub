@@ -2,7 +2,30 @@
 
 本目录存放**等待代码审查**的测试 harness 快照，不参与固件构建，也不随固件发布。
 
-## `cmd0215_stage3_v3.py`（当前待审版本）
+## `cmd0215_stage3_v4.py`（当前待审版本）
+
+- 状态：**待审**。未在真机运行；`--selftest` 只用 mock 验证控制流。
+- SHA-256 `3da89c784da3a33b0aac642896b82a83bac44daeceed261aa16d997670d2b645`，916 行。
+- 针对 v3 审查的四项：
+  1. **统一写入口**：`w_tryconnect`/`wait_terminal`/`wait_sta` 均改用本文件的 `call()`；
+     `race_suite` 只剩 `Session/ADDR/ABSENT`（连接与常量），不再借其写/轮询 helper。
+  2. **删除类名兜底**：`classify_exc` 只按真实类型 `isinstance`；真实类型不可用一律 `other`，
+     不重连。自测 `classify-no-name-fallback` 验证。
+  3. **C2-3 关联**：记录本次 `operation_id`；`trial=got_ip` 时要求 `trial_ssid` 等于本次 job 的
+     SSID，并交叉读取 `operation.get` 要求 job 处于 `got_ip/committing/success`；非 `got_ip`
+     不得带 trial 字段。**覆盖说明**：absent-SSID 路径不会产生 trial，此时结果标注
+     `coverage=no_trial_in_absent_path`，关联校验实际未覆盖（需已知口令的真实 AP 才能覆盖）。
+  4. **C15-2 终态与订阅确认**：`tryconnect` 终态必须是 `failed` 且错误码为
+     `wrong_password`/`ap_not_found`，否则 FAIL；`AttrTap` 必须等到 CONNACK 与 SUBACK
+     才返回并记录时间戳，建立失败直接 FAIL。
+- 自测：`--selftest` 共 14 项，含只读重连、写命令不重发、超时不重连、协议异常透传、
+  身份缺失/不匹配、结构化核验、恢复发送次数、reader 异常、C15-2 订阅先于抖动、
+  C2-3 trial 不一致必 FAIL、类名兜底禁用、tryconnect 不重发、C15-2 终态不符必 FAIL。
+- 残余限制：`flock` 为建议性锁、preflight 到 open 仍有 TOCTOU；C15-2 依赖抖动窗口内确有
+  属性发布；C2-3 的 trial 关联在 absent-SSID 刺激下无法覆盖。
+- v3/v2 保留对照。
+
+## `cmd0215_stage3_v3.py`（已被 v4 取代，保留对照）
 
 - 状态：**待审**。未在真机运行；`--selftest` 只用 mock 验证控制流。
 - SHA-256 `51f35925d7215a35803d53f0b4dff06e65cfb609f4d6bf99adff7aae8f0e2eb2`，727 行。
