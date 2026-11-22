@@ -1,7 +1,7 @@
 # WIFI-OP-RESOURCE-RACE / CMD-01 设备复测记录（2026-11-22）
 
 > 文档状态：**CURRENT（执行记录）**。本文只记录本轮设备验证的实际结果与证据，**不构成状态变更**：
-> `CMD-01` 仍为 `TEST_PENDING`；`WIFI-OP-RESOURCE-RACE` 不作为已关闭项；`PROTO-ID-01` 记录不受影响。
+> 记录时 `CMD-01` 为 `TEST_PENDING`；台账随后（`7def7cd`）已转 PASS，当前状态以 [CMD 任务台账](../status/CMD任务台账.md) 为准；`WIFI-OP-RESOURCE-RACE` 不作为已关闭项；`PROTO-ID-01` 记录不受影响。
 
 ## 1. 环境与镜像
 
@@ -260,5 +260,5 @@ RACE-03 用例本身已判定完成；之后 `wait_sta` 期间 BLE 报 `Connecti
 
 - 本文为**执行方采集与整理**；评审方是否独立复跑/校验哈希，以评审记录为准，本文不代替独立复核。
 - 本轮**未修改**代码、测试脚本、Contract；**未重新烧录**；只按授权临时修改过 `mqtt_port` 并已恢复。
-- **不改变任何状态**：`CMD-01` 仍 `TEST_PENDING`；`WIFI-OP-RESOURCE-RACE` 未关闭；`PROTO-ID-01` 保持已关闭。
+- **不改变任何状态**：记录时 `CMD-01` 为 `TEST_PENDING`；台账随后（`7def7cd`）已转 PASS，当前状态以台账为准；`WIFI-OP-RESOURCE-RACE` 未关闭；`PROTO-ID-01` 保持已关闭。
 - RACE 与 CMD-01 的状态变更，待评审复核本文与证据后再单独决定。
