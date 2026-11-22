@@ -2,7 +2,31 @@
 
 本目录存放**等待代码审查**的测试 harness 快照，不参与固件构建，也不随固件发布。
 
-## `cmd0215_stage3_v5.py`（当前待审版本）
+## `cmd0215_stage3_v6.py`（当前待审版本）
+
+- 状态：**待审**。未在真机运行；`--selftest` 只用 mock 验证控制流。
+- SHA-256 `cd141430eff000774ec11a2b2d699af25ee108b9ea48f63d1b84542fb3388846`，1121 行。
+- 针对 v5 初审的一个阻塞项、一个覆盖缺口与一个证据边界：
+  1. **C15-1 接口回归修复**：属性采样改走统一消息模型 `snapshot()` + `merge_attrs()`，
+     不再调用 v5 已删除的 `AttrTap.merged()`；窗口从 SUBACK 确认起，最多等 20s
+     取首条 attributes；采样失败计入 `case_c151` 返回值，触发停止后续用例。
+  2. **C15-1 完整 mock 路径**：新增 T19（订阅建立 → 窗口采样 PASS → finally stop + 恢复）
+     与 T20（窗口内只有 telemetry → 属性快照 FAIL，但 finally 仍恢复并 stop）。
+     两个 mock 只提供 `snapshot()`，旧接口一旦回归会直接失败。
+  3. **C15-2 证据边界**：结果改名为 `C15-2 tryconnect 及恢复区间属性自洽`，明确
+     `w0=tryconnect 发送前`、`w1=STA 恢复+身份核验后`，记录
+     `semantics=operation_and_recovery_interval`；只声称覆盖“操作及恢复区间”，
+     **不声称覆盖瞬时 Wi-Fi 断开窗口**。若需后者，须另行记录 STA 断开/恢复边界
+     并按其筛选属性消息。
+- 自测：`--selftest` 共 20 项，输出 `SELFTEST: PASS (20/20)`。
+- 残余限制：`flock` 为建议性锁、preflight 到 open 有 TOCTOU；C15-1/C15-2 的属性断言
+  依赖窗口内确有 attributes 发布；`got_ip` 关联覆盖需已知口令 AP（本版不含）。
+- v5/v4/v3/v2 保留对照。
+
+## `cmd0215_stage3_v5.py`（已被 v6 取代，保留对照）
+
+- 已知缺陷（v6 修复）：C15-1 仍调用 v5 已删除的 `tap.merged()`，真机路径会
+  `AttributeError`；18 项自测的 C15-1 mock 自带 `merged()`，未覆盖该回归。
 
 - 状态：**待审**。未在真机运行；`--selftest` 只用 mock 验证控制流。
 - SHA-256 `8a74f60018ed30ca554ee3098134fea2b9a1f2de40d8ea409c962937fc1bba82`，1028 行。
