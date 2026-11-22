@@ -1,0 +1,99 @@
+diff --git a/main/cmd_net_job.c b/main/cmd_net_job.c
+index 83242c3..683e4fe 100644
+--- a/main/cmd_net_job.c
++++ b/main/cmd_net_job.c
+@@ -56,6 +56,29 @@ static bool s_apply_internal;
+ static app_cmd_net_job_port_t s_port;
+ static bool s_inited;
+ 
++#ifdef APP_CMD_NET_JOB_TEST
++static app_cmd_net_job_test_hook_fn s_test_hook;
++
++void app_cmd_net_job_test_hook_set(app_cmd_net_job_test_hook_fn fn)
++{
++    s_test_hook = fn;
++}
++
++static void net_test_hook(const char *point, app_operation_t *op, uint32_t expected_gen)
++{
++    if (s_test_hook != NULL) {
++        s_test_hook(point, op, expected_gen);
++    }
++}
++#else
++static void net_test_hook(const char *point, app_operation_t *op, uint32_t expected_gen)
++{
++    (void)point;
++    (void)op;
++    (void)expected_gen;
++}
++#endif
++
+ static bool app_cmd_net_job_owned_by_locked(const app_operation_t *op, uint32_t expected_gen);
+ static bool app_cmd_net_trial_ready_locked(const char *trial_id);
+ static void app_cmd_net_job_clear_impl_locked(void);
+@@ -212,6 +235,7 @@ bool app_cmd_net_job_clear_if_owned(const app_operation_t *op, uint32_t expected
+ {
+     bool owned;
+ 
++    net_test_hook("clear_before_lock", (app_operation_t *)op, expected_gen);
+     app_cmd_net_job_lock();
+     owned = app_cmd_net_job_owned_by_locked(op, expected_gen);
+     if (owned) {
+@@ -260,6 +284,7 @@ bool app_cmd_net_job_set_netcheck_gen(const app_operation_t *op, uint32_t expect
+ {
+     bool owned;
+ 
++    net_test_hook("netcheck_before_lock", (app_operation_t *)op, expected_gen);
+     app_cmd_net_job_lock();
+     owned = app_cmd_net_job_owned_by_locked(op, expected_gen);
+     if (owned) {
+@@ -274,6 +299,7 @@ bool app_cmd_net_job_set_stages(const app_operation_t *op, uint32_t expected_gen
+ {
+     bool owned;
+ 
++    net_test_hook("stages_before_lock", (app_operation_t *)op, expected_gen);
+     app_cmd_net_job_lock();
+     owned = app_cmd_net_job_owned_by_locked(op, expected_gen);
+     if (owned) {
+@@ -344,6 +370,7 @@ app_cmd_net_trial_store_result_t app_cmd_net_trial_store(
+     if (ssid == NULL || password == NULL) {
+         return APP_CMD_NET_TRIAL_REJECTED;
+     }
++    net_test_hook("trial_before_lock", (app_operation_t *)op, 0);
+     app_cmd_net_job_lock();
+     if (op != NULL && (!s_job.active || s_job.op != op)) {
+         result = s_job.active ? APP_CMD_NET_TRIAL_STALE_OP
+@@ -582,6 +609,7 @@ bool app_cmd_net_cleanup_run(app_operation_t *op, void *ctx)
+     app_cmd_net_job_clear_impl_locked();
+     app_cmd_net_job_unlock();
+ 
++    net_test_hook("cleanup_after_claim", op, expected_gen);
+     if (s_port.netcheck_cancel != NULL) {
+         s_port.netcheck_cancel(nc_gen);
+     }
+@@ -596,6 +624,7 @@ bool app_cmd_net_cleanup_run(app_operation_t *op, void *ctx)
+             ESP_LOGE(TAG, "rescue=restore_persistent failed (cleanup request) op=%s", op_id);
+         }
+     }
++    net_test_hook("cleanup_before_complete", op, expected_gen);
+     app_operation_cleanup_complete(op, expected_gen, ok);
+     if (ok) {
+         ESP_LOGI(TAG, "CLEANUP_DONE_OK op=%s", op_id);
+diff --git a/main/cmd_net_job.h b/main/cmd_net_job.h
+index 7dd8b48..7d207c2 100644
+--- a/main/cmd_net_job.h
++++ b/main/cmd_net_job.h
+@@ -132,4 +132,12 @@ typedef struct app_cmd_net_job_port {
+ #ifdef APP_CMD_NET_JOB_TEST
+ /* host 测试入口：按值复制 port；仅测试构建可见。 */
+ esp_err_t app_cmd_net_job_init_with_port(const app_cmd_net_job_port_t *port);
++
++/* 测试 hook：仅 APP_CMD_NET_JOB_TEST 构建存在；point 为冻结设计中的
++ * trial_before_lock / netcheck_before_lock / stages_before_lock /
++ * clear_before_lock / cleanup_after_claim / cleanup_before_complete。 */
++typedef void (*app_cmd_net_job_test_hook_fn)(const char *point,
++                                             app_operation_t *op,
++                                             uint32_t expected_gen);
++void app_cmd_net_job_test_hook_set(app_cmd_net_job_test_hook_fn fn);
+ #endif
