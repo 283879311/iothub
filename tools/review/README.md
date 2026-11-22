@@ -2,7 +2,29 @@
 
 本目录存放**等待代码审查**的测试 harness 快照，不参与固件构建，也不随固件发布。
 
-## `cmd0215_stage3_v4.py`（当前待审版本）
+## `cmd0215_stage3_v5.py`（当前待审版本）
+
+- 状态：**待审**。未在真机运行；`--selftest` 只用 mock 验证控制流。
+- SHA-256 `8a74f60018ed30ca554ee3098134fea2b9a1f2de40d8ea409c962937fc1bba82`，1028 行。
+- 针对 v4 审查的三项：
+  1. **SUBACK 真正判定**：`suback_ok()` 检查每个 reason code，任一 ≥0x80 即拒绝；
+     `subscribe()` 的本地返回码也必须为 `MQTT_ERR_SUCCESS`；失败即 `AttrTap` 初始化抛错，
+     C15-2 在抖动前中止。
+  2. **属性窗口隔离**：每条消息保存 `topic/ts/obj`；C15-2 以 `w0`（tryconnect 前）到
+     `w1`（恢复+身份核验后）为窗口，`merge_attrs()` 只取窗口内 `attributes` 主题；
+     `attributes=0` 直接 FAIL（遥测条数仅记录、不参与判定）；窗口外旧值不参与合并。
+  3. **显式 disconnect**：`AttrTap.stop()` 先 `disconnect()` 再 `loop_stop()`。
+- **C2-3 结果拆分**：
+  - `C2-3 absent 路径（无 trial 残留/终态）`：可 PASS/FAIL；
+  - `C2-3 got_ip trial/job 关联`：absent 路径不产生 trial，记 `not_covered=True` +
+    detail `NOT_COVERED`，**不计入整体 pass**，并在 `stage3_results.json.not_covered` 中列出。
+- 自测：`--selftest` 共 18 项，新增 SUBACK 拒绝、属性窗口隔离、disconnect 顺序、
+  C2-3 覆盖拆分。
+- 残余限制：`flock` 为建议性锁、preflight 到 open 有 TOCTOU；C15-2 依赖抖动窗口内确有
+  attributes 发布；`got_ip` 关联覆盖需已知口令 AP（本版不含）。
+- v4/v3/v2 保留对照。
+
+## `cmd0215_stage3_v4.py`（已被 v5 取代，保留对照）
 
 - 状态：**待审**。未在真机运行；`--selftest` 只用 mock 验证控制流。
 - SHA-256 `3da89c784da3a33b0aac642896b82a83bac44daeceed261aa16d997670d2b645`，916 行。
