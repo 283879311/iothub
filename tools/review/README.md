@@ -2,7 +2,67 @@
 
 本目录存放**等待代码审查**的测试 harness 快照，不参与固件构建，也不随固件发布。
 
-## `cmd0215_stage3_v6.py`（当前待审版本）
+## `cmd0215_stage3_v7.py`（当前待审版本）
+
+- 状态：**待审**。未在真机运行；`--selftest` 只用 mock 验证控制流，不需要凭据、
+  不加载 `p0_acceptance`、不连接设备、不打开串口。
+- SHA-256 `b7096df64bb74d0eb1dc9322c5089a3f7d4f7f3f6ed063cbaf02c959f34c0de9`，1317 行。
+- 针对 v6 初审的三项阻塞：
+  1. **恢复写不再自动重发**（BLOCKER-1）：C15-1 的恢复 `config.set` 只发一次。
+     `OutcomeUnknown` / `asyncio.TimeoutError` / 其它异常分别记录为
+     `restore_outcome_unknown_no_resend` / `restore_timeout_no_resend` /
+     `restore_exception_no_resend`，一律不进入重试；是否恢复成功只由随后的
+     只读核验（`config.get` + `device.status`）判定，核验失败即 FAIL 并停止后续用例。
+  2. **凭据不再硬编码**（BLOCKER-2）：设备路径要求环境变量
+     `IOTHUB_BLE_USER` / `IOTHUB_BLE_PASSWORD`，缺失直接 `REFUSE`（exit 2），
+     且发生在打开串口/连接 BLE 之前；仓库文件内不出现口令。
+  3. **依赖固化**（BLOCKER-3）：删除对 `/tmp/race_suite.py` 的隐式 import（该文件
+     不在仓库内，且其 `main()` 含硬编码口令）。改为显式加载仓库内
+     `tools/ble_p0/p0_acceptance.py`（可用 `CMD0215_P0_ACCEPTANCE` 覆盖路径），
+     锁定 SHA-256
+     `45977737165aa176998c5d92a021e22db83036e62c2a80985dca799f935c1a63`；
+     文件缺失、哈希不符或缺少 `Session`/`ConnectionLost` 接口即拒绝运行。
+- 非阻塞事项：
+  - **REVIEW-05 基线镜像强制匹配**：设备路径必须给 `--expect-fw` 与
+    `--expect-sha`，与 `device.status.firmware/build_sha` 不一致即记录 FAIL 并停止。
+  - **REVIEW-06 串口顺序**：先 `open` + `flock`，再 `stty`；preflight→open 的
+    TOCTOU 仍存在（建议性锁），但改串口参数已不在无锁窗口内。
+  - **REVIEW-07 窗口边界 mock**：T19 增加 SUBACK 之前的属性消息（`ts=50 < w0`，
+    带冲突值），断言采样只取窗口内值。
+  - **REVIEW-04 规模偏离**：见下节。
+- 负向自测：T7（恢复只发 1 次）、T21（恢复结果不确定但只读核验通过）、
+  T22（恢复超时且核验失败）、T23（凭据/基线缺失拒绝）、T24（依赖哈希不符）、
+  T25（依赖缺失）。`--selftest` 共 25 项，输出 `SELFTEST: PASS (25/25)`。
+- 运行前置（设备路径）：
+  ```bash
+  export IOTHUB_BLE_USER=... IOTHUB_BLE_PASSWORD=...   # 只注入环境，不入库
+  .venv-bleak/bin/python cmd0215_stage3_v7.py \
+    --expect-fw 1.3-1ff92db --expect-sha 32b10dfa5 --out /path/to/artifacts
+  ```
+  默认依赖路径 `/home/tc/esp/workspace/iothub/tools/ble_p0/p0_acceptance.py`；
+  换环境用 `CMD0215_P0_ACCEPTANCE=/abs/path/p0_acceptance.py`，哈希必须与常量一致。
+- 残余限制：`flock` 为建议性锁、preflight→open 仍有 TOCTOU；25 项自测只验证
+  mock 控制流，**不能验证真实 Paho 回调时序、真实 MQTT 窗口或设备恢复行为**
+  （REVIEW-08），这些只能在获授权的设备窗口内验证；C15-1/C15-2 属性断言依赖
+  窗口内确有 attributes 发布；`got_ip` 关联覆盖需已知口令 AP。
+- v6/v5/v4/v3/v2 保留对照。
+
+### REVIEW-04：单文件规模偏离说明
+
+- 依据：仓库 `AGENTS.md` §7“Python/测试 harness 约 400–500 行评估，超过 600 行原则上
+  拆分”。本文件 1317 行，已超过该阈值。
+- 暂不拆分的理由：该文件是**待审快照**，评审以 v2→v7 的逐版 diff 为主线；
+  现在拆成多文件会让 1300 行整体移动，历史版本对照失效，新增的导入路径与模块
+  边界本身也需要一轮完整审查。v7 的授权范围只允许修 harness，不适合同时做结构重构。
+- 处理决定：**记录偏离并延后**。设备窗口关闭后拆分为 `harness_common.py`
+  （异常分类/call/RunState）、`harness_attr.py`（AttrTap/merge_attrs）、
+  `harness_serial.py`（SerialCapture）、`harness_cases.py`（C2-1…C15-2）、
+  `harness_selftest.py`；拆分需单独提交与审查，并用同一套 selftest 验证等价性。
+
+## `cmd0215_stage3_v6.py`（已被 v7 取代，保留对照）
+
+- 已知阻塞（v7 修复）：C15-1 恢复写在 `OutcomeUnknown` 后仍循环重发；设备凭据
+  硬编码；隐式依赖 `/tmp/race_suite.py` 且未校验哈希。
 
 - 状态：**待审**。未在真机运行；`--selftest` 只用 mock 验证控制流。
 - SHA-256 `cd141430eff000774ec11a2b2d699af25ee108b9ea48f63d1b84542fb3388846`，1121 行。
