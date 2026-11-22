@@ -2,8 +2,28 @@
 
 本目录存放**等待代码审查**的测试 harness 快照，不参与固件构建，也不随固件发布。
 
-## `cmd0215_stage3_v8.py`（当前待审版本）
+## `cmd0215_stage3_v9.py`（当前待审版本）
 
+- 状态：**待审**。未在真机运行；`--selftest` 只用 mock 验证控制流，不需要凭据、
+  不加载 `p0_acceptance`、不连接设备、不打开串口。
+- SHA-256 `df59e4f25d37659d6120ebecd718658795c117a2fd43b871d93d58782caf531f`，1445 行。
+- 只修 v8 初审的 **BLOCKER-3（未锁定导入）**：
+  - 删除顶部的 `from p0_acceptance import ConnectionLost`。该语句会在 SHA-256 校验
+    之前从当前 `sys.path` 尝试导入任意同名模块，破坏依赖锁定边界。
+  - `ConnectionLost` 初始为 `None`，唯一赋值点是 `run_device()` 中经哈希校验的
+    `load_p0_acceptance()`。
+  - 新增 T30：在 `sys.path` 放置会写 sentinel 的同名 `p0_acceptance.py`，
+    重新加载 harness 后断言 sentinel 未生成且 `ConnectionLost is None`。
+- 自测：`--selftest` 共 30 项，输出 `SELFTEST: PASS (30/30)`。
+- **设备操作前的未决项**：`SERIAL_PORT` 默认 `/dev/ttyUSB0`，但 `2026-11-16` 授权
+  文档记录的是 `/dev/ttyUSB1`（且该文档状态为 PENDING）。这不代表串口已获授权；
+  任何设备运行前必须核对当前有效授权与实际 boot 后的串口映射，不得默认两者一致。
+- 其余运行前置、依赖哈希、残余限制与 v8 相同（见下节）；v8/v7/…/v2 保留对照。
+
+## `cmd0215_stage3_v8.py`（已被 v9 取代，保留对照）
+
+- 已知阻塞（v9 修复）：顶部仍有未指定路径、未校验哈希的
+  `from p0_acceptance import ConnectionLost`，会在锁定加载前尝试导入同名模块。
 - 状态：**待审**。未在真机运行；`--selftest` 只用 mock 验证控制流，不需要凭据、
   不加载 `p0_acceptance`、不连接设备、不打开串口。
 - SHA-256 `32af5e79a1254bd40a06f49d12d6479827dfb879238fe195ddc5698627670945`，1429 行。
