@@ -13,8 +13,8 @@
 |---|---|---|---|---|
 | CMD-01 | P0 | `io.get` Wi-Fi runtime 读取快照 | PASS | 修复 `add93e7`；构建通过；BLE/MQTT `io.get` 与 `network.status` 一致性对读通过（[复测记录](../reviews/WIFI-OP-RESOURCE-RACE_CMD-01_设备复测记录_2026-11-22.md)，设备 65D8 / `1.3-1ff92db`） |
 | CMD-02 | P0 | `s_net_async` 字段所有权与读点 | TEST_PENDING | 七处读点已实施（`28f9090`）；联合构建和 host tests 按执行报告通过；阶段 3 设备回归未执行、未授权 |
-| CMD-03 | P0 | operation 锁序、回调时序及 expiring 窄窗口 | IN_PROGRESS | Phase A host 测试通过；worker 在 cleanup 窗口可能重新写入 trial 的风险仍待专门动态验证/设计决策；Phase B 代码修改和设备测试均未授权 |
-| CMD-04 | P1 | status 响应快照化 | TODO | 04c 内联快照已实施并有代码审查/本地验证记录；04a operation_status 与 04b network_status 快照仍待实施和验收 |
+| CMD-03 | P0 | operation 锁序、回调时序及 expiring 窄窗口 | IN_PROGRESS | Phase A host 测试通过；CMD-03b H1 测试架构 v3 已冻结（`review/cmd03b-2026-11-22` / `d7d95fd`）。H1-P1 已在 `h1-p1-cmd-net-job` / `a904de9` 实施并提交 PR #3（2 commits / 6 files，Open · Draft，未合并）；最新静态复核已关闭密码擦除时序、空密码快照和截断失败擦除三个阻塞项。Host T01–T12 尚未实施/运行；构建、语法检查、设备测试均未执行；200ms cleanup wait 尚未实测。
+| CMD-04 | P1 | status 响应快照化 | IN_PROGRESS | `main/cmd.c` 中已存在 04a `app_cmd_net_operation_status` / `app_cmd_net_op_status_capture` 与 04b `app_cmd_build_network_status` / `app_cmd_network_status_snap_t` 实现入口；目前仅确认源码存在，尚未完成对冻结设计的逐分支静态复核及完整验收。04c 已实施部分仍以专项审查记录为准。
 | CMD-05 | P1 | config/profile 全局锁序 | REVIEWED | 静态审查确认偏序 `J → C → P`；未测持锁时长，CMD-06 必须遵守递归锁和锁序约束 |
 | CMD-06 | P1 | 网络异步事务迁移到 `cmd_net_txn.c` | TODO | 等待阶段 A 相关风险与验证收口；迁移不得改变状态机、owner、generation、cleanup 和锁序 |
 | CMD-07 | P1 | 普通网络命令迁移到 `cmd_net.c` | TODO | scan/profile/reconnect/status 行为及权限保持一致 |
@@ -31,8 +31,8 @@
 
 1. **CMD-02 / CMD-15**：阶段 1 ESP-IDF fullclean/build 和阶段 2 host tests 于 2026-11-16 按执行报告通过；阶段 3 设备回归没有执行，也没有授权。执行方报告及本地忽略目录中的证据未上传仓库，因此不能标记 PASS。执行事实（BIN/ELF SHA256、run_id、warning 清单）见 [执行记录](../reports/CMD-02_15_执行记录_2026-11-16.md)。
 2. **CMD-01**：已闭环（`add93e7` + 构建 + BLE/MQTT 回归），状态转 PASS；证据见 [复测记录](../reviews/WIFI-OP-RESOURCE-RACE_CMD-01_设备复测记录_2026-11-22.md)。不能用 CMD-02/15 的联合 host 结果替代该结论。
-3. **CMD-03**：Phase A host 测试已通过，变异体检查可证伪；仍需决定是否设计并实施 cmd 层 `store_trial` 守卫。不得直接修改 `expiring` 状态语义。Phase B 和设备验证须单独授权。
-4. **CMD-04**：04a/04b 设计材料仍是待实施方案；04c 已实施的部分不代表整个 CMD-04 关闭。04c 中同步 tryconnect 分支已确认不属于当前 v1 wire 可达路径，不得把它写成 wire 真机验收 PASS；apply dispatcher 的 trial patch 路径仍需按 async apply 全流程理解。
+3. **CMD-03**：Phase A host 测试已通过，变异体检查可证伪。CMD-03b H1 测试架构 v3 已冻结；H1-P1 代码已进入 PR #3（`h1-p1-cmd-net-job` / `a904de9`，base `d7d95fd`），PR 保持 Open · Draft、未合并。最新静态复核关闭了三个已识别阻塞项，但 PR 描述仍明确未构建、未运行 Host T01–T12、未做语法检查和设备测试；200ms cleanup wait 未实测。下一步是单独授权实现 Host harness/hooks 并执行 T01–T12；T09 的预期语义差异必须按冻结设计标为 EXPECTED，不能记作普通 PASS。Host 通过后再分别评审构建与设备阶段；验收前不得合并 PR #3。
+4. **CMD-04**：04a/04b 的实现入口已存在于当前 `main/cmd.c`，但尚未完成按设计清单逐分支核对，不能仅凭函数存在标记完成或 PASS；对应设计文件仍标记 PENDING，表示设计材料本身的生命周期，不替代本台账中的实施状态。后续需核对 wire 字段/分支、失败路径、锁内外边界、资源预算及回归证据。04c 已实施部分不代表整个 CMD-04 关闭；其中同步 tryconnect 分支已确认不属于当前 v1 wire 可达路径，不得写成 wire 真机验收 PASS；apply dispatcher 的 trial patch 路径仍需按 async apply 全流程理解。
 5. **CMD-05 / CMD-14**：锁序静态审查完成，但长持锁尚未实测。CMD-14 测量前不得因“看起来持锁过久”直接缩短临界区。
 6. **CMD-06 及后续模块迁移**：须等待相关锁契约、所有权边界和必要验证收口，再单独评审实施；不得把文件迁移与行为变化混在同一增量中。
 
