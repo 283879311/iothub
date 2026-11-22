@@ -1,0 +1,24 @@
+make: 进入目录“/tmp/iothub-h1-review/tests/cmd_net_job”
+mkdir -p build
+cp ../../main/cmd_net_job.c build/cmd_net_job.c
+cp stub/bt_gatts.h build/bt_gatts.h
+cp stub/common.h build/common.h
+cp stub/netcheck.h build/netcheck.h
+cp stub/wifi.h build/wifi.h
+cc -Istub -I../operation_host -I../operation_host/stub -I../../main -DAPP_CMD_NET_JOB_TEST=1 -std=c11 -O2 -g -Wall -Wextra -Werror -pthread -o cmd_net_job_test test_cmd_net_job.c job_port_shim.c ../operation_host/rtos_shim.c build/cmd_net_job.c ../../main/operation.c ../../main/operation_state.c ../../main/cmd_cfg_txn.c ../../main/cmd_context.c
+./cmd_net_job_test
+T01 PASS
+T02 PASS
+T03 PASS
+T04 PASS
+T05 PASS
+T06 PASS
+T07 PASS
+T08 PASS
+T09a EXPECTED
+T09b PASS
+T10 PASS
+T11 PASS
+T12 PASS
+summary: 0 failed
+make: 离开目录“/tmp/iothub-h1-review/tests/cmd_net_job”
