@@ -241,13 +241,14 @@ bool app_cmd_net_job_worker_snapshot(const app_operation_t *op, uint32_t expecte
     if (app_cmd_net_job_owned_by_locked(op, expected_gen)) {
         n1 = snprintf(ssid, ssid_size, "%s", s_job.ssid);
         n2 = snprintf(password, password_size, "%s", s_job.password);
-        if (n1 > 0 && (size_t)n1 < ssid_size &&
-            n2 > 0 && (size_t)n2 < password_size) {
+        if (n1 >= 0 && (size_t)n1 < ssid_size &&
+            n2 >= 0 && (size_t)n2 < password_size) {
             *owner = s_job.owner;
             owned = true;
         } else {
             ssid[0] = '\0';
-            password[0] = '\0';
+            /* 截断时可能已写入密码前缀:擦除整个输出缓冲区。 */
+            app_cmd_net_wipe(password, password_size);
         }
     }
     app_cmd_net_job_unlock();

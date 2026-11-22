@@ -353,6 +353,7 @@ static esp_err_t app_cmd_net_async_run(app_operation_t *op, void *ctx)
     /* CMD-03 H1:通过模块快照获取 worker 运行数据,不再解引用内部 job。 */
     if (!app_cmd_net_job_worker_snapshot(op, generation, ssid, sizeof(ssid),
                                          password, sizeof(password), &owner)) {
+        app_cmd_secure_wipe(password, sizeof(password));
         return ESP_ERR_INVALID_ARG;
     }
     /* B5(第三轮):活动 operation 登记——scheduled/task run 日志的 op 字段 */
@@ -365,17 +366,18 @@ static esp_err_t app_cmd_net_async_run(app_operation_t *op, void *ctx)
         app_mqtt_wait_resp_delivery();
     }
     result = app_wifi_try_connect_ip(ssid, password, 15000);
-    app_cmd_secure_wipe(password, sizeof(password));
 
     /* R5:operation 框架已用 running 标志禁止槽位在 run_fn 返回前复用;
      * 这里再按 generation+state 复核,陈旧/已终态的 run 直接返回,绝不
      * 触碰 job(旧实现用裸 state 判断,槽位复用后会误清新 job)。 */
     if (!app_operation_get_status(op, &st1)) {
+        app_cmd_secure_wipe(password, sizeof(password));
         ESP_LOGW(TAG, "async tryconnect op=%s status lost after wait, no job touch",
                  op_id);
         return ESP_ERR_INVALID_ARG;
     }
     if (st1.generation != generation || st1.state != APP_OP_CONNECTING) {
+        app_cmd_secure_wipe(password, sizeof(password));
         ESP_LOGW(TAG, "async tryconnect op=%s stale after wait (gen=%u state=%d), no job touch",
                  op_id, (unsigned)generation, (int)st1.state);
         return ESP_OK;
@@ -383,6 +385,8 @@ static esp_err_t app_cmd_net_async_run(app_operation_t *op, void *ctx)
     if (result == APP_WIFI_TRY_OK) {
         app_cmd_net_trial_store_result_t stored =
             app_cmd_net_trial_store(ssid, password, owner, op_id, NULL, op, NULL);
+        /* trial 保存完成后再擦除栈副本;trial 内部持有独立副本。 */
+        app_cmd_secure_wipe(password, sizeof(password));
 
         if (stored == APP_CMD_NET_TRIAL_STALE_JOB ||
             stored == APP_CMD_NET_TRIAL_STALE_OP) {
@@ -468,6 +472,7 @@ static esp_err_t app_cmd_net_async_run(app_operation_t *op, void *ctx)
                                        APP_OPERATION_ERR_NONE);
     }
 
+    app_cmd_secure_wipe(password, sizeof(password));
     (void)app_cmd_net_job_clear_if_owned(op, generation);
     /* 契约 v1.1:连接阶段失败/取消 = 本 op 未达成任何阶段,写入全 false 快照,
      * 避免 operation.get 回落活运行态(那是"别的链路"的状态)。 */
