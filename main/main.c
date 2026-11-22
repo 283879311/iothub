@@ -7,6 +7,7 @@
 
 #include "bootstrap.h"
 #include "bt.h"
+#include "cmd.h"
 #include "config.h"
 #include "config_apply.h"
 #include "data_pipe.h"
@@ -63,6 +64,8 @@ void app_main(void)
     app_bootstrap_load_config();
     ESP_LOGI(TAG, "[boot-4a] config_apply_init");
     config_apply_init();
+    ESP_LOGI(TAG, "[boot-4a1] app_cmd_net_job_init");
+    ESP_ERROR_CHECK(app_cmd_net_job_init());
     ESP_LOGI(TAG, "[boot-4a2] app_operation_init");
     if (app_operation_init() != ESP_OK) {
         ESP_LOGW(TAG, "operation table init skipped");
