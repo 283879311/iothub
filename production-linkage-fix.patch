@@ -1,0 +1,10 @@
+--- a/main/cmd_net_job.c
++++ b/main/cmd_net_job.c
+@@ -80,7 +80,6 @@
+ #endif
+ 
+ static bool app_cmd_net_job_owned_by_locked(const app_operation_t *op, uint32_t expected_gen);
+-static bool app_cmd_net_trial_ready_locked(const char *trial_id);
+ static void app_cmd_net_job_clear_impl_locked(void);
+ 
+ static void app_cmd_net_wipe(char *buf, size_t len)
