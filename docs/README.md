@@ -68,3 +68,7 @@
 
 `ACTIVE` 统一改为 `CURRENT`；`ARCHIVED` 是存储位置，不是文档状态；`FROZEN` 的历史快照以 `HISTORICAL` 标识并保留不可变性说明；`CODE_DONE` 属于任务实施状态，不作为文档生命周期状态。任务台账中的 TODO、IN_PROGRESS、TEST_PENDING、PASS、DEFERRED 等仍按各自任务语义解释，不与文档状态混用。
 
+
+## 仓库级协作规则
+
+- [AGENTS.md](../AGENTS.md)：仓库级 Agent/协作者规则，涵盖授权边界、产品与架构约定、协议、设备安全、测试证据和文档维护。
