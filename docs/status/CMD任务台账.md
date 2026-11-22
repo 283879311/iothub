@@ -11,7 +11,7 @@
 
 | ID | 优先级 | 当前事项 | 状态 | 当前结论 / 关闭条件 |
 |---|---|---|---|---|
-| CMD-01 | P0 | `io.get` Wi-Fi runtime 读取快照 | TEST_PENDING | 最小改动已实施（`add93e7`）；仍缺构建及 BLE/MQTT 入口回归 |
+| CMD-01 | P0 | `io.get` Wi-Fi runtime 读取快照 | PASS | 修复 `add93e7`；构建通过；BLE/MQTT `io.get` 与 `network.status` 一致性对读通过（[复测记录](../reviews/WIFI-OP-RESOURCE-RACE_CMD-01_设备复测记录_2026-11-22.md)，设备 65D8 / `1.3-1ff92db`） |
 | CMD-02 | P0 | `s_net_async` 字段所有权与读点 | TEST_PENDING | 七处读点已实施（`28f9090`）；联合构建和 host tests 按执行报告通过；阶段 3 设备回归未执行、未授权 |
 | CMD-03 | P0 | operation 锁序、回调时序及 expiring 窄窗口 | IN_PROGRESS | Phase A host 测试通过；worker 在 cleanup 窗口可能重新写入 trial 的风险仍待专门动态验证/设计决策；Phase B 代码修改和设备测试均未授权 |
 | CMD-04 | P1 | status 响应快照化 | TODO | 04c 内联快照已实施并有代码审查/本地验证记录；04a operation_status 与 04b network_status 快照仍待实施和验收 |
@@ -30,7 +30,7 @@
 ## 2. 当前未关闭事项与推进依赖
 
 1. **CMD-02 / CMD-15**：阶段 1 ESP-IDF fullclean/build 和阶段 2 host tests 于 2026-11-16 按执行报告通过；阶段 3 设备回归没有执行，也没有授权。执行方报告及本地忽略目录中的证据未上传仓库，因此不能标记 PASS。执行事实（BIN/ELF SHA256、run_id、warning 清单）见 [执行记录](../reports/CMD-02_15_执行记录_2026-11-16.md)。
-2. **CMD-01**：构建和 BLE/MQTT 入口回归仍缺；不能用 CMD-02/15 的联合 host 结果替代。
+2. **CMD-01**：已闭环（`add93e7` + 构建 + BLE/MQTT 回归），状态转 PASS；证据见 [复测记录](../reviews/WIFI-OP-RESOURCE-RACE_CMD-01_设备复测记录_2026-11-22.md)。不能用 CMD-02/15 的联合 host 结果替代该结论。
 3. **CMD-03**：Phase A host 测试已通过，变异体检查可证伪；仍需决定是否设计并实施 cmd 层 `store_trial` 守卫。不得直接修改 `expiring` 状态语义。Phase B 和设备验证须单独授权。
 4. **CMD-04**：04a/04b 设计材料仍是待实施方案；04c 已实施的部分不代表整个 CMD-04 关闭。04c 中同步 tryconnect 分支已确认不属于当前 v1 wire 可达路径，不得把它写成 wire 真机验收 PASS；apply dispatcher 的 trial patch 路径仍需按 async apply 全流程理解。
 5. **CMD-05 / CMD-14**：锁序静态审查完成，但长持锁尚未实测。CMD-14 测量前不得因“看起来持锁过久”直接缩短临界区。
