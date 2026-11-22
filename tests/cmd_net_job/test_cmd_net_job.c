@@ -27,11 +27,19 @@ typedef struct {
     uint32_t gen;
 } run_ctx_t;
 
+/* cmd_net_job 把 run_fn 的 ctx 固定为内部 &s_job，不能当作 run_ctx_t 使用；
+ * 单 worker 串行执行，run_fn 通过本指针取当前用例的同步上下文。 */
+static run_ctx_t *g_run_ctx;
+
 static esp_err_t test_run(app_operation_t *op, void *v)
 {
-    run_ctx_t *r = (run_ctx_t *)v;
+    run_ctx_t *r = g_run_ctx;
     app_operation_status_t st;
 
+    (void)v;
+    if (r == NULL) {
+        return ESP_ERR_INVALID_STATE;
+    }
     if (!app_operation_get_status(op, &st)) {
         return ESP_ERR_INVALID_ARG;
     }
@@ -60,6 +68,7 @@ static bool start_op(run_ctx_t *r, app_operation_t **out, uint32_t ttl_ms,
     bool ok = false;
 
     run_ctx_init(r);
+    g_run_ctx = r;
     app_cmd_net_job_lock();
     if (app_cmd_net_job_begin_locked(APP_CMD_SOURCE_BLE, APP_OPERATION_OWNER_BLE,
                                      &ctx, ssid, "pass", NULL, ttl_ms, 300000,
@@ -97,6 +106,7 @@ static bool begin_job_only(run_ctx_t *r, app_operation_t **out, uint32_t ttl_ms,
     bool ok = false;
 
     run_ctx_init(r);
+    g_run_ctx = r;
     app_cmd_net_job_lock();
     if (app_cmd_net_job_begin_locked(APP_CMD_SOURCE_BLE, APP_OPERATION_OWNER_BLE,
                                      &ctx, ssid, "pass", NULL, ttl_ms, 300000,
@@ -163,11 +173,12 @@ static void hook_fn(const char *point, app_operation_t *op, uint32_t gen)
         }
     }
     pthread_mutex_lock(&g_hook_m);
-    g_hook_reached = true;
-    pthread_cond_broadcast(&g_hook_c);
-    while (g_wait_point != NULL && strcmp(point, g_wait_point) == 0 &&
-           !g_hook_release) {
-        pthread_cond_wait(&g_hook_c, &g_hook_m);
+    if (g_wait_point != NULL && strcmp(point, g_wait_point) == 0) {
+        g_hook_reached = true;
+        pthread_cond_broadcast(&g_hook_c);
+        while (!g_hook_release) {
+            pthread_cond_wait(&g_hook_c, &g_hook_m);
+        }
     }
     pthread_mutex_unlock(&g_hook_m);
 }
