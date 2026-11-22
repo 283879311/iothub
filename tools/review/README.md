@@ -2,7 +2,55 @@
 
 本目录存放**等待代码审查**的测试 harness 快照，不参与固件构建，也不随固件发布。
 
-## `cmd0215_stage3_v7.py`（当前待审版本）
+## `cmd0215_stage3_v8.py`（当前待审版本）
+
+- 状态：**待审**。未在真机运行；`--selftest` 只用 mock 验证控制流，不需要凭据、
+  不加载 `p0_acceptance`、不连接设备、不打开串口。
+- SHA-256 `32af5e79a1254bd40a06f49d12d6479827dfb879238fe195ddc5698627670945`，1429 行。
+- 针对 v7 初审的两个阻塞项：
+  1. **设备身份绑定**（BLOCKER-1）：新增必填 `--expect-device`（本轮为
+     `IotHub-65D8`）。连接后先读 `device.status.device_id`，与授权身份不一致即记录
+     FAIL 并在**任何测试写命令之前**停止。
+     **地址说明**：`ADDR=10:97:BD:D3:65:DA` 是 65D8 的 BLE 地址；其 WiFi MAC 是
+     `10:97:BD:D3:65:D8`。按授权文档（`docs/authorization/S6阶段B操作授权申请_2026-11-16.md`
+     §身份表），65D8 = BLE `…65:DA` + WiFi MAC `…65:D8` + device_id `IotHub-65D8`。
+     BLE 地址比 WiFi MAC 大 2，不能把 WiFi MAC 当作 BLE 地址连接，因此默认地址保持
+     `…65:DA` 并增加 device_id 强校验，而不是改成 `…65:D8`。
+  2. **依赖凭据边界闭合**（BLOCKER-2）：`tools/ble_p0/p0_acceptance.py` 的
+     `Session.__init__` 删除内置默认口令，改为显式参数或
+     `IOTHUB_BLE_USER` / `IOTHUB_BLE_PASSWORD`，两者都缺失时 `ValueError`。
+     依赖锁定 SHA-256 更新为
+     `3882a2e050c02ca8ec854915dd7aba528a689e23758f1d709d7bbd51bcaa4673`。
+     harness 加载依赖后额外校验构造器 `username/password` 默认值必须为 `None`
+     或缺失；带任何非 None 默认值即拒绝运行。
+- 附带清理：
+  - **BLE 断开进 finally**：身份不符、基线不符、中途异常都保证 `disconnect()`。
+  - **stty 失败即前置失败**：改为 `check=True`，失败抛 `RuntimeError`，不再继续
+    生成可能不完整的串口证据。
+- 负向自测：T26 身份门（缺失/不符/匹配）、T27 构造器凭据默认值守卫、
+  T28 stty 失败拒绝、T29 断开清理。`--selftest` 共 29 项，
+  输出 `SELFTEST: PASS (29/29)`。
+- 运行前置（设备路径）：
+  ```bash
+  export IOTHUB_BLE_USER=... IOTHUB_BLE_PASSWORD=...   # 只注入环境，不入库
+  .venv-bleak/bin/python cmd0215_stage3_v8.py \
+    --expect-device IotHub-65D8 \
+    --expect-fw 1.3-1ff92db --expect-sha 32b10dfa5 --out /path/to/artifacts
+  ```
+  五项缺一即 `REFUSE`（exit 2），且在打开串口/连接 BLE 之前。
+- **依赖行为变化**：`p0_acceptance.Session` 不再有默认凭据，仓库内其它直接构造
+  `Session` 的历史工具（未显式传参者）现在需要注入环境变量，否则 fail-closed。
+  这是有意为之；本轮未逐个修改那些工具。
+- 残余限制：`flock` 为建议性锁、preflight→open 仍有 TOCTOU；29 项自测只验证
+  mock 控制流，不能验证真实 Paho 回调时序、真实 MQTT 窗口或设备恢复行为；
+  C15-1/C15-2 属性断言依赖窗口内确有 attributes 发布；`got_ip` 关联覆盖需
+  已知口令 AP。
+- v7/v6/v5/v4/v3/v2 保留对照。
+
+## `cmd0215_stage3_v7.py`（已被 v8 取代，保留对照）
+
+- 已知阻塞（v8 修复）：未将 `device_id` 与授权设备身份比对；锁定的依赖构造器
+  仍保留默认口令，README“仓库文件内不出现口令”的表述不成立。
 
 - 状态：**待审**。未在真机运行；`--selftest` 只用 mock 验证控制流，不需要凭据、
   不加载 `p0_acceptance`、不连接设备、不打开串口。

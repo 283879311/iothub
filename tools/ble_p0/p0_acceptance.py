@@ -330,14 +330,20 @@ class Session:
         self,
         cli: BleakClient,
         address: str | None = None,
-        username: str = "admin",
-        password: str = "123456",
+        username: str | None = None,
+        password: str | None = None,
         max_write: int = 20,
     ) -> None:
         self.cli = cli
         self.address = address or getattr(cli, "address", None)
-        self.username = username
-        self.password = password
+        # 凭据安全边界：构造器不再内置默认口令。
+        # 显式传参优先；否则读环境变量；两者都缺失时拒绝创建会话。
+        self.username = username if username is not None else os.environ.get("IOTHUB_BLE_USER")
+        self.password = password if password is not None else os.environ.get("IOTHUB_BLE_PASSWORD")
+        if not self.username or not self.password:
+            raise ValueError(
+                "Session 需要显式 BLE 凭据：传 username/password，"
+                "或设置 IOTHUB_BLE_USER/IOTHUB_BLE_PASSWORD")
         self.max_write = max(1, min(int(max_write), 512))
         self.cmd_notify_hook = None
         self.stream = JsonStream()
@@ -1502,8 +1508,10 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         default="p0-wrong-" + "".join(random.choices(string.ascii_letters + string.digits, k=12)),
         help="deliberately wrong Wi-Fi password for error/cancel tests",
     )
-    parser.add_argument("--user", default="admin", help="BLE admin username")
-    parser.add_argument("--password", default="123456", help="BLE admin password")
+    parser.add_argument("--user", default=os.environ.get("IOTHUB_BLE_USER"),
+                        help="BLE admin username (or IOTHUB_BLE_USER)")
+    parser.add_argument("--password", default=os.environ.get("IOTHUB_BLE_PASSWORD"),
+                        help="BLE admin password (or IOTHUB_BLE_PASSWORD)")
     parser.add_argument("--n-long", type=int, default=10, help="number of long responses")
     parser.add_argument("--scan-timeout", type=float, default=12, help="filtered scan seconds")
     parser.add_argument(
@@ -1519,7 +1527,10 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         action="store_false",
         help="do not send the final config.set",
     )
-    return parser.parse_args(argv)
+    args = parser.parse_args(argv)
+    if not args.user or not args.password:
+        parser.error("需要 --user/--password，或环境变量 IOTHUB_BLE_USER/IOTHUB_BLE_PASSWORD")
+    return args
 
 
 def main(argv: list[str] | None = None) -> int:
