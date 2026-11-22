@@ -30,6 +30,8 @@ struct app_operation {
     bool used;
     bool expiring;
     bool running;      /* run_fn 在飞:期间禁止本槽回收/复用(R5) */
+    uint8_t net_cleanup_state;   /* CMD-03b:cleanup 一次性认领状态 */
+    uint32_t net_cleanup_gen;    /* 认领时的 generation 快照(诊断用) */
     uint32_t generation;
     app_operation_owner_t owner;
     app_op_state_t state;
@@ -132,10 +134,26 @@ static int64_t app_operation_now_ms(void)
     return esp_timer_get_time() / 1000;
 }
 
+/* C 语言不允许对不同数组对象的指针做 < / >= 关系比较;这里用逐槽位相等
+ * 判断,避免以未定义行为判断"指针是否属于 s_ops"。 */
+static bool app_operation_in_table(const app_operation_t *op)
+{
+    size_t i;
+
+    if (op == NULL) {
+        return false;
+    }
+    for (i = 0; i < APP_OPERATION_MAX_SLOTS; i++) {
+        if (op == &s_ops[i]) {
+            return true;
+        }
+    }
+    return false;
+}
+
 static bool app_operation_valid(const app_operation_t *op)
 {
-    return op != NULL && op >= &s_ops[0] && op < &s_ops[APP_OPERATION_MAX_SLOTS] &&
-           op->used;
+    return app_operation_in_table(op) && op->used;
 }
 
 app_operation_t *app_operation_find(const char *operation_id)
@@ -545,6 +563,92 @@ bool app_operation_get_status(const app_operation_t *op, app_operation_status_t 
     }
     portEXIT_CRITICAL(&s_ops_mux);
     return ok;
+}
+
+bool app_operation_generation_matches(const app_operation_t *op, uint32_t expected_generation)
+{
+    bool match = false;
+
+    if (!app_operation_in_table(op)) {
+        return false;
+    }
+    portENTER_CRITICAL(&s_ops_mux);
+    match = op->used && op->state != APP_OP_FREE &&
+            op->generation == expected_generation;
+    portEXIT_CRITICAL(&s_ops_mux);
+    return match;
+}
+
+app_operation_cleanup_claim_t app_operation_cleanup_claim(app_operation_t *op,
+                                                          uint32_t expected_generation)
+{
+    app_operation_cleanup_claim_t result;
+
+    if (!app_operation_in_table(op)) {
+        return APP_OPERATION_CLEANUP_INVALID;
+    }
+    portENTER_CRITICAL(&s_ops_mux);
+    if (!op->used || op->state == APP_OP_FREE) {
+        result = APP_OPERATION_CLEANUP_INVALID;
+    } else if (op->generation != expected_generation) {
+        result = APP_OPERATION_CLEANUP_STALE;
+    } else if (!app_op_state_is_active(op->state)) {
+        /* 生命周期保证 cleanup 只在该 op 活动期间被调用(框架 cancel/expire
+         * 在终态化之前调用,worker 直调在 CONNECTING)。若仍收到终态槽位,
+         * 视为陈旧/非法调用:不认领、不执行副作用。已完成结果改由
+         * app_operation_cleanup_result() 读取(非认领者路径)。 */
+        result = APP_OPERATION_CLEANUP_INVALID;
+    } else if (op->net_cleanup_state == APP_OPERATION_CLEANUP_RUNNING) {
+        result = APP_OPERATION_CLEANUP_ALREADY_RUNNING;
+    } else if (op->net_cleanup_state == APP_OPERATION_CLEANUP_OK) {
+        result = APP_OPERATION_CLEANUP_ALREADY_DONE_OK;
+    } else if (op->net_cleanup_state == APP_OPERATION_CLEANUP_FAIL) {
+        result = APP_OPERATION_CLEANUP_ALREADY_DONE_FAIL;
+    } else {
+        op->net_cleanup_state = APP_OPERATION_CLEANUP_RUNNING;
+        op->net_cleanup_gen = expected_generation;
+        result = APP_OPERATION_CLEANUP_CLAIMED;
+    }
+    portEXIT_CRITICAL(&s_ops_mux);
+    return result;
+}
+
+void app_operation_cleanup_complete(app_operation_t *op, uint32_t expected_generation, bool ok)
+{
+    bool ignored = false;
+
+    if (!app_operation_in_table(op)) {
+        return;
+    }
+    portENTER_CRITICAL(&s_ops_mux);
+    if (op->used && op->generation == expected_generation &&
+        op->net_cleanup_gen == expected_generation &&
+        op->net_cleanup_state == APP_OPERATION_CLEANUP_RUNNING) {
+        op->net_cleanup_state = ok ? APP_OPERATION_CLEANUP_OK
+                                   : APP_OPERATION_CLEANUP_FAIL;
+    } else {
+        ignored = true;
+    }
+    portEXIT_CRITICAL(&s_ops_mux);
+    if (ignored) {
+        ESP_LOGW(TAG, "cleanup complete ignored: generation/claim mismatch");
+    }
+}
+
+app_operation_cleanup_state_t app_operation_cleanup_result(const app_operation_t *op,
+                                                           uint32_t expected_generation)
+{
+    app_operation_cleanup_state_t state = APP_OPERATION_CLEANUP_NONE;
+
+    if (!app_operation_in_table(op)) {
+        return state;
+    }
+    portENTER_CRITICAL(&s_ops_mux);
+    if (op->used && op->generation == expected_generation) {
+        state = (app_operation_cleanup_state_t)op->net_cleanup_state;
+    }
+    portEXIT_CRITICAL(&s_ops_mux);
+    return state;
 }
 
 static void app_operation_run_pending(void)

@@ -68,6 +68,35 @@ typedef struct {
     uint32_t generation;
 } app_operation_status_t;
 
+/* CMD-03b：cleanup 一次性认领状态。
+ * NONE 未认领；RUNNING 已有认领者执行中；OK/FAIL 认领者已完成。
+ * 随 operation 槽位 generation 复位，不跨槽位复用保留。 */
+typedef enum {
+    APP_OPERATION_CLEANUP_NONE = 0,
+    APP_OPERATION_CLEANUP_RUNNING,
+    APP_OPERATION_CLEANUP_OK,
+    APP_OPERATION_CLEANUP_FAIL,
+} app_operation_cleanup_state_t;
+
+typedef enum {
+    APP_OPERATION_CLEANUP_CLAIMED = 0,
+    APP_OPERATION_CLEANUP_ALREADY_RUNNING,
+    APP_OPERATION_CLEANUP_ALREADY_DONE_OK,
+    APP_OPERATION_CLEANUP_ALREADY_DONE_FAIL,
+    APP_OPERATION_CLEANUP_INVALID,
+    APP_OPERATION_CLEANUP_STALE,
+} app_operation_cleanup_claim_t;
+
+/* 以下 API 只在 s_ops_mux 内读写 claim；不改变 operation 状态迁移语义。
+ * claim 准入：槽位有效、generation 匹配、state 为活动态、claim==NONE；
+ * expiring/running 不作为拒绝条件（P4/P5 的正常入口）。 */
+bool app_operation_generation_matches(const app_operation_t *op, uint32_t expected_generation);
+app_operation_cleanup_claim_t app_operation_cleanup_claim(app_operation_t *op,
+                                                          uint32_t expected_generation);
+void app_operation_cleanup_complete(app_operation_t *op, uint32_t expected_generation, bool ok);
+app_operation_cleanup_state_t app_operation_cleanup_result(const app_operation_t *op,
+                                                           uint32_t expected_generation);
+
 /* 静态表初始化；不创建 worker，不占堆。 */
 esp_err_t app_operation_init(void);
 
