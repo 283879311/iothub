@@ -172,3 +172,5 @@ GPIO 默认值由 `main/Kconfig.projbuild` 配置并写入 `sdkconfig`：继电�
 ## 测试凭据管理
 
 测试设备 Token、Wi-Fi 密码、管理员口令、私钥和证书不得提交到公开仓库或 README。通过设备本地配置、受控环境变量或不纳入版本控制的文件管理；曾经公开过的凭据应视为已泄露并轮换。
+
+Agent 与自动化协作规则见 [AGENTS.md](AGENTS.md)。
