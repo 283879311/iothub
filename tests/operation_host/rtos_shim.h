@@ -13,3 +13,8 @@ const char *op_test_hook_probe_log(void);
 
 /* 诊断输出开关（默认关，避免 50 次重复刷屏） */
 void op_test_set_verbose(int on);
+
+/* P1 测试：MQTT defer begin/end 调用计数。 */
+void op_test_reset_defer_counts(void);
+int op_test_defer_begin_count(void);
+int op_test_defer_end_count(void);

@@ -269,12 +269,33 @@ size_t heap_caps_get_largest_free_block(uint32_t caps)
     return 0;
 }
 
+static _Atomic int s_defer_begin_count;
+static _Atomic int s_defer_end_count;
+
+void op_test_reset_defer_counts(void)
+{
+    atomic_store(&s_defer_begin_count, 0);
+    atomic_store(&s_defer_end_count, 0);
+}
+
+int op_test_defer_begin_count(void)
+{
+    return atomic_load(&s_defer_begin_count);
+}
+
+int op_test_defer_end_count(void)
+{
+    return atomic_load(&s_defer_end_count);
+}
+
 esp_err_t app_mqtt_defer_restart_begin(void)
 {
+    atomic_fetch_add(&s_defer_begin_count, 1);
     return ESP_OK;
 }
 
 void app_mqtt_defer_restart_end_at(const char *tag)
 {
     (void)tag;
+    atomic_fetch_add(&s_defer_end_count, 1);
 }

@@ -272,6 +272,21 @@ static void *cleanup_thread(void *p)
     return NULL;
 }
 
+typedef struct {
+    app_operation_t *op;
+    uint32_t gen;
+    app_operation_finish_result_t result;
+} finish_arg_t;
+
+static void *finish_thread(void *p)
+{
+    finish_arg_t *a = (finish_arg_t *)p;
+    a->result = app_operation_request_finish(
+        a->op, a->gen, APP_OP_CANCELLED, APP_OPERATION_ERR_CANCELLED,
+        APP_OPERATION_CLEANUP_REQUIRED);
+    return NULL;
+}
+
 /* ------------------------------------------------------------------ */
 /* init / ticker                                                       */
 /* ------------------------------------------------------------------ */
@@ -290,6 +305,7 @@ static void init_all(void)
     pthread_t t;
 
     job_test_port_reset();
+    op_test_reset_defer_counts();
     job_test_port_install();
     if (app_operation_init() != ESP_OK) {
         fprintf(stderr, "operation init failed\n");
@@ -686,6 +702,168 @@ static bool t12(void)
     return expired && job_test_rp_count() == 2 && job_test_nc_count() == 2;
 }
 
+static bool t13(void)
+{
+    run_ctx_t a;
+    app_operation_t *A = NULL;
+    finish_arg_t f = {0};
+    pthread_t th;
+    app_operation_status_t st;
+
+    init_all();
+    if (!start_op(&a, &A, 30000, "A")) {
+        return false;
+    }
+    f.op = A;
+    f.gen = a.gen;
+    hook_wait_for("cleanup_after_claim");
+    pthread_create(&th, NULL, finish_thread, &f);
+    bool reached = hook_wait_reached(2000);
+    int begin_count = op_test_defer_begin_count();
+    app_operation_finish_result_t second = app_operation_request_finish(
+        A, a.gen, APP_OP_CANCELLED, APP_OPERATION_ERR_CANCELLED,
+        APP_OPERATION_CLEANUP_REQUIRED);
+    int ends_while_pending = op_test_defer_end_count();
+    hook_release();
+    pthread_join(th, NULL);
+    bool got = app_operation_get_status(A, &st);
+
+    return reached && second == APP_OPERATION_FINISH_PENDING &&
+           f.result == APP_OPERATION_FINISH_DONE && got &&
+           st.state == APP_OP_CANCELLED &&
+           claim_state(A, a.gen) == APP_OPERATION_CLEANUP_OK &&
+           job_test_rp_count() == 1 && begin_count == 1 &&
+           ends_while_pending == 0 && op_test_defer_end_count() == 1;
+}
+
+static bool t14(void)
+{
+    run_ctx_t a;
+    app_operation_t *A = NULL;
+    app_operation_status_t st;
+    app_operation_finish_result_t finish;
+
+    init_all();
+    if (!start_op(&a, &A, 30000, "A")) {
+        return false;
+    }
+    if (app_operation_set_state(A, APP_OP_GOT_IP, APP_OPERATION_ERR_NONE) != ESP_OK ||
+        app_operation_set_state(A, APP_OP_COMMITTING, APP_OPERATION_ERR_NONE) != ESP_OK) {
+        return false;
+    }
+    int ends_before = op_test_defer_end_count();
+    finish = app_operation_request_finish(
+        A, a.gen, APP_OP_CANCELLED, APP_OPERATION_ERR_CANCELLED,
+        APP_OPERATION_CLEANUP_REQUIRED);
+    bool got = app_operation_get_status(A, &st);
+    int ends_after_reject = op_test_defer_end_count();
+    bool success = app_operation_set_state(A, APP_OP_SUCCESS,
+                                          APP_OPERATION_ERR_NONE) == ESP_OK;
+
+    return finish == APP_OPERATION_FINISH_REJECTED && got &&
+           st.state == APP_OP_COMMITTING && ends_before == 0 &&
+           ends_after_reject == 0 && success &&
+           op_test_defer_end_count() == 1;
+}
+
+static bool t15(void)
+{
+    run_ctx_t a;
+    app_operation_t *A = NULL;
+
+    init_all();
+    if (!start_op(&a, &A, 30000, "A")) {
+        return false;
+    }
+    app_cmd_net_release_result_t rel = app_cmd_net_release_if_owned(A, a.gen);
+    app_cmd_net_job_snap_t s = job_snapshot();
+
+    return rel == APP_CMD_NET_RELEASE_DONE && !s.active &&
+           claim_state(A, a.gen) == APP_OPERATION_CLEANUP_OK &&
+           job_test_clear_count() >= 1;
+}
+
+static bool t16(void)
+{
+    run_ctx_t a;
+    app_operation_t *A = NULL;
+    char op_id[APP_OPERATION_ID_LEN];
+
+    init_all();
+    if (!start_op(&a, &A, 30000, "A")) {
+        return false;
+    }
+    snprintf(op_id, sizeof(op_id), "%s", app_operation_id(A));
+    if (app_cmd_net_trial_store("A", "pass", APP_CMD_SOURCE_BLE,
+                                op_id, NULL, A, NULL) != APP_CMD_NET_TRIAL_STORED) {
+        return false;
+    }
+    app_cmd_net_job_lock();
+    app_cmd_net_job_clear_locked();
+    app_cmd_net_job_unlock();
+
+    app_cmd_net_release_result_t rel = app_cmd_net_release_if_owned(A, a.gen);
+    app_cmd_net_trial_snap_t t = trial_snapshot();
+
+    return rel == APP_CMD_NET_RELEASE_DONE && !t.valid &&
+           claim_state(A, a.gen) == APP_OPERATION_CLEANUP_OK;
+}
+
+static bool t17(void)
+{
+    run_ctx_t a;
+    app_operation_t *A = NULL;
+    cleanup_arg_t c = {0};
+    pthread_t th;
+
+    init_all();
+    if (!start_op(&a, &A, 30000, "A")) {
+        return false;
+    }
+    c.op = A;
+    hook_wait_for("cleanup_after_claim");
+    pthread_create(&th, NULL, cleanup_thread, &c);
+    if (!hook_wait_reached(2000)) {
+        hook_release();
+        pthread_join(th, NULL);
+        return false;
+    }
+    app_cmd_net_release_result_t rel = app_cmd_net_release_if_owned(A, a.gen);
+    app_cmd_net_job_snap_t s = job_snapshot();
+    app_cmd_net_trial_snap_t t = trial_snapshot();
+    app_operation_cleanup_state_t running = claim_state(A, a.gen);
+    int rp_while_blocked = job_test_rp_count();
+    hook_release();
+    pthread_join(th, NULL);
+
+    return rel == APP_CMD_NET_RELEASE_PENDING && !s.active && !t.valid &&
+           running == APP_OPERATION_CLEANUP_RUNNING && rp_while_blocked == 0 &&
+           c.result && claim_state(A, a.gen) == APP_OPERATION_CLEANUP_OK &&
+           job_test_rp_count() == 1;
+}
+
+static bool t18(void)
+{
+    run_ctx_t a;
+    run_ctx_t b;
+    app_operation_t *A = NULL;
+    app_operation_t *B = NULL;
+
+    init_all();
+    if (!start_op(&a, &A, 30000, "A")) {
+        return false;
+    }
+    (void)app_operation_cancel(A);
+    if (!begin_job_only(&b, &B, 30000, "B")) {
+        return false;
+    }
+    app_cmd_net_release_result_t rel = app_cmd_net_release_if_owned(A, a.gen);
+    app_cmd_net_job_snap_t s = job_snapshot();
+
+    return rel == APP_CMD_NET_RELEASE_STALE && s.active &&
+           strcmp(s.operation_id, app_operation_id(B)) == 0;
+}
+
 /* ------------------------------------------------------------------ */
 /* runner                                                              */
 /* ------------------------------------------------------------------ */
@@ -700,7 +878,8 @@ int main(void)
         {"T01", t01}, {"T02", t02}, {"T03", t03}, {"T04", t04},
         {"T05", t05}, {"T06", t06}, {"T07", t07}, {"T08", t08},
         {"T09a", t09a}, {"T09b", t09b}, {"T10", t10}, {"T11", t11},
-        {"T12", t12},
+        {"T12", t12}, {"T13", t13}, {"T14", t14}, {"T15", t15},
+        {"T16", t16}, {"T17", t17}, {"T18", t18},
     };
     int failed = 0;
 
