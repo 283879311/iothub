@@ -82,7 +82,7 @@
       "data": "见 states.json#operation_get（1.3-2ef2a38 起含 error_detail/finished_uptime_ms/stages_source；P1 起含 cleanup_state）",
       "possible_errors": ["not_found", "params_required", "invalid_argument"],
       "client_timeout_ms": 10000,
-      "notes": "轮询跳出=terminal_states(4)；500ms 间隔建议；cleanup_state 为加法诊断字段，ok 仅表示 cleanup claim/派发成功，不代表 Wi-Fi restore 完成"
+      "notes": "轮询跳出=state 的 terminal_states(4)；500ms 间隔建议。cleanup_state 为独立资源清理诊断字段：state 才是 operation 终态依据，cleanup_state=running 不得覆盖/否定终态且终态下仍可能为 running；不得以 running 永久轮询，也不得把 ok 当作 Wi-Fi restore 完成"
     },
     "network.apply": {
       "args": { "operation_id": "string, required" },
