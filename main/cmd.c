@@ -12,6 +12,9 @@
 #include "esp_system.h"
 #include "esp_wifi.h"
 
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+
 #include "auth.h"
 #include "bt.h"
 #include "bt_gattc.h"
@@ -19,6 +22,7 @@
 #include "cmd.h"
 #include "cmd_cfg_txn.h"
 #include "cmd_net_adapter.h"
+#include "cmd_net_job.h"
 #include "cmd_policy.h"
 #include "diag.h"
 #include "common.h"
@@ -55,54 +59,6 @@ extern app_config_t s_config;
 static const char *const k_config_domains[] = {
     "network", "mqtt", "bluetooth", "uart", "gpio", "web",
 };
-
-#define APP_NET_TRIAL_TTL_MS (300 * 1000)
-
-typedef struct {
-    bool valid;
-    app_cmd_source_t owner;
-    app_cmd_cfg_txn_t cfg_txn;
-    bool cfg_txn_valid;
-    char id[20];
-    char operation_id[20];
-    char ssid[33];
-    char password[65];
-    int64_t expires_ms;
-} app_cmd_net_trial_t;
-
-static app_cmd_net_trial_t s_net_trial;
-
-typedef struct {
-    bool active;
-    app_cmd_source_t owner;
-    /* 评审 R1-P0:受理时快照的完整父上下文(tryconnect 命令的入口 ctx)。
-     * apply 内部再入从这里派生 child,不再由 owner 事后重建 —— origin/trace/
-     * auth_level 是因果链的真实值,不依赖"owner 当前只可能是 BLE"的论证。
-     * 并发:受理写入、apply 再入读取、worker/cleanup 的终态 memset 全部由
-     * s_net_job_lock 串行(评审 R2-P0;协议见设计文档 §9.3)——否则
-     * GOT_IP 300s TTL 过期或 BLE 断连取消的 cleanup 与 apply 再入并发,
-     * memset 会撕碎 parent_ctx。 */
-    app_cmd_context_t parent_ctx;
-    char idem_key[65];
-    char ssid[33];
-    char password[65];
-    char operation_id[20];
-    app_cmd_cfg_txn_t cfg_txn;
-    bool cfg_txn_valid;
-    app_operation_t *op;
-    /* DEF-NET-001:worker 等待验证前写入的链路代次;cleanup 据此调
-     * app_netcheck_cancel(gen),取消绑定代次,不误杀换代后的新一轮。 */
-    uint32_t netcheck_gen;
-    /* DEF-NET-001 P6:GOT_IP 交付时刻的四项阶段快照(任务书 §7.2"来自当前
-     * operation 而非全局旧状态");operation.get 优先读本快照。 */
-    bool st_wifi_connected;
-    bool st_ip_acquired;
-    bool st_internet_verified;
-    bool st_mqtt_connected;
-} app_cmd_net_async_job_t;
-
-static app_cmd_net_async_job_t s_net_async;
-static bool s_net_async_apply_internal = false;
 
 /* 契约 v1.1(Phase 1):终态 stages 快照缓存(按 op id,4 槽环形,与 operation 槽数一致)。
  * 背景:job 清理后 operation.get 回落读活运行态,apply 后重建链路的数秒内四项
@@ -222,14 +178,6 @@ static uint32_t app_cmd_take_accepted_ttl(void)
 }
 #endif
 
-/* job 生命周期锁(评审 R2-P0):封 "cleanup 在飞 vs dispatcher 已过 COMMITTING"
- * 的 memset/read 竞态窗口。锁序:本锁 → operation.c 的 s_ops_mux —— 反向
- * 不存在(ops_mux 临界区不回调 cmd.c,cleanup/run 均在临界区外执行)。
- * 持本锁期间不得调用 app_cmd_net_async_clear_job()(直接版),用 _sync 版。 */
-static SemaphoreHandle_t s_net_job_lock = NULL;
-static StaticSemaphore_t s_net_job_lock_buf;
-static portMUX_TYPE s_net_job_lock_mux = portMUX_INITIALIZER_UNLOCKED;
-
 /* DEF-SCAN-001(2026-11-06):BLE 连接下 WiFi 主动扫描每次占射频 ~5.8s,
  * 背靠背连续调用会在 6-7 次后把 BLE 链路饿到 LL 响应超时(0x222);
  * 新旧固件同病。命令层做最小间隔节流(保底),超频返回 busy。
@@ -237,23 +185,6 @@ static portMUX_TYPE s_net_job_lock_mux = portMUX_INITIALIZER_UNLOCKED;
 #define APP_CMD_SCAN_MIN_INTERVAL_MS 3000
 static int64_t s_last_scan_end_ms = 0;
 static portMUX_TYPE s_scan_gate_mux = portMUX_INITIALIZER_UNLOCKED;
-
-static void app_cmd_net_job_lock(void)
-{
-    /* 递归锁(评审 R8):trial 原语内建加锁后,apply 再入(持锁)会再次触发
-     * trial_ready/patch 读点的内层加锁;wifi.c restart/scan 同款递归模式。
-     * 必须用 TakeRecursive —— 普通 Take 对递归互斥不识别属主,同任务
-     * 二次加锁会自锁(R8 首测在 network.status 上实测死锁)。 */
-    xSemaphoreTakeRecursive(app_mutex_ensure(&s_net_job_lock, &s_net_job_lock_buf,
-                                             &s_net_job_lock_mux, true), portMAX_DELAY);
-}
-
-static void app_cmd_net_job_unlock(void)
-{
-    if (s_net_job_lock != NULL) {
-        xSemaphoreGiveRecursive(s_net_job_lock);
-    }
-}
 
 /* CMD-04c:敏感值擦除——volatile 逐字节写零，防优化构建消除
  * （评审要求：栈副本不可被优化掉的显式擦除）。 */
@@ -267,37 +198,6 @@ static void app_cmd_secure_wipe(char *buf, size_t len)
 }
 
 static cJSON *app_cmd_net_operation_status(const app_cmd_context_t *ctx, const char *operation_id, const char **err_out);
-
-/* 直接版:调用方必须已持 s_net_job_lock(受理/apply 尾部在锁内调用)。 */
-static void app_cmd_net_async_clear_job(void)
-{
-    if (s_net_async.cfg_txn_valid) {
-        (void)app_cmd_cfg_txn_end(s_net_async.cfg_txn);
-    }
-    memset(&s_net_async, 0, sizeof(s_net_async));
-}
-
-/* 同步版:worker(run 失败路径)与 operation cleanup 在各自任务上下文调用,
- * 自取锁。 */
-static void app_cmd_net_async_clear_job_sync(void)
-{
-    app_cmd_net_job_lock();
-    app_cmd_net_async_clear_job();
-    app_cmd_net_job_unlock();
-}
-
-/* CMD-02：active 的窄读点（内部持 J 快照后立即释放）。
- * 只允许**未持 J** 的调用方使用——避免把递归锁依赖扩散到新路径。
- * 注意：返回值是快照，调用方随后的业务动作与它并非原子。 */
-static bool app_cmd_net_job_is_active(void)
-{
-    bool active;
-
-    app_cmd_net_job_lock();
-    active = s_net_async.active;
-    app_cmd_net_job_unlock();
-    return active;
-}
 
 /* v1-only safety: static IP is pinned to the formal SSID. DHCP trials are not
  * allowed while the formal config is static; use BLE v1 config.set first. */
@@ -343,48 +243,6 @@ static bool app_cmd_static_switch_blocked(const char *ssid, const cJSON *params,
     return false;
 }
 
-static bool app_cmd_net_store_trial(const char *ssid, const char *password,
-                                    app_cmd_source_t source, const char *operation_id,
-                                    const app_cmd_cfg_txn_t *cfg_txn)
-{
-    /* R8:worker(run 成功)与 dispatcher(同步 tryconnect)都会调用,
-     * 与 NimBLE 断连清理/dispatcher 读点构成跨任务并发 —— 整体入 job 锁。 */
-    app_cmd_net_job_lock();
-    if (source == APP_CMD_SOURCE_BLE && !app_ble_gatts_connected()) {
-        app_cmd_net_job_unlock();
-        return false;
-    }
-    snprintf(s_net_trial.id, sizeof(s_net_trial.id), "trial-%08X",
-             (unsigned)esp_random());
-    snprintf(s_net_trial.ssid, sizeof(s_net_trial.ssid), "%s", ssid);
-    snprintf(s_net_trial.password, sizeof(s_net_trial.password), "%s", password);
-    if (operation_id != NULL) {
-        snprintf(s_net_trial.operation_id, sizeof(s_net_trial.operation_id), "%s",
-                 operation_id);
-    }
-    if (cfg_txn != NULL) {
-        s_net_trial.cfg_txn = *cfg_txn;
-        s_net_trial.cfg_txn_valid = true;
-    }
-    s_net_trial.expires_ms = esp_timer_get_time() / 1000 + APP_NET_TRIAL_TTL_MS;
-    s_net_trial.owner = source;
-    s_net_trial.valid = true;
-    app_cmd_net_job_unlock();
-    return true;
-}
-
-static void app_cmd_net_trial_clear(void)
-{
-    /* R8:原语内建锁(递归)——调用点有的已持锁(apply 再入/cleanup),
-     * 有的未持(断连/TTL 过期),统一在此收口。 */
-    app_cmd_net_job_lock();
-    if (s_net_trial.cfg_txn_valid) {
-        (void)app_cmd_cfg_txn_end(s_net_trial.cfg_txn);
-    }
-    memset(&s_net_trial, 0, sizeof(s_net_trial));
-    app_cmd_net_job_unlock();
-}
-
 void app_cmd_net_on_ble_disconnect(void)
 {
     app_operation_t *op = NULL;
@@ -396,20 +254,39 @@ void app_cmd_net_on_ble_disconnect(void)
      * 仅针对终态且需 600s 保留期(RETENTION_MS),本函数从解锁到 cancel
      * 的窗口远小于该值;cancel 内部另有 s_ops_mux 下的 generation 守卫,
      * 陈旧 finalize 不会写坏更新的 operation。 */
-    app_cmd_net_job_lock();
-    if (s_net_async.active && s_net_async.op != NULL &&
-        s_net_async.owner == APP_CMD_SOURCE_BLE) {
-        op = s_net_async.op;
-    }
-    app_cmd_net_job_unlock();
+    (void)app_cmd_net_job_disconnect_target(&op);
 
     if (op != NULL) {
         app_operation_status_t status;
 
         if (app_operation_get_status(op, &status)) {
             if (app_op_state_can_cancel(status.state)) {
-                (void)app_operation_cancel(op);
-                ESP_LOGI(TAG, "async network operation cancelled on BLE disconnect");
+                app_operation_finish_result_t finish = app_operation_request_finish(
+                    op, status.generation, APP_OP_CANCELLED,
+                    APP_OPERATION_ERR_CANCELLED, APP_OPERATION_CLEANUP_REQUIRED);
+
+                if (finish == APP_OPERATION_FINISH_DONE) {
+                    app_operation_status_t final_st;
+                    bool got = app_operation_get_status(op, &final_st);
+
+                    if (got && final_st.state == APP_OP_CANCELLED) {
+                        ESP_LOGI(TAG, "async network operation cancelled on BLE disconnect");
+                    } else if (got) {
+                        ESP_LOGW(TAG, "BLE disconnect finish done state=%s error=%s",
+                                 app_op_state_name(final_st.state),
+                                 app_operation_error_name(final_st.error));
+                    } else {
+                        ESP_LOGW(TAG, "BLE disconnect finish done but status lost");
+                    }
+                } else if (finish == APP_OPERATION_FINISH_PENDING) {
+                    ESP_LOGW(TAG, "BLE disconnect finish pending (another cleanup owner)");
+                } else if (finish == APP_OPERATION_FINISH_REJECTED) {
+                    ESP_LOGW(TAG, "BLE disconnect finish rejected state=%s",
+                             app_op_state_name(status.state));
+                } else {
+                    ESP_LOGW(TAG, "BLE disconnect finish stale gen=%u",
+                             (unsigned)status.generation);
+                }
                 return;
             }
             if (status.state == APP_OP_COMMITTING) {
@@ -420,12 +297,9 @@ void app_cmd_net_on_ble_disconnect(void)
     }
     /* R8:trial 属主检查 + 清理入锁(NimBLE host 任务,与 worker store /
      * dispatcher 读点互斥)。 */
-    app_cmd_net_job_lock();
-    if (s_net_trial.valid && s_net_trial.owner == APP_CMD_SOURCE_BLE) {
-        app_cmd_net_trial_clear();
+    if (app_cmd_net_trial_disconnect_clear()) {
         ESP_LOGI(TAG, "network trial cleared on BLE disconnect");
     }
-    app_cmd_net_job_unlock();
 }
 
 /* DEF-SCAN-001 扫描节流闸(2026-11-06 返工):
@@ -457,82 +331,7 @@ static void app_cmd_scan_gate_stamp(void)
 
 bool app_cmd_net_op_active(void)
 {
-    bool active;
-
-    app_cmd_net_job_lock();
-    active = s_net_async.active;
-    app_cmd_net_job_unlock();
-    return active;
-}
-
-static bool app_cmd_net_trial_ready(const char *trial_id)
-{
-    int64_t now = esp_timer_get_time() / 1000;
-    bool ok;
-
-    app_cmd_net_job_lock();
-    if (!s_net_trial.valid || now >= s_net_trial.expires_ms) {
-        if (s_net_trial.valid) {
-            app_cmd_net_trial_clear();
-        }
-        ok = false;
-    } else {
-        ok = (trial_id == NULL || strcmp(trial_id, s_net_trial.id) == 0);
-    }
-    app_cmd_net_job_unlock();
-    return ok;
-}
-
-
-static bool app_cmd_net_async_cleanup(app_operation_t *op, void *ctx)
-{
-    (void)ctx;
-    if (op == NULL) {
-        return false;
-    }
-    bool restore_persistent = false;
-    uint32_t nc_gen;
-
-    /* trial 清理与 job 清理一并入锁:apply 再入期间 cleanup 在此等待,
-     * 不会把 trial/trial_id 从正在提交的 apply 脚下抽走(R2-P0)。
-     * 判别点(DEF-MQTT-003,评审选 B):"这次清理没有提交新配置" ⇔ state !=
-     * COMMITTING。EXPIRED/CANCELLED/FAILED 都成立;COMMITTING 表示 apply 已
-     * 接管新配置,不得回退。状态读取与 trial 检查放在同一临界区,单点决策。 */
-    /* B5(第三轮):本 op 终态清理时按 id 匹配清空活动登记(旧终态不误清新 op) */
-    app_wifi_clear_active_operation(app_operation_id(op));
-    app_cmd_net_job_lock();
-    nc_gen = s_net_async.netcheck_gen;   /* memset 前捕获(0=尚未验证,无需取消) */
-    restore_persistent = (app_operation_state(op) != APP_OP_COMMITTING);
-    if (s_net_trial.valid &&
-        strcmp(s_net_trial.operation_id, app_operation_id(op)) == 0) {
-        app_cmd_net_trial_clear();
-    }
-    app_cmd_net_async_clear_job();
-    app_cmd_net_job_unlock();
-
-    /* DEF-NET-001:取消绑定代次(任务书 3.4)—— 只杀本事务验证过的那条链路
-     * 的在飞验证,换代后的新一轮不受影响;0=本事务尚未到验证阶段 */
-    app_netcheck_cancel(nc_gen);
-    if (app_operation_state(op) == APP_OP_CONNECTING) {
-        (void)app_wifi_try_cancel();
-    }
-
-    /* 锁外异步恢复(不持锁调用 schedule) */
-    if (restore_persistent) {
-        /* DEF-MQTT-003:trial 未提交即被清理(cancel/expire),运行态可能停在
-         * 试验网络(DHCP/临时地址);持久配置是唯一合法形态,走既有 restart 链
-         * 恢复。只 schedule 不阻塞(本函数会在 op_expire 任务上下文执行)。
-         * 不走 LKG/DHCP 救援链,不改变 M1 语义。 */
-        ESP_LOGW(TAG, "rescue=restore_persistent op=%s (cleanup without commit)",
-                 app_operation_id(op));
-        if (!app_wifi_cleanup_request(app_operation_id(op))) {
-            /* CLEANUP_FAILED 粘性或唤醒失败:不得假装已释放(B3/C2) */
-            ESP_LOGE(TAG, "rescue=restore_persistent failed (cleanup request) op=%s",
-                     app_operation_id(op));
-            return false;
-        }
-    }
-    return true;
+    return app_cmd_net_job_is_active();
 }
 
 static app_operation_error_t app_cmd_net_wifi_error(app_wifi_try_result_t result)
@@ -556,48 +355,34 @@ static app_operation_error_t app_cmd_net_wifi_error(app_wifi_try_result_t result
 
 static esp_err_t app_cmd_net_async_run(app_operation_t *op, void *ctx)
 {
-    app_cmd_net_async_job_t *job = ctx;
     app_wifi_try_result_t result;
     app_operation_status_t st0;
     app_operation_status_t st1;
     uint32_t generation;
-    char ssid[33];
-    char password[65];
+    char ssid[APP_CMD_NET_TRIAL_SSID_LEN];
+    char password[APP_CMD_NET_TRIAL_PASSWORD_LEN];
+    char op_id[APP_OPERATION_ID_LEN];
     app_cmd_source_t owner;
 
-    if (op == NULL || job == NULL) {
+    (void)ctx;
+    if (op == NULL) {
         return ESP_ERR_INVALID_ARG;
     }
-    /* CMD-02：一次性持 J 快照 active/ssid/password/owner。
-     * 早退顺序保持原语义：active==false 时**先返回**，不做任何锁外调用。
-     * 注意：解锁后 job 仍可能被 cleanup 清零；本函数后续对
-     * s_net_async.netcheck_gen/st_* 的写入属 CMD-03 窄窗口范畴，本补丁不处理。 */
-    {
-        bool job_active;
-
-        app_cmd_net_job_lock();
-        job_active = job->active;
-        if (job_active) {
-            snprintf(ssid, sizeof(ssid), "%s", job->ssid);
-            snprintf(password, sizeof(password), "%s", job->password);
-            owner = job->owner;
-        }
-        app_cmd_net_job_unlock();
-        if (!job_active) {
-            return ESP_ERR_INVALID_ARG;
-        }
-    }
-    /* B5(第三轮):活动 operation 登记——scheduled/task run 日志的 op 字段 */
-    app_wifi_set_active_operation(app_operation_id(op));
+    /* CMD-03a:operation ID 局部化,后续日志/归属校验不再回读 operation 表。 */
+    snprintf(op_id, sizeof(op_id), "%s", app_operation_id(op));
     if (!app_operation_get_status(op, &st0)) {
-        /* fencing 终审(2026-11-14,裁决(b)):早退与 set 对偶清除,残留 id 不再
-         * 污染后续 scheduled/task run 日志的 op 字段(log-only 语义不变) */
-        app_wifi_clear_active_operation(app_operation_id(op));
         return ESP_ERR_INVALID_ARG;
     }
     generation = st0.generation;   /* R5:跨阻塞调用校验槽位未被复用 */
-    ESP_LOGI(TAG, "async tryconnect ssid='%s' op=%s", ssid,
-             app_operation_id(op));
+    /* CMD-03 H1:通过模块快照获取 worker 运行数据,不再解引用内部 job。 */
+    if (!app_cmd_net_job_worker_snapshot(op, generation, ssid, sizeof(ssid),
+                                         password, sizeof(password), &owner)) {
+        app_cmd_secure_wipe(password, sizeof(password));
+        return ESP_ERR_INVALID_ARG;
+    }
+    /* B5(第三轮):活动 operation 登记——scheduled/task run 日志的 op 字段 */
+    app_wifi_set_active_operation(op_id);
+    ESP_LOGI(TAG, "async tryconnect ssid='%s' op=%s", ssid, op_id);
     /* DEF-MQTT-001:MQTT 源的受理回包必须先出站再拆 WiFi —— 试验的第一步
      * 就是断连扫描,一旦早于 PUBACK 就会把回包连同 TCP 一起丢掉。 */
     if (owner == APP_CMD_SOURCE_MQTT) {
@@ -610,19 +395,34 @@ static esp_err_t app_cmd_net_async_run(app_operation_t *op, void *ctx)
      * 这里再按 generation+state 复核,陈旧/已终态的 run 直接返回,绝不
      * 触碰 job(旧实现用裸 state 判断,槽位复用后会误清新 job)。 */
     if (!app_operation_get_status(op, &st1)) {
+        app_cmd_secure_wipe(password, sizeof(password));
         ESP_LOGW(TAG, "async tryconnect op=%s status lost after wait, no job touch",
-                 app_operation_id(op));
+                 op_id);
         return ESP_ERR_INVALID_ARG;
     }
     if (st1.generation != generation || st1.state != APP_OP_CONNECTING) {
+        app_cmd_secure_wipe(password, sizeof(password));
         ESP_LOGW(TAG, "async tryconnect op=%s stale after wait (gen=%u state=%d), no job touch",
-                 app_operation_id(op), (unsigned)generation, (int)st1.state);
+                 op_id, (unsigned)generation, (int)st1.state);
         return ESP_OK;
     }
     if (result == APP_WIFI_TRY_OK) {
-        if (!app_cmd_net_store_trial(ssid, password, owner,
-                                     app_operation_id(op), NULL)) {
-            app_cmd_net_async_clear_job_sync();
+        app_cmd_net_trial_store_result_t stored =
+            app_cmd_net_trial_store(ssid, password, owner, op_id, NULL, op, NULL);
+        /* trial 保存完成后再擦除栈副本;trial 内部持有独立副本。 */
+        app_cmd_secure_wipe(password, sizeof(password));
+
+        if (stored == APP_CMD_NET_TRIAL_STALE_JOB ||
+            stored == APP_CMD_NET_TRIAL_STALE_OP) {
+            /* CMD-03a:cleanup 已接管终态,job 可能已被新 op 复用。
+             * 不 clear_job、不写 job、不改 operation 状态。 */
+            ESP_LOGW(TAG, "async tryconnect op=%s state=%d stale(%s) no job touch",
+                     op_id, (int)st1.state,
+                     stored == APP_CMD_NET_TRIAL_STALE_JOB ? "job_cleared" : "other_op");
+            return ESP_OK;
+        }
+        if (stored != APP_CMD_NET_TRIAL_STORED) {
+            (void)app_cmd_net_job_clear_if_owned(op, generation);
             return app_operation_set_state(op, APP_OP_CANCELLED,
                                            APP_OPERATION_ERR_CANCELLED);
         }
@@ -637,9 +437,11 @@ static esp_err_t app_cmd_net_async_run(app_operation_t *op, void *ctx)
             bool have = app_netcheck_read_done(link_gen, &dres);
             bool verified = have && dres.outcome == APP_NETCHECK_OUT_OK;
 
-            app_cmd_net_job_lock();
-            s_net_async.netcheck_gen = link_gen;   /* cleanup 的取消依据 */
-            app_cmd_net_job_unlock();
+            if (!app_cmd_net_job_set_netcheck_gen(op, generation, link_gen)) {
+                ESP_LOGW(TAG, "async tryconnect op=%s stale before netcheck snapshot, no job touch",
+                         op_id);
+                return ESP_OK;
+            }
             if (verified) {
                 /* P6:交付快照 —— 全部取 worker 在手真值,零竞速。
                  * 2026-11-08 实锤(用户 BLE 源 apply 被拒):旧实现读活运行态,
@@ -650,20 +452,22 @@ static esp_err_t app_cmd_net_async_run(app_operation_t *op, void *ctx)
                  * got_ip 至 300s TTL。TRY_OK(require_ip) 本身即 wifi+ip 的
                  * 交付语义;判决真值(verified)与阶段串(dres.stage)来自
                  * read_done 不可变快照,全部确定性可得。 */
-                app_cmd_net_job_lock();
-                s_net_async.st_wifi_connected = true;
-                s_net_async.st_ip_acquired = true;
-                s_net_async.st_internet_verified = verified;
-                s_net_async.st_mqtt_connected =
-                    strcmp(dres.stage, "mqtt") == 0;
-                app_cmd_net_job_unlock();
+                bool st_owned = app_cmd_net_job_set_stages(
+                    op, generation, true, true, verified,
+                    strcmp(dres.stage, "mqtt") == 0);
+
+                if (!st_owned) {
+                    ESP_LOGW(TAG, "async tryconnect op=%s stale before stage snapshot, no job touch",
+                             op_id);
+                    return ESP_OK;
+                }
                 /* 契约 v1.1:终态快照缓存(job 清理后 operation.get 仍返回本 op
                  * 的阶段真值,不再回落活运行态)。 */
                 app_cmd_net_stage_snap_put(app_operation_id(op), true, true, verified,
                                            strcmp(dres.stage, "mqtt") == 0);
             } else {
                 ESP_LOGW(TAG, "async tryconnect op=%s netcheck have=%d outcome=%d gen=%u stage=%s -> rollback",
-                         app_operation_id(op), (int)have, (int)dres.outcome,
+                         op_id, (int)have, (int)dres.outcome,
                          dres.gen, dres.stage);
                 /* P2-4:推迟窗口内 op 可能已被 cancel/过期 —— 二次 R5 复核,
                  * 输者绝不触碰 job(与 connect 后的复核同一纪律)。 */
@@ -671,7 +475,7 @@ static esp_err_t app_cmd_net_async_run(app_operation_t *op, void *ctx)
                     st1.generation != generation ||
                     st1.state != APP_OP_CONNECTING) {
                     ESP_LOGW(TAG, "async tryconnect op=%s stale after netcheck, no job touch",
-                             app_operation_id(op));
+                             op_id);
                     return ESP_OK;
                 }
                 /* 契约 v1.1:失败终态也保留"已完成阶段"真值(候选拿到过 IP
@@ -679,7 +483,7 @@ static esp_err_t app_cmd_net_async_run(app_operation_t *op, void *ctx)
                 app_cmd_net_stage_snap_put(app_operation_id(op), true, true, false, false);
                 /* 判别点 B(state != COMMITTING → restore_persistent):清 trial/job
                  * + schedule_restart 回持久配置,再给 op 终态。 */
-                (void)app_cmd_net_async_cleanup(op, job);
+                (void)app_cmd_net_cleanup_run(op, NULL);
                 return app_operation_set_state(
                     op, APP_OP_FAILED,
                     !have ? APP_OPERATION_ERR_VERIFY_TIMEOUT :
@@ -692,7 +496,8 @@ static esp_err_t app_cmd_net_async_run(app_operation_t *op, void *ctx)
                                        APP_OPERATION_ERR_NONE);
     }
 
-    app_cmd_net_async_clear_job_sync();
+    app_cmd_secure_wipe(password, sizeof(password));
+    (void)app_cmd_net_job_clear_if_owned(op, generation);
     /* 契约 v1.1:连接阶段失败/取消 = 本 op 未达成任何阶段,写入全 false 快照,
      * 避免 operation.get 回落活运行态(那是"别的链路"的状态)。 */
     app_cmd_net_stage_snap_put(app_operation_id(op), false, false, false, false);
@@ -723,9 +528,8 @@ static bool app_cmd_net_tryconnect_async(const cJSON *params,
     const char *idem_key = cJSON_IsString(key_item) ? key_item->valuestring : NULL;
     const app_cmd_source_t source = ctx->source;
     app_operation_t *op = NULL;
-    esp_err_t err;
     /* CMD-02：受理响应只读本局部副本，不再在解锁后读共享缓冲区。 */
-    char accepted_operation_id[sizeof(s_net_async.operation_id)] = "";
+    char accepted_operation_id[APP_OPERATION_ID_LEN] = "";
 
     if (source == APP_CMD_SOURCE_MQTT && !app_cmd_mqtt_net_txn_enabled()) {
         *err_out = "guard_rejected";
@@ -755,15 +559,15 @@ static bool app_cmd_net_tryconnect_async(const cJSON *params,
      * operation 查询。本处只消除数据竞争，**不宣称**检查-动作原子：
      * 快照后 job 可能被 cleanup 清零，返回旧 op 的幂等终态仍属合法结果。 */
     {
-        bool job_active;
-        app_operation_t *job_op;
-        char job_idem_key[sizeof(s_net_async.idem_key)];
+        bool job_active = false;
+        app_operation_t *job_op = NULL;
+        char job_idem_key[65];
 
-        app_cmd_net_job_lock();
-        job_active = s_net_async.active;
-        job_op = s_net_async.op;
-        snprintf(job_idem_key, sizeof(job_idem_key), "%s", s_net_async.idem_key);
-        app_cmd_net_job_unlock();
+        if (!app_cmd_net_job_accept_snapshot(&job_active, &job_op, job_idem_key,
+                                             sizeof(job_idem_key))) {
+            *err_out = "internal_error";
+            return false;
+        }
 
         if (job_active) {
             if (job_op != NULL && idem_key != NULL &&
@@ -788,65 +592,36 @@ static bool app_cmd_net_tryconnect_async(const cJSON *params,
             return false;
         }
     }
-    {
-        bool trial_busy;
-
-        app_cmd_net_job_lock();
-        trial_busy = (s_net_trial.valid && app_cmd_net_trial_ready(NULL));
-        app_cmd_net_job_unlock();
-        if (trial_busy) {
-            *err_out = "busy";
-            return false;
-        }
+    if (app_cmd_net_trial_busy()) {
+        *err_out = "busy";
+        return false;
     }
 
     app_cmd_net_job_lock();
     {
-        app_cmd_cfg_txn_t cfg_txn;
+#ifdef APP_WIFI_FAULT_INJECT
+        uint32_t accepted_ttl = app_cmd_take_accepted_ttl();
+#else
+        uint32_t accepted_ttl = 45000;
+#endif
+        app_cmd_net_job_begin_result_t begin = app_cmd_net_job_begin_locked(
+            source, app_cmd_operation_owner(source), ctx,
+            ssid_item->valuestring,
+            (cJSON_IsString(pass_item) && pass_item->valuestring != NULL)
+                ? pass_item->valuestring : "",
+            idem_key, accepted_ttl, 300000, app_cmd_net_async_run, &op);
 
-        if (!app_cmd_cfg_txn_begin(&cfg_txn)) {
+        if (begin != APP_CMD_NET_JOB_BEGIN_OK) {
             app_cmd_net_job_unlock();
-            *err_out = "busy";
+            *err_out = (begin == APP_CMD_NET_JOB_BEGIN_BUSY) ? "busy"
+                     : (begin == APP_CMD_NET_JOB_BEGIN_NO_SLOT) ? "no_slot"
+                     : (begin == APP_CMD_NET_JOB_BEGIN_NO_TXN) ? "busy"
+                                                               : "internal_error";
             return false;
         }
-        memset(&s_net_async, 0, sizeof(s_net_async));
-        s_net_async.cfg_txn = cfg_txn;
-        s_net_async.cfg_txn_valid = true;
+        snprintf(accepted_operation_id, sizeof(accepted_operation_id), "%s",
+                 app_operation_id(op));
     }
-    s_net_async.active = true;
-    s_net_async.owner = source;
-    s_net_async.parent_ctx = *ctx;   /* R1-P0:真实父上下文快照(先于 operation_start) */
-    snprintf(s_net_async.ssid, sizeof(s_net_async.ssid), "%s", ssid_item->valuestring);
-    if (cJSON_IsString(pass_item) && pass_item->valuestring != NULL) {
-        snprintf(s_net_async.password, sizeof(s_net_async.password), "%s",
-                 pass_item->valuestring);
-    }
-    if (idem_key != NULL) {
-        snprintf(s_net_async.idem_key, sizeof(s_net_async.idem_key), "%s", idem_key);
-    }
-
-#ifdef APP_WIFI_FAULT_INJECT
-    err = app_operation_start(
-        app_cmd_operation_owner(source),
-        idem_key, app_cmd_take_accepted_ttl(), 300000, app_cmd_net_async_run,
-        app_cmd_net_async_cleanup, &s_net_async, &op);
-#else
-    err = app_operation_start(
-        app_cmd_operation_owner(source),
-        idem_key, 45000, 300000, app_cmd_net_async_run,
-        app_cmd_net_async_cleanup, &s_net_async, &op);
-#endif
-    if (err != ESP_OK) {
-        app_cmd_net_async_clear_job();
-        app_cmd_net_job_unlock();
-        *err_out = (err == ESP_ERR_INVALID_STATE) ? "busy" : "no_slot";
-        return false;
-    }
-    s_net_async.op = op;
-    snprintf(s_net_async.operation_id, sizeof(s_net_async.operation_id), "%s",
-             app_operation_id(op));
-    snprintf(accepted_operation_id, sizeof(accepted_operation_id), "%s",
-             s_net_async.operation_id);
     app_cmd_net_job_unlock();
 
     {
@@ -868,6 +643,7 @@ typedef struct {
     bool op_found;
     app_op_state_t state;
     app_operation_error_t error;
+    app_operation_cleanup_state_t cleanup_state;
     char operation_id[APP_OPERATION_ID_LEN];
     app_operation_owner_t owner;
     int64_t terminal_ms;
@@ -894,6 +670,8 @@ static void app_cmd_net_op_status_capture(const char *operation_id,
 {
     app_operation_t *op;
     app_operation_status_t st;
+    app_cmd_net_job_snap_t job_snap;
+    app_cmd_net_trial_snap_t trial_snap;
 
     memset(snap, 0, sizeof(*snap));
 
@@ -909,25 +687,39 @@ static void app_cmd_net_op_status_capture(const char *operation_id,
     if (snap->op_found) {
         snap->state = st.state;
         snap->error = st.error;
+        snap->cleanup_state = st.cleanup_state;
         snap->owner = st.owner;
         snap->terminal_ms = st.terminal_ms;
         app_copy_string(snap->operation_id, sizeof(snap->operation_id), st.id);
     }
-    snap->have_job_snapshot = (s_net_async.active &&
-                               strcmp(s_net_async.operation_id, operation_id) == 0);
+    app_cmd_net_job_snapshot_locked(&job_snap);
+    snap->have_job_snapshot = (job_snap.active &&
+                               strcmp(job_snap.operation_id, operation_id) == 0);
     if (snap->have_job_snapshot) {
-        snap->st_wifi_connected = s_net_async.st_wifi_connected;
-        snap->st_ip_acquired = s_net_async.st_ip_acquired;
-        snap->st_internet_verified = s_net_async.st_internet_verified;
-        snap->st_mqtt_connected = s_net_async.st_mqtt_connected;
+        snap->st_wifi_connected = job_snap.st_wifi_connected;
+        snap->st_ip_acquired = job_snap.st_ip_acquired;
+        snap->st_internet_verified = job_snap.st_internet_verified;
+        snap->st_mqtt_connected = job_snap.st_mqtt_connected;
     }
-    snap->trial_match = (s_net_trial.valid &&
-                         strcmp(s_net_trial.operation_id, operation_id) == 0);
+    app_cmd_net_trial_snapshot_locked(&trial_snap);
+    snap->trial_match = (trial_snap.valid &&
+                         strcmp(trial_snap.operation_id, operation_id) == 0);
     if (snap->trial_match) {
-        app_copy_string(snap->trial_id, sizeof(snap->trial_id), s_net_trial.id);
-        app_copy_string(snap->trial_ssid, sizeof(snap->trial_ssid), s_net_trial.ssid);
+        app_copy_string(snap->trial_id, sizeof(snap->trial_id), trial_snap.id);
+        app_copy_string(snap->trial_ssid, sizeof(snap->trial_ssid), trial_snap.ssid);
     }
     app_cmd_net_job_unlock();
+}
+
+static const char *app_cmd_net_cleanup_state_name(app_operation_cleanup_state_t state)
+{
+    switch (state) {
+    case APP_OPERATION_CLEANUP_NONE:    return "none";
+    case APP_OPERATION_CLEANUP_RUNNING: return "running";
+    case APP_OPERATION_CLEANUP_OK:      return "ok";
+    case APP_OPERATION_CLEANUP_FAIL:    return "fail";
+    default:                            return "none";
+    }
 }
 
 static cJSON *app_cmd_net_operation_status(const app_cmd_context_t *ctx,
@@ -961,6 +753,8 @@ static cJSON *app_cmd_net_operation_status(const app_cmd_context_t *ctx,
     }
     cJSON_AddStringToObject(resp, "operation_id", snap.operation_id);
     cJSON_AddStringToObject(resp, "state", app_op_state_name(snap.state));
+    cJSON_AddStringToObject(resp, "cleanup_state",
+                            app_cmd_net_cleanup_state_name(snap.cleanup_state));
     {
         /* 契约 v1.1:error 保持扁平字符串(v1 冻结);并行新增 error_detail 对象,
          * 2.0 再统一。两者值同源,客户端可任选。 */
@@ -1081,9 +875,11 @@ static bool app_cmd_net_apply_async(const app_cmd_context_t *ctx,
      * 真正的安全边界是后面的 set_state(COMMITTING) 与 expiring 闸。 */
     {
         bool internet_verified;
+        app_cmd_net_job_snap_t job_snap;
 
         app_cmd_net_job_lock();
-        internet_verified = s_net_async.st_internet_verified;
+        app_cmd_net_job_snapshot_locked(&job_snap);
+        internet_verified = job_snap.st_internet_verified;
         app_cmd_net_job_unlock();
         if (!internet_verified) {
             /* 理论不可达:GOT_IP 交付门槛保证 verified 才置位 */
@@ -1098,9 +894,7 @@ static bool app_cmd_net_apply_async(const app_cmd_context_t *ctx,
         /* R8:trial 预检读点入锁;set_state(COMMITTING) 留在锁外,
          * 它与 cancel/expire 的裁决点语义不变。 */
         app_cmd_net_job_lock();
-        trial_ok = (s_net_trial.valid &&
-                    strcmp(s_net_trial.operation_id, status.id) == 0 &&
-                    app_cmd_net_trial_ready(s_net_trial.id));
+        trial_ok = app_cmd_net_trial_ready_for_operation_locked(status.id);
         app_cmd_net_job_unlock();
         if (!trial_ok) {
             *err_out = "trial_invalid";
@@ -1120,9 +914,12 @@ static bool app_cmd_net_apply_async(const app_cmd_context_t *ctx,
 
     {
         cJSON *p = cJSON_CreateObject();
+        app_cmd_net_trial_snap_t trial_snap;
+
+        app_cmd_net_trial_snapshot_locked(&trial_snap);
         if (p != NULL) {
-            cJSON_AddStringToObject(p, "trial_id", s_net_trial.id);
-            s_net_async_apply_internal = true;
+            cJSON_AddStringToObject(p, "trial_id", trial_snap.id);
+            app_cmd_net_job_set_apply_internal_locked(true);
             {
                 /* C1 阶段 1(R1-P0):从受理时快照的父上下文派生 child ——
                  * source=INTERNAL、origin/trace/auth 继承 tryconnect 请求的
@@ -1130,9 +927,10 @@ static bool app_cmd_net_apply_async(const app_cmd_context_t *ctx,
                  * v0 彻底删除(2026-11-05):直接按 canonical 方法名调用,
                  * 不再构造 {"method","params"} 帧。 */
                 app_cmd_context_t inner_ctx;
+                app_cmd_context_t parent_ctx;
 
-                if (!app_cmd_ctx_internal_child(&s_net_async.parent_ctx,
-                                                &inner_ctx)) {
+                if (!app_cmd_net_job_parent_ctx_locked(&parent_ctx) ||
+                    !app_cmd_ctx_internal_child(&parent_ctx, &inner_ctx)) {
                     inner_err = "internal_error";
                 } else if (app_cmd_execute_method(&inner_ctx, "network.apply", p,
                                                   &inner, &out, &inner_err) == ESP_OK &&
@@ -1140,7 +938,7 @@ static bool app_cmd_net_apply_async(const app_cmd_context_t *ctx,
                     ok = true;
                 }
             }
-            s_net_async_apply_internal = false;
+            app_cmd_net_job_set_apply_internal_locked(false);
             cJSON_Delete(p);
         }
     }
@@ -1148,7 +946,7 @@ static bool app_cmd_net_apply_async(const app_cmd_context_t *ctx,
     if (ok) {
         (void)app_operation_set_state(op, APP_OP_SUCCESS, APP_OPERATION_ERR_NONE);
         app_wifi_clear_active_operation(status.id);
-        app_cmd_net_async_clear_job();
+        app_cmd_net_job_clear_locked();
         {
             cJSON *resp = cJSON_CreateObject();
             if (resp == NULL) {
@@ -1178,7 +976,7 @@ static bool app_cmd_net_apply_async(const app_cmd_context_t *ctx,
             }
         }
         (void)app_operation_set_state(op, APP_OP_FAILED, error);
-        app_cmd_net_async_clear_job();
+        app_cmd_net_job_clear_locked();
         *err_out = inner_err != NULL ? inner_err : "apply_failed";
     }
     app_cmd_net_job_unlock();
@@ -1224,9 +1022,18 @@ static bool app_cmd_net_cancel_async(const app_cmd_context_t *ctx,
         *err_out = "operation_state";
         return false;
     }
-    if (app_operation_cancel(op) != ESP_OK) {
-        *err_out = "operation_state";
-        return false;
+    {
+        app_operation_finish_result_t finish = app_operation_request_finish(
+            op, status.generation, APP_OP_CANCELLED,
+            APP_OPERATION_ERR_CANCELLED, APP_OPERATION_CLEANUP_REQUIRED);
+        app_operation_status_t final_st;
+
+        if (finish != APP_OPERATION_FINISH_DONE ||
+            !app_operation_get_status(op, &final_st) ||
+            final_st.state != APP_OP_CANCELLED) {
+            *err_out = "operation_state";
+            return false;
+        }
     }
     {
         cJSON *resp = cJSON_CreateObject();
@@ -1379,10 +1186,13 @@ static cJSON *app_cmd_build_network_status(void)
     if (trial != NULL) {
         /* R8:trial 读点入锁(与 worker store / 断连 clear 跨任务)。 */
         app_cmd_net_job_lock();
-        snap.trial_ready = app_cmd_net_trial_ready(NULL);
+        snap.trial_ready = app_cmd_net_trial_ready_locked(NULL);
         if (snap.trial_ready) {
-            app_copy_string(snap.trial_id, sizeof(snap.trial_id), s_net_trial.id);
-            app_copy_string(snap.trial_ssid, sizeof(snap.trial_ssid), s_net_trial.ssid);
+            app_cmd_net_trial_snap_t trial_snap;
+
+            app_cmd_net_trial_snapshot_locked(&trial_snap);
+            app_copy_string(snap.trial_id, sizeof(snap.trial_id), trial_snap.id);
+            app_copy_string(snap.trial_ssid, sizeof(snap.trial_ssid), trial_snap.ssid);
         }
         app_cmd_net_job_unlock();
         if (snap.trial_ready) {
@@ -2726,11 +2536,11 @@ esp_err_t app_cmd_execute_method(const app_cmd_context_t *ctx, const char *metho
                 /* R8:trial 忙检/清理入锁;紧随其后的 15s 阻塞试连不持锁
                  * (断连期间到达的清理会在 store_trial 锁内与其串行)。 */
                 app_cmd_net_job_lock();
-                if (s_net_trial.valid && app_cmd_net_trial_ready(NULL)) {
+                if (app_cmd_net_trial_busy_locked()) {
                     app_cmd_net_job_unlock();
                     err = "busy";
                 } else {
-                    app_cmd_net_trial_clear();
+                    app_cmd_net_trial_clear_locked();
                     app_cmd_net_job_unlock();
                     if (!app_cmd_cfg_txn_begin(&cfg_txn)) {
                         err = "busy";
@@ -2742,16 +2552,19 @@ esp_err_t app_cmd_execute_method(const app_cmd_context_t *ctx, const char *metho
                 ESP_LOGI(TAG, "network.tryconnect ssid='%s'", ssid);
                 result = app_wifi_try_connect_ip(ssid, password, 15000);
                 switch (result) {
-                case APP_WIFI_TRY_OK:
+                case APP_WIFI_TRY_OK: {
                     /* tryconnect 是同步阻塞的:等待期间 BLE 可能已断开。
                      * 此时若仍把候选留在 RAM,会形成"无会话但可 apply"的遗留事务;
                      * 直接丢弃候选,连接已恢复的正式配置不受影响。 */
-                    if (!app_cmd_net_store_trial(ssid, password, source, NULL, &cfg_txn)) {
+                    bool txn_taken = false;
+
+                    if (app_cmd_net_trial_store(ssid, password, source, NULL, &cfg_txn, NULL,
+                                                &txn_taken) != APP_CMD_NET_TRIAL_STORED) {
                         ESP_LOGW(TAG, "network.tryconnect: BLE disconnected, discard candidate");
                         err = "cancelled";
                         break;
                     }
-                    cfg_txn_transferred = true;
+                    cfg_txn_transferred = txn_taken;
                     resp = cJSON_CreateObject();
                     if (resp == NULL) {
                         app_cmd_net_trial_clear();
@@ -2759,18 +2572,21 @@ esp_err_t app_cmd_execute_method(const app_cmd_context_t *ctx, const char *metho
                     } else {
                         /* R8:锁内值复制(防中途断连清理撕读)——
                          * CMD-04c:构建移到锁外(锁内零 cJSON)。 */
-                        char trial_id[20];
-                        char trial_ssid[33];
+                        char trial_id[APP_CMD_NET_TRIAL_ID_LEN];
+                        char trial_ssid[APP_CMD_NET_TRIAL_SSID_LEN];
+                        app_cmd_net_trial_snap_t trial_snap;
 
                         app_cmd_net_job_lock();
-                        app_copy_string(trial_id, sizeof(trial_id), s_net_trial.id);
-                        app_copy_string(trial_ssid, sizeof(trial_ssid), s_net_trial.ssid);
+                        app_cmd_net_trial_snapshot_locked(&trial_snap);
                         app_cmd_net_job_unlock();
+                        app_copy_string(trial_id, sizeof(trial_id), trial_snap.id);
+                        app_copy_string(trial_ssid, sizeof(trial_ssid), trial_snap.ssid);
                         cJSON_AddStringToObject(resp, "trial_id", trial_id);
                         cJSON_AddStringToObject(resp, "state", "got_ip");
                         cJSON_AddStringToObject(resp, "ssid", trial_ssid);
                     }
                     break;
+                }
                 case APP_WIFI_TRY_WRONG_PASSWORD:
                     err = "wrong_password";
                     break;
@@ -2810,7 +2626,7 @@ esp_err_t app_cmd_execute_method(const app_cmd_context_t *ctx, const char *metho
 
             if (source == APP_CMD_SOURCE_MQTT) {
                 err = "guard_rejected";
-            } else if (app_cmd_net_job_is_active() && !s_net_async_apply_internal) {
+            } else if (app_cmd_net_job_is_active() && !app_cmd_net_job_apply_internal()) {
                 err = "busy";
             } else if (!cJSON_IsString(trial_item) || trial_item->valuestring == NULL ||
                        !app_cmd_net_trial_ready(trial_item->valuestring)) {
@@ -2832,9 +2648,9 @@ esp_err_t app_cmd_execute_method(const app_cmd_context_t *ctx, const char *metho
                     /* R8:trial 字段读点入锁(...)。
                      * CMD-04c:锁内值复制——patch 构建移到锁外(锁内零 cJSON)。 */
                     app_cmd_net_job_lock();
-                    app_copy_string(trial_ssid, sizeof(trial_ssid), s_net_trial.ssid);
-                    app_copy_string(trial_password, sizeof(trial_password),
-                                    s_net_trial.password);
+                    (void)app_cmd_net_trial_credentials_locked(
+                        trial_ssid, sizeof(trial_ssid),
+                        trial_password, sizeof(trial_password));
                     app_cmd_net_job_unlock();
                     /* CMD-04b 评审修正的恢复:候选 SSID/密码从快照副本加入
                      * patch——字段顺序(1.sta_ssid 2.sta_password 3.net_mode)
@@ -2874,10 +2690,17 @@ esp_err_t app_cmd_execute_method(const app_cmd_context_t *ctx, const char *metho
                     app_cmd_net_trial_clear();
                     err = apply_err == ESP_ERR_INVALID_ARG ? "invalid_config" : "save_failed";
                 } else {
+                    char prof_ssid[APP_CMD_NET_TRIAL_SSID_LEN] = {0};
+                    char prof_password[APP_CMD_NET_TRIAL_PASSWORD_LEN] = {0};
+                    esp_err_t profile_err;
+
                     app_cmd_net_job_lock();
-                    esp_err_t profile_err = app_config_save_wifi_profile(s_net_trial.ssid,
-                                                                          s_net_trial.password);
+                    (void)app_cmd_net_trial_credentials_locked(
+                        prof_ssid, sizeof(prof_ssid),
+                        prof_password, sizeof(prof_password));
+                    profile_err = app_config_save_wifi_profile(prof_ssid, prof_password);
                     app_cmd_net_job_unlock();
+                    app_cmd_secure_wipe(prof_password, sizeof(prof_password));
 
                     if (profile_err != ESP_OK) {
                         esp_err_t restore_err = app_config_snapshot_restore();
@@ -2890,11 +2713,13 @@ esp_err_t app_cmd_execute_method(const app_cmd_context_t *ctx, const char *metho
                         app_cmd_net_trial_clear();
                         err = restore_err == ESP_OK ? "apply_failed" : "rollback_failed";
                     } else {
-                        char trial_id[sizeof(s_net_trial.id)];
+                        char trial_id[APP_CMD_NET_TRIAL_ID_LEN];
+                        app_cmd_net_trial_snap_t trial_snap;
 
                         app_cmd_net_job_lock();
-                        snprintf(trial_id, sizeof(trial_id), "%s", s_net_trial.id);
+                        app_cmd_net_trial_snapshot_locked(&trial_snap);
                         app_cmd_net_job_unlock();
+                        snprintf(trial_id, sizeof(trial_id), "%s", trial_snap.id);
                         app_config_snapshot_discard();
                         app_cmd_net_trial_clear();
                         resp = cJSON_CreateObject();
@@ -2922,11 +2747,13 @@ esp_err_t app_cmd_execute_method(const app_cmd_context_t *ctx, const char *metho
                        !app_cmd_net_trial_ready(trial_item->valuestring)) {
                 err = "not_found";
             } else {
-                char trial_id[sizeof(s_net_trial.id)];
+                char trial_id[APP_CMD_NET_TRIAL_ID_LEN];
+                app_cmd_net_trial_snap_t trial_snap;
 
                 app_cmd_net_job_lock();
-                snprintf(trial_id, sizeof(trial_id), "%s", s_net_trial.id);
+                app_cmd_net_trial_snapshot_locked(&trial_snap);
                 app_cmd_net_job_unlock();
+                snprintf(trial_id, sizeof(trial_id), "%s", trial_snap.id);
                 app_cmd_net_trial_clear();
                 resp = cJSON_CreateObject();
                 if (resp == NULL) {
