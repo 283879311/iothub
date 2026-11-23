@@ -521,6 +521,10 @@ bool app_cmd_net_trial_credentials_locked(char *ssid, size_t ssid_size,
     return true;
 }
 
+/* P1 兼容边界：超时返回 false 会被调用方映射为 CLEANUP_DONE_FAIL。
+ * 此时遗留 claimant 可能仍在执行，因此这不是最终生命周期语义；
+ * P2 迁移全部 cleanup caller 后再移除固定等待，避免把“尚未完成”永久
+ * 说成“已完成”或直接强制终态。 */
 static bool app_cmd_net_cleanup_wait_result(const app_operation_t *op, uint32_t expected_gen,
                                             const char *op_id)
 {
@@ -584,7 +588,9 @@ static app_operation_cleanup_outcome_t app_cmd_net_cleanup_run_common(
         return APP_OPERATION_CLEANUP_OUTCOME_STALE;
     }
     trial_match = s_trial.valid;
-    restore_persistent = job_owned && st.state != APP_OP_COMMITTING;
+    /* REQUIRED：trial-only 也可能代表未提交候选，不能仅因 job 已消失就
+     * 跳过持久配置恢复。 */
+    restore_persistent = st.state != APP_OP_COMMITTING;
 
     existing = app_operation_cleanup_result(op, expected_gen);
     if (existing == APP_OPERATION_CLEANUP_RUNNING) {
@@ -655,12 +661,12 @@ static app_operation_cleanup_outcome_t app_cmd_net_cleanup_run_common(
         if (st.state == APP_OP_CONNECTING && s_port.try_cancel != NULL) {
             (void)s_port.try_cancel();
         }
-        if (restore_persistent) {
-            ESP_LOGW(TAG, "rescue=restore_persistent op=%s (cleanup without commit)", op_id);
-            ok = s_port.cleanup_request != NULL && s_port.cleanup_request(op_id);
-            if (!ok) {
-                ESP_LOGE(TAG, "rescue=restore_persistent failed (cleanup request) op=%s", op_id);
-            }
+    }
+    if (restore_persistent) {
+        ESP_LOGW(TAG, "rescue=restore_persistent op=%s (cleanup without commit)", op_id);
+        ok = s_port.cleanup_request != NULL && s_port.cleanup_request(op_id);
+        if (!ok) {
+            ESP_LOGE(TAG, "rescue=restore_persistent failed (cleanup request) op=%s", op_id);
         }
     }
 
