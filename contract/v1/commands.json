@@ -101,7 +101,28 @@
     "config.get": { "args": {}, "data": "配置对象（~1.1KB）", "client_timeout_ms": 30000 },
     "config.set": { "args": "配置对象（域级）", "data": { "effect": "none|reboot", "changed": "array" }, "client_timeout_ms": 30000 },
     "network.profile.list": { "args": {}, "client_timeout_ms": 15000 },
-    "network.profile.delete": { "args": { "profile_id": "string" }, "possible_errors": ["last_profile", "not_found"], "client_timeout_ms": 15000 },
-    "data.loopback": { "args": { "on": "bool" }, "client_timeout_ms": 10000 }
+    "network.profile.delete": { "args": { "ssid": "string, required" }, "possible_errors": ["last_profile", "not_found"], "client_timeout_ms": 15000 },
+    "io.get": {
+      "args": {},
+      "data": {
+        "relay_on": "bool", "led_on": "bool", "input_active": "bool",
+        "io_seq": "number", "io_source": "string", "net_mode": "string",
+        "sta_has_ip": "bool", "sta_ip": "string"
+      },
+      "client_timeout_ms": 10000,
+      "notes": "CMD-01（2026-11-14）：sta_has_ip/sta_ip 在 runtime lock 内取快照后再构造 JSON，与 network.status 同源，两处读数应一致"
+    },
+    "io.set": {
+      "args": { "relay_on": "bool?", "led_on": "bool?" },
+      "data": {
+        "success": "bool", "changed": "array（只列实际翻转的字段）",
+        "effect": "none|reboot|subsys", "relay_on": "bool", "led_on": "bool",
+        "input_active": "bool", "io_seq": "number", "io_source": "string"
+      },
+      "client_timeout_ms": 10000,
+      "possible_errors": ["params_required", "gpio_apply_failed"],
+      "notes": "relay_on/led_on 至少给一个，否则 params_required"
+    },
+    "data.loopback": { "args": { "enabled": "bool, required" }, "client_timeout_ms": 10000 }
   }
 }
