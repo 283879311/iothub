@@ -81,6 +81,8 @@ static void net_test_hook(const char *point, app_operation_t *op, uint32_t expec
 
 static bool app_cmd_net_job_owned_by_locked(const app_operation_t *op, uint32_t expected_gen);
 static void app_cmd_net_job_clear_impl_locked(void);
+static app_operation_cleanup_outcome_t app_cmd_net_finish_run(
+    app_operation_t *op, void *ctx, app_operation_cleanup_policy_t policy);
 
 static void app_cmd_net_wipe(char *buf, size_t len)
 {
@@ -214,8 +216,9 @@ app_cmd_net_job_begin_result_t app_cmd_net_job_begin_locked(
         snprintf(s_job.idem_key, sizeof(s_job.idem_key), "%s", idem_key);
     }
 
-    err = app_operation_start(owner, idem_key, accepted_ttl, got_ip_ttl,
-                              run_fn, app_cmd_net_cleanup_run, &s_job, &op);
+    err = app_operation_start_with_finish(owner, idem_key, accepted_ttl, got_ip_ttl,
+                                          run_fn, app_cmd_net_cleanup_run,
+                                          app_cmd_net_finish_run, &s_job, &op);
     if (err != ESP_OK) {
         app_cmd_net_job_clear_impl_locked();
         return (err == ESP_ERR_INVALID_STATE) ? APP_CMD_NET_JOB_BEGIN_BUSY
@@ -635,6 +638,134 @@ bool app_cmd_net_cleanup_run(app_operation_t *op, void *ctx)
         ESP_LOGW(TAG, "CLEANUP_DONE_FAIL op=%s", op_id);
     }
     return ok;
+}
+
+app_cmd_net_release_result_t app_cmd_net_release_if_owned(
+    app_operation_t *op, uint32_t expected_gen)
+{
+    char op_id[APP_CMD_NET_TRIAL_OPERATION_ID_LEN];
+    app_operation_status_t st;
+    bool job_owned;
+    bool trial_match;
+    app_operation_cleanup_state_t existing;
+    app_operation_cleanup_claim_t claim;
+
+    if (op == NULL) {
+        return APP_CMD_NET_RELEASE_STALE;
+    }
+    snprintf(op_id, sizeof(op_id), "%s", app_operation_id(op));
+
+    app_cmd_net_job_lock();
+    if (!app_operation_get_status(op, &st) || st.generation != expected_gen) {
+        app_cmd_net_job_unlock();
+        return APP_CMD_NET_RELEASE_STALE;
+    }
+    if (s_job.active && s_job.op != op) {
+        app_cmd_net_job_unlock();
+        return APP_CMD_NET_RELEASE_STALE;
+    }
+    if (s_job.active && !app_operation_generation_matches(op, expected_gen)) {
+        app_cmd_net_job_unlock();
+        return APP_CMD_NET_RELEASE_STALE;
+    }
+    job_owned = s_job.active && s_job.op == op;
+    if (s_trial.valid) {
+        if (strcmp(s_trial.operation_id, op_id) != 0) {
+            app_cmd_net_job_unlock();
+            return APP_CMD_NET_RELEASE_STALE;
+        }
+        trial_match = true;
+    } else {
+        trial_match = false;
+    }
+
+    existing = app_operation_cleanup_result(op, expected_gen);
+    if (!job_owned && !trial_match) {
+        app_cmd_net_job_unlock();
+        if (existing == APP_OPERATION_CLEANUP_RUNNING) {
+            return APP_CMD_NET_RELEASE_PENDING;
+        }
+        if (existing == APP_OPERATION_CLEANUP_FAIL) {
+            return APP_CMD_NET_RELEASE_FAIL;
+        }
+        if (s_port.clear_active_operation != NULL) {
+            s_port.clear_active_operation(op_id);
+        }
+        return APP_CMD_NET_RELEASE_NO_RESOURCE;
+    }
+
+    claim = app_operation_cleanup_claim(op, expected_gen);
+    switch (claim) {
+    case APP_OPERATION_CLEANUP_CLAIMED:
+        if (job_owned) {
+            app_cmd_net_job_clear_impl_locked();
+        }
+        if (trial_match) {
+            app_cmd_net_trial_clear_locked();
+        }
+        app_cmd_net_job_unlock();
+        app_operation_cleanup_complete(op, expected_gen, true);
+        if (s_port.clear_active_operation != NULL) {
+            s_port.clear_active_operation(op_id);
+        }
+        return APP_CMD_NET_RELEASE_DONE;
+    case APP_OPERATION_CLEANUP_ALREADY_RUNNING:
+        app_cmd_net_job_unlock();
+        return APP_CMD_NET_RELEASE_PENDING;
+    case APP_OPERATION_CLEANUP_ALREADY_DONE_OK:
+        app_cmd_net_job_unlock();
+        if (job_owned || trial_match) {
+            ESP_LOGE(TAG, "release inconsistent: claim OK but resources remain op=%s",
+                     op_id);
+            return APP_CMD_NET_RELEASE_FAIL;
+        }
+        if (s_port.clear_active_operation != NULL) {
+            s_port.clear_active_operation(op_id);
+        }
+        return APP_CMD_NET_RELEASE_NO_RESOURCE;
+    case APP_OPERATION_CLEANUP_ALREADY_DONE_FAIL:
+        app_cmd_net_job_unlock();
+        return APP_CMD_NET_RELEASE_FAIL;
+    case APP_OPERATION_CLEANUP_INVALID:
+    case APP_OPERATION_CLEANUP_STALE:
+    default:
+        app_cmd_net_job_unlock();
+        return APP_CMD_NET_RELEASE_STALE;
+    }
+}
+
+static app_operation_cleanup_outcome_t app_cmd_net_finish_run(
+    app_operation_t *op, void *ctx, app_operation_cleanup_policy_t policy)
+{
+    app_operation_status_t st;
+
+    (void)ctx;
+    if (op == NULL || !app_operation_get_status(op, &st)) {
+        return APP_OPERATION_CLEANUP_OUTCOME_STALE;
+    }
+    switch (policy) {
+    case APP_OPERATION_CLEANUP_REQUIRED:
+        return app_cmd_net_cleanup_run(op, NULL)
+                   ? APP_OPERATION_CLEANUP_OUTCOME_DONE_OK
+                   : APP_OPERATION_CLEANUP_OUTCOME_DONE_FAIL;
+    case APP_OPERATION_CLEANUP_RELEASE_ONLY:
+        switch (app_cmd_net_release_if_owned(op, st.generation)) {
+        case APP_CMD_NET_RELEASE_DONE:
+            return APP_OPERATION_CLEANUP_OUTCOME_DONE_OK;
+        case APP_CMD_NET_RELEASE_NO_RESOURCE:
+            return APP_OPERATION_CLEANUP_OUTCOME_NO_JOB;
+        case APP_CMD_NET_RELEASE_PENDING:
+            return APP_OPERATION_CLEANUP_OUTCOME_PENDING;
+        case APP_CMD_NET_RELEASE_STALE:
+            return APP_OPERATION_CLEANUP_OUTCOME_STALE;
+        case APP_CMD_NET_RELEASE_FAIL:
+        default:
+            return APP_OPERATION_CLEANUP_OUTCOME_DONE_FAIL;
+        }
+    case APP_OPERATION_CLEANUP_NO_RESOURCE_RELEASE:
+    default:
+        return APP_OPERATION_CLEANUP_OUTCOME_NO_JOB;
+    }
 }
 
 #ifndef APP_CMD_NET_JOB_TEST

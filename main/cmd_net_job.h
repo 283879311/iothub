@@ -32,6 +32,15 @@ typedef enum {
     APP_CMD_NET_JOB_BEGIN_NOT_READY,
 } app_cmd_net_job_begin_result_t;
 
+/* P1b：RELEASE_ONLY 的资源释放结果。 */
+typedef enum {
+    APP_CMD_NET_RELEASE_DONE = 0,
+    APP_CMD_NET_RELEASE_NO_RESOURCE,
+    APP_CMD_NET_RELEASE_PENDING,
+    APP_CMD_NET_RELEASE_STALE,
+    APP_CMD_NET_RELEASE_FAIL,
+} app_cmd_net_release_result_t;
+
 typedef struct {
     bool active;
     char operation_id[APP_CMD_NET_TRIAL_OPERATION_ID_LEN];
@@ -113,6 +122,11 @@ bool app_cmd_net_trial_credentials_locked(char *ssid, size_t ssid_size,
 
 /* operation cleanup 回调（注册进 operation_start）。 */
 bool app_cmd_net_cleanup_run(app_operation_t *op, void *ctx);
+
+/* P1b：RELEASE_ONLY。claim 与完整 cleanup 共用同一 authority；
+ * 只释放本 op 拥有的 job/trial，不触发 netcheck/try/restore。 */
+app_cmd_net_release_result_t app_cmd_net_release_if_owned(
+    app_operation_t *op, uint32_t expected_gen);
 
 /* 运行时副作用 port：Wi-Fi/BLE/netcheck/时钟/锁的唯一出口。
  * 生产实现由模块内部绑定；host 测试构建可显式传入。
