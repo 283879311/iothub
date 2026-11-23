@@ -1,0 +1,102 @@
+[scan-filtered] 1 hit(s) in 12s
+  HIT 10:97:BD:D3:65:DA name='IotHubBLE-65D8' local_name='IotHubBLE-65D8' rssi=-49 uuids=['6e400001-b5a3-f393-e0a9-e50e24dcca9e']
+[focus] target=10:97:BD:D3:65:DA name='IotHubBLE-65D8'
+/home/tc/esp/workspace/iothub/.venv-bleak/lib/python3.12/site-packages/bleak/backends/bluezdbus/client.py:646: UserWarning: Using default MTU value. Call _acquire_mtu() or set _mtu_size first to avoid this warning.
+  warnings.warn(
+>13.826s TX id=info-1 62B {"id": "info-1", "version": "1.0", "cmd": "device.info", "args": {}}
+[tx] chunked 62B into 4 GATT writes (<= 20B each)
+<14.300s> RX id=info-1 289B frags=2 sizes=[253, 36] {"id": "info-1", "ok": true, "data": {"model": "iothub", "firmware": "1.3-b685bd5", "build_sha": "ca103533d", "device_id": "IotHub-65D8", "build_variant": "mqtt_net_txn=on", "protocol_versions": ["1.0"], "security": {"link_encrypted": false, "bonded": false, "l2_ready": false, "sensitive_writes_allowed": false}}}
+[info] {"id": "info-1", "ok": true, "data": {"model": "iothub", "firmware": "1.3-b685bd5", "build_sha": "ca103533d", "device_id": "IotHub-65D8", "build_variant": "mqtt_net_txn=on", "protocol_versions": ["1.0"], "security": {"link_encrypted": false, "bonded": false, "l2_ready": false, "sensitive_writes_allowed": false}}}
+>14.301s TX id=login-2 100B {"id": "login-2", "version": "1.0", "cmd": "auth.login", "args": {"username": "admin", "password": "<redacted>"}}
+[tx] chunked 100B into 5 GATT writes (<= 20B each)
+<14.931s> RX id=login-2 95B frags=1 sizes=[95] {"id": "login-2", "ok": true, "data": {"token": "<redacted>", "expires_in": 600}}
+[auth] login ok (token redacted)
+>15.187s TX id=wrongpw-3 208B {"id": "wrongpw-3", "version": "1.0", "cmd": "network.tryconnect", "args": {"ssid": "CMCC-502", "password": "<redacted>", "idempotency_key": "p0wrong-d94563c504a1"}, "token": "<redacted>"}
+[tx] chunked 208B into 11 GATT writes (<= 20B each)
+<16.505s> RX id=wrongpw-3 93B frags=1 sizes=[93] {"id": "wrongpw-3", "ok": true, "data": {"operation_id": "op-0F22092FE1F7DB65", "state": "accepted"}}
+>16.509s TX id=opget-poll-4 149B {"id": "opget-poll-4", "version": "1.0", "cmd": "operation.get", "args": {"operation_id": "op-0F22092FE1F7DB65"}, "token": "<redacted>"}
+[tx] chunked 149B into 8 GATT writes (<= 20B each)
+<17.677s> RX id=opget-poll-4 291B frags=2 sizes=[253, 38] {"id": "opget-poll-4", "ok": true, "data": {"operation_id": "op-0F22092FE1F7DB65", "state": "connecting", "error": "none", "error_detail": {"code": "none", "message": "none"}, "stages": {"wifi_connected": false, "ip_acquired": false, "internet_verified": false, "mqtt_connected": false}, "stages_source": "snapshot"}}
+>18.179s TX id=opget-poll-5 149B {"id": "opget-poll-5", "version": "1.0", "cmd": "operation.get", "args": {"operation_id": "op-0F22092FE1F7DB65"}, "token": "<redacted>"}
+[tx] chunked 149B into 8 GATT writes (<= 20B each)
+<19.212s> RX id=opget-poll-5 291B frags=2 sizes=[253, 38] {"id": "opget-poll-5", "ok": true, "data": {"operation_id": "op-0F22092FE1F7DB65", "state": "connecting", "error": "none", "error_detail": {"code": "none", "message": "none"}, "stages": {"wifi_connected": false, "ip_acquired": false, "internet_verified": false, "mqtt_connected": false}, "stages_source": "snapshot"}}
+>19.717s TX id=opget-poll-6 149B {"id": "opget-poll-6", "version": "1.0", "cmd": "operation.get", "args": {"operation_id": "op-0F22092FE1F7DB65"}, "token": "<redacted>"}
+[tx] chunked 149B into 8 GATT writes (<= 20B each)
+<20.876s> RX id=opget-poll-6 291B frags=2 sizes=[253, 38] {"id": "opget-poll-6", "ok": true, "data": {"operation_id": "op-0F22092FE1F7DB65", "state": "connecting", "error": "none", "error_detail": {"code": "none", "message": "none"}, "stages": {"wifi_connected": false, "ip_acquired": false, "internet_verified": false, "mqtt_connected": false}, "stages_source": "snapshot"}}
+>21.382s TX id=opget-poll-7 149B {"id": "opget-poll-7", "version": "1.0", "cmd": "operation.get", "args": {"operation_id": "op-0F22092FE1F7DB65"}, "token": "<redacted>"}
+[tx] chunked 149B into 8 GATT writes (<= 20B each)
+<22.588s> RX id=opget-poll-7 291B frags=2 sizes=[253, 38] {"id": "opget-poll-7", "ok": true, "data": {"operation_id": "op-0F22092FE1F7DB65", "state": "connecting", "error": "none", "error_detail": {"code": "none", "message": "none"}, "stages": {"wifi_connected": false, "ip_acquired": false, "internet_verified": false, "mqtt_connected": false}, "stages_source": "snapshot"}}
+>23.092s TX id=opget-poll-8 149B {"id": "opget-poll-8", "version": "1.0", "cmd": "operation.get", "args": {"operation_id": "op-0F22092FE1F7DB65"}, "token": "<redacted>"}
+[tx] chunked 149B into 8 GATT writes (<= 20B each)
+<24.292s> RX id=opget-poll-8 291B frags=2 sizes=[253, 38] {"id": "opget-poll-8", "ok": true, "data": {"operation_id": "op-0F22092FE1F7DB65", "state": "connecting", "error": "none", "error_detail": {"code": "none", "message": "none"}, "stages": {"wifi_connected": false, "ip_acquired": false, "internet_verified": false, "mqtt_connected": false}, "stages_source": "snapshot"}}
+>24.793s TX id=opget-poll-9 149B {"id": "opget-poll-9", "version": "1.0", "cmd": "operation.get", "args": {"operation_id": "op-0F22092FE1F7DB65"}, "token": "<redacted>"}
+[tx] chunked 149B into 8 GATT writes (<= 20B each)
+<26.004s> RX id=opget-poll-9 291B frags=2 sizes=[253, 38] {"id": "opget-poll-9", "ok": true, "data": {"operation_id": "op-0F22092FE1F7DB65", "state": "connecting", "error": "none", "error_detail": {"code": "none", "message": "none"}, "stages": {"wifi_connected": false, "ip_acquired": false, "internet_verified": false, "mqtt_connected": false}, "stages_source": "snapshot"}}
+>26.507s TX id=opget-poll-10 150B {"id": "opget-poll-10", "version": "1.0", "cmd": "operation.get", "args": {"operation_id": "op-0F22092FE1F7DB65"}, "token": "<redacted>"}
+[tx] chunked 150B into 8 GATT writes (<= 20B each)
+<27.622s> RX id=opget-poll-10 292B frags=2 sizes=[253, 39] {"id": "opget-poll-10", "ok": true, "data": {"operation_id": "op-0F22092FE1F7DB65", "state": "connecting", "error": "none", "error_detail": {"code": "none", "message": "none"}, "stages": {"wifi_connected": false, "ip_acquired": false, "internet_verified": false, "mqtt_connected": false}, "stages_source": "snapshot"}}
+>28.126s TX id=opget-poll-11 150B {"id": "opget-poll-11", "version": "1.0", "cmd": "operation.get", "args": {"operation_id": "op-0F22092FE1F7DB65"}, "token": "<redacted>"}
+[tx] chunked 150B into 8 GATT writes (<= 20B each)
+<29.249s> RX id=opget-poll-11 292B frags=2 sizes=[253, 39] {"id": "opget-poll-11", "ok": true, "data": {"operation_id": "op-0F22092FE1F7DB65", "state": "connecting", "error": "none", "error_detail": {"code": "none", "message": "none"}, "stages": {"wifi_connected": false, "ip_acquired": false, "internet_verified": false, "mqtt_connected": false}, "stages_source": "snapshot"}}
+>29.754s TX id=opget-poll-12 150B {"id": "opget-poll-12", "version": "1.0", "cmd": "operation.get", "args": {"operation_id": "op-0F22092FE1F7DB65"}, "token": "<redacted>"}
+[tx] chunked 150B into 8 GATT writes (<= 20B each)
+<31.220s> RX id=opget-poll-12 292B frags=2 sizes=[253, 39] {"id": "opget-poll-12", "ok": true, "data": {"operation_id": "op-0F22092FE1F7DB65", "state": "connecting", "error": "none", "error_detail": {"code": "none", "message": "none"}, "stages": {"wifi_connected": false, "ip_acquired": false, "internet_verified": false, "mqtt_connected": false}, "stages_source": "snapshot"}}
+>31.723s TX id=opget-poll-13 150B {"id": "opget-poll-13", "version": "1.0", "cmd": "operation.get", "args": {"operation_id": "op-0F22092FE1F7DB65"}, "token": "<redacted>"}
+[tx] chunked 150B into 8 GATT writes (<= 20B each)
+<32.976s> RX id=opget-poll-13 345B frags=2 sizes=[253, 92] {"id": "opget-poll-13", "ok": true, "data": {"operation_id": "op-0F22092FE1F7DB65", "state": "failed", "error": "wrong_password", "error_detail": {"code": "wrong_password", "message": "wrong_password"}, "finished_uptime_ms": 56143, "stages": {"wifi_connected": false, "ip_acquired": false, "internet_verified": false, "mqtt_connected": false}, "stages_source": "snapshot"}}
+>33.228s TX id=wrongpw-cancel-14 155B {"id": "wrongpw-cancel-14", "version": "1.0", "cmd": "network.cancel", "args": {"operation_id": "op-0F22092FE1F7DB65"}, "token": "<redacted>"}
+[tx] chunked 155B into 8 GATT writes (<= 20B each)
+<34.282s> RX id=wrongpw-cancel-14 100B frags=1 sizes=[100] {"id": "wrongpw-cancel-14", "ok": false, "error": {"code": "operation_state", "message": "operation_state"}}
+[5a] {
+ "name": "5a_WRONG_PASSWORD",
+ "pass": true,
+ "tryconnect": {
+  "ok": true,
+  "operation_id": "op-0F22092FE1F7DB65",
+  "state": "accepted",
+  "error": null
+ },
+ "terminal": {
+  "state": "failed",
+  "error": "wrong_password",
+  "data": {
+   "operation_id": "op-0F22092FE1F7DB65",
+   "state": "failed",
+   "error": "wrong_password",
+   "error_detail": {
+    "code": "wrong_password",
+    "message": "wrong_password"
+   },
+   "finished_uptime_ms": 56143,
+   "stages": {
+    "wifi_connected": false,
+    "ip_acquired": false,
+    "internet_verified": false,
+    "mqtt_connected": false
+   },
+   "stages_source": "snapshot"
+  },
+  "elapsed_s": 16.468,
+  "first_poll": {
+   "operation_id": "op-0F22092FE1F7DB65",
+   "state": "connecting",
+   "error": "none",
+   "error_detail": {
+    "code": "none",
+    "message": "none"
+   },
+   "stages": {
+    "wifi_connected": false,
+    "ip_acquired": false,
+    "internet_verified": false,
+    "mqtt_connected": false
+   },
+   "stages_source": "snapshot"
+  }
+ },
+ "cancel_after_failed": {
+  "ok": false,
+  "state": null,
+  "error_code": "operation_state"
+ }
+}

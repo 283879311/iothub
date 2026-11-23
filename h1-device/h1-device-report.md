@@ -29,7 +29,7 @@ Serial capture was single-reader via `tools/capture_serial.py`.
 | 3 long scan x10 | PASS | long responses complete; `busy` responses handled by harness |
 | 3b long config x10 | PASS | long config responses complete |
 | 4 operation.get during fragmentation | PASS | duplicate same key returns same op; different key busy; async op non-blocking |
-| 5a wrong password | FAIL (test environment) | see below |
+| 5a wrong password | PASS on focused retest | original P0 run interrupted by BLE disconnect; see below |
 | 5b cancel race | PASS | 2/2 rounds: cancel + duplicate cancel = cancelled; terminal cancelled |
 | 5c not found | PASS | operation.get/apply/cancel all `not_found` |
 | 6 final config set | SKIP | `--no-final-config-set`; no config write |
@@ -47,7 +47,21 @@ W cmd: async tryconnect op=op-DD709DE2C3BAFC46 stale after wait (gen=1 state=7),
 I wifi: cleanup complete op=op-DD709DE2C3BAFC46 attempts=1
 ```
 
-The harness's reconnect then observed terminal `cancelled`, not `failed/wrong_password`, so 5a is marked FAIL by the harness. This is a test-environment/link-loss limitation, not evidence of a wrong-password defect: in test 4 the earlier wrong-password operation reached `state=failed, error=wrong_password` (device uptime ~112.9s) while BLE remained connected.
+The harness's reconnect then observed terminal `cancelled`, not `failed/wrong_password`, so the original P0 5a run is marked FAIL by the harness. This is a test-environment/link-loss limitation, not evidence of a wrong-password defect: in test 4 the earlier wrong-password operation reached `state=failed, error=wrong_password` (device uptime ~112.9s) while BLE remained connected.
+
+### 5a focused retest (fresh BLE link)
+
+A fresh BLE connection was established after a clean reboot, then only `network.tryconnect` with a deliberately wrong Wi-Fi password was executed and polled. No long preceding tests were run.
+
+- operation_id: `op-0F22092FE1F7DB65`
+- serial: `tryconnect failed: reason=15(4WAY_HANDSHAKE_TIMEOUT)` at uptime 56.751s
+- `operation.get` terminal: `state=failed`, `error=wrong_password`, `finished_uptime_ms=56143`
+- measured poll elapsed: 16.468s
+- post-failure `network.cancel`: `operation_state` (correct; terminal op cannot be cancelled)
+- BLE link remained connected through the terminal response; the central closed it only after the test completed (`reason=0x213`).
+- Device then recovered to `CMCC-502` and MQTT `139.9.93.245:21883`.
+
+This closes the 5a observation gap: the wrong-Wi-Fi-password terminal is `failed/wrong_password`; the original P0 5a remains an environment-interrupted run, not a product failure.
 
 ## CMD-03 evidence mapping
 
@@ -60,6 +74,7 @@ The harness's reconnect then observed terminal `cancelled`, not `failed/wrong_pa
 
 - Device remained online: MQTT `139.9.93.245:21883` connected; SSID `CMCC-502`; DHCP.
 - No successful apply; `final_config_set` skipped; persistent config unchanged by this run.
+- The focused 5a retest also left SSID `CMCC-502` and MQTT `139.9.93.245:21883` unchanged; it did not write config.
 - Device left running the flashed `b685bd5` image. No ESP-IDF rebuild was performed during the device run.
 
 ## Evidence hashes

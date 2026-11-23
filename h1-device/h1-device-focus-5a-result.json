@@ -1,0 +1,53 @@
+{
+ "name": "5a_WRONG_PASSWORD",
+ "pass": true,
+ "tryconnect": {
+  "ok": true,
+  "operation_id": "op-0F22092FE1F7DB65",
+  "state": "accepted",
+  "error": null
+ },
+ "terminal": {
+  "state": "failed",
+  "error": "wrong_password",
+  "data": {
+   "operation_id": "op-0F22092FE1F7DB65",
+   "state": "failed",
+   "error": "wrong_password",
+   "error_detail": {
+    "code": "wrong_password",
+    "message": "wrong_password"
+   },
+   "finished_uptime_ms": 56143,
+   "stages": {
+    "wifi_connected": false,
+    "ip_acquired": false,
+    "internet_verified": false,
+    "mqtt_connected": false
+   },
+   "stages_source": "snapshot"
+  },
+  "elapsed_s": 16.468,
+  "first_poll": {
+   "operation_id": "op-0F22092FE1F7DB65",
+   "state": "connecting",
+   "error": "none",
+   "error_detail": {
+    "code": "none",
+    "message": "none"
+   },
+   "stages": {
+    "wifi_connected": false,
+    "ip_acquired": false,
+    "internet_verified": false,
+    "mqtt_connected": false
+   },
+   "stages_source": "snapshot"
+  }
+ },
+ "cancel_after_failed": {
+  "ok": false,
+  "state": null,
+  "error_code": "operation_state"
+ }
+}
