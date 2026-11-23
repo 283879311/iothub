@@ -261,8 +261,32 @@ void app_cmd_net_on_ble_disconnect(void)
 
         if (app_operation_get_status(op, &status)) {
             if (app_op_state_can_cancel(status.state)) {
-                (void)app_operation_cancel(op);
-                ESP_LOGI(TAG, "async network operation cancelled on BLE disconnect");
+                app_operation_finish_result_t finish = app_operation_request_finish(
+                    op, status.generation, APP_OP_CANCELLED,
+                    APP_OPERATION_ERR_CANCELLED, APP_OPERATION_CLEANUP_REQUIRED);
+
+                if (finish == APP_OPERATION_FINISH_DONE) {
+                    app_operation_status_t final_st;
+                    bool got = app_operation_get_status(op, &final_st);
+
+                    if (got && final_st.state == APP_OP_CANCELLED) {
+                        ESP_LOGI(TAG, "async network operation cancelled on BLE disconnect");
+                    } else if (got) {
+                        ESP_LOGW(TAG, "BLE disconnect finish done state=%s error=%s",
+                                 app_op_state_name(final_st.state),
+                                 app_operation_error_name(final_st.error));
+                    } else {
+                        ESP_LOGW(TAG, "BLE disconnect finish done but status lost");
+                    }
+                } else if (finish == APP_OPERATION_FINISH_PENDING) {
+                    ESP_LOGW(TAG, "BLE disconnect finish pending (another cleanup owner)");
+                } else if (finish == APP_OPERATION_FINISH_REJECTED) {
+                    ESP_LOGW(TAG, "BLE disconnect finish rejected state=%s",
+                             app_op_state_name(status.state));
+                } else {
+                    ESP_LOGW(TAG, "BLE disconnect finish stale gen=%u",
+                             (unsigned)status.generation);
+                }
                 return;
             }
             if (status.state == APP_OP_COMMITTING) {
@@ -983,9 +1007,18 @@ static bool app_cmd_net_cancel_async(const app_cmd_context_t *ctx,
         *err_out = "operation_state";
         return false;
     }
-    if (app_operation_cancel(op) != ESP_OK) {
-        *err_out = "operation_state";
-        return false;
+    {
+        app_operation_finish_result_t finish = app_operation_request_finish(
+            op, status.generation, APP_OP_CANCELLED,
+            APP_OPERATION_ERR_CANCELLED, APP_OPERATION_CLEANUP_REQUIRED);
+        app_operation_status_t final_st;
+
+        if (finish != APP_OPERATION_FINISH_DONE ||
+            !app_operation_get_status(op, &final_st) ||
+            final_st.state != APP_OP_CANCELLED) {
+            *err_out = "operation_state";
+            return false;
+        }
     }
     {
         cJSON *resp = cJSON_CreateObject();

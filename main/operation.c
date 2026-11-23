@@ -934,26 +934,23 @@ static void app_operation_run_pending(void)
 static void app_operation_expire_one(void)
 {
     app_operation_t *op = NULL;
-    app_operation_cleanup_fn cleanup = NULL;
-    void *ctx = NULL;
     uint32_t generation = 0;
-    bool cleanup_ok = true;
     int64_t now_ms = app_operation_now_ms();
+    char op_id[APP_OPERATION_ID_LEN] = "";
+    app_operation_finish_result_t finish;
 
     portENTER_CRITICAL(&s_ops_mux);
     for (size_t i = 0; i < APP_OPERATION_MAX_SLOTS; i++) {
         app_operation_t *candidate = &s_ops[i];
 
         if (!candidate->used || !app_op_state_is_active(candidate->state) ||
-            candidate->expiring || candidate->deadline_ms == 0 ||
-            now_ms < candidate->deadline_ms) {
+            candidate->expiring || candidate->finish_registered ||
+            candidate->deadline_ms == 0 || now_ms < candidate->deadline_ms) {
             continue;
         }
-        candidate->expiring = true;
-        generation = candidate->generation;
-        cleanup = candidate->cleanup_fn;
-        ctx = candidate->ctx;
         op = candidate;
+        generation = candidate->generation;
+        snprintf(op_id, sizeof(op_id), "%s", candidate->id);
         break;
     }
     portEXIT_CRITICAL(&s_ops_mux);
@@ -961,33 +958,18 @@ static void app_operation_expire_one(void)
     if (op == NULL) {
         return;
     }
-    if (cleanup != NULL) {
-        cleanup_ok = cleanup(op, ctx);
+    finish = app_operation_request_finish(op, generation, APP_OP_EXPIRED,
+                                          APP_OPERATION_ERR_TIMEOUT,
+                                          APP_OPERATION_CLEANUP_REQUIRED);
+    if (finish == APP_OPERATION_FINISH_DONE) {
+        ESP_LOGW(TAG, "expire %s finished", op_id);
+    } else if (finish == APP_OPERATION_FINISH_PENDING) {
+        ESP_LOGW(TAG, "expire %s pending (another finish owner)", op_id);
+    } else if (finish == APP_OPERATION_FINISH_REJECTED) {
+        ESP_LOGW(TAG, "expire %s rejected", op_id);
+    } else {
+        ESP_LOGW(TAG, "expire %s stale", op_id);
     }
-
-#ifdef APP_C1_TEST_HOOKS
-    app_operation_test_hook_pause("expire_post_cleanup", op);
-#endif
-    {
-        bool expired = false;
-
-        portENTER_CRITICAL(&s_ops_mux);
-        if (op->used && op->generation == generation && app_op_state_is_active(op->state)) {
-            op->state = cleanup_ok ? APP_OP_EXPIRED : APP_OP_FAILED;
-            op->error = cleanup_ok ? APP_OPERATION_ERR_TIMEOUT
-                                   : APP_OPERATION_ERR_CLEANUP_FAILED;
-            op->deadline_ms = 0;
-            op->terminal_ms = app_operation_now_ms();
-            expired = true;
-        }
-        op->expiring = false;
-        portEXIT_CRITICAL(&s_ops_mux);
-        if (expired) {
-            app_mqtt_defer_restart_end_at("expire/terminal");
-        }
-    }
-    ESP_LOGW(TAG, "expire %s cleanup=%s", op->id,
-             cleanup_ok ? "ok" : "failed");
 }
 
 /* DEF-MQTT-002(2026-11-05):独立过期任务。
