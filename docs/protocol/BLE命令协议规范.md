@@ -123,6 +123,7 @@ network.tryconnect
 - 不再有 v0 同步 `trial_id` 协议。
 - `apply` 成功返回 `state:"success"`、`saved:true`、`applied:true`。
 - 失败/取消后事务进入终态；终态保留 600s，可用 `operation.get` 查询。
+- `operation.get` 的 `cleanup_state` 为 P1 加法诊断字段，取值 `none|running|ok|fail`；`ok` 只表示资源清理/派发成功，**不表示 Wi-Fi 持久配置恢复完成**。客户端必须容忍未知字段，并在 `running` 时继续轮询终态。
 - 静态 IP 模式跨 SSID 被拒绝；`network.apply` 不再无条件把静态改 DHCP。
 
 ## 6. 错误码
