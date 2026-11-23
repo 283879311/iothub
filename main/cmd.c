@@ -643,6 +643,7 @@ typedef struct {
     bool op_found;
     app_op_state_t state;
     app_operation_error_t error;
+    app_operation_cleanup_state_t cleanup_state;
     char operation_id[APP_OPERATION_ID_LEN];
     app_operation_owner_t owner;
     int64_t terminal_ms;
@@ -686,6 +687,7 @@ static void app_cmd_net_op_status_capture(const char *operation_id,
     if (snap->op_found) {
         snap->state = st.state;
         snap->error = st.error;
+        snap->cleanup_state = st.cleanup_state;
         snap->owner = st.owner;
         snap->terminal_ms = st.terminal_ms;
         app_copy_string(snap->operation_id, sizeof(snap->operation_id), st.id);
@@ -707,6 +709,17 @@ static void app_cmd_net_op_status_capture(const char *operation_id,
         app_copy_string(snap->trial_ssid, sizeof(snap->trial_ssid), trial_snap.ssid);
     }
     app_cmd_net_job_unlock();
+}
+
+static const char *app_cmd_net_cleanup_state_name(app_operation_cleanup_state_t state)
+{
+    switch (state) {
+    case APP_OPERATION_CLEANUP_NONE:    return "none";
+    case APP_OPERATION_CLEANUP_RUNNING: return "running";
+    case APP_OPERATION_CLEANUP_OK:      return "ok";
+    case APP_OPERATION_CLEANUP_FAIL:    return "fail";
+    default:                            return "none";
+    }
 }
 
 static cJSON *app_cmd_net_operation_status(const app_cmd_context_t *ctx,
@@ -740,6 +753,8 @@ static cJSON *app_cmd_net_operation_status(const app_cmd_context_t *ctx,
     }
     cJSON_AddStringToObject(resp, "operation_id", snap.operation_id);
     cJSON_AddStringToObject(resp, "state", app_op_state_name(snap.state));
+    cJSON_AddStringToObject(resp, "cleanup_state",
+                            app_cmd_net_cleanup_state_name(snap.cleanup_state));
     {
         /* 契约 v1.1:error 保持扁平字符串(v1 冻结);并行新增 error_detail 对象,
          * 2.0 再统一。两者值同源,客户端可任选。 */

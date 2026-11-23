@@ -706,6 +706,16 @@ app_operation_request_finish(app_operation_t *op, uint32_t expected_generation,
         outcome = finish_fn(op, ctx, cleanup_policy);
     }
 
+#ifdef APP_C1_TEST_HOOKS
+    /* 保留 C1 实验构建的 expire 暂停点：cleanup 已返回、终态发布之前。
+     * 仅测试构建存在，不改变生产路径。 */
+    if (outcome != APP_OPERATION_CLEANUP_OUTCOME_PENDING &&
+        outcome != APP_OPERATION_CLEANUP_OUTCOME_STALE &&
+        op->finish_target_state == APP_OP_EXPIRED) {
+        app_operation_test_hook_pause("expire_post_cleanup", op);
+    }
+#endif
+
     portENTER_CRITICAL(&s_ops_mux);
     if (!op->used || op->generation != expected_generation ||
         op->finish_generation != expected_generation ||
