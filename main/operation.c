@@ -703,7 +703,7 @@ app_operation_request_finish(app_operation_t *op, uint32_t expected_generation,
                       ? APP_OPERATION_CLEANUP_OUTCOME_DONE_OK
                       : APP_OPERATION_CLEANUP_OUTCOME_DONE_FAIL;
     } else {
-        outcome = finish_fn(op, ctx, cleanup_policy);
+        outcome = finish_fn(op, ctx, cleanup_policy, expected_generation);
     }
 
 #ifdef APP_C1_TEST_HOOKS

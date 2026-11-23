@@ -82,7 +82,8 @@ static void net_test_hook(const char *point, app_operation_t *op, uint32_t expec
 static bool app_cmd_net_job_owned_by_locked(const app_operation_t *op, uint32_t expected_gen);
 static void app_cmd_net_job_clear_impl_locked(void);
 static app_operation_cleanup_outcome_t app_cmd_net_finish_run(
-    app_operation_t *op, void *ctx, app_operation_cleanup_policy_t policy);
+    app_operation_t *op, void *ctx, app_operation_cleanup_policy_t policy,
+    uint32_t expected_generation);
 
 static void app_cmd_net_wipe(char *buf, size_t len)
 {
@@ -130,6 +131,13 @@ void app_cmd_net_job_unlock(void)
 {
     if (s_port.unlock != NULL) {
         s_port.unlock();
+    }
+}
+
+static void app_cmd_net_clear_active_id(const char *op_id)
+{
+    if (s_port.clear_active_operation != NULL) {
+        s_port.clear_active_operation(op_id);
     }
 }
 
@@ -540,58 +548,73 @@ static bool app_cmd_net_cleanup_wait_result(const app_operation_t *op, uint32_t 
     return false;
 }
 
-bool app_cmd_net_cleanup_run(app_operation_t *op, void *ctx)
+/* REQUIRED 的共享实现。job/trial 任一归本 op 都必须先 claim；
+ * RUNNING 只等待，不触碰资源。旧 bool 入口和 P1 finish REQUIRED 共用。 */
+static app_operation_cleanup_outcome_t app_cmd_net_cleanup_run_common(
+    app_operation_t *op, uint32_t expected_gen)
 {
-    (void)ctx;
-    if (op == NULL) {
-        return false;
-    }
-
     char op_id[APP_OPERATION_ID_LEN];
     app_operation_status_t st;
-    uint32_t expected_gen;
-    bool owned;
-    bool restore_persistent;
+    bool job_owned;
     bool trial_match;
+    bool restore_persistent;
     uint32_t nc_gen = 0;
     bool ok = true;
     app_operation_cleanup_claim_t claim;
     app_operation_cleanup_state_t existing = APP_OPERATION_CLEANUP_NONE;
 
+    if (op == NULL) {
+        return APP_OPERATION_CLEANUP_OUTCOME_STALE;
+    }
     snprintf(op_id, sizeof(op_id), "%s", app_operation_id(op));
 
-    if (s_port.clear_active_operation != NULL) {
-        s_port.clear_active_operation(op_id);
-    }
-
     app_cmd_net_job_lock();
-    if (!app_operation_get_status(op, &st)) {
+    if (!app_operation_get_status(op, &st) || st.generation != expected_gen) {
         app_cmd_net_job_unlock();
-        return false;
+        return APP_OPERATION_CLEANUP_OUTCOME_STALE;
     }
-    expected_gen = st.generation;
-    owned = app_cmd_net_job_owned_by_locked(op, expected_gen);
-    restore_persistent = (st.state != APP_OP_COMMITTING);
-    trial_match = (s_trial.valid && strcmp(s_trial.operation_id, op_id) == 0);
-
-    if (!owned) {
-        existing = app_operation_cleanup_result(op, expected_gen);
-        if (trial_match) {
-            app_cmd_net_trial_clear_locked();
-        }
+    job_owned = s_job.active && s_job.op == op &&
+                app_operation_generation_matches(op, expected_gen);
+    if (s_job.active && !job_owned) {
         app_cmd_net_job_unlock();
+        return APP_OPERATION_CLEANUP_OUTCOME_STALE;
+    }
+    if (s_trial.valid && strcmp(s_trial.operation_id, op_id) != 0) {
+        app_cmd_net_job_unlock();
+        return APP_OPERATION_CLEANUP_OUTCOME_STALE;
+    }
+    trial_match = s_trial.valid;
+    restore_persistent = job_owned && st.state != APP_OP_COMMITTING;
 
-        if (existing == APP_OPERATION_CLEANUP_RUNNING) {
-            return app_cmd_net_cleanup_wait_result(op, expected_gen, op_id);
+    existing = app_operation_cleanup_result(op, expected_gen);
+    if (existing == APP_OPERATION_CLEANUP_RUNNING) {
+        app_cmd_net_job_unlock();
+        ok = app_cmd_net_cleanup_wait_result(op, expected_gen, op_id);
+        return ok ? APP_OPERATION_CLEANUP_OUTCOME_DONE_OK
+                  : APP_OPERATION_CLEANUP_OUTCOME_DONE_FAIL;
+    }
+    if (!job_owned && !trial_match) {
+        app_cmd_net_job_unlock();
+        app_cmd_net_clear_active_id(op_id);
+        if (existing == APP_OPERATION_CLEANUP_FAIL) {
+            return APP_OPERATION_CLEANUP_OUTCOME_DONE_FAIL;
         }
         if (existing == APP_OPERATION_CLEANUP_OK) {
-            return true;
-        }
-        if (existing == APP_OPERATION_CLEANUP_FAIL) {
-            return false;
+            return APP_OPERATION_CLEANUP_OUTCOME_DONE_OK;
         }
         ESP_LOGI(TAG, "CLEANUP_NO_JOB op=%s", op_id);
-        return true;
+        return APP_OPERATION_CLEANUP_OUTCOME_NO_JOB;
+    }
+    if (existing == APP_OPERATION_CLEANUP_FAIL) {
+        app_cmd_net_job_unlock();
+        app_cmd_net_clear_active_id(op_id);
+        return APP_OPERATION_CLEANUP_OUTCOME_DONE_FAIL;
+    }
+    if (existing == APP_OPERATION_CLEANUP_OK) {
+        /* claim 已完成但仍有本 op 资源：所有权不一致，不重复释放。 */
+        app_cmd_net_job_unlock();
+        ESP_LOGE(TAG, "cleanup inconsistent: claim OK but resources remain op=%s", op_id);
+        return APP_OPERATION_CLEANUP_OUTCOME_DONE_FAIL;
     }
 
     claim = app_operation_cleanup_claim(op, expected_gen);
@@ -599,37 +622,48 @@ bool app_cmd_net_cleanup_run(app_operation_t *op, void *ctx)
         app_cmd_net_job_unlock();
         ESP_LOGW(TAG, "cleanup claim anomaly op=%s claim=%d", op_id, (int)claim);
         if (claim == APP_OPERATION_CLEANUP_ALREADY_RUNNING) {
-            return app_cmd_net_cleanup_wait_result(op, expected_gen, op_id);
+            ok = app_cmd_net_cleanup_wait_result(op, expected_gen, op_id);
+            return ok ? APP_OPERATION_CLEANUP_OUTCOME_DONE_OK
+                      : APP_OPERATION_CLEANUP_OUTCOME_DONE_FAIL;
         }
         if (claim == APP_OPERATION_CLEANUP_ALREADY_DONE_OK) {
-            return true;
+            return APP_OPERATION_CLEANUP_OUTCOME_DONE_FAIL;
         }
-        return false;
+        if (claim == APP_OPERATION_CLEANUP_STALE ||
+            claim == APP_OPERATION_CLEANUP_INVALID) {
+            return APP_OPERATION_CLEANUP_OUTCOME_STALE;
+        }
+        return APP_OPERATION_CLEANUP_OUTCOME_DONE_FAIL;
     }
 
-    nc_gen = s_job.netcheck_gen;
+    nc_gen = job_owned ? s_job.netcheck_gen : 0;
     if (trial_match) {
         app_cmd_net_trial_clear_locked();
     }
-    app_cmd_net_job_clear_impl_locked();
+    if (job_owned) {
+        app_cmd_net_job_clear_impl_locked();
+    }
     app_cmd_net_job_unlock();
+    app_cmd_net_clear_active_id(op_id);
 
     net_test_hook("cleanup_after_claim", op, expected_gen);
 
-    if (s_port.netcheck_cancel != NULL) {
-        s_port.netcheck_cancel(nc_gen);
-    }
-    if (st.state == APP_OP_CONNECTING && s_port.try_cancel != NULL) {
-        (void)s_port.try_cancel();
-    }
-
-    if (restore_persistent) {
-        ESP_LOGW(TAG, "rescue=restore_persistent op=%s (cleanup without commit)", op_id);
-        ok = s_port.cleanup_request != NULL && s_port.cleanup_request(op_id);
-        if (!ok) {
-            ESP_LOGE(TAG, "rescue=restore_persistent failed (cleanup request) op=%s", op_id);
+    if (job_owned) {
+        if (s_port.netcheck_cancel != NULL) {
+            s_port.netcheck_cancel(nc_gen);
+        }
+        if (st.state == APP_OP_CONNECTING && s_port.try_cancel != NULL) {
+            (void)s_port.try_cancel();
+        }
+        if (restore_persistent) {
+            ESP_LOGW(TAG, "rescue=restore_persistent op=%s (cleanup without commit)", op_id);
+            ok = s_port.cleanup_request != NULL && s_port.cleanup_request(op_id);
+            if (!ok) {
+                ESP_LOGE(TAG, "rescue=restore_persistent failed (cleanup request) op=%s", op_id);
+            }
         }
     }
+
     net_test_hook("cleanup_before_complete", op, expected_gen);
     app_operation_cleanup_complete(op, expected_gen, ok);
     if (ok) {
@@ -637,7 +671,22 @@ bool app_cmd_net_cleanup_run(app_operation_t *op, void *ctx)
     } else {
         ESP_LOGW(TAG, "CLEANUP_DONE_FAIL op=%s", op_id);
     }
-    return ok;
+    return ok ? APP_OPERATION_CLEANUP_OUTCOME_DONE_OK
+              : APP_OPERATION_CLEANUP_OUTCOME_DONE_FAIL;
+}
+
+bool app_cmd_net_cleanup_run(app_operation_t *op, void *ctx)
+{
+    app_operation_status_t st;
+    app_operation_cleanup_outcome_t outcome;
+
+    (void)ctx;
+    if (op == NULL || !app_operation_get_status(op, &st)) {
+        return false;
+    }
+    outcome = app_cmd_net_cleanup_run_common(op, st.generation);
+    return outcome == APP_OPERATION_CLEANUP_OUTCOME_DONE_OK ||
+           outcome == APP_OPERATION_CLEANUP_OUTCOME_NO_JOB;
 }
 
 app_cmd_net_release_result_t app_cmd_net_release_if_owned(
@@ -735,21 +784,18 @@ app_cmd_net_release_result_t app_cmd_net_release_if_owned(
 }
 
 static app_operation_cleanup_outcome_t app_cmd_net_finish_run(
-    app_operation_t *op, void *ctx, app_operation_cleanup_policy_t policy)
+    app_operation_t *op, void *ctx, app_operation_cleanup_policy_t policy,
+    uint32_t expected_generation)
 {
-    app_operation_status_t st;
-
     (void)ctx;
-    if (op == NULL || !app_operation_get_status(op, &st)) {
+    if (op == NULL) {
         return APP_OPERATION_CLEANUP_OUTCOME_STALE;
     }
     switch (policy) {
     case APP_OPERATION_CLEANUP_REQUIRED:
-        return app_cmd_net_cleanup_run(op, NULL)
-                   ? APP_OPERATION_CLEANUP_OUTCOME_DONE_OK
-                   : APP_OPERATION_CLEANUP_OUTCOME_DONE_FAIL;
+        return app_cmd_net_cleanup_run_common(op, expected_generation);
     case APP_OPERATION_CLEANUP_RELEASE_ONLY:
-        switch (app_cmd_net_release_if_owned(op, st.generation)) {
+        switch (app_cmd_net_release_if_owned(op, expected_generation)) {
         case APP_CMD_NET_RELEASE_DONE:
             return APP_OPERATION_CLEANUP_OUTCOME_DONE_OK;
         case APP_CMD_NET_RELEASE_NO_RESOURCE:

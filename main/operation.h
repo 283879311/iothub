@@ -80,9 +80,11 @@ typedef enum {
     APP_OPERATION_FINISH_STALE,
 } app_operation_finish_result_t;
 
-/* policy-aware finish 回调：在 s_ops_mux 外执行。 */
+/* policy-aware finish 回调：在 s_ops_mux 外执行。
+ * expected_generation 由 operation finish intent 传入，供资源释放前复核。 */
 typedef app_operation_cleanup_outcome_t (*app_operation_finish_fn)(
-    app_operation_t *op, void *ctx, app_operation_cleanup_policy_t policy);
+    app_operation_t *op, void *ctx, app_operation_cleanup_policy_t policy,
+    uint32_t expected_generation);
 
 /* CMD-03b：cleanup 一次性认领状态。
  * NONE 未认领；RUNNING 已有认领者执行中；OK/FAIL 认领者已完成。
