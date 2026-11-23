@@ -53,8 +53,48 @@ typedef struct app_operation app_operation_t;
 typedef esp_err_t (*app_operation_run_fn)(app_operation_t *op, void *ctx);
 
 /* TTL/取消时的清理钩子：返回 false 表示清理失败，operation 进入 failed
- * 而不是 expired/cancelled，避免"operation 已过期但底层 trial 仍可提交"。 */
+ * 而不是 expired/cancelled，避免"operation 已过期但底层 trial 仍可提交"。
+ * 兼容旧路径；新 finish 路径使用 policy-aware finish_fn。 */
 typedef bool (*app_operation_cleanup_fn)(app_operation_t *op, void *ctx);
+
+/* P1：finish policy。COMMITTING 不作为 policy，由 finish API 直接拒绝。 */
+typedef enum {
+    APP_OPERATION_CLEANUP_REQUIRED = 0,
+    APP_OPERATION_CLEANUP_RELEASE_ONLY,
+    APP_OPERATION_CLEANUP_NO_RESOURCE_RELEASE,
+} app_operation_cleanup_policy_t;
+
+/* finish 路径的 cleanup/release 结果。 */
+typedef enum {
+    APP_OPERATION_CLEANUP_OUTCOME_DONE_OK = 0,
+    APP_OPERATION_CLEANUP_OUTCOME_DONE_FAIL,
+    APP_OPERATION_CLEANUP_OUTCOME_PENDING,
+    APP_OPERATION_CLEANUP_OUTCOME_NO_JOB,
+    APP_OPERATION_CLEANUP_OUTCOME_STALE,
+} app_operation_cleanup_outcome_t;
+
+typedef enum {
+    APP_OPERATION_FINISH_DONE = 0,
+    APP_OPERATION_FINISH_PENDING,
+    APP_OPERATION_FINISH_REJECTED,
+    APP_OPERATION_FINISH_STALE,
+} app_operation_finish_result_t;
+
+/* policy-aware finish 回调：在 s_ops_mux 外执行。
+ * expected_generation 由 operation finish intent 传入，供资源释放前复核。 */
+typedef app_operation_cleanup_outcome_t (*app_operation_finish_fn)(
+    app_operation_t *op, void *ctx, app_operation_cleanup_policy_t policy,
+    uint32_t expected_generation);
+
+/* CMD-03b：cleanup 一次性认领状态。
+ * NONE 未认领；RUNNING 已有认领者执行中；OK/FAIL 认领者已完成。
+ * 随 operation 槽位 generation 复位，不跨槽位复用保留。 */
+typedef enum {
+    APP_OPERATION_CLEANUP_NONE = 0,
+    APP_OPERATION_CLEANUP_RUNNING,
+    APP_OPERATION_CLEANUP_OK,
+    APP_OPERATION_CLEANUP_FAIL,
+} app_operation_cleanup_state_t;
 
 typedef struct {
     char id[APP_OPERATION_ID_LEN];
@@ -66,17 +106,8 @@ typedef struct {
     int64_t deadline_ms;
     int64_t terminal_ms;
     uint32_t generation;
+    app_operation_cleanup_state_t cleanup_state;
 } app_operation_status_t;
-
-/* CMD-03b：cleanup 一次性认领状态。
- * NONE 未认领；RUNNING 已有认领者执行中；OK/FAIL 认领者已完成。
- * 随 operation 槽位 generation 复位，不跨槽位复用保留。 */
-typedef enum {
-    APP_OPERATION_CLEANUP_NONE = 0,
-    APP_OPERATION_CLEANUP_RUNNING,
-    APP_OPERATION_CLEANUP_OK,
-    APP_OPERATION_CLEANUP_FAIL,
-} app_operation_cleanup_state_t;
 
 typedef enum {
     APP_OPERATION_CLEANUP_CLAIMED = 0,
@@ -109,6 +140,23 @@ esp_err_t app_operation_start(app_operation_owner_t owner, const char *idem_key,
                               app_operation_run_fn run_fn,
                               app_operation_cleanup_fn cleanup_fn,
                               void *ctx, app_operation_t **out);
+
+/* P1：带 policy-aware finish 回调的启动入口。旧 app_operation_start 等价
+ * finish_fn=NULL；未迁移路径继续使用旧 cleanup_fn。 */
+esp_err_t app_operation_start_with_finish(app_operation_owner_t owner, const char *idem_key,
+                                          uint32_t accepted_ttl_ms, uint32_t got_ip_ttl_ms,
+                                          app_operation_run_fn run_fn,
+                                          app_operation_cleanup_fn cleanup_fn,
+                                          app_operation_finish_fn finish_fn,
+                                          void *ctx, app_operation_t **out);
+
+/* 统一终态请求：first-writer 在 s_ops_mux 内原子登记；callback 在锁外执行。
+ * 第一个请求执行 policy 并 finalize；后续请求返回 PENDING，不执行 callback。 */
+app_operation_finish_result_t
+app_operation_request_finish(app_operation_t *op, uint32_t expected_generation,
+                             app_op_state_t target_state,
+                             app_operation_error_t target_error,
+                             app_operation_cleanup_policy_t cleanup_policy);
 
 esp_err_t app_operation_set_state(app_operation_t *op, app_op_state_t state,
                                   app_operation_error_t error);

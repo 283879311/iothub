@@ -26,6 +26,14 @@ static const char *TAG = "operation";
 #define APP_OPERATION_DEFAULT_RETENTION_MS 600000
 #define APP_OPERATION_WORKER_STACK 4096
 
+enum {
+    APP_OPERATION_FINISH_PHASE_NONE = 0,
+    APP_OPERATION_FINISH_PHASE_REGISTERED,
+    APP_OPERATION_FINISH_PHASE_CALLBACK_RUNNING,
+    APP_OPERATION_FINISH_PHASE_CALLBACK_PENDING_EXTERNAL,
+    APP_OPERATION_FINISH_PHASE_DONE,
+};
+
 struct app_operation {
     bool used;
     bool expiring;
@@ -44,7 +52,18 @@ struct app_operation {
     int64_t terminal_ms;
     app_operation_run_fn run_fn;
     app_operation_cleanup_fn cleanup_fn;
+    app_operation_finish_fn finish_fn;
     void *ctx;
+    /* P1 finish intent：仅登记一次；第二个请求只返回 PENDING。 */
+    bool finish_registered;
+    uint8_t finish_phase;
+    uint32_t finish_generation;
+    app_op_state_t finish_target_state;
+    app_operation_error_t finish_target_error;
+    app_operation_cleanup_policy_t finish_policy;
+    int64_t finish_started_ms;
+    uint16_t finish_pending_normal_count;
+    uint16_t finish_pending_external_count;
 };
 
 static app_operation_t s_ops[APP_OPERATION_MAX_SLOTS];
@@ -302,11 +321,12 @@ esp_err_t app_operation_init(void)
     return ESP_OK;
 }
 
-esp_err_t app_operation_start(app_operation_owner_t owner, const char *idem_key,
-                              uint32_t accepted_ttl_ms, uint32_t got_ip_ttl_ms,
-                              app_operation_run_fn run_fn,
-                              app_operation_cleanup_fn cleanup_fn,
-                              void *ctx, app_operation_t **out)
+esp_err_t app_operation_start_with_finish(app_operation_owner_t owner, const char *idem_key,
+                                          uint32_t accepted_ttl_ms, uint32_t got_ip_ttl_ms,
+                                          app_operation_run_fn run_fn,
+                                          app_operation_cleanup_fn cleanup_fn,
+                                          app_operation_finish_fn finish_fn,
+                                          void *ctx, app_operation_t **out)
 {
     int64_t now_ms;
     app_operation_t *slot = NULL;
@@ -391,6 +411,7 @@ esp_err_t app_operation_start(app_operation_owner_t owner, const char *idem_key,
     slot->got_ip_ttl_ms = got_ip_ttl_ms;
     slot->run_fn = run_fn;
     slot->cleanup_fn = cleanup_fn;
+    slot->finish_fn = finish_fn;
     slot->ctx = ctx;
     app_operation_fill_id(slot->id, sizeof(slot->id));
     if (idem_key != NULL) {
@@ -423,6 +444,16 @@ esp_err_t app_operation_start(app_operation_owner_t owner, const char *idem_key,
         *out = slot;
     }
     return ESP_OK;
+}
+
+esp_err_t app_operation_start(app_operation_owner_t owner, const char *idem_key,
+                              uint32_t accepted_ttl_ms, uint32_t got_ip_ttl_ms,
+                              app_operation_run_fn run_fn,
+                              app_operation_cleanup_fn cleanup_fn,
+                              void *ctx, app_operation_t **out)
+{
+    return app_operation_start_with_finish(owner, idem_key, accepted_ttl_ms, got_ip_ttl_ms,
+                                           run_fn, cleanup_fn, NULL, ctx, out);
 }
 
 esp_err_t app_operation_set_state(app_operation_t *op, app_op_state_t state,
@@ -540,6 +571,195 @@ esp_err_t app_operation_cancel(app_operation_t *op)
     return ESP_OK;
 }
 
+/* 仅在 s_ops_mux 内调用；成功后 operation 已终态化。 */
+static bool app_operation_finish_apply_locked(app_operation_t *op,
+                                               app_operation_cleanup_outcome_t outcome)
+{
+    app_op_state_t final_state;
+    app_operation_error_t final_error;
+
+    if (!op->used || !op->finish_registered ||
+        op->finish_generation != op->generation ||
+        !app_op_state_is_active(op->state)) {
+        return false;
+    }
+    if (outcome == APP_OPERATION_CLEANUP_OUTCOME_DONE_FAIL) {
+        final_state = APP_OP_FAILED;
+        final_error = APP_OPERATION_ERR_CLEANUP_FAILED;
+    } else {
+        final_state = op->finish_target_state;
+        final_error = op->finish_target_error;
+    }
+    if (!app_op_transition_allowed(op->state, final_state)) {
+        return false;
+    }
+    op->state = final_state;
+    op->error = final_error;
+    op->deadline_ms = 0;
+    op->terminal_ms = app_operation_now_ms();
+    op->finish_phase = APP_OPERATION_FINISH_PHASE_DONE;
+    op->expiring = false;
+    return true;
+}
+
+app_operation_finish_result_t
+app_operation_request_finish(app_operation_t *op, uint32_t expected_generation,
+                             app_op_state_t target_state,
+                             app_operation_error_t target_error,
+                             app_operation_cleanup_policy_t cleanup_policy)
+{
+    app_operation_cleanup_fn cleanup_fn;
+    app_operation_finish_fn finish_fn;
+    void *ctx;
+    bool run_callback = false;
+    bool legacy_cleanup = false;
+    app_operation_cleanup_outcome_t outcome;
+    char op_id[APP_OPERATION_ID_LEN] = "";
+    uint32_t log_gen = 0;
+
+    if (!app_operation_in_table(op)) {
+        return APP_OPERATION_FINISH_STALE;
+    }
+
+    portENTER_CRITICAL(&s_ops_mux);
+    if (!op->used || op->generation != expected_generation) {
+        portEXIT_CRITICAL(&s_ops_mux);
+        return APP_OPERATION_FINISH_STALE;
+    }
+    if (op->state == APP_OP_COMMITTING) {
+        portEXIT_CRITICAL(&s_ops_mux);
+        return APP_OPERATION_FINISH_REJECTED;
+    }
+    if (app_op_state_is_terminal(op->state)) {
+        portEXIT_CRITICAL(&s_ops_mux);
+        return APP_OPERATION_FINISH_REJECTED;
+    }
+    if (op->finish_registered) {
+        if (op->finish_pending_normal_count != UINT16_MAX) {
+            op->finish_pending_normal_count++;
+        }
+        portEXIT_CRITICAL(&s_ops_mux);
+        return APP_OPERATION_FINISH_PENDING;
+    }
+    if (target_state == APP_OP_FREE || !app_op_state_is_terminal(target_state) ||
+        !app_op_transition_allowed(op->state, target_state)) {
+        portEXIT_CRITICAL(&s_ops_mux);
+        return APP_OPERATION_FINISH_REJECTED;
+    }
+    if (cleanup_policy == APP_OPERATION_CLEANUP_RELEASE_ONLY &&
+        op->finish_fn == NULL) {
+        portEXIT_CRITICAL(&s_ops_mux);
+        return APP_OPERATION_FINISH_REJECTED;
+    }
+
+    cleanup_fn = op->cleanup_fn;
+    finish_fn = op->finish_fn;
+    ctx = op->ctx;
+    if (cleanup_policy != APP_OPERATION_CLEANUP_NO_RESOURCE_RELEASE) {
+        if (cleanup_policy == APP_OPERATION_CLEANUP_RELEASE_ONLY) {
+            run_callback = (finish_fn != NULL);
+        } else if (finish_fn != NULL) {
+            run_callback = true;
+            legacy_cleanup = false;
+        } else if (cleanup_fn != NULL) {
+            run_callback = true;
+            legacy_cleanup = true;
+        }
+    }
+
+    op->finish_registered = true;
+    op->finish_phase = APP_OPERATION_FINISH_PHASE_REGISTERED;
+    op->finish_generation = expected_generation;
+    op->finish_target_state = target_state;
+    op->finish_target_error = target_error;
+    op->finish_policy = cleanup_policy;
+    op->finish_started_ms = app_operation_now_ms();
+    op->expiring = true;
+    snprintf(op_id, sizeof(op_id), "%s", op->id);
+    log_gen = op->generation;
+    if (run_callback) {
+        op->finish_phase = APP_OPERATION_FINISH_PHASE_CALLBACK_RUNNING;
+    }
+    portEXIT_CRITICAL(&s_ops_mux);
+
+    if (!run_callback) {
+        bool applied;
+
+        portENTER_CRITICAL(&s_ops_mux);
+        applied = app_operation_finish_apply_locked(
+            op, APP_OPERATION_CLEANUP_OUTCOME_DONE_OK);
+        portEXIT_CRITICAL(&s_ops_mux);
+        if (!applied) {
+            return APP_OPERATION_FINISH_STALE;
+        }
+        app_mqtt_defer_restart_end_at("op_finish/no_resource");
+        ESP_LOGI(TAG, "finish %s gen=%u -> %s (no callback)",
+                 op_id, (unsigned)log_gen, app_op_state_name(target_state));
+        return APP_OPERATION_FINISH_DONE;
+    }
+
+    if (legacy_cleanup) {
+        outcome = cleanup_fn(op, ctx)
+                      ? APP_OPERATION_CLEANUP_OUTCOME_DONE_OK
+                      : APP_OPERATION_CLEANUP_OUTCOME_DONE_FAIL;
+    } else {
+        outcome = finish_fn(op, ctx, cleanup_policy, expected_generation);
+    }
+
+#ifdef APP_C1_TEST_HOOKS
+    /* 保留 C1 实验构建的 expire 暂停点：cleanup 已返回、终态发布之前。
+     * 仅测试构建存在，不改变生产路径。 */
+    if (outcome != APP_OPERATION_CLEANUP_OUTCOME_PENDING &&
+        outcome != APP_OPERATION_CLEANUP_OUTCOME_STALE &&
+        op->finish_target_state == APP_OP_EXPIRED) {
+        app_operation_test_hook_pause("expire_post_cleanup", op);
+    }
+#endif
+
+    portENTER_CRITICAL(&s_ops_mux);
+    if (!op->used || op->generation != expected_generation ||
+        op->finish_generation != expected_generation ||
+        !op->finish_registered) {
+        portEXIT_CRITICAL(&s_ops_mux);
+        ESP_LOGW(TAG, "finish %s gen=%u stale after callback", op_id,
+                 (unsigned)log_gen);
+        return APP_OPERATION_FINISH_STALE;
+    }
+    if (outcome == APP_OPERATION_CLEANUP_OUTCOME_PENDING) {
+        op->finish_phase = APP_OPERATION_FINISH_PHASE_CALLBACK_PENDING_EXTERNAL;
+        if (op->finish_pending_external_count != UINT16_MAX) {
+            op->finish_pending_external_count++;
+        }
+        portEXIT_CRITICAL(&s_ops_mux);
+        ESP_LOGE(TAG, "finish %s gen=%u external cleanup pending (claim running)",
+                 op_id, (unsigned)log_gen);
+        return APP_OPERATION_FINISH_PENDING;
+    }
+    if (outcome == APP_OPERATION_CLEANUP_OUTCOME_STALE) {
+        portEXIT_CRITICAL(&s_ops_mux);
+        ESP_LOGW(TAG, "finish %s gen=%u cleanup stale; operation left active",
+                 op_id, (unsigned)log_gen);
+        return APP_OPERATION_FINISH_STALE;
+    }
+    if (!app_operation_finish_apply_locked(op, outcome)) {
+        portEXIT_CRITICAL(&s_ops_mux);
+        ESP_LOGW(TAG, "finish %s gen=%u could not apply final state", op_id,
+                 (unsigned)log_gen);
+        return APP_OPERATION_FINISH_STALE;
+    }
+    {
+        app_op_state_t final_state = op->state;
+        app_operation_error_t final_error = op->error;
+
+        portEXIT_CRITICAL(&s_ops_mux);
+        app_mqtt_defer_restart_end_at("op_finish/terminal");
+        ESP_LOGI(TAG, "finish %s gen=%u -> %s/%s outcome=%d",
+                 op_id, (unsigned)log_gen, app_op_state_name(final_state),
+                 app_operation_error_name(final_error), (int)outcome);
+    }
+    return APP_OPERATION_FINISH_DONE;
+}
+
 bool app_operation_get_status(const app_operation_t *op, app_operation_status_t *out)
 {
     bool ok = false;
@@ -559,6 +779,7 @@ bool app_operation_get_status(const app_operation_t *op, app_operation_status_t 
         out->deadline_ms = op->deadline_ms;
         out->terminal_ms = op->terminal_ms;
         out->generation = op->generation;
+        out->cleanup_state = (app_operation_cleanup_state_t)op->net_cleanup_state;
         ok = true;
     }
     portEXIT_CRITICAL(&s_ops_mux);
@@ -723,26 +944,23 @@ static void app_operation_run_pending(void)
 static void app_operation_expire_one(void)
 {
     app_operation_t *op = NULL;
-    app_operation_cleanup_fn cleanup = NULL;
-    void *ctx = NULL;
     uint32_t generation = 0;
-    bool cleanup_ok = true;
     int64_t now_ms = app_operation_now_ms();
+    char op_id[APP_OPERATION_ID_LEN] = "";
+    app_operation_finish_result_t finish;
 
     portENTER_CRITICAL(&s_ops_mux);
     for (size_t i = 0; i < APP_OPERATION_MAX_SLOTS; i++) {
         app_operation_t *candidate = &s_ops[i];
 
         if (!candidate->used || !app_op_state_is_active(candidate->state) ||
-            candidate->expiring || candidate->deadline_ms == 0 ||
-            now_ms < candidate->deadline_ms) {
+            candidate->expiring || candidate->finish_registered ||
+            candidate->deadline_ms == 0 || now_ms < candidate->deadline_ms) {
             continue;
         }
-        candidate->expiring = true;
-        generation = candidate->generation;
-        cleanup = candidate->cleanup_fn;
-        ctx = candidate->ctx;
         op = candidate;
+        generation = candidate->generation;
+        snprintf(op_id, sizeof(op_id), "%s", candidate->id);
         break;
     }
     portEXIT_CRITICAL(&s_ops_mux);
@@ -750,33 +968,18 @@ static void app_operation_expire_one(void)
     if (op == NULL) {
         return;
     }
-    if (cleanup != NULL) {
-        cleanup_ok = cleanup(op, ctx);
+    finish = app_operation_request_finish(op, generation, APP_OP_EXPIRED,
+                                          APP_OPERATION_ERR_TIMEOUT,
+                                          APP_OPERATION_CLEANUP_REQUIRED);
+    if (finish == APP_OPERATION_FINISH_DONE) {
+        ESP_LOGW(TAG, "expire %s finished", op_id);
+    } else if (finish == APP_OPERATION_FINISH_PENDING) {
+        ESP_LOGW(TAG, "expire %s pending (another finish owner)", op_id);
+    } else if (finish == APP_OPERATION_FINISH_REJECTED) {
+        ESP_LOGW(TAG, "expire %s rejected", op_id);
+    } else {
+        ESP_LOGW(TAG, "expire %s stale", op_id);
     }
-
-#ifdef APP_C1_TEST_HOOKS
-    app_operation_test_hook_pause("expire_post_cleanup", op);
-#endif
-    {
-        bool expired = false;
-
-        portENTER_CRITICAL(&s_ops_mux);
-        if (op->used && op->generation == generation && app_op_state_is_active(op->state)) {
-            op->state = cleanup_ok ? APP_OP_EXPIRED : APP_OP_FAILED;
-            op->error = cleanup_ok ? APP_OPERATION_ERR_TIMEOUT
-                                   : APP_OPERATION_ERR_CLEANUP_FAILED;
-            op->deadline_ms = 0;
-            op->terminal_ms = app_operation_now_ms();
-            expired = true;
-        }
-        op->expiring = false;
-        portEXIT_CRITICAL(&s_ops_mux);
-        if (expired) {
-            app_mqtt_defer_restart_end_at("expire/terminal");
-        }
-    }
-    ESP_LOGW(TAG, "expire %s cleanup=%s", op->id,
-             cleanup_ok ? "ok" : "failed");
 }
 
 /* DEF-MQTT-002(2026-11-05):独立过期任务。

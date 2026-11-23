@@ -40,6 +40,7 @@
       "operation_id": "string",
       "state": "enum above",
       "error": "flat string（无错=none）",
+      "cleanup_state": "none|running|ok|fail（P1 1.1-draft 加法字段）",
       "trial_id": "string, 仅试用存在时",
       "ssid": "string, 仅试用存在时",
       "stages": { "wifi_connected": "bool", "ip_acquired": "bool", "internet_verified": "bool", "mqtt_connected": "bool" }
@@ -49,6 +50,13 @@
       "fields": ["error_detail:{code,message}", "finished_uptime_ms", "stages_source"],
       "stages_source": "snapshot|live——命中 job/终态快照缓存=snapshot；仅未命中才 live",
       "terminal_snapshot_retention": "4 槽按 op id 的进程内缓存；job 清理后仍返回该 op 最后阶段真值",
+      "cleanup_state": {
+        "since": "P1 review/p1-operation-finish (2026-11-23)",
+        "values": ["none", "running", "ok", "fail"],
+        "meaning": "P1 cleanup claim/派发状态。ok 只表示资源清理/派发成功，不表示 Wi-Fi 持久配置恢复完成。",
+        "client_rule": "state 是 operation 生命周期终态的唯一判断依据；cleanup_state 是独立的资源清理诊断字段。cleanup_state=running 不得覆盖或否定 operation 终态；终态下仍可能为 running（P1 200ms 兼容行为）。客户端可继续查询 operation.get 观察该字段变化，但不得把 running 作为永久轮询条件，也不得把 ok 当作网络恢复成功条件。网络实际状态仍以 network.status、config.get 等接口为准。",
+        "status": "1.1-draft additive; device acceptance pending"
+      },
       "wire_evidence": "op-36A936F9E7909901 终态 +5s：stages 四项全 true、stages_source=snapshot、finished_uptime_ms=61305"
     }
   },

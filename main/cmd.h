@@ -41,5 +41,8 @@ esp_err_t app_cmd_execute_method(const app_cmd_context_t *ctx, const char *metho
 /* DEF-BLE-001:是否有在途网络操作(BLE 空闲回收用:配网在途时不得断链)。 */
 bool app_cmd_net_op_active(void);
 
+/* CMD-03 H1:网络 job/trial 模块初始化(须在 BLE/Wi-Fi 启动前调用一次)。 */
+esp_err_t app_cmd_net_job_init(void);
+
 /* BLE 断连:作废属于 BLE 会话的网络候选 trial,避免无会话时遗留可 apply 的凭据。 */
 void app_cmd_net_on_ble_disconnect(void);
