@@ -1,0 +1,271 @@
+[scan-filtered] 1 hit(s) in 12s
+  HIT 10:97:BD:D3:65:DA name='IotHubBLE-65D8' local_name='IotHubBLE-65D8' rssi=-46 uuids=['6e400001-b5a3-f393-e0a9-e50e24dcca9e']
+[scan-unfiltered] 3 device(s) in 6s
+  TARGET? 10:97:BD:D3:65:DA name='IotHubBLE-65D8' local_name='IotHubBLE-65D8' rssi=-46 uuids=['6e400001-b5a3-f393-e0a9-e50e24dcca9e']
+[name-transition] rc=124 lines=0 names=[]
+
+== 1/2 scan+name: PASS ==
+
+[conn] connecting to 10:97:BD:D3:65:DA name='IotHubBLE-65D8'
+/home/tc/esp/workspace/iothub/.venv-bleak/lib/python3.12/site-packages/bleak/backends/bluezdbus/client.py:646: UserWarning: Using default MTU value. Call _acquire_mtu() or set _mtu_size first to avoid this warning.
+  warnings.warn(
+[conn] connected=True mtu_size=23
+>36.097s TX id=info-1 62B {"id": "info-1", "version": "1.0", "cmd": "device.info", "args": {}}
+[tx] chunked 62B into 4 GATT writes (<= 20B each)
+<36.447s> RX id=info-1 289B frags=2 sizes=[253, 36] {"id": "info-1", "ok": true, "data": {"model": "iothub", "firmware": "1.3-b685bd5", "build_sha": "ca103533d", "device_id": "IotHub-65D8", "build_variant": "mqtt_net_txn=on", "protocol_versions": ["1.0"], "security": {"link_encrypted": false, "bonded": false, "l2_ready": false, "sensitive_writes_allowed": false}}}
+[info] {"id": "info-1", "ok": true, "data": {"model": "iothub", "firmware": "1.3-b685bd5", "build_sha": "ca103533d", "device_id": "IotHub-65D8", "build_variant": "mqtt_net_txn=on", "protocol_versions": ["1.0"], "security": {"link_encrypted": false, "bonded": false, "l2_ready": false, "sensitive_writes_allowed": false}}}
+>36.447s TX id=login-2 100B {"id": "login-2", "version": "1.0", "cmd": "auth.login", "args": {"username": "admin", "password": "<redacted>"}}
+[tx] chunked 100B into 5 GATT writes (<= 20B each)
+<37.159s> RX id=login-2 95B frags=1 sizes=[95] {"id": "login-2", "ok": true, "data": {"token": "<redacted>", "expires_in": 600}}
+[auth] login ok (token redacted)
+>37.412s TX id=status-3 110B {"id": "status-3", "version": "1.0", "cmd": "network.status", "args": {}, "token": "<redacted>"}
+[tx] chunked 110B into 6 GATT writes (<= 20B each)
+<38.596s> RX id=status-3 536B frags=3 sizes=[253, 253, 30] {"id": "status-3", "ok": true, "data": {"sta_connected": true, "sta_has_ip": true, "sta_ip": "192.168.1.45", "last_disconnect": "none", "connected_ssid": "CMCC-502", "connected_profile": 0, "internet_verified": true, "net_verify_stage": "mqtt", "nc_tcp_fails_last": 0, "nc_tcp_last_errno": 0, "rssi": -52, "channel": 8, "bssid": "5c:c0:a0:bd:f6:28", "rssi_valid": true, "sta_ssid": "CMCC-502", "password_set": true, "mode": "sta", "persistent_use_static": false, "persistent_static_ip": "", "cfg_state": "dhcp", "mqtt_connected": true, "mqtt_last_error": "", "trial": {"state": "idle"}}}
+[status] {"sta_connected": true, "sta_has_ip": true, "sta_ip": "192.168.1.45", "last_disconnect": "none", "connected_ssid": "CMCC-502", "connected_profile": 0, "internet_verified": true, "net_verify_stage": "mqtt", "nc_tcp_fails_last": 0, "nc_tcp_last_errno": 0, "rssi": -52, "channel": 8, "bssid": "5c:c0:a0:bd:f6:28", "rssi_valid": true, "sta_ssid": "CMCC-502", "password_set": true, "mode": "sta", "persistent_use_static": false, "persistent_static_ip": "", "cfg_state": "dhcp", "mqtt_connected": true, "mqtt_last_error": "", "trial": {"state": "idle"}}
+>38.849s TX id=cfg-initial-4 111B {"id": "cfg-initial-4", "version": "1.0", "cmd": "config.get", "args": {}, "token": "<redacted>"}
+[tx] chunked 111B into 6 GATT writes (<= 20B each)
+<39.588s> RX id=cfg-initial-4 1074B frags=5 sizes=[253, 253, 253, 253, 62] {"id": "cfg-initial-4", "ok": true, "data": {"network": {"net_mode": "sta", "sta_ssid": "CMCC-502", "sta_password_set": true, "sta_use_static": false, "sta_static_ip": "", "sta_static_gateway": "", "sta_static_netmask": "", "sta_static_dns1": "", "sta_static_dns2": "", "sta_connected": true, "sta_has_ip": true, "sta_ip": "192.168.1.45", "last_disconnect": "none"}, "mqtt": {"mqtt_backend": "tb_selfhost", "mqtt_host": "139.9.93.245", "mqtt_port": 21883, "mqtt_use_tls": false, "mqtt_token_set": true, "connected": true, "publish_count": 6, "outbox": 0, "last_error": ""}, "bluetooth": {"bt_role": "ble", "bt_device_name": "IotHubBLE-65D8", "runtime_mode": "ble", "adv_active": false, "connected": true, "adv_retry_count": 0, "last_error": ""}, "uart": {"uart_baudrate": 115200, "uart_data_bits": 8, "uart_stop_bits": 1, "uart_parity_mode": "none", "uart_rx_gpio": 18, "uart_tx_gpio": 17}, "gpio": {"relay_on": false, "led_on": false, "relay_power_policy": 0, "led_power_policy": 0, "relay_active_high": true, "led_active_high": true, "input_active_low": true, "input_active": false, "io_seq": 0, "relay_gpio": 16, "led_gpio": 4, "input_gpio": 27}, "web": {"username": "admin"}}}
+>39.842s TX id=profiles-5 118B {"id": "profiles-5", "version": "1.0", "cmd": "network.profile.list", "args": {}, "token": "<redacted>"}
+[tx] chunked 118B into 6 GATT writes (<= 20B each)
+<40.762s> RX id=profiles-5 167B frags=1 sizes=[167] {"id": "profiles-5", "ok": true, "data": {"profiles": [{"ssid": "CMCC-502", "password_set": true}, {"ssid": "TQ2018", "password_set": true}, {"ssid": "TQ2017", "password_set": true}]}}
+>40.768s TX id=scan1-6 107B {"id": "scan1-6", "version": "1.0", "cmd": "network.scan", "args": {}, "token": "<redacted>"}
+[tx] chunked 107B into 6 GATT writes (<= 20B each)
+<46.482s> RX id=scan1-6 620B frags=3 sizes=[253, 253, 114] {"id": "scan1-6", "ok": true, "data": {"status": "ok", "count": 8, "aps": [{"ssid": "CMCC-502", "rssi": -54, "auth": 4, "bssid": "5c:c0:a0:bd:f6:28"}, {"ssid": "302", "rssi": -56, "auth": 3, "bssid": "42:41:f0:93:17:3b"}, {"ssid": "TQ2018", "rssi": -70, "auth": 3, "bssid": "e2:5a:9f:89:df:4e"}, {"ssid": "ChinaNet-eykP", "rssi": -71, "auth": 3, "bssid": "38:9e:80:ee:4a:b1"}, {"ssid": "CMCC-GhyE", "rssi": -79, "auth": 7, "bssid": "38:16:5a:4e:71:11"}, {"ssid": "CU_Gb5G", "rssi": -84, "auth": 4, "bssid": "50:42:89:e8:84:72"}, {"ssid": "TP-LINK_BFBD", "rssi": -88, "auth": 4, "bssid": "0c:4b:54:0e:bf:bd"}, {"ssid": "ChinaNGB-UM8Qvf", "rssi": -88, "auth": 4, "bssid": "a0:1c:87:fe:c8:b7"}]}}
+[long 1/10] complete=True id=scan1-6 ok=True bytes=620 frags=3 aps=8 latency=5473.8ms attempts=1
+>46.736s TX id=scan2-7 107B {"id": "scan2-7", "version": "1.0", "cmd": "network.scan", "args": {}, "token": "<redacted>"}
+[tx] chunked 107B into 6 GATT writes (<= 20B each)
+<47.327s> RX id=scan2-7 68B frags=1 sizes=[68] {"id": "scan2-7", "ok": false, "error": {"code": "busy", "message": "busy"}}
+[long 2/10] complete=True id=scan2-7 ok=False bytes=68 frags=1 aps=0 latency=591.3ms attempts=1
+>47.578s TX id=scan3-8 107B {"id": "scan3-8", "version": "1.0", "cmd": "network.scan", "args": {}, "token": "<redacted>"}
+[tx] chunked 107B into 6 GATT writes (<= 20B each)
+<48.183s> RX id=scan3-8 68B frags=1 sizes=[68] {"id": "scan3-8", "ok": false, "error": {"code": "busy", "message": "busy"}}
+[long 3/10] complete=True id=scan3-8 ok=False bytes=68 frags=1 aps=0 latency=605.0ms attempts=1
+>48.438s TX id=scan4-9 107B {"id": "scan4-9", "version": "1.0", "cmd": "network.scan", "args": {}, "token": "<redacted>"}
+[tx] chunked 107B into 6 GATT writes (<= 20B each)
+<49.128s> RX id=scan4-9 68B frags=1 sizes=[68] {"id": "scan4-9", "ok": false, "error": {"code": "busy", "message": "busy"}}
+[long 4/10] complete=True id=scan4-9 ok=False bytes=68 frags=1 aps=0 latency=690.0ms attempts=1
+>49.384s TX id=scan5-10 108B {"id": "scan5-10", "version": "1.0", "cmd": "network.scan", "args": {}, "token": "<redacted>"}
+[tx] chunked 108B into 6 GATT writes (<= 20B each)
+<54.860s> RX id=scan5-10 621B frags=3 sizes=[253, 253, 115] {"id": "scan5-10", "ok": true, "data": {"status": "ok", "count": 8, "aps": [{"ssid": "CMCC-502", "rssi": -53, "auth": 4, "bssid": "5c:c0:a0:bd:f6:28"}, {"ssid": "302", "rssi": -58, "auth": 3, "bssid": "42:41:f0:93:17:3b"}, {"ssid": "TQ2018", "rssi": -66, "auth": 3, "bssid": "e2:5a:9f:89:df:4e"}, {"ssid": "ChinaNet-eykP", "rssi": -70, "auth": 3, "bssid": "38:9e:80:ee:4a:b1"}, {"ssid": "CMCC-GhyE", "rssi": -76, "auth": 7, "bssid": "38:16:5a:4e:71:11"}, {"ssid": "CU_Gb5G", "rssi": -84, "auth": 4, "bssid": "50:42:89:e8:84:72"}, {"ssid": "TP-LINK_BFBD", "rssi": -86, "auth": 4, "bssid": "0c:4b:54:0e:bf:bd"}, {"ssid": "ChinaNGB-UM8Qvf", "rssi": -86, "auth": 4, "bssid": "a0:1c:87:fe:c8:b7"}]}}
+[long 5/10] complete=True id=scan5-10 ok=True bytes=621 frags=3 aps=8 latency=5476.1ms attempts=1
+>55.112s TX id=scan6-11 108B {"id": "scan6-11", "version": "1.0", "cmd": "network.scan", "args": {}, "token": "<redacted>"}
+[tx] chunked 108B into 6 GATT writes (<= 20B each)
+<55.699s> RX id=scan6-11 69B frags=1 sizes=[69] {"id": "scan6-11", "ok": false, "error": {"code": "busy", "message": "busy"}}
+[long 6/10] complete=True id=scan6-11 ok=False bytes=69 frags=1 aps=0 latency=586.2ms attempts=1
+>55.952s TX id=scan7-12 108B {"id": "scan7-12", "version": "1.0", "cmd": "network.scan", "args": {}, "token": "<redacted>"}
+[tx] chunked 108B into 6 GATT writes (<= 20B each)
+<56.508s> RX id=scan7-12 69B frags=1 sizes=[69] {"id": "scan7-12", "ok": false, "error": {"code": "busy", "message": "busy"}}
+[long 7/10] complete=True id=scan7-12 ok=False bytes=69 frags=1 aps=0 latency=555.4ms attempts=1
+>56.764s TX id=scan8-13 108B {"id": "scan8-13", "version": "1.0", "cmd": "network.scan", "args": {}, "token": "<redacted>"}
+[tx] chunked 108B into 6 GATT writes (<= 20B each)
+<57.859s> RX id=scan8-13 69B frags=1 sizes=[69] {"id": "scan8-13", "ok": false, "error": {"code": "busy", "message": "busy"}}
+[long 8/10] complete=True id=scan8-13 ok=False bytes=69 frags=1 aps=0 latency=1095.4ms attempts=1
+>58.113s TX id=scan9-14 108B {"id": "scan9-14", "version": "1.0", "cmd": "network.scan", "args": {}, "token": "<redacted>"}
+[tx] chunked 108B into 6 GATT writes (<= 20B each)
+<63.758s> RX id=scan9-14 615B frags=3 sizes=[253, 253, 109] {"id": "scan9-14", "ok": true, "data": {"status": "ok", "count": 8, "aps": [{"ssid": "CMCC-502", "rssi": -55, "auth": 4, "bssid": "5c:c0:a0:bd:f6:28"}, {"ssid": "302", "rssi": -57, "auth": 3, "bssid": "42:41:f0:93:17:3b"}, {"ssid": "TQ2018", "rssi": -67, "auth": 3, "bssid": "e2:5a:9f:89:df:4e"}, {"ssid": "ChinaNet-eykP", "rssi": -69, "auth": 3, "bssid": "38:9e:80:ee:4a:b1"}, {"ssid": "CMCC-GhyE", "rssi": -76, "auth": 7, "bssid": "38:16:5a:4e:71:11"}, {"ssid": "CU_Gb5G", "rssi": -83, "auth": 4, "bssid": "50:42:89:e8:84:72"}, {"ssid": "CMCC-J99h", "rssi": -85, "auth": 4, "bssid": "b8:a1:4a:85:32:b5"}, {"ssid": "TP-LINK_BFBD", "rssi": -87, "auth": 4, "bssid": "0c:4b:54:0e:bf:bd"}]}}
+[long 9/10] complete=True id=scan9-14 ok=True bytes=615 frags=3 aps=8 latency=5644.7ms attempts=1
+>64.013s TX id=scan10-15 109B {"id": "scan10-15", "version": "1.0", "cmd": "network.scan", "args": {}, "token": "<redacted>"}
+[tx] chunked 109B into 6 GATT writes (<= 20B each)
+<64.699s> RX id=scan10-15 70B frags=1 sizes=[70] {"id": "scan10-15", "ok": false, "error": {"code": "busy", "message": "busy"}}
+[long 10/10] complete=True id=scan10-15 ok=False bytes=70 frags=1 aps=0 latency=686.0ms attempts=1
+
+== 3 long scan x10: PASS ==
+
+>64.949s TX id=cfg1-16 105B {"id": "cfg1-16", "version": "1.0", "cmd": "config.get", "args": {}, "token": "<redacted>"}
+[tx] chunked 105B into 6 GATT writes (<= 20B each)
+<65.626s> RX id=cfg1-16 1068B frags=5 sizes=[253, 253, 253, 253, 56] {"id": "cfg1-16", "ok": true, "data": {"network": {"net_mode": "sta", "sta_ssid": "CMCC-502", "sta_password_set": true, "sta_use_static": false, "sta_static_ip": "", "sta_static_gateway": "", "sta_static_netmask": "", "sta_static_dns1": "", "sta_static_dns2": "", "sta_connected": true, "sta_has_ip": true, "sta_ip": "192.168.1.45", "last_disconnect": "none"}, "mqtt": {"mqtt_backend": "tb_selfhost", "mqtt_host": "139.9.93.245", "mqtt_port": 21883, "mqtt_use_tls": false, "mqtt_token_set": true, "connected": true, "publish_count": 9, "outbox": 0, "last_error": ""}, "bluetooth": {"bt_role": "ble", "bt_device_name": "IotHubBLE-65D8", "runtime_mode": "ble", "adv_active": false, "connected": true, "adv_retry_count": 0, "last_error": ""}, "uart": {"uart_baudrate": 115200, "uart_data_bits": 8, "uart_stop_bits": 1, "uart_parity_mode": "none", "uart_rx_gpio": 18, "uart_tx_gpio": 17}, "gpio": {"relay_on": false, "led_on": false, "relay_power_policy": 0, "led_power_policy": 0, "relay_active_high": true, "led_active_high": true, "input_active_low": true, "input_active": false, "io_seq": 0, "relay_gpio": 16, "led_gpio": 4, "input_gpio": 27}, "web": {"username": "admin"}}}
+[cfg 1/10] complete=True id=cfg1-16 bytes=1068 frags=5 latency=676.9ms attempts=1
+>65.881s TX id=cfg2-17 105B {"id": "cfg2-17", "version": "1.0", "cmd": "config.get", "args": {}, "token": "<redacted>"}
+[tx] chunked 105B into 6 GATT writes (<= 20B each)
+<66.905s> RX id=cfg2-17 1068B frags=5 sizes=[253, 253, 253, 253, 56] {"id": "cfg2-17", "ok": true, "data": {"network": {"net_mode": "sta", "sta_ssid": "CMCC-502", "sta_password_set": true, "sta_use_static": false, "sta_static_ip": "", "sta_static_gateway": "", "sta_static_netmask": "", "sta_static_dns1": "", "sta_static_dns2": "", "sta_connected": true, "sta_has_ip": true, "sta_ip": "192.168.1.45", "last_disconnect": "none"}, "mqtt": {"mqtt_backend": "tb_selfhost", "mqtt_host": "139.9.93.245", "mqtt_port": 21883, "mqtt_use_tls": false, "mqtt_token_set": true, "connected": true, "publish_count": 9, "outbox": 0, "last_error": ""}, "bluetooth": {"bt_role": "ble", "bt_device_name": "IotHubBLE-65D8", "runtime_mode": "ble", "adv_active": false, "connected": true, "adv_retry_count": 0, "last_error": ""}, "uart": {"uart_baudrate": 115200, "uart_data_bits": 8, "uart_stop_bits": 1, "uart_parity_mode": "none", "uart_rx_gpio": 18, "uart_tx_gpio": 17}, "gpio": {"relay_on": false, "led_on": false, "relay_power_policy": 0, "led_power_policy": 0, "relay_active_high": true, "led_active_high": true, "input_active_low": true, "input_active": false, "io_seq": 0, "relay_gpio": 16, "led_gpio": 4, "input_gpio": 27}, "web": {"username": "admin"}}}
+[cfg 2/10] complete=True id=cfg2-17 bytes=1068 frags=5 latency=1023.6ms attempts=1
+>67.159s TX id=cfg3-18 105B {"id": "cfg3-18", "version": "1.0", "cmd": "config.get", "args": {}, "token": "<redacted>"}
+[tx] chunked 105B into 6 GATT writes (<= 20B each)
+<67.996s> RX id=cfg3-18 1068B frags=5 sizes=[253, 253, 253, 253, 56] {"id": "cfg3-18", "ok": true, "data": {"network": {"net_mode": "sta", "sta_ssid": "CMCC-502", "sta_password_set": true, "sta_use_static": false, "sta_static_ip": "", "sta_static_gateway": "", "sta_static_netmask": "", "sta_static_dns1": "", "sta_static_dns2": "", "sta_connected": true, "sta_has_ip": true, "sta_ip": "192.168.1.45", "last_disconnect": "none"}, "mqtt": {"mqtt_backend": "tb_selfhost", "mqtt_host": "139.9.93.245", "mqtt_port": 21883, "mqtt_use_tls": false, "mqtt_token_set": true, "connected": true, "publish_count": 9, "outbox": 0, "last_error": ""}, "bluetooth": {"bt_role": "ble", "bt_device_name": "IotHubBLE-65D8", "runtime_mode": "ble", "adv_active": false, "connected": true, "adv_retry_count": 0, "last_error": ""}, "uart": {"uart_baudrate": 115200, "uart_data_bits": 8, "uart_stop_bits": 1, "uart_parity_mode": "none", "uart_rx_gpio": 18, "uart_tx_gpio": 17}, "gpio": {"relay_on": false, "led_on": false, "relay_power_policy": 0, "led_power_policy": 0, "relay_active_high": true, "led_active_high": true, "input_active_low": true, "input_active": false, "io_seq": 0, "relay_gpio": 16, "led_gpio": 4, "input_gpio": 27}, "web": {"username": "admin"}}}
+[cfg 3/10] complete=True id=cfg3-18 bytes=1068 frags=5 latency=837.3ms attempts=1
+>68.250s TX id=cfg4-19 105B {"id": "cfg4-19", "version": "1.0", "cmd": "config.get", "args": {}, "token": "<redacted>"}
+[tx] chunked 105B into 6 GATT writes (<= 20B each)
+<68.972s> RX id=cfg4-19 1068B frags=5 sizes=[253, 253, 253, 253, 56] {"id": "cfg4-19", "ok": true, "data": {"network": {"net_mode": "sta", "sta_ssid": "CMCC-502", "sta_password_set": true, "sta_use_static": false, "sta_static_ip": "", "sta_static_gateway": "", "sta_static_netmask": "", "sta_static_dns1": "", "sta_static_dns2": "", "sta_connected": true, "sta_has_ip": true, "sta_ip": "192.168.1.45", "last_disconnect": "none"}, "mqtt": {"mqtt_backend": "tb_selfhost", "mqtt_host": "139.9.93.245", "mqtt_port": 21883, "mqtt_use_tls": false, "mqtt_token_set": true, "connected": true, "publish_count": 9, "outbox": 0, "last_error": ""}, "bluetooth": {"bt_role": "ble", "bt_device_name": "IotHubBLE-65D8", "runtime_mode": "ble", "adv_active": false, "connected": true, "adv_retry_count": 0, "last_error": ""}, "uart": {"uart_baudrate": 115200, "uart_data_bits": 8, "uart_stop_bits": 1, "uart_parity_mode": "none", "uart_rx_gpio": 18, "uart_tx_gpio": 17}, "gpio": {"relay_on": false, "led_on": false, "relay_power_policy": 0, "led_power_policy": 0, "relay_active_high": true, "led_active_high": true, "input_active_low": true, "input_active": false, "io_seq": 0, "relay_gpio": 16, "led_gpio": 4, "input_gpio": 27}, "web": {"username": "admin"}}}
+[cfg 4/10] complete=True id=cfg4-19 bytes=1068 frags=5 latency=721.6ms attempts=1
+>69.227s TX id=cfg5-20 105B {"id": "cfg5-20", "version": "1.0", "cmd": "config.get", "args": {}, "token": "<redacted>"}
+[tx] chunked 105B into 6 GATT writes (<= 20B each)
+<70.429s> RX id=cfg5-20 1068B frags=5 sizes=[253, 253, 253, 253, 56] {"id": "cfg5-20", "ok": true, "data": {"network": {"net_mode": "sta", "sta_ssid": "CMCC-502", "sta_password_set": true, "sta_use_static": false, "sta_static_ip": "", "sta_static_gateway": "", "sta_static_netmask": "", "sta_static_dns1": "", "sta_static_dns2": "", "sta_connected": true, "sta_has_ip": true, "sta_ip": "192.168.1.45", "last_disconnect": "none"}, "mqtt": {"mqtt_backend": "tb_selfhost", "mqtt_host": "139.9.93.245", "mqtt_port": 21883, "mqtt_use_tls": false, "mqtt_token_set": true, "connected": true, "publish_count": 9, "outbox": 0, "last_error": ""}, "bluetooth": {"bt_role": "ble", "bt_device_name": "IotHubBLE-65D8", "runtime_mode": "ble", "adv_active": false, "connected": true, "adv_retry_count": 0, "last_error": ""}, "uart": {"uart_baudrate": 115200, "uart_data_bits": 8, "uart_stop_bits": 1, "uart_parity_mode": "none", "uart_rx_gpio": 18, "uart_tx_gpio": 17}, "gpio": {"relay_on": false, "led_on": false, "relay_power_policy": 0, "led_power_policy": 0, "relay_active_high": true, "led_active_high": true, "input_active_low": true, "input_active": false, "io_seq": 0, "relay_gpio": 16, "led_gpio": 4, "input_gpio": 27}, "web": {"username": "admin"}}}
+[cfg 5/10] complete=True id=cfg5-20 bytes=1068 frags=5 latency=1202.6ms attempts=1
+>70.682s TX id=cfg6-21 105B {"id": "cfg6-21", "version": "1.0", "cmd": "config.get", "args": {}, "token": "<redacted>"}
+[tx] chunked 105B into 6 GATT writes (<= 20B each)
+<71.329s> RX id=cfg6-21 1068B frags=5 sizes=[253, 253, 253, 253, 56] {"id": "cfg6-21", "ok": true, "data": {"network": {"net_mode": "sta", "sta_ssid": "CMCC-502", "sta_password_set": true, "sta_use_static": false, "sta_static_ip": "", "sta_static_gateway": "", "sta_static_netmask": "", "sta_static_dns1": "", "sta_static_dns2": "", "sta_connected": true, "sta_has_ip": true, "sta_ip": "192.168.1.45", "last_disconnect": "none"}, "mqtt": {"mqtt_backend": "tb_selfhost", "mqtt_host": "139.9.93.245", "mqtt_port": 21883, "mqtt_use_tls": false, "mqtt_token_set": true, "connected": true, "publish_count": 9, "outbox": 0, "last_error": ""}, "bluetooth": {"bt_role": "ble", "bt_device_name": "IotHubBLE-65D8", "runtime_mode": "ble", "adv_active": false, "connected": true, "adv_retry_count": 0, "last_error": ""}, "uart": {"uart_baudrate": 115200, "uart_data_bits": 8, "uart_stop_bits": 1, "uart_parity_mode": "none", "uart_rx_gpio": 18, "uart_tx_gpio": 17}, "gpio": {"relay_on": false, "led_on": false, "relay_power_policy": 0, "led_power_policy": 0, "relay_active_high": true, "led_active_high": true, "input_active_low": true, "input_active": false, "io_seq": 0, "relay_gpio": 16, "led_gpio": 4, "input_gpio": 27}, "web": {"username": "admin"}}}
+[cfg 6/10] complete=True id=cfg6-21 bytes=1068 frags=5 latency=646.5ms attempts=1
+>71.582s TX id=cfg7-22 105B {"id": "cfg7-22", "version": "1.0", "cmd": "config.get", "args": {}, "token": "<redacted>"}
+[tx] chunked 105B into 6 GATT writes (<= 20B each)
+<72.346s> RX id=cfg7-22 1068B frags=5 sizes=[253, 253, 253, 253, 56] {"id": "cfg7-22", "ok": true, "data": {"network": {"net_mode": "sta", "sta_ssid": "CMCC-502", "sta_password_set": true, "sta_use_static": false, "sta_static_ip": "", "sta_static_gateway": "", "sta_static_netmask": "", "sta_static_dns1": "", "sta_static_dns2": "", "sta_connected": true, "sta_has_ip": true, "sta_ip": "192.168.1.45", "last_disconnect": "none"}, "mqtt": {"mqtt_backend": "tb_selfhost", "mqtt_host": "139.9.93.245", "mqtt_port": 21883, "mqtt_use_tls": false, "mqtt_token_set": true, "connected": true, "publish_count": 9, "outbox": 0, "last_error": ""}, "bluetooth": {"bt_role": "ble", "bt_device_name": "IotHubBLE-65D8", "runtime_mode": "ble", "adv_active": false, "connected": true, "adv_retry_count": 0, "last_error": ""}, "uart": {"uart_baudrate": 115200, "uart_data_bits": 8, "uart_stop_bits": 1, "uart_parity_mode": "none", "uart_rx_gpio": 18, "uart_tx_gpio": 17}, "gpio": {"relay_on": false, "led_on": false, "relay_power_policy": 0, "led_power_policy": 0, "relay_active_high": true, "led_active_high": true, "input_active_low": true, "input_active": false, "io_seq": 0, "relay_gpio": 16, "led_gpio": 4, "input_gpio": 27}, "web": {"username": "admin"}}}
+[cfg 7/10] complete=True id=cfg7-22 bytes=1068 frags=5 latency=764.4ms attempts=1
+>72.602s TX id=cfg8-23 105B {"id": "cfg8-23", "version": "1.0", "cmd": "config.get", "args": {}, "token": "<redacted>"}
+[tx] chunked 105B into 6 GATT writes (<= 20B each)
+<73.624s> RX id=cfg8-23 1068B frags=5 sizes=[253, 253, 253, 253, 56] {"id": "cfg8-23", "ok": true, "data": {"network": {"net_mode": "sta", "sta_ssid": "CMCC-502", "sta_password_set": true, "sta_use_static": false, "sta_static_ip": "", "sta_static_gateway": "", "sta_static_netmask": "", "sta_static_dns1": "", "sta_static_dns2": "", "sta_connected": true, "sta_has_ip": true, "sta_ip": "192.168.1.45", "last_disconnect": "none"}, "mqtt": {"mqtt_backend": "tb_selfhost", "mqtt_host": "139.9.93.245", "mqtt_port": 21883, "mqtt_use_tls": false, "mqtt_token_set": true, "connected": true, "publish_count": 9, "outbox": 0, "last_error": ""}, "bluetooth": {"bt_role": "ble", "bt_device_name": "IotHubBLE-65D8", "runtime_mode": "ble", "adv_active": false, "connected": true, "adv_retry_count": 0, "last_error": ""}, "uart": {"uart_baudrate": 115200, "uart_data_bits": 8, "uart_stop_bits": 1, "uart_parity_mode": "none", "uart_rx_gpio": 18, "uart_tx_gpio": 17}, "gpio": {"relay_on": false, "led_on": false, "relay_power_policy": 0, "led_power_policy": 0, "relay_active_high": true, "led_active_high": true, "input_active_low": true, "input_active": false, "io_seq": 0, "relay_gpio": 16, "led_gpio": 4, "input_gpio": 27}, "web": {"username": "admin"}}}
+[cfg 8/10] complete=True id=cfg8-23 bytes=1068 frags=5 latency=1022.0ms attempts=1
+>73.879s TX id=cfg9-24 105B {"id": "cfg9-24", "version": "1.0", "cmd": "config.get", "args": {}, "token": "<redacted>"}
+[tx] chunked 105B into 6 GATT writes (<= 20B each)
+<74.696s> RX id=cfg9-24 1069B frags=5 sizes=[253, 253, 253, 253, 57] {"id": "cfg9-24", "ok": true, "data": {"network": {"net_mode": "sta", "sta_ssid": "CMCC-502", "sta_password_set": true, "sta_use_static": false, "sta_static_ip": "", "sta_static_gateway": "", "sta_static_netmask": "", "sta_static_dns1": "", "sta_static_dns2": "", "sta_connected": true, "sta_has_ip": true, "sta_ip": "192.168.1.45", "last_disconnect": "none"}, "mqtt": {"mqtt_backend": "tb_selfhost", "mqtt_host": "139.9.93.245", "mqtt_port": 21883, "mqtt_use_tls": false, "mqtt_token_set": true, "connected": true, "publish_count": 10, "outbox": 0, "last_error": ""}, "bluetooth": {"bt_role": "ble", "bt_device_name": "IotHubBLE-65D8", "runtime_mode": "ble", "adv_active": false, "connected": true, "adv_retry_count": 0, "last_error": ""}, "uart": {"uart_baudrate": 115200, "uart_data_bits": 8, "uart_stop_bits": 1, "uart_parity_mode": "none", "uart_rx_gpio": 18, "uart_tx_gpio": 17}, "gpio": {"relay_on": false, "led_on": false, "relay_power_policy": 0, "led_power_policy": 0, "relay_active_high": true, "led_active_high": true, "input_active_low": true, "input_active": false, "io_seq": 0, "relay_gpio": 16, "led_gpio": 4, "input_gpio": 27}, "web": {"username": "admin"}}}
+[cfg 9/10] complete=True id=cfg9-24 bytes=1069 frags=5 latency=817.0ms attempts=1
+>74.949s TX id=cfg10-25 106B {"id": "cfg10-25", "version": "1.0", "cmd": "config.get", "args": {}, "token": "<redacted>"}
+[tx] chunked 106B into 6 GATT writes (<= 20B each)
+[conn] link lost during id=cfg10-25 (ConnectionLost: write failed after disconnect: (<BleakGATTProtocolErrorCode.UNLIKELY_ERROR: 14>, 'GATT Protocol Error: Unlikely Error')); reconnecting and retrying
+[conn] reconnect #1 starting
+>76.958s TX id=login-26 101B {"id": "login-26", "version": "1.0", "cmd": "auth.login", "args": {"username": "admin", "password": "<redacted>"}}
+[tx] chunked 101B into 6 GATT writes (<= 20B each)
+<77.705s> RX id=login-26 96B frags=1 sizes=[96] {"id": "login-26", "ok": true, "data": {"token": "<redacted>", "expires_in": 600}}
+[auth] login ok (token redacted)
+[conn] reconnect #1 ok
+>77.881s TX id=cfg10-25 106B {"id": "cfg10-25", "version": "1.0", "cmd": "config.get", "args": {}, "token": "<redacted>"}
+[tx] chunked 106B into 6 GATT writes (<= 20B each)
+<78.790s> RX id=cfg10-25 1070B frags=5 sizes=[253, 253, 253, 253, 58] {"id": "cfg10-25", "ok": true, "data": {"network": {"net_mode": "sta", "sta_ssid": "CMCC-502", "sta_password_set": true, "sta_use_static": false, "sta_static_ip": "", "sta_static_gateway": "", "sta_static_netmask": "", "sta_static_dns1": "", "sta_static_dns2": "", "sta_connected": true, "sta_has_ip": true, "sta_ip": "192.168.1.45", "last_disconnect": "none"}, "mqtt": {"mqtt_backend": "tb_selfhost", "mqtt_host": "139.9.93.245", "mqtt_port": 21883, "mqtt_use_tls": false, "mqtt_token_set": true, "connected": true, "publish_count": 10, "outbox": 0, "last_error": ""}, "bluetooth": {"bt_role": "ble", "bt_device_name": "IotHubBLE-65D8", "runtime_mode": "ble", "adv_active": false, "connected": true, "adv_retry_count": 0, "last_error": ""}, "uart": {"uart_baudrate": 115200, "uart_data_bits": 8, "uart_stop_bits": 1, "uart_parity_mode": "none", "uart_rx_gpio": 18, "uart_tx_gpio": 17}, "gpio": {"relay_on": false, "led_on": false, "relay_power_policy": 0, "led_power_policy": 0, "relay_active_high": true, "led_active_high": true, "input_active_low": true, "input_active": false, "io_seq": 0, "relay_gpio": 16, "led_gpio": 4, "input_gpio": 27}, "web": {"username": "admin"}}}
+[cfg 10/10] complete=True id=cfg10-25 bytes=1070 frags=5 latency=658.7ms attempts=1
+
+== 3b long config x10: PASS ==
+
+[op] using ssid='CMCC-502'; NO correct Wi-Fi password, tryconnect/apply is expected to fail
+>79.043s TX id=tc-27 201B {"id": "tc-27", "version": "1.0", "cmd": "network.tryconnect", "args": {"ssid": "CMCC-502", "password": "<redacted>", "idempotency_key": "p0tc-c84e988bab8f"}, "token": "<redacted>"}
+[tx] chunked 201B into 11 GATT writes (<= 20B each)
+<80.043s> RX id=tc-27 89B frags=1 sizes=[89] {"id": "tc-27", "ok": true, "data": {"operation_id": "op-F407EDACBF7F206D", "state": "accepted"}}
+[op] tryconnect accepted op=op-F407EDACBF7F206D state=accepted
+>80.383s TX id=tc-dup-same-28 210B {"id": "tc-dup-same-28", "version": "1.0", "cmd": "network.tryconnect", "args": {"ssid": "CMCC-502", "password": "<redacted>", "idempotency_key": "p0tc-c84e988bab8f"}, "token": "<redacted>"}
+[tx] chunked 210B into 11 GATT writes (<= 20B each)
+<82.382s> RX id=tc-dup-same-28 293B frags=2 sizes=[253, 40] {"id": "tc-dup-same-28", "ok": true, "data": {"operation_id": "op-F407EDACBF7F206D", "state": "connecting", "error": "none", "error_detail": {"code": "none", "message": "none"}, "stages": {"wifi_connected": false, "ip_acquired": false, "internet_verified": false, "mqtt_connected": false}, "stages_source": "snapshot"}}
+>82.637s TX id=tc-dup-diff-29 210B {"id": "tc-dup-diff-29", "version": "1.0", "cmd": "network.tryconnect", "args": {"ssid": "CMCC-502", "password": "<redacted>", "idempotency_key": "p0tc-3411df6e3fcf"}, "token": "<redacted>"}
+[tx] chunked 210B into 11 GATT writes (<= 20B each)
+<84.139s> RX id=tc-dup-diff-29 75B frags=1 sizes=[75] {"id": "tc-dup-diff-29", "ok": false, "error": {"code": "busy", "message": "busy"}}
+>84.142s TX id=long-30 105B {"id": "long-30", "version": "1.0", "cmd": "config.get", "args": {}, "token": "<redacted>"}
+[tx] chunked 105B into 6 GATT writes (<= 20B each)
+>85.377s TX id=opget-31 145B {"id": "opget-31", "version": "1.0", "cmd": "operation.get", "args": {"operation_id": "op-F407EDACBF7F206D"}, "token": "<redacted>"}
+[tx] chunked 145B into 8 GATT writes (<= 20B each)
+<85.447s> RX id=long-30 1082B frags=5 sizes=[253, 253, 253, 253, 70] {"id": "long-30", "ok": true, "data": {"network": {"net_mode": "sta", "sta_ssid": "CMCC-502", "sta_password_set": true, "sta_use_static": false, "sta_static_ip": "", "sta_static_gateway": "", "sta_static_netmask": "", "sta_static_dns1": "", "sta_static_dns2": "", "sta_connected": true, "sta_has_ip": true, "sta_ip": "192.168.1.45", "last_disconnect": "none"}, "mqtt": {"mqtt_backend": "tb_selfhost", "mqtt_host": "139.9.93.245", "mqtt_port": 21883, "mqtt_use_tls": false, "mqtt_token_set": true, "connected": false, "publish_count": 11, "outbox": 0, "last_error": "disconnected"}, "bluetooth": {"bt_role": "ble", "bt_device_name": "IotHubBLE-65D8", "runtime_mode": "ble", "adv_active": false, "connected": true, "adv_retry_count": 0, "last_error": ""}, "uart": {"uart_baudrate": 115200, "uart_data_bits": 8, "uart_stop_bits": 1, "uart_parity_mode": "none", "uart_rx_gpio": 18, "uart_tx_gpio": 17}, "gpio": {"relay_on": false, "led_on": false, "relay_power_policy": 0, "led_power_policy": 0, "relay_active_high": true, "led_active_high": true, "input_active_low": true, "input_active": false, "io_seq": 0, "relay_gpio": 16, "led_gpio": 4, "input_gpio": 27}, "web": {"username": "admin"}}}
+<86.522s> RX id=opget-31 287B frags=2 sizes=[253, 34] {"id": "opget-31", "ok": true, "data": {"operation_id": "op-F407EDACBF7F206D", "state": "connecting", "error": "none", "error_detail": {"code": "none", "message": "none"}, "stages": {"wifi_connected": false, "ip_acquired": false, "internet_verified": false, "mqtt_connected": false}, "stages_source": "snapshot"}}
+>86.527s TX id=opget-poll-32 150B {"id": "opget-poll-32", "version": "1.0", "cmd": "operation.get", "args": {"operation_id": "op-F407EDACBF7F206D"}, "token": "<redacted>"}
+[tx] chunked 150B into 8 GATT writes (<= 20B each)
+<87.744s> RX id=opget-poll-32 292B frags=2 sizes=[253, 39] {"id": "opget-poll-32", "ok": true, "data": {"operation_id": "op-F407EDACBF7F206D", "state": "connecting", "error": "none", "error_detail": {"code": "none", "message": "none"}, "stages": {"wifi_connected": false, "ip_acquired": false, "internet_verified": false, "mqtt_connected": false}, "stages_source": "snapshot"}}
+>88.248s TX id=opget-poll-33 150B {"id": "opget-poll-33", "version": "1.0", "cmd": "operation.get", "args": {"operation_id": "op-F407EDACBF7F206D"}, "token": "<redacted>"}
+[tx] chunked 150B into 8 GATT writes (<= 20B each)
+<89.409s> RX id=opget-poll-33 292B frags=2 sizes=[253, 39] {"id": "opget-poll-33", "ok": true, "data": {"operation_id": "op-F407EDACBF7F206D", "state": "connecting", "error": "none", "error_detail": {"code": "none", "message": "none"}, "stages": {"wifi_connected": false, "ip_acquired": false, "internet_verified": false, "mqtt_connected": false}, "stages_source": "snapshot"}}
+>89.913s TX id=opget-poll-34 150B {"id": "opget-poll-34", "version": "1.0", "cmd": "operation.get", "args": {"operation_id": "op-F407EDACBF7F206D"}, "token": "<redacted>"}
+[tx] chunked 150B into 8 GATT writes (<= 20B each)
+<91.202s> RX id=opget-poll-34 292B frags=2 sizes=[253, 39] {"id": "opget-poll-34", "ok": true, "data": {"operation_id": "op-F407EDACBF7F206D", "state": "connecting", "error": "none", "error_detail": {"code": "none", "message": "none"}, "stages": {"wifi_connected": false, "ip_acquired": false, "internet_verified": false, "mqtt_connected": false}, "stages_source": "snapshot"}}
+>91.703s TX id=opget-poll-35 150B {"id": "opget-poll-35", "version": "1.0", "cmd": "operation.get", "args": {"operation_id": "op-F407EDACBF7F206D"}, "token": "<redacted>"}
+[tx] chunked 150B into 8 GATT writes (<= 20B each)
+<92.787s> RX id=opget-poll-35 292B frags=2 sizes=[253, 39] {"id": "opget-poll-35", "ok": true, "data": {"operation_id": "op-F407EDACBF7F206D", "state": "connecting", "error": "none", "error_detail": {"code": "none", "message": "none"}, "stages": {"wifi_connected": false, "ip_acquired": false, "internet_verified": false, "mqtt_connected": false}, "stages_source": "snapshot"}}
+>93.288s TX id=opget-poll-36 150B {"id": "opget-poll-36", "version": "1.0", "cmd": "operation.get", "args": {"operation_id": "op-F407EDACBF7F206D"}, "token": "<redacted>"}
+[tx] chunked 150B into 8 GATT writes (<= 20B each)
+<94.630s> RX id=opget-poll-36 292B frags=2 sizes=[253, 39] {"id": "opget-poll-36", "ok": true, "data": {"operation_id": "op-F407EDACBF7F206D", "state": "connecting", "error": "none", "error_detail": {"code": "none", "message": "none"}, "stages": {"wifi_connected": false, "ip_acquired": false, "internet_verified": false, "mqtt_connected": false}, "stages_source": "snapshot"}}
+>95.135s TX id=opget-poll-37 150B {"id": "opget-poll-37", "version": "1.0", "cmd": "operation.get", "args": {"operation_id": "op-F407EDACBF7F206D"}, "token": "<redacted>"}
+[tx] chunked 150B into 8 GATT writes (<= 20B each)
+<96.161s> RX id=opget-poll-37 346B frags=2 sizes=[253, 93] {"id": "opget-poll-37", "ok": true, "data": {"operation_id": "op-F407EDACBF7F206D", "state": "failed", "error": "wrong_password", "error_detail": {"code": "wrong_password", "message": "wrong_password"}, "finished_uptime_ms": 112929, "stages": {"wifi_connected": false, "ip_acquired": false, "internet_verified": false, "mqtt_connected": false}, "stages_source": "snapshot"}}
+>96.415s TX id=apply-38 145B {"id": "apply-38", "version": "1.0", "cmd": "network.apply", "args": {"operation_id": "op-F407EDACBF7F206D"}, "token": "<redacted>"}
+[tx] chunked 145B into 8 GATT writes (<= 20B each)
+<97.547s> RX id=apply-38 91B frags=1 sizes=[91] {"id": "apply-38", "ok": false, "error": {"code": "operation_state", "message": "operation_state"}}
+>97.803s TX id=apply-dup-39 149B {"id": "apply-dup-39", "version": "1.0", "cmd": "network.apply", "args": {"operation_id": "op-F407EDACBF7F206D"}, "token": "<redacted>"}
+[tx] chunked 149B into 8 GATT writes (<= 20B each)
+<98.853s> RX id=apply-dup-39 95B frags=1 sizes=[95] {"id": "apply-dup-39", "ok": false, "error": {"code": "operation_state", "message": "operation_state"}}
+>99.109s TX id=cancel-40 147B {"id": "cancel-40", "version": "1.0", "cmd": "network.cancel", "args": {"operation_id": "op-F407EDACBF7F206D"}, "token": "<redacted>"}
+[tx] chunked 147B into 8 GATT writes (<= 20B each)
+<100.250s> RX id=cancel-40 92B frags=1 sizes=[92] {"id": "cancel-40", "ok": false, "error": {"code": "operation_state", "message": "operation_state"}}
+>100.503s TX id=cancel-dup-41 151B {"id": "cancel-dup-41", "version": "1.0", "cmd": "network.cancel", "args": {"operation_id": "op-F407EDACBF7F206D"}, "token": "<redacted>"}
+[tx] chunked 151B into 8 GATT writes (<= 20B each)
+<101.463s> RX id=cancel-dup-41 96B frags=1 sizes=[96] {"id": "cancel-dup-41", "ok": false, "error": {"code": "operation_state", "message": "operation_state"}}
+
+== 4 operation.get during fragmentation: PASS ==
+
+>101.467s TX id=wrongpw-42 209B {"id": "wrongpw-42", "version": "1.0", "cmd": "network.tryconnect", "args": {"ssid": "CMCC-502", "password": "<redacted>", "idempotency_key": "p0wrong-c74179ef9096"}, "token": "<redacted>"}
+[tx] chunked 209B into 11 GATT writes (<= 20B each)
+<103.309s> RX id=wrongpw-42 94B frags=1 sizes=[94] {"id": "wrongpw-42", "ok": true, "data": {"operation_id": "op-DD709DE2C3BAFC46", "state": "accepted"}}
+>103.312s TX id=opget-poll-43 150B {"id": "opget-poll-43", "version": "1.0", "cmd": "operation.get", "args": {"operation_id": "op-DD709DE2C3BAFC46"}, "token": "<redacted>"}
+[tx] chunked 150B into 8 GATT writes (<= 20B each)
+<104.665s> RX id=opget-poll-43 292B frags=2 sizes=[253, 39] {"id": "opget-poll-43", "ok": true, "data": {"operation_id": "op-DD709DE2C3BAFC46", "state": "connecting", "error": "none", "error_detail": {"code": "none", "message": "none"}, "stages": {"wifi_connected": false, "ip_acquired": false, "internet_verified": false, "mqtt_connected": false}, "stages_source": "snapshot"}}
+>105.169s TX id=opget-poll-44 150B {"id": "opget-poll-44", "version": "1.0", "cmd": "operation.get", "args": {"operation_id": "op-DD709DE2C3BAFC46"}, "token": "<redacted>"}
+[tx] chunked 150B into 8 GATT writes (<= 20B each)
+<106.372s> RX id=opget-poll-44 292B frags=2 sizes=[253, 39] {"id": "opget-poll-44", "ok": true, "data": {"operation_id": "op-DD709DE2C3BAFC46", "state": "connecting", "error": "none", "error_detail": {"code": "none", "message": "none"}, "stages": {"wifi_connected": false, "ip_acquired": false, "internet_verified": false, "mqtt_connected": false}, "stages_source": "snapshot"}}
+>106.878s TX id=opget-poll-45 150B {"id": "opget-poll-45", "version": "1.0", "cmd": "operation.get", "args": {"operation_id": "op-DD709DE2C3BAFC46"}, "token": "<redacted>"}
+[tx] chunked 150B into 8 GATT writes (<= 20B each)
+<108.033s> RX id=opget-poll-45 292B frags=2 sizes=[253, 39] {"id": "opget-poll-45", "ok": true, "data": {"operation_id": "op-DD709DE2C3BAFC46", "state": "connecting", "error": "none", "error_detail": {"code": "none", "message": "none"}, "stages": {"wifi_connected": false, "ip_acquired": false, "internet_verified": false, "mqtt_connected": false}, "stages_source": "snapshot"}}
+>108.538s TX id=opget-poll-46 150B {"id": "opget-poll-46", "version": "1.0", "cmd": "operation.get", "args": {"operation_id": "op-DD709DE2C3BAFC46"}, "token": "<redacted>"}
+[tx] chunked 150B into 8 GATT writes (<= 20B each)
+<109.617s> RX id=opget-poll-46 292B frags=2 sizes=[253, 39] {"id": "opget-poll-46", "ok": true, "data": {"operation_id": "op-DD709DE2C3BAFC46", "state": "connecting", "error": "none", "error_detail": {"code": "none", "message": "none"}, "stages": {"wifi_connected": false, "ip_acquired": false, "internet_verified": false, "mqtt_connected": false}, "stages_source": "snapshot"}}
+>110.119s TX id=opget-poll-47 150B {"id": "opget-poll-47", "version": "1.0", "cmd": "operation.get", "args": {"operation_id": "op-DD709DE2C3BAFC46"}, "token": "<redacted>"}
+[tx] chunked 150B into 8 GATT writes (<= 20B each)
+<111.277s> RX id=opget-poll-47 292B frags=2 sizes=[253, 39] {"id": "opget-poll-47", "ok": true, "data": {"operation_id": "op-DD709DE2C3BAFC46", "state": "connecting", "error": "none", "error_detail": {"code": "none", "message": "none"}, "stages": {"wifi_connected": false, "ip_acquired": false, "internet_verified": false, "mqtt_connected": false}, "stages_source": "snapshot"}}
+>111.780s TX id=opget-poll-48 150B {"id": "opget-poll-48", "version": "1.0", "cmd": "operation.get", "args": {"operation_id": "op-DD709DE2C3BAFC46"}, "token": "<redacted>"}
+[tx] chunked 150B into 8 GATT writes (<= 20B each)
+<113.209s> RX id=opget-poll-48 292B frags=2 sizes=[253, 39] {"id": "opget-poll-48", "ok": true, "data": {"operation_id": "op-DD709DE2C3BAFC46", "state": "connecting", "error": "none", "error_detail": {"code": "none", "message": "none"}, "stages": {"wifi_connected": false, "ip_acquired": false, "internet_verified": false, "mqtt_connected": false}, "stages_source": "snapshot"}}
+>113.710s TX id=opget-poll-49 150B {"id": "opget-poll-49", "version": "1.0", "cmd": "operation.get", "args": {"operation_id": "op-DD709DE2C3BAFC46"}, "token": "<redacted>"}
+[tx] chunked 150B into 8 GATT writes (<= 20B each)
+<115.059s> RX id=opget-poll-49 292B frags=2 sizes=[253, 39] {"id": "opget-poll-49", "ok": true, "data": {"operation_id": "op-DD709DE2C3BAFC46", "state": "connecting", "error": "none", "error_detail": {"code": "none", "message": "none"}, "stages": {"wifi_connected": false, "ip_acquired": false, "internet_verified": false, "mqtt_connected": false}, "stages_source": "snapshot"}}
+>115.563s TX id=opget-poll-50 150B {"id": "opget-poll-50", "version": "1.0", "cmd": "operation.get", "args": {"operation_id": "op-DD709DE2C3BAFC46"}, "token": "<redacted>"}
+[tx] chunked 150B into 8 GATT writes (<= 20B each)
+[conn] link lost during id=opget-poll-50 (ConnectionLost: write failed after disconnect: (<BleakGATTProtocolErrorCode.UNLIKELY_ERROR: 14>, 'GATT Protocol Error: Unlikely Error')); reconnecting and retrying
+[conn] reconnect #2 starting
+>118.312s TX id=login-51 101B {"id": "login-51", "version": "1.0", "cmd": "auth.login", "args": {"username": "admin", "password": "<redacted>"}}
+[tx] chunked 101B into 6 GATT writes (<= 20B each)
+<118.968s> RX id=login-51 96B frags=1 sizes=[96] {"id": "login-51", "ok": true, "data": {"token": "<redacted>", "expires_in": 600}}
+[auth] login ok (token redacted)
+[conn] reconnect #2 ok
+>119.101s TX id=opget-poll-50 150B {"id": "opget-poll-50", "version": "1.0", "cmd": "operation.get", "args": {"operation_id": "op-DD709DE2C3BAFC46"}, "token": "<redacted>"}
+[tx] chunked 150B into 8 GATT writes (<= 20B each)
+<120.633s> RX id=opget-poll-50 329B frags=2 sizes=[253, 76] {"id": "opget-poll-50", "ok": true, "data": {"operation_id": "op-DD709DE2C3BAFC46", "state": "cancelled", "error": "cancelled", "error_detail": {"code": "cancelled", "message": "cancelled"}, "finished_uptime_ms": 134160, "stages": {"wifi_connected": true, "ip_acquired": false, "internet_verified": false, "mqtt_connected": false}, "stages_source": "live"}}
+>120.884s TX id=wrongpw-cancel-52 155B {"id": "wrongpw-cancel-52", "version": "1.0", "cmd": "network.cancel", "args": {"operation_id": "op-DD709DE2C3BAFC46"}, "token": "<redacted>"}
+[tx] chunked 155B into 8 GATT writes (<= 20B each)
+<122.032s> RX id=wrongpw-cancel-52 102B frags=1 sizes=[102] {"id": "wrongpw-cancel-52", "ok": true, "data": {"operation_id": "op-DD709DE2C3BAFC46", "state": "cancelled"}}
+
+== 5a wrong password: FAIL ==
+
+>122.037s TX id=race1-53 206B {"id": "race1-53", "version": "1.0", "cmd": "network.tryconnect", "args": {"ssid": "CMCC-502", "password": "<redacted>", "idempotency_key": "p0race-57a324574b1b"}, "token": "<redacted>"}
+[tx] chunked 206B into 11 GATT writes (<= 20B each)
+<123.692s> RX id=race1-53 92B frags=1 sizes=[92] {"id": "race1-53", "ok": true, "data": {"operation_id": "op-64478A2550A4D612", "state": "accepted"}}
+>123.946s TX id=race1-cancel-54 153B {"id": "race1-cancel-54", "version": "1.0", "cmd": "network.cancel", "args": {"operation_id": "op-64478A2550A4D612"}, "token": "<redacted>"}
+[tx] chunked 153B into 8 GATT writes (<= 20B each)
+<124.957s> RX id=race1-cancel-54 100B frags=1 sizes=[100] {"id": "race1-cancel-54", "ok": true, "data": {"operation_id": "op-64478A2550A4D612", "state": "cancelled"}}
+>124.962s TX id=opget-poll-55 150B {"id": "opget-poll-55", "version": "1.0", "cmd": "operation.get", "args": {"operation_id": "op-64478A2550A4D612"}, "token": "<redacted>"}
+[tx] chunked 150B into 8 GATT writes (<= 20B each)
+<126.398s> RX id=opget-poll-55 328B frags=2 sizes=[253, 75] {"id": "opget-poll-55", "ok": true, "data": {"operation_id": "op-64478A2550A4D612", "state": "cancelled", "error": "cancelled", "error_detail": {"code": "cancelled", "message": "cancelled"}, "finished_uptime_ms": 142773, "stages": {"wifi_connected": true, "ip_acquired": true, "internet_verified": false, "mqtt_connected": false}, "stages_source": "live"}}
+>126.652s TX id=race1-cancel-dup-56 157B {"id": "race1-cancel-dup-56", "version": "1.0", "cmd": "network.cancel", "args": {"operation_id": "op-64478A2550A4D612"}, "token": "<redacted>"}
+[tx] chunked 157B into 8 GATT writes (<= 20B each)
+<127.833s> RX id=race1-cancel-dup-56 104B frags=1 sizes=[104] {"id": "race1-cancel-dup-56", "ok": true, "data": {"operation_id": "op-64478A2550A4D612", "state": "cancelled"}}
+[race 1] cancel=cancelled terminal=cancelled elapsed=1.44s dup=cancelled
+>128.084s TX id=race2-57 206B {"id": "race2-57", "version": "1.0", "cmd": "network.tryconnect", "args": {"ssid": "CMCC-502", "password": "<redacted>", "idempotency_key": "p0race-8284ab801290"}, "token": "<redacted>"}
+[tx] chunked 206B into 11 GATT writes (<= 20B each)
+<129.318s> RX id=race2-57 92B frags=1 sizes=[92] {"id": "race2-57", "ok": true, "data": {"operation_id": "op-0B65D16CE5B48C7C", "state": "accepted"}}
+>129.572s TX id=race2-cancel-58 153B {"id": "race2-cancel-58", "version": "1.0", "cmd": "network.cancel", "args": {"operation_id": "op-0B65D16CE5B48C7C"}, "token": "<redacted>"}
+[tx] chunked 153B into 8 GATT writes (<= 20B each)
+<130.624s> RX id=race2-cancel-58 100B frags=1 sizes=[100] {"id": "race2-cancel-58", "ok": true, "data": {"operation_id": "op-0B65D16CE5B48C7C", "state": "cancelled"}}
+>130.626s TX id=opget-poll-59 150B {"id": "opget-poll-59", "version": "1.0", "cmd": "operation.get", "args": {"operation_id": "op-0B65D16CE5B48C7C"}, "token": "<redacted>"}
+[tx] chunked 150B into 8 GATT writes (<= 20B each)
+<132.019s> RX id=opget-poll-59 330B frags=2 sizes=[253, 77] {"id": "opget-poll-59", "ok": true, "data": {"operation_id": "op-0B65D16CE5B48C7C", "state": "cancelled", "error": "cancelled", "error_detail": {"code": "cancelled", "message": "cancelled"}, "finished_uptime_ms": 148446, "stages": {"wifi_connected": false, "ip_acquired": false, "internet_verified": false, "mqtt_connected": false}, "stages_source": "live"}}
+>132.269s TX id=race2-cancel-dup-60 157B {"id": "race2-cancel-dup-60", "version": "1.0", "cmd": "network.cancel", "args": {"operation_id": "op-0B65D16CE5B48C7C"}, "token": "<redacted>"}
+[tx] chunked 157B into 8 GATT writes (<= 20B each)
+<133.325s> RX id=race2-cancel-dup-60 104B frags=1 sizes=[104] {"id": "race2-cancel-dup-60", "ok": true, "data": {"operation_id": "op-0B65D16CE5B48C7C", "state": "cancelled"}}
+[race 2] cancel=cancelled terminal=cancelled elapsed=1.393s dup=cancelled
+
+== 5b cancel race: PASS ==
+
+>133.578s TX id=nf-get-61 151B {"id": "nf-get-61", "version": "1.0", "cmd": "operation.get", "args": {"operation_id": "op-does-not-exist-cc6a09"}, "token": "<redacted>"}
+[tx] chunked 151B into 8 GATT writes (<= 20B each)
+<134.584s> RX id=nf-get-61 80B frags=1 sizes=[80] {"id": "nf-get-61", "ok": false, "error": {"code": "not_found", "message": "not_found"}}
+>134.587s TX id=nf-apply-62 153B {"id": "nf-apply-62", "version": "1.0", "cmd": "network.apply", "args": {"operation_id": "op-does-not-exist-cc6a09"}, "token": "<redacted>"}
+[tx] chunked 153B into 8 GATT writes (<= 20B each)
+<135.619s> RX id=nf-apply-62 82B frags=1 sizes=[82] {"id": "nf-apply-62", "ok": false, "error": {"code": "not_found", "message": "not_found"}}
+>135.624s TX id=nf-cancel-63 155B {"id": "nf-cancel-63", "version": "1.0", "cmd": "network.cancel", "args": {"operation_id": "op-does-not-exist-cc6a09"}, "token": "<redacted>"}
+[tx] chunked 155B into 8 GATT writes (<= 20B each)
+<136.789s> RX id=nf-cancel-63 83B frags=1 sizes=[83] {"id": "nf-cancel-63", "ok": false, "error": {"code": "not_found", "message": "not_found"}}
+
+== 5c not found: PASS ==
+
+[results] wrote /tmp/iothub-h1-build/tools/ble_p0/results/p0_20261123_100618.json
+
+== SUMMARY ==
+  scan                 PASS
+  long_scan            PASS
+  long_config          PASS
+  operation            PASS
+  wrong_password       FAIL
+  cancel_race          PASS
+  not_found            PASS
+  final_config_set     FAIL
+  p0_core_pass=True phone_ui_verified=False
+[results] /tmp/iothub-h1-build/tools/ble_p0/results/p0_20261123_100618.json
