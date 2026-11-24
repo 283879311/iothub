@@ -26,7 +26,7 @@
 - [CMD-02/03 并发静态审查（历史基线）](reviews/CMD/CMD-02_03_并发静态审查_2026-11-15.md)
 - [CMD-04c 已实施部分审查证据](reviews/CMD/CMD-04c_execute_method内联快照清单与判定表_2026-11-14.md)
 - [CMD-05 config/profile 锁序审查](reviews/CMD/CMD-05_config_profile锁序审查_2026-11-15.md)
-- [P0/P1 阶段性基线与客户端审查输入（2026-11-24）](reviews/CMD/P0-P1阶段性基线_2026-11-24.md)：P0 关闭评估、H1-P1 设备覆盖分层与 cleanup 时序输入。
+- [P0/P1 阶段性基线与客户端审查输入（2026-11-24）](reviews/CMD/P0-P1阶段性基线_2026-11-24.md)：P0 审核依据（正式处置见 CMD 台账 §2.1）、H1-P1 设备覆盖分层与 cleanup 时序输入。
 - [MQTT 运行态与 config 同步实施证据](reviews/MQTT/MQTT运行态与config同步复核_2026-11-15.md)
 
 设计文件说明设计约束，审查文件保存限定时点的证据；任务状态只在对应台账维护，专项材料不另行维护状态。
@@ -43,7 +43,7 @@
 - [S6 阶段 A 分区证据](evidence/S6_stageA/README.md)
 - [S6 阶段 B 镜像 manifest](evidence/S6_stageB/images_manifest.md)
 - [S6 阶段 B 身份采集](evidence/S6_stageB/identity_2026-11-15/README.md)
-- [H1-P1 main 固件设备验收（2026-11-24）](evidence/H1-P1_device_main_2026-11-24/README.md)：设备 `IotHub-65D8`；构建/设备证据执行于 `0e4d49c`，证据文档合入 `956afcd`；200 ms 与完整并发矩阵为 NOT_COVERED。
+- [H1-P1 main 固件设备验收（2026-11-24）](evidence/H1-P1_device_main_2026-11-24/README.md)：设备 `IotHub-65D8`；构建/设备证据执行于 `0e4d49c`，证据文档合入 `956afcd`；设备侧 200 ms 与设备侧完整并发矩阵为 NOT_COVERED。
 
 ## 历史材料
 

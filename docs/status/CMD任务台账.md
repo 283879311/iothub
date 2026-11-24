@@ -13,7 +13,7 @@
 |---|---|---|---|---|
 | CMD-01 | P0 | `io.get` Wi-Fi runtime 读取快照 | PASS | 修复 `add93e7`；构建通过；BLE/MQTT `io.get` 与 `network.status` 一致性对读通过（[复测记录](../reviews/WIFI-OP-RESOURCE-RACE_CMD-01_设备复测记录_2026-11-22.md)，设备 65D8 / `1.3-1ff92db`） |
 | CMD-02 | P0 | `s_net_async` 字段所有权与读点 | TEST_PENDING | 七处读点已实施（`28f9090`）；阶段 1 ESP-IDF fullclean/build 和阶段 2 host tests 按执行报告通过；阶段 3 设备回归未执行、未授权 |
-| CMD-03 | P0 | operation 锁序、回调时序及 expiring 窄窗口 | IN_PROGRESS | H1-P1 已进入 `main`：本轮执行基线 `0e4d49c`（PR #4 merge；全局源码维护基线见 `docs/baseline/`），证据文档 `956afcd`。Host `tests/cmd_net_job` 为 23 PASS + T09a EXPECTED、0 failed；`tests/operation_host` S1–S5、A1–A7 PASS；ESP-IDF build 证据来自 `0e4d49c`（PASS），`956afcd` 仅证据文档合并。设备 65D8 / `1.3-0e4d49c` / `build_sha=659cf7f1c` 的外部可触发 cancel、重复 cancel、BLE 断连 cleanup、持久恢复、网络/MQTT 恢复 PASS（[证据](../evidence/H1-P1_device_main_2026-11-24/README.md)）。设备侧 200 ms、T01–T12、T14–T18、T20–T23 NOT_COVERED；T13/T19 PARTIAL。P0 关闭条件未满足。 |
+| CMD-03 | P0 | operation 锁序、回调时序及 expiring 窄窗口 | IN_PROGRESS | H1-P1 已进入 `main`：本轮执行基线 `0e4d49c`（PR #4 merge；全局源码维护基线见 `docs/baseline/`），证据文档 `956afcd`。Host `tests/cmd_net_job` 为 23 PASS + T09a EXPECTED、0 failed；`tests/operation_host` S1–S5 各 50/50；断言 A1/A2/A3/A4/A5/A5h/A7 均 PASS（无独立 A6 断言）；ESP-IDF build 证据来自 `0e4d49c`（PASS），`956afcd` 仅证据文档合并。设备 65D8 / `1.3-0e4d49c` / `build_sha=659cf7f1c` 的外部可触发 cancel、重复 cancel、BLE 断连 cleanup、持久恢复、网络/MQTT 恢复 PASS（[证据](../evidence/H1-P1_device_main_2026-11-24/README.md)）。设备侧 200 ms NOT_COVERED；T01–T12、T14–T18、T20–T23 的设备适用性/可复现性缺口（Host 侧已通过，按 Host 证据验收，不纳入设备补测）；设备侧 T13/T19 PARTIAL。P0 处置为 `OPEN`（见 §2.1）。 |
 | CMD-04 | P1 | status 响应快照化 | IN_PROGRESS | `main/cmd.c` 中已存在 04a `app_cmd_net_operation_status` / `app_cmd_net_op_status_capture` 与 04b `app_cmd_build_network_status` / `app_cmd_network_status_snap_t` 实现入口；目前仅确认源码存在，尚未完成对冻结设计的逐分支静态复核及完整验收。04c 已实施部分仍以专项审查记录为准。
 | CMD-05 | P1 | config/profile 全局锁序 | REVIEWED | 静态审查确认偏序 `J → C → P`；未测持锁时长，CMD-06 必须遵守递归锁和锁序约束 |
 | CMD-06 | P1 | 网络异步事务迁移到 `cmd_net_txn.c` | TODO | 等待阶段 A 相关风险与验证收口；迁移不得改变状态机、owner、generation、cleanup 和锁序 |
@@ -31,12 +31,42 @@
 
 1. **CMD-02 / CMD-15**：阶段 1 ESP-IDF fullclean/build 和阶段 2 host tests 于 2026-11-16 按执行报告通过；阶段 3 设备回归没有执行，也没有授权。执行方报告及本地忽略目录中的证据未上传仓库，因此不能标记 PASS。执行事实（BIN/ELF SHA256、run_id、warning 清单）见 [执行记录](../reports/CMD-02_15_执行记录_2026-11-16.md)。
 2. **CMD-01**：已闭环（`add93e7` + 构建 + BLE/MQTT 回归），状态转 PASS；证据见 [复测记录](../reviews/WIFI-OP-RESOURCE-RACE_CMD-01_设备复测记录_2026-11-22.md)。不能用 CMD-02/15 的联合 host 结果替代该结论。
-3. **CMD-03**：H1-P1 已合入 `main`（本轮执行基线 `0e4d49c`；全局源码维护基线仍为 `5104a3b`，证据归档 `956afcd`）。Host `tests/cmd_net_job` 为 23 PASS + T09a EXPECTED、0 failed，`tests/operation_host` PASS；ESP-IDF build 证据来自 `0e4d49c`（PASS），`956afcd` 仅证据文档合并。设备 65D8 / `1.3-0e4d49c` 的外部可触发 cancel、重复 cancel、BLE 断连 cleanup、持久恢复、网络/MQTT 恢复 PASS；但设备侧 200 ms、T01–T12、T14–T18、T20–T23 仍 NOT_COVERED，T13/T19 PARTIAL。因此 CMD-03 保持 `IN_PROGRESS`，不能以 P1 设备证据标记 PASS。下一步需单独决定补齐设备矩阵/200 ms，或由项目负责人将残余覆盖记录为“范围豁免/风险接受”（列明缺口、影响、期限和责任人）；该记录不等于测试 PASS，不得把 CMD-03 状态写成 `PASS`。在此之前 P0 不关闭。
+3. **CMD-03**：H1-P1 已合入 `main`（本轮执行基线 `0e4d49c`；全局源码维护基线见 `docs/baseline/`，证据归档 `956afcd`）。Host `tests/cmd_net_job` 为 23 PASS + T09a EXPECTED、0 failed，`tests/operation_host` S1–S5 各 50/50、断言 A1/A2/A3/A4/A5/A5h/A7 均 PASS（无独立 A6 断言）；ESP-IDF build 证据来自 `0e4d49c`（PASS），`956afcd` 仅证据文档合并。设备 65D8 / `1.3-0e4d49c` 的外部可触发 cancel、重复 cancel、BLE 断连 cleanup、持久恢复、网络/MQTT 恢复 PASS；但设备侧 200 ms 仍 NOT_COVERED，T01–T12、T14–T18、T20–T23 的设备适用性/可复现性缺口（Host 侧已通过，按 Host 证据验收，不纳入设备补测），设备侧 T13/T19 PARTIAL。因此 CMD-03 保持 `IN_PROGRESS`，不能以 P1 设备证据标记 PASS。下一步按 §2.1 选择路径 A 或 B；在此之前 P0 处置为 `OPEN`。
 4. **CMD-04**：04a/04b 的实现入口已存在于当前 `main/cmd.c`，但尚未完成按设计清单逐分支核对，不能仅凭函数存在标记完成或 PASS；对应设计文件仍标记 PENDING，表示设计材料本身的生命周期，不替代本台账中的实施状态。后续需核对 wire 字段/分支、失败路径、锁内外边界、资源预算及回归证据。04c 已实施部分不代表整个 CMD-04 关闭；其中同步 tryconnect 分支已确认不属于当前 v1 wire 可达路径，不得写成 wire 真机验收 PASS；apply dispatcher 的 trial patch 路径仍需按 async apply 全流程理解。
 5. **CMD-05 / CMD-14**：锁序静态审查完成，但长持锁尚未实测。CMD-14 测量前不得因“看起来持锁过久”直接缩短临界区。
 6. **CMD-06 及后续模块迁移**：须等待相关锁契约、所有权边界和必要验证收口，再单独评审实施；不得把文件迁移与行为变化混在同一增量中。
 
-**P0 阶段性关闭判断（2026-11-24）**：P0 当前不具备正式关闭条件。CMD-01 已 PASS；CMD-02 阶段 3 设备回归未执行、未授权；CMD-03 仍为 `IN_PROGRESS`，设备 200 ms 与完整并发矩阵未覆盖。P0 收口必须独立验收并更新本台账，不能由 H1-P1 设备证据或证据文档合入自动推导。
+### 2.1 P0 正式状态与关闭路径
+
+> 本小节是 P0 正式状态、关闭路径、处置词表和关闭条件的唯一维护入口；阶段性基线 §2 仅提供审核依据和技术解释。
+
+当前 P0 处置：`OPEN`（未关闭）。
+
+处置值：`OPEN` / `CLOSED` / `CLOSED_WITH_RISK_ACCEPTANCE`。
+
+**路径 A：测试闭环**
+
+1. CMD-02 阶段 3 设备回归完成并 PASS；
+2. CMD-03 约定验收范围完成并 PASS：
+   - Host T01–T23：23 PASS + T09a EXPECTED，0 failed；
+   - 设备侧 200 ms：完成并通过；
+   - 设备适用性/可复现性：T01–T12、T14–T18、T20–T23 按 Host 证据验收；设备侧明确标记为不可完整复现，不要求设备实测，也不得计为设备 PASS；这些项目不列入路径 A 的设备补测清单；
+   - 路径 A 的设备侧补测范围仅为：设备侧 200 ms、T13/T19 尚未完成的覆盖要求；
+3. 台账记录 P0 处置为 `CLOSED`。
+
+**路径 B：正式风险接受**
+
+1. CMD-02 阶段 3 设备回归完成并 PASS；CMD-02 不在本路径豁免；
+2. CMD-03 未覆盖项逐项记录为“范围豁免/风险接受”，包括缺口、影响、责任人、期限和重新开启条件；
+3. 风险接受尚未完成审批和记录时，CMD-03 保持 `IN_PROGRESS`；正式批准并完成记录后，CMD-03 标记 `DEFERRED` 并关联风险接受记录；CMD-03 不得标记 `PASS`；
+4. 台账记录 P0 处置为 `CLOSED_WITH_RISK_ACCEPTANCE`。
+
+**状态约束**
+
+- 路径 A/B 互斥，不得混用。
+- `PASS` 只适用于路径 A 中完成的测试闭环。
+- `CLOSED_WITH_RISK_ACCEPTANCE` 是 P0 处置结果，不是 CMD 任务状态，也不是测试 PASS。
+- 当前 P0 处置为 `OPEN`，直到上述任一路径被正式记录。
 
 ## 3. 必须保持的实现约束
 
@@ -53,7 +83,7 @@
 ## 4. 必要证据入口
 
 - [CMD 架构与权限边界](../architecture/CMD共享命令架构与权限边界.md)：当前模块职责、生产注册表、来源白名单及认证/授权边界。
-- [CMD-02/03 并发静态审查](../reviews/CMD/CMD-02_03_并发静态审查_2026-11-15.md)：字段所有权、operation 并发模型、expiring 窄窗口及未决项。
+- [CMD-02/03 并发静态审查](../reviews/CMD/CMD-02_03_并发静态审查_2026-11-15.md)：字段所有权、operation 并发模型、expiring 窄窗口及历史未决项。历史 §2.4 的 `store_trial` 窄窗口发现保留原文；当前实现已由 `app_cmd_net_trial_store()` 所有权校验及 T01/T02 覆盖，不能再作为当前未决缺陷引用。
 - [CMD-04 快照方案](../design/CMD/CMD-04_status快照方案_2026-11-14.md)：04a/04b/04c 的范围和总体约束。
 - [CMD-04a operation_status 快照清单](../design/CMD/CMD-04a_operation_status快照清单与判定表_2026-11-14.md)：待实施设计和分支/资源验收要求。
 - [CMD-04b network_status 快照清单](../design/CMD/CMD-04b_network_status快照清单与判定表_2026-11-14.md)：待实施设计、skew 和资源验收要求。
