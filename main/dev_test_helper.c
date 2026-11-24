@@ -163,7 +163,8 @@ static bool devtest_wait_claim_settled(app_operation_cleanup_state_t *out,
 
     while (esp_timer_get_time() < deadline) {
         if (!app_operation_generation_matches(s_op, s_generation)) {
-            ESP_LOGE(TAG, "DEVTEST_IDENTITY_ERROR cleanup_wait_generation op=%s gen=%u",
+            ESP_LOGE(TAG, "DEVTEST_IDENTITY_ERROR cleanup_state_stale=1 "
+                          "cleanup_wait_generation op=%s gen=%u",
                      s_op_id, (unsigned)s_generation);
             if (out != NULL) {
                 *out = APP_OPERATION_CLEANUP_NONE;
@@ -259,6 +260,46 @@ static esp_err_t devtest_run_fn(app_operation_t *op, void *ctx)
     return ESP_OK;
 }
 
+static bool devtest_identity_failure_cleanup(esp_err_t cancel_err)
+{
+    app_operation_status_t st = {0};
+    app_cmd_net_job_snap_t job;
+    app_cmd_net_trial_snap_t trial;
+    bool status_ok;
+    bool id_ok;
+    bool terminal_ok;
+    bool cleanup_ok;
+    bool resources_ok;
+
+    app_cmd_net_job_lock();
+    app_cmd_net_job_snapshot_locked(&job);
+    app_cmd_net_trial_snapshot_locked(&trial);
+    app_cmd_net_job_unlock();
+
+    status_ok = app_operation_get_status(s_op, &st);
+    id_ok = status_ok && strcmp(st.id, s_op_id) == 0;
+    terminal_ok = status_ok &&
+                  (st.state == APP_OP_CANCELLED || st.state == APP_OP_FAILED ||
+                   st.state == APP_OP_EXPIRED || st.state == APP_OP_SUCCESS);
+    cleanup_ok = status_ok && st.state == APP_OP_CANCELLED &&
+                 st.cleanup_state == APP_OPERATION_CLEANUP_OK;
+    resources_ok = !job.active && !trial.valid;
+    bool converged = cancel_err == ESP_OK && id_ok && terminal_ok &&
+                     cleanup_ok && resources_ok;
+
+    ESP_LOGE(TAG, "DEVTEST_CLEANUP identity_read_failed cancel=%s status_ok=%d "
+                  "id_ok=%d state=%d cleanup=%d job_active=%d trial_valid=%d "
+                  "outcome=%s op=%s",
+             esp_err_to_name(cancel_err), (int)status_ok, (int)id_ok,
+             (int)st.state, (int)st.cleanup_state, (int)job.active,
+             (int)trial.valid, converged ? "PASS" : "FAIL", s_op_id);
+    if (!converged) {
+        ESP_LOGE(TAG, "DEVTEST_IDENTITY_ERROR cleanup_state_stale=1 "
+                      "identity_failure_cleanup op=%s", s_op_id);
+    }
+    return converged;
+}
+
 static bool devtest_begin_operation(void)
 {
     app_cmd_context_t ctx = app_cmd_ctx_entry(APP_CMD_SOURCE_SERIAL);
@@ -309,8 +350,7 @@ static bool devtest_begin_operation(void)
                 s_admission_reason = "identity_error";
                 ESP_LOGE(TAG, "DEVTEST_IDENTITY_ERROR admission op=%s", s_op_id);
                 esp_err_t cancel_err = app_operation_cancel(op);
-                ESP_LOGE(TAG, "DEVTEST_CLEANUP identity_read_failed cancel=%s op=%s",
-                         esp_err_to_name(cancel_err), s_op_id);
+                (void)devtest_identity_failure_cleanup(cancel_err);
                 return false;
             }
             s_generation = st.generation;
