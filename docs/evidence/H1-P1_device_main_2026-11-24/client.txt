@@ -1,0 +1,71 @@
+[scan-filtered] 1 hit(s) in 12s
+  HIT <ble-mac> name='IotHubBLE-65D8' local_name='IotHubBLE-65D8' rssi=-47 uuids=['6e400001-b5a3-f393-e0a9-e50e24dcca9e']
+/tmp/iothub-main-merge/.venv-bleak/lib/python3.12/site-packages/bleak/backends/bluezdbus/client.py:646: UserWarning: Using default MTU value. Call _acquire_mtu() or set _mtu_size first to avoid this warning.
+  warnings.warn(
+>13.130s TX id=login-1 100B {"id": "login-1", "version": "1.0", "cmd": "auth.login", "args": {"username": "<ble-user>", "password": "<redacted>"}}
+[tx] chunked 100B into 5 GATT writes (<= 20B each)
+<13.695s> RX id=login-1 95B frags=1 sizes=[95] {"id": "login-1", "ok": true, "data": {"token": "<redacted>", "expires_in": 600}}
+[auth] login ok (token redacted)
+>13.897s TX id=race1-tc-2 207B {"id": "race1-tc-2", "version": "1.0", "cmd": "network.tryconnect", "args": {"ssid": "<wifi-ssid>", "password": "<redacted>", "idempotency_key": "main-race-b7b29f2d"}, "token": "<redacted>"}
+[tx] chunked 207B into 11 GATT writes (<= 20B each)
+<15.135s> RX id=race1-tc-2 94B frags=1 sizes=[94] {"id": "race1-tc-2", "ok": true, "data": {"operation_id": "op-817FABFBE2667274", "state": "accepted"}}
+RACE1_TRYCONNECT={"id": "race1-tc-2", "ok": true, "data": {"operation_id": "op-817FABFBE2667274", "state": "accepted"}}
+>15.288s TX id=race1-cancel-3 152B {"id": "race1-cancel-3", "version": "1.0", "cmd": "network.cancel", "args": {"operation_id": "op-817FABFBE2667274"}, "token": "<redacted>"}
+[tx] chunked 152B into 8 GATT writes (<= 20B each)
+<16.351s> RX id=race1-cancel-3 99B frags=1 sizes=[99] {"id": "race1-cancel-3", "ok": true, "data": {"operation_id": "op-817FABFBE2667274", "state": "cancelled"}}
+RACE1_CANCEL ms=1068 {"id": "race1-cancel-3", "ok": true, "data": {"operation_id": "op-817FABFBE2667274", "state": "cancelled"}}
+>16.356s TX id=race1-cancel2-4 153B {"id": "race1-cancel2-4", "version": "1.0", "cmd": "network.cancel", "args": {"operation_id": "op-817FABFBE2667274"}, "token": "<redacted>"}
+[tx] chunked 153B into 8 GATT writes (<= 20B each)
+<17.657s> RX id=race1-cancel2-4 100B frags=1 sizes=[100] {"id": "race1-cancel2-4", "ok": true, "data": {"operation_id": "op-817FABFBE2667274", "state": "cancelled"}}
+RACE1_CANCEL_DUP={"id": "race1-cancel2-4", "ok": true, "data": {"operation_id": "op-817FABFBE2667274", "state": "cancelled"}}
+>17.660s TX id=opget-poll-5 149B {"id": "opget-poll-5", "version": "1.0", "cmd": "operation.get", "args": {"operation_id": "op-817FABFBE2667274"}, "token": "<redacted>"}
+[tx] chunked 149B into 8 GATT writes (<= 20B each)
+<19.186s> RX id=opget-poll-5 346B frags=2 sizes=[253, 93] {"id": "opget-poll-5", "ok": true, "data": {"operation_id": "op-817FABFBE2667274", "state": "cancelled", "cleanup_state": "ok", "error": "cancelled", "error_detail": {"code": "cancelled", "message": "cancelled"}, "finished_uptime_ms": 146636, "stages": {"wifi_connected": true, "ip_acquired": true, "internet_verified": true, "mqtt_connected": true}, "stages_source": "live"}}
+RACE1_TERMINAL elapsed=1.527 {"operation_id": "op-817FABFBE2667274", "state": "cancelled", "cleanup_state": "ok", "error": "cancelled", "error_detail": {"code": "cancelled", "message": "cancelled"}, "finished_uptime_ms": 146636, "stages": {"wifi_connected": true, "ip_acquired": true, "internet_verified": true, "mqtt_connected": true}, "stages_source": "live"}
+>19.187s TX id=race2-tc-6 207B {"id": "race2-tc-6", "version": "1.0", "cmd": "network.tryconnect", "args": {"ssid": "<wifi-ssid>", "password": "<redacted>", "idempotency_key": "main-race-df50df26"}, "token": "<redacted>"}
+[tx] chunked 207B into 11 GATT writes (<= 20B each)
+<20.717s> RX id=race2-tc-6 94B frags=1 sizes=[94] {"id": "race2-tc-6", "ok": true, "data": {"operation_id": "op-8C26C09891553922", "state": "accepted"}}
+RACE2_TRYCONNECT={"id": "race2-tc-6", "ok": true, "data": {"operation_id": "op-8C26C09891553922", "state": "accepted"}}
+>20.869s TX id=race2-cancel-7 152B {"id": "race2-cancel-7", "version": "1.0", "cmd": "network.cancel", "args": {"operation_id": "op-8C26C09891553922"}, "token": "<redacted>"}
+[tx] chunked 152B into 8 GATT writes (<= 20B each)
+<22.066s> RX id=race2-cancel-7 99B frags=1 sizes=[99] {"id": "race2-cancel-7", "ok": true, "data": {"operation_id": "op-8C26C09891553922", "state": "cancelled"}}
+RACE2_CANCEL ms=1201 {"id": "race2-cancel-7", "ok": true, "data": {"operation_id": "op-8C26C09891553922", "state": "cancelled"}}
+>22.071s TX id=race2-cancel2-8 153B {"id": "race2-cancel2-8", "version": "1.0", "cmd": "network.cancel", "args": {"operation_id": "op-8C26C09891553922"}, "token": "<redacted>"}
+[tx] chunked 153B into 8 GATT writes (<= 20B each)
+<23.282s> RX id=race2-cancel2-8 100B frags=1 sizes=[100] {"id": "race2-cancel2-8", "ok": true, "data": {"operation_id": "op-8C26C09891553922", "state": "cancelled"}}
+RACE2_CANCEL_DUP={"id": "race2-cancel2-8", "ok": true, "data": {"operation_id": "op-8C26C09891553922", "state": "cancelled"}}
+>23.284s TX id=opget-poll-9 149B {"id": "opget-poll-9", "version": "1.0", "cmd": "operation.get", "args": {"operation_id": "op-8C26C09891553922"}, "token": "<redacted>"}
+[tx] chunked 149B into 8 GATT writes (<= 20B each)
+<24.900s> RX id=opget-poll-9 350B frags=2 sizes=[253, 97] {"id": "opget-poll-9", "ok": true, "data": {"operation_id": "op-8C26C09891553922", "state": "cancelled", "cleanup_state": "ok", "error": "cancelled", "error_detail": {"code": "cancelled", "message": "cancelled"}, "finished_uptime_ms": 152350, "stages": {"wifi_connected": false, "ip_acquired": false, "internet_verified": false, "mqtt_connected": false}, "stages_source": "live"}}
+RACE2_TERMINAL elapsed=1.621 {"operation_id": "op-8C26C09891553922", "state": "cancelled", "cleanup_state": "ok", "error": "cancelled", "error_detail": {"code": "cancelled", "message": "cancelled"}, "finished_uptime_ms": 152350, "stages": {"wifi_connected": false, "ip_acquired": false, "internet_verified": false, "mqtt_connected": false}, "stages_source": "live"}
+[scan-filtered] 1 hit(s) in 12s
+  HIT <ble-mac> name='IotHubBLE-65D8' local_name='IotHubBLE-65D8' rssi=-48 uuids=['6e400001-b5a3-f393-e0a9-e50e24dcca9e']
+>40.040s TX id=login-1 100B {"id": "login-1", "version": "1.0", "cmd": "auth.login", "args": {"username": "<ble-user>", "password": "<redacted>"}}
+[tx] chunked 100B into 5 GATT writes (<= 20B each)
+<40.471s> RX id=login-1 95B frags=1 sizes=[95] {"id": "login-1", "ok": true, "data": {"token": "<redacted>", "expires_in": 600}}
+[auth] login ok (token redacted)
+>40.677s TX id=disc-tc-2 206B {"id": "disc-tc-2", "version": "1.0", "cmd": "network.tryconnect", "args": {"ssid": "<wifi-ssid>", "password": "<redacted>", "idempotency_key": "main-disc-299a149d"}, "token": "<redacted>"}
+[tx] chunked 206B into 11 GATT writes (<= 20B each)
+<41.955s> RX id=disc-tc-2 93B frags=1 sizes=[93] {"id": "disc-tc-2", "ok": true, "data": {"operation_id": "op-F8713D39989362CF", "state": "accepted"}}
+DISC_TRYCONNECT={"id": "disc-tc-2", "ok": true, "data": {"operation_id": "op-F8713D39989362CF", "state": "accepted"}}
+[scan-filtered] 1 hit(s) in 15s
+  HIT <ble-mac> name='IotHubBLE-65D8' local_name='IotHubBLE-65D8' rssi=-50 uuids=['6e400001-b5a3-f393-e0a9-e50e24dcca9e']
+>63.980s TX id=login-1 100B {"id": "login-1", "version": "1.0", "cmd": "auth.login", "args": {"username": "<ble-user>", "password": "<redacted>"}}
+[tx] chunked 100B into 5 GATT writes (<= 20B each)
+<64.456s> RX id=login-1 95B frags=1 sizes=[95] {"id": "login-1", "ok": true, "data": {"token": "<redacted>", "expires_in": 600}}
+[auth] login ok (token redacted)
+>64.660s TX id=disc-opget-2 149B {"id": "disc-opget-2", "version": "1.0", "cmd": "operation.get", "args": {"operation_id": "op-F8713D39989362CF"}, "token": "<redacted>"}
+[tx] chunked 149B into 8 GATT writes (<= 20B each)
+<65.579s> RX id=disc-opget-2 346B frags=2 sizes=[253, 93] {"id": "disc-opget-2", "ok": true, "data": {"operation_id": "op-F8713D39989362CF", "state": "cancelled", "cleanup_state": "ok", "error": "cancelled", "error_detail": {"code": "cancelled", "message": "cancelled"}, "finished_uptime_ms": 175211, "stages": {"wifi_connected": true, "ip_acquired": true, "internet_verified": true, "mqtt_connected": true}, "stages_source": "live"}}
+DISC_OPGET={"id": "disc-opget-2", "ok": true, "data": {"operation_id": "op-F8713D39989362CF", "state": "cancelled", "cleanup_state": "ok", "error": "cancelled", "error_detail": {"code": "cancelled", "message": "cancelled"}, "finished_uptime_ms": 175211, "stages": {"wifi_connected": true, "ip_acquired": true, "internet_verified": true, "mqtt_connected": true}, "stages_source": "live"}}
+[scan-filtered] 1 hit(s) in 12s
+  HIT <ble-mac> name='IotHubBLE-65D8' local_name='IotHubBLE-65D8' rssi=-48 uuids=['6e400001-b5a3-f393-e0a9-e50e24dcca9e']
+>89.315s TX id=login-1 100B {"id": "login-1", "version": "1.0", "cmd": "auth.login", "args": {"username": "<ble-user>", "password": "<redacted>"}}
+[tx] chunked 100B into 5 GATT writes (<= 20B each)
+<89.881s> RX id=login-1 95B frags=1 sizes=[95] {"id": "login-1", "ok": true, "data": {"token": "<redacted>", "expires_in": 600}}
+[auth] login ok (token redacted)
+>90.087s TX id=final-status-2 116B {"id": "final-status-2", "version": "1.0", "cmd": "network.status", "args": {}, "token": "<redacted>"}
+[tx] chunked 116B into 6 GATT writes (<= 20B each)
+<90.872s> RX id=final-status-2 542B frags=3 sizes=[253, 253, 36] {"id": "final-status-2", "ok": true, "data": {"sta_connected": true, "sta_has_ip": true, "sta_ip": "<device-ip>", "last_disconnect": "none", "connected_ssid": "<wifi-ssid>", "connected_profile": 0, "internet_verified": true, "net_verify_stage": "mqtt", "nc_tcp_fails_last": 0, "nc_tcp_last_errno": 0, "rssi": -56, "channel": 8, "bssid": "<ap-bssid>", "rssi_valid": true, "sta_ssid": "<wifi-ssid>", "password_set": true, "mode": "sta", "persistent_use_static": false, "persistent_static_ip": "", "cfg_state": "dhcp", "mqtt_connected": true, "mqtt_last_error": "", "trial": {"state": "idle"}}}
+FINAL_STATUS={"id": "final-status-2", "ok": true, "data": {"sta_connected": true, "sta_has_ip": true, "sta_ip": "<device-ip>", "last_disconnect": "none", "connected_ssid": "<wifi-ssid>", "connected_profile": 0, "internet_verified": true, "net_verify_stage": "mqtt", "nc_tcp_fails_last": 0, "nc_tcp_last_errno": 0, "rssi": -56, "channel": 8, "bssid": "<ap-bssid>", "rssi_valid": true, "sta_ssid": "<wifi-ssid>", "password_set": true, "mode": "sta", "persistent_use_static": false, "persistent_static_ip": "", "cfg_state": "dhcp", "mqtt_connected": true, "mqtt_last_error": "", "trial": {"state": "idle"}}}
+RESULTS=[{"name": "race1", "pass": true, "detail": "cancelled"}, {"name": "race2", "pass": true, "detail": "cancelled"}, {"name": "disconnect_cleanup", "pass": true, "detail": "cancelled"}, {"name": "network_recovered", "pass": true, "detail": "sta=True ip=True mqtt=True"}]

@@ -1,0 +1,16 @@
+[scan-filtered] 1 hit(s) in 12s
+  HIT <ble-mac> name='IotHubBLE-65D8' local_name='IotHubBLE-65D8' rssi=-49 uuids=['6e400001-b5a3-f393-e0a9-e50e24dcca9e']
+/tmp/iothub-main-merge/.venv-bleak/lib/python3.12/site-packages/bleak/backends/bluezdbus/client.py:646: UserWarning: Using default MTU value. Call _acquire_mtu() or set _mtu_size first to avoid this warning.
+  warnings.warn(
+>14.176s TX id=info-1 62B {"id": "info-1", "version": "1.0", "cmd": "device.info", "args": {}}
+[tx] chunked 62B into 4 GATT writes (<= 20B each)
+<14.609s> RX id=info-1 289B frags=2 sizes=[253, 36] {"id": "info-1", "ok": true, "data": {"model": "iothub", "firmware": "1.3-0e4d49c", "build_sha": "659cf7f1c", "device_id": "IotHub-65D8", "build_variant": "mqtt_net_txn=on", "protocol_versions": ["1.0"], "security": {"link_encrypted": false, "bonded": false, "l2_ready": false, "sensitive_writes_allowed": false}}}
+>14.614s TX id=login-2 100B {"id": "login-2", "version": "1.0", "cmd": "auth.login", "args": {"username": "<ble-user>", "password": "<redacted>"}}
+[tx] chunked 100B into 5 GATT writes (<= 20B each)
+<15.237s> RX id=login-2 95B frags=1 sizes=[95] {"id": "login-2", "ok": true, "data": {"token": "<redacted>", "expires_in": 600}}
+[auth] login ok (token redacted)
+>15.441s TX id=status-3 110B {"id": "status-3", "version": "1.0", "cmd": "network.status", "args": {}, "token": "<redacted>"}
+[tx] chunked 110B into 6 GATT writes (<= 20B each)
+<16.227s> RX id=status-3 536B frags=3 sizes=[253, 253, 30] {"id": "status-3", "ok": true, "data": {"sta_connected": true, "sta_has_ip": true, "sta_ip": "<device-ip>", "last_disconnect": "none", "connected_ssid": "<wifi-ssid>", "connected_profile": 0, "internet_verified": true, "net_verify_stage": "mqtt", "nc_tcp_fails_last": 0, "nc_tcp_last_errno": 0, "rssi": -53, "channel": 8, "bssid": "<ap-bssid>", "rssi_valid": true, "sta_ssid": "<wifi-ssid>", "password_set": true, "mode": "sta", "persistent_use_static": false, "persistent_static_ip": "", "cfg_state": "dhcp", "mqtt_connected": true, "mqtt_last_error": "", "trial": {"state": "idle"}}}
+INFO={"id": "info-1", "ok": true, "data": {"model": "iothub", "firmware": "1.3-0e4d49c", "build_sha": "659cf7f1c", "device_id": "IotHub-65D8", "build_variant": "mqtt_net_txn=on", "protocol_versions": ["1.0"], "security": {"link_encrypted": false, "bonded": false, "l2_ready": false, "sensitive_writes_allowed": false}}}
+STATUS={"id": "status-3", "ok": true, "data": {"sta_connected": true, "sta_has_ip": true, "sta_ip": "<device-ip>", "last_disconnect": "none", "connected_ssid": "<wifi-ssid>", "connected_profile": 0, "internet_verified": true, "net_verify_stage": "mqtt", "nc_tcp_fails_last": 0, "nc_tcp_last_errno": 0, "rssi": -53, "channel": 8, "bssid": "<ap-bssid>", "rssi_valid": true, "sta_ssid": "<wifi-ssid>", "password_set": true, "mode": "sta", "persistent_use_static": false, "persistent_static_ip": "", "cfg_state": "dhcp", "mqtt_connected": true, "mqtt_last_error": "", "trial": {"state": "idle"}}}
