@@ -79,6 +79,81 @@ static void net_test_hook(const char *point, app_operation_t *op, uint32_t expec
 }
 #endif
 
+#ifdef APP_DEV_TEST_HELPER
+static app_cmd_net_job_dev_test_hook_fn s_dev_test_hook;
+static bool s_dev_test_hook_set;
+static uint32_t s_dev_claim_count;
+static uint32_t s_dev_restore_request_count;
+static bool s_dev_last_restore_ok;
+static int64_t s_dev_wait_start_us;
+static int64_t s_dev_wait_end_us;
+static uint32_t s_dev_wait_limit_ticks;
+static uint32_t s_dev_wait_waited_ticks;
+static app_operation_cleanup_state_t s_dev_wait_claim_at_return =
+    APP_OPERATION_CLEANUP_NONE;
+
+void app_cmd_net_job_dev_test_hook_set(app_cmd_net_job_dev_test_hook_fn fn)
+{
+    /* 单向初始化：首个设置生效，运行期间不再替换/清空。 */
+    if (!s_dev_test_hook_set) {
+        s_dev_test_hook = fn;
+        s_dev_test_hook_set = true;
+    }
+}
+
+void app_cmd_net_job_dev_test_obs_reset(void)
+{
+    s_dev_claim_count = 0;
+    s_dev_restore_request_count = 0;
+    s_dev_last_restore_ok = false;
+    s_dev_wait_start_us = 0;
+    s_dev_wait_end_us = 0;
+    s_dev_wait_limit_ticks = 0;
+    s_dev_wait_waited_ticks = 0;
+    s_dev_wait_claim_at_return = APP_OPERATION_CLEANUP_NONE;
+}
+
+uint32_t app_cmd_net_job_dev_test_claim_count(void)
+{
+    return s_dev_claim_count;
+}
+
+uint32_t app_cmd_net_job_dev_test_restore_request_count(void)
+{
+    return s_dev_restore_request_count;
+}
+
+bool app_cmd_net_job_dev_test_last_restore_ok(void)
+{
+    return s_dev_last_restore_ok;
+}
+
+int64_t app_cmd_net_job_dev_test_wait_start_us(void)
+{
+    return s_dev_wait_start_us;
+}
+
+int64_t app_cmd_net_job_dev_test_wait_end_us(void)
+{
+    return s_dev_wait_end_us;
+}
+
+uint32_t app_cmd_net_job_dev_test_wait_limit_ticks(void)
+{
+    return s_dev_wait_limit_ticks;
+}
+
+uint32_t app_cmd_net_job_dev_test_wait_waited_ticks(void)
+{
+    return s_dev_wait_waited_ticks;
+}
+
+app_operation_cleanup_state_t app_cmd_net_job_dev_test_wait_claim_at_return(void)
+{
+    return s_dev_wait_claim_at_return;
+}
+#endif
+
 static bool app_cmd_net_job_owned_by_locked(const app_operation_t *op, uint32_t expected_gen);
 static void app_cmd_net_job_clear_impl_locked(void);
 static app_operation_cleanup_outcome_t app_cmd_net_finish_run(
@@ -535,6 +610,12 @@ static bool app_cmd_net_cleanup_wait_result(const app_operation_t *op, uint32_t 
     if (limit == 0) {
         limit = 1;
     }
+#ifdef APP_DEV_TEST_HELPER
+    s_dev_wait_start_us = esp_timer_get_time();
+    s_dev_wait_limit_ticks = (uint32_t)limit;
+    s_dev_wait_waited_ticks = 0;
+    s_dev_wait_claim_at_return = APP_OPERATION_CLEANUP_NONE;
+#endif
     for (waited = 0; waited < limit; waited++) {
         vTaskDelay(1);
         state = app_operation_cleanup_result(op, expected_gen);
@@ -542,6 +623,11 @@ static bool app_cmd_net_cleanup_wait_result(const app_operation_t *op, uint32_t 
             break;
         }
     }
+#ifdef APP_DEV_TEST_HELPER
+    s_dev_wait_end_us = esp_timer_get_time();
+    s_dev_wait_waited_ticks = (uint32_t)waited;
+    s_dev_wait_claim_at_return = state;
+#endif
     if (state == APP_OPERATION_CLEANUP_OK) {
         return true;
     }
@@ -624,6 +710,11 @@ static app_operation_cleanup_outcome_t app_cmd_net_cleanup_run_common(
     }
 
     claim = app_operation_cleanup_claim(op, expected_gen);
+#ifdef APP_DEV_TEST_HELPER
+    if (claim == APP_OPERATION_CLEANUP_CLAIMED) {
+        s_dev_claim_count++;
+    }
+#endif
     if (claim != APP_OPERATION_CLEANUP_CLAIMED) {
         app_cmd_net_job_unlock();
         ESP_LOGW(TAG, "cleanup claim anomaly op=%s claim=%d", op_id, (int)claim);
@@ -653,6 +744,11 @@ static app_operation_cleanup_outcome_t app_cmd_net_cleanup_run_common(
     app_cmd_net_clear_active_id(op_id);
 
     net_test_hook("cleanup_after_claim", op, expected_gen);
+#ifdef APP_DEV_TEST_HELPER
+    if (s_dev_test_hook != NULL) {
+        s_dev_test_hook("cleanup_after_claim", op, expected_gen);
+    }
+#endif
 
     if (job_owned) {
         if (s_port.netcheck_cancel != NULL) {
@@ -664,7 +760,17 @@ static app_operation_cleanup_outcome_t app_cmd_net_cleanup_run_common(
     }
     if (restore_persistent) {
         ESP_LOGW(TAG, "rescue=restore_persistent op=%s (cleanup without commit)", op_id);
-        ok = s_port.cleanup_request != NULL && s_port.cleanup_request(op_id);
+        ok = false;
+        if (s_port.cleanup_request != NULL) {
+#ifdef APP_DEV_TEST_HELPER
+            s_dev_restore_request_count++;
+            s_dev_last_restore_ok = false;
+#endif
+            ok = s_port.cleanup_request(op_id);
+#ifdef APP_DEV_TEST_HELPER
+            s_dev_last_restore_ok = ok;
+#endif
+        }
         if (!ok) {
             ESP_LOGE(TAG, "rescue=restore_persistent failed (cleanup request) op=%s", op_id);
         }

@@ -8,6 +8,10 @@
 #include "cmd_context.h"
 #include "operation.h"
 
+#if defined(APP_CMD_NET_JOB_TEST) && defined(APP_DEV_TEST_HELPER)
+#error "APP_CMD_NET_JOB_TEST and APP_DEV_TEST_HELPER are mutually exclusive"
+#endif
+
 /* CMD-03 H1：网络 job/trial 状态与 cleanup 归属协调。
  * 仅封装 job/trial 状态、J 锁、归属守卫与 cleanup claim；命令解析、apply 事务、
  * 状态响应构建和 BLE 断连事件处理仍留在 cmd.c。 */
@@ -154,4 +158,24 @@ typedef void (*app_cmd_net_job_test_hook_fn)(const char *point,
                                              app_operation_t *op,
                                              uint32_t expected_gen);
 void app_cmd_net_job_test_hook_set(app_cmd_net_job_test_hook_fn fn);
+#endif
+
+#ifdef APP_DEV_TEST_HELPER
+/* 设备测试构建专用：hook 只能测试任务启动前注册一次，不提供 clear。
+ * 当前唯一调用点是 cleanup_after_claim（J 锁外）。 */
+typedef void (*app_cmd_net_job_dev_test_hook_fn)(const char *point,
+                                                 app_operation_t *op,
+                                                 uint32_t expected_generation);
+void app_cmd_net_job_dev_test_hook_set(app_cmd_net_job_dev_test_hook_fn fn);
+
+/* 设备测试观测；仅测试构建存在。 */
+void app_cmd_net_job_dev_test_obs_reset(void);
+uint32_t app_cmd_net_job_dev_test_claim_count(void);
+uint32_t app_cmd_net_job_dev_test_restore_request_count(void);
+bool app_cmd_net_job_dev_test_last_restore_ok(void);
+int64_t app_cmd_net_job_dev_test_wait_start_us(void);
+int64_t app_cmd_net_job_dev_test_wait_end_us(void);
+uint32_t app_cmd_net_job_dev_test_wait_limit_ticks(void);
+uint32_t app_cmd_net_job_dev_test_wait_waited_ticks(void);
+app_operation_cleanup_state_t app_cmd_net_job_dev_test_wait_claim_at_return(void);
 #endif

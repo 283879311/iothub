@@ -12,6 +12,9 @@
 #include "config_apply.h"
 #include "data_pipe.h"
 #include "diag.h"
+#ifdef APP_DEV_TEST_HELPER
+#include "dev_test_helper.h"
+#endif
 #include "mqtt.h"
 #include "operation.h"
 #include "ota.h"
@@ -133,5 +136,11 @@ void app_main(void)
 #ifdef APP_OPERATION_LIFECYCLE_TEST
     ESP_LOGI(TAG, "[boot-14b] operation worker lifecycle test");
     app_operation_lifecycle_test_start();
+#endif
+#ifdef APP_DEV_TEST_HELPER
+    ESP_LOGI(TAG, "[boot-14c] CMD-03 device test helper");
+    if (app_dev_test_helper_start() != ESP_OK) {
+        ESP_LOGE(TAG, "device test helper start failed");
+    }
 #endif
 }
