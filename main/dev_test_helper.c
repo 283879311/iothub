@@ -81,6 +81,8 @@ static char s_op_id[APP_OPERATION_ID_LEN];
 static uint32_t s_generation;
 static char s_run_id[24];
 static bool s_started;
+static const char *s_admission_reason = "none";
+static bool s_admission_skip;
 #if defined(APP_DEV_TEST_SCENARIO_T13) || defined(APP_DEV_TEST_SCENARIO_WAIT200)
 static bool s_hook_used;
 #endif
@@ -211,8 +213,9 @@ static void devtest_hook(const char *point, app_operation_t *op,
     if (point == NULL || strcmp(point, "cleanup_after_claim") != 0) {
         return;
     }
-    (void)op;
-    (void)expected_generation;
+    if (op != s_op || expected_generation != s_generation) {
+        return;
+    }
     if (s_hook_used) {
         ESP_LOGW(TAG, "DEVTEST_HOOK duplicate point=%s", point);
         return;
@@ -262,9 +265,13 @@ static bool devtest_begin_operation(void)
     char idem_key[40];
     int64_t deadline = esp_timer_get_time() + (int64_t)DEVTEST_ADMISSION_TIMEOUT_MS * 1000;
     unsigned attempts = 0;
+    unsigned no_txn_attempts = 0;
 
+    s_admission_reason = "none";
+    s_admission_skip = false;
     if (!app_cmd_ctx_valid(&ctx)) {
-        ESP_LOGE(TAG, "DEVTEST_ADMISSION invalid ctx");
+        s_admission_reason = "invalid_ctx";
+        ESP_LOGE(TAG, "DEVTEST_ADMISSION result=invalid_ctx");
         return false;
     }
     snprintf(idem_key, sizeof(idem_key), "devtest-%s", s_run_id);
@@ -272,7 +279,7 @@ static bool devtest_begin_operation(void)
     while (esp_timer_get_time() < deadline) {
         app_cmd_net_job_begin_result_t r;
         app_operation_t *op = NULL;
-        app_operation_status_t st;
+        app_operation_status_t st = {0};
 
         attempts++;
         app_cmd_net_job_lock();
@@ -284,13 +291,30 @@ static bool devtest_begin_operation(void)
         app_cmd_net_job_unlock();
 
         if (r == APP_CMD_NET_JOB_BEGIN_OK) {
-            if (op == NULL || !app_operation_get_status(op, &st)) {
-                ESP_LOGE(TAG, "DEVTEST_ADMISSION op status unavailable");
+            if (op == NULL) {
+                s_admission_reason = "op_null";
+                ESP_LOGE(TAG, "DEVTEST_ADMISSION result=op_null attempts=%u", attempts);
                 return false;
             }
+            /* BEGIN_OK 后立即保存身份，状态读取失败也必须走受控收敛。 */
             s_op = op;
-            s_generation = st.generation;
             snprintf(s_op_id, sizeof(s_op_id), "%s", app_operation_id(op));
+            for (unsigned i = 0; i < 3; i++) {
+                if (app_operation_get_status(op, &st)) {
+                    break;
+                }
+                vTaskDelay(pdMS_TO_TICKS(10));
+            }
+            if (st.generation == 0 || st.cleanup_state != APP_OPERATION_CLEANUP_NONE) {
+                s_admission_reason = "identity_error";
+                ESP_LOGE(TAG, "DEVTEST_IDENTITY_ERROR admission op=%s", s_op_id);
+                esp_err_t cancel_err = app_operation_cancel(op);
+                ESP_LOGE(TAG, "DEVTEST_CLEANUP identity_read_failed cancel=%s op=%s",
+                         esp_err_to_name(cancel_err), s_op_id);
+                return false;
+            }
+            s_generation = st.generation;
+            s_admission_reason = "ok";
             ESP_LOGI(TAG, "DEVTEST_ADMISSION result=ok attempts=%u op=%s gen=%u",
                      attempts, s_op_id, (unsigned)s_generation);
             return true;
@@ -300,17 +324,27 @@ static bool devtest_begin_operation(void)
             continue;
         }
         if (r == APP_CMD_NET_JOB_BEGIN_NO_TXN) {
+            no_txn_attempts++;
+            if (no_txn_attempts < 3) {
+                vTaskDelay(pdMS_TO_TICKS(100));
+                continue;
+            }
+            s_admission_reason = "cfg_txn_unavailable";
+            s_admission_skip = true;
             ESP_LOGE(TAG, "DEVTEST_ADMISSION result=no_txn attempts=%u", attempts);
             return false;
         }
         if (r == APP_CMD_NET_JOB_BEGIN_NOT_READY) {
+            s_admission_reason = "not_ready";
             ESP_LOGE(TAG, "DEVTEST_ADMISSION result=not_ready attempts=%u", attempts);
             return false;
         }
+        s_admission_reason = "no_slot";
         ESP_LOGE(TAG, "DEVTEST_ADMISSION result=no_slot attempts=%u", attempts);
         return false;
     }
 
+    s_admission_reason = "busy_timeout";
     ESP_LOGE(TAG, "DEVTEST_ADMISSION timeout attempts=%u", attempts);
     return false;
 }
@@ -351,6 +385,7 @@ static void devtest_finish_task(void *arg)
     s_finish_result_valid = true;
     s_finish_state = DEV_FINISH_RETURNED;
     xEventGroupSetBits(s_events, EV_FINISH_DONE);
+    vTaskDelete(NULL);
 }
 
 #endif
@@ -362,6 +397,7 @@ static void devtest_first_cleanup_task(void *arg)
     s_first_cleanup_started = true;
     s_first_cleanup_result = app_cmd_net_cleanup_run(s_op, NULL);
     xEventGroupSetBits(s_events, EV_FIRST_CLEANUP_DONE);
+    vTaskDelete(NULL);
 }
 
 #endif
@@ -464,12 +500,13 @@ static bool devtest_check_resources(void)
 static bool devtest_success_or_cleanup(const char *reason, bool scenario_ok)
 {
     bool cleanup_ok = true;
+    bool first_cleanup_failed = false;
     app_operation_cleanup_state_t claim = APP_OPERATION_CLEANUP_NONE;
     app_operation_status_t st = {0};
 
     devtest_release_barrier();
 
-    /* WAIT200 的第一 claimant 必须先退出，再决定是否发起最终 finish。 */
+    /* WAIT200 的第一 claimant 必须先退出；失败时不得再发起 finish。 */
     if (s_first_cleanup_task_created || s_first_cleanup_started) {
         EventBits_t bits = xEventGroupWaitBits(s_events, EV_FIRST_CLEANUP_DONE,
                                                pdFALSE, pdTRUE,
@@ -477,6 +514,7 @@ static bool devtest_success_or_cleanup(const char *reason, bool scenario_ok)
         if ((bits & EV_FIRST_CLEANUP_DONE) == 0 || !s_first_cleanup_result) {
             ESP_LOGE(TAG, "DEVTEST_CLEANUP first cleanup failed op=%s", s_op_id);
             cleanup_ok = false;
+            first_cleanup_failed = true;
         }
     }
 
@@ -489,12 +527,20 @@ static bool devtest_success_or_cleanup(const char *reason, bool scenario_ok)
             cleanup_ok = false;
         }
     }
+    if (s_finish_task_created && s_finish_result_valid &&
+        s_finish_result != APP_OPERATION_FINISH_DONE &&
+        s_finish_result != APP_OPERATION_FINISH_PENDING) {
+        ESP_LOGE(TAG, "DEVTEST_CLEANUP first finish result=%d op=%s",
+                 (int)s_finish_result, s_op_id);
+        cleanup_ok = false;
+    }
 
-    if (!s_finish_task_created && s_finish_state == DEV_FINISH_NOT_STARTED) {
+    if (cleanup_ok && !first_cleanup_failed && !s_finish_task_created &&
+        s_finish_state == DEV_FINISH_NOT_STARTED) {
         if (!devtest_do_finish(reason)) {
             cleanup_ok = false;
         }
-    } else if (s_finish_state == DEV_FINISH_RETURNED &&
+    } else if (cleanup_ok && s_finish_state == DEV_FINISH_RETURNED &&
                s_finish_result_valid &&
                s_finish_result == APP_OPERATION_FINISH_PENDING) {
         if (!devtest_wait_claim_settled(&claim, DEVTEST_TERMINAL_TIMEOUT_MS)) {
@@ -504,36 +550,61 @@ static bool devtest_success_or_cleanup(const char *reason, bool scenario_ok)
     }
 
     devtest_release_run();
-
     if (s_run_started && !devtest_wait_run_exit()) {
         ESP_LOGE(TAG, "DEVTEST_CLEANUP run exit timeout op=%s", s_op_id);
         cleanup_ok = false;
     }
 
-    if (!devtest_wait_status_terminal(DEVTEST_TERMINAL_TIMEOUT_MS)) {
-        ESP_LOGE(TAG, "DEVTEST_CLEANUP terminal timeout op=%s", s_op_id);
-        cleanup_ok = false;
-    }
-    if (!devtest_wait_claim_settled(&claim, DEVTEST_TERMINAL_TIMEOUT_MS)) {
-        ESP_LOGE(TAG, "DEVTEST_CLEANUP claim timeout op=%s", s_op_id);
-        cleanup_ok = false;
-    } else if (claim != APP_OPERATION_CLEANUP_OK) {
-        ESP_LOGE(TAG, "DEVTEST_CLEANUP claim=%d op=%s", (int)claim, s_op_id);
-        cleanup_ok = false;
-    }
-    if (!devtest_check_resources()) {
-        cleanup_ok = false;
+    /* 冻结规则：先看 cleanup claim。FAIL 直接失败，不等待成功终态。 */
+    if (cleanup_ok) {
+        if (!devtest_wait_claim_settled(&claim, DEVTEST_TERMINAL_TIMEOUT_MS)) {
+            ESP_LOGE(TAG, "DEVTEST_CLEANUP claim timeout op=%s", s_op_id);
+            cleanup_ok = false;
+        } else if (claim != APP_OPERATION_CLEANUP_OK) {
+            ESP_LOGE(TAG, "DEVTEST_CLEANUP claim=%d op=%s", (int)claim, s_op_id);
+            cleanup_ok = false;
+        }
     }
 
-    if (app_operation_get_status(s_op, &st)) {
-        ESP_LOGI(TAG, "DEVTEST_FINAL state=%d error=%d cleanup=%d op=%s",
-                 (int)st.state, (int)st.error, (int)st.cleanup_state, s_op_id);
+    if (cleanup_ok) {
+        if (!devtest_wait_status_terminal(DEVTEST_TERMINAL_TIMEOUT_MS)) {
+            ESP_LOGE(TAG, "DEVTEST_CLEANUP terminal timeout op=%s", s_op_id);
+            cleanup_ok = false;
+        }
+        if (cleanup_ok && !devtest_check_resources()) {
+            cleanup_ok = false;
+        }
+        if (cleanup_ok && app_operation_get_status(s_op, &st)) {
+            ESP_LOGI(TAG, "DEVTEST_FINAL state=%d error=%d cleanup=%d op=%s",
+                     (int)st.state, (int)st.error, (int)st.cleanup_state, s_op_id);
+            vTaskDelay(pdMS_TO_TICKS(DEVTEST_WORKER_SETTLE_MS));
+            app_operation_status_t st_after = {0};
+            bool got_after = app_operation_get_status(s_op, &st_after);
+            bool job_active_after = app_cmd_net_job_is_active();
+            bool stable = got_after && st_after.generation == s_generation &&
+                          st_after.state == st.state &&
+                          st_after.cleanup_state == APP_OPERATION_CLEANUP_OK &&
+                          !job_active_after;
+            ESP_LOGI(TAG, "DEVTEST_WORKER_SETTLE settle_ms=%u terminal_before=%d "
+                          "terminal_after=%d job_active_after=%d "
+                          "running_observed=unknown evidence=weak",
+                     (unsigned)DEVTEST_WORKER_SETTLE_MS, (int)st.state,
+                     (int)st_after.state, (int)job_active_after);
+            if (!stable) {
+                ESP_LOGE(TAG, "DEVTEST_CLEANUP settle check failed op=%s", s_op_id);
+                cleanup_ok = false;
+            }
+        } else if (cleanup_ok) {
+            ESP_LOGE(TAG, "DEVTEST_CLEANUP final status unavailable op=%s", s_op_id);
+            cleanup_ok = false;
+        }
+    } else {
+        if (app_operation_get_status(s_op, &st)) {
+            ESP_LOGE(TAG, "DEVTEST_FINAL failure state=%d error=%d cleanup=%d op=%s",
+                     (int)st.state, (int)st.error, (int)st.cleanup_state, s_op_id);
+        }
     }
-    vTaskDelay(pdMS_TO_TICKS(DEVTEST_WORKER_SETTLE_MS));
-    ESP_LOGI(TAG, "DEVTEST_WORKER_SETTLE settle_ms=%u terminal=%d job_active=%d "
-                  "running_observed=unknown evidence=weak",
-             (unsigned)DEVTEST_WORKER_SETTLE_MS, st.state,
-             (int)app_cmd_net_job_is_active());
+
     return scenario_ok && cleanup_ok;
 }
 
@@ -755,7 +826,6 @@ static void devtest_control_task(void *arg)
              s_run_id, DEVTEST_SCENARIO_NAME, esp_app_get_elf_sha256_str(),
              esp_app_get_description() != NULL ? esp_app_get_description()->version : "");
     app_cmd_net_job_dev_test_obs_reset();
-    app_cmd_net_job_dev_test_hook_set(devtest_hook);
 
     if (!devtest_wait_net_ready()) {
         ESP_LOGW(TAG, "DEVTEST_RESULT run_id=%s scenario=%s outcome=SKIP "
@@ -764,11 +834,14 @@ static void devtest_control_task(void *arg)
         return;
     }
     if (!devtest_begin_operation()) {
-        ESP_LOGE(TAG, "DEVTEST_RESULT run_id=%s scenario=%s outcome=FAIL "
-                      "reason=admission_failed", s_run_id, DEVTEST_SCENARIO_NAME);
+        ESP_LOGW(TAG, "DEVTEST_RESULT run_id=%s scenario=%s outcome=%s reason=%s",
+                 s_run_id, DEVTEST_SCENARIO_NAME,
+                 s_admission_skip ? "SKIP" : "FAIL", s_admission_reason);
         vTaskDelete(NULL);
         return;
     }
+    /* Admission Gate 成功且测试 operation 身份已保存后才注册 hook。 */
+    app_cmd_net_job_dev_test_hook_set(devtest_hook);
     if (!devtest_wait_connecting()) {
         cleanup_ok = devtest_success_or_cleanup("run_not_connecting", false);
         ESP_LOGE(TAG, "DEVTEST_RESULT run_id=%s scenario=%s outcome=FAIL "
