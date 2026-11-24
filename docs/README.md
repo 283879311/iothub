@@ -42,6 +42,7 @@
 - [S6 阶段 A 分区证据](evidence/S6_stageA/README.md)
 - [S6 阶段 B 镜像 manifest](evidence/S6_stageB/images_manifest.md)
 - [S6 阶段 B 身份采集](evidence/S6_stageB/identity_2026-11-15/README.md)
+- [CMD-03 Phase A clean-cycle 设备与 NVS 核验（2026-11-25）](evidence/CMD-03_phase_a_clean_2026-11-25/README.md)：clean-tree T13/T19/WAIT200、NVS 前后一致、生产 main 恢复。
 - [H1-P1 main 固件设备验收（2026-11-24）](evidence/H1-P1_device_main_2026-11-24/README.md)：设备 `IotHub-65D8`、main `0e4d49c` 的可触发子集；200 ms 与完整并发矩阵为 NOT_COVERED。
 
 ## 历史材料

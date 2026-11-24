@@ -1,0 +1,2 @@
+c1e04bc96a88f60f41c7b5d8a2a54473edca548d15d1d01dcbc8f7fc2f3f5dc6  /tmp/h1-device/nvs_before_clean_cycle.bin
+c1e04bc96a88f60f41c7b5d8a2a54473edca548d15d1d01dcbc8f7fc2f3f5dc6  /tmp/h1-device/nvs_after_clean_cycle.bin
