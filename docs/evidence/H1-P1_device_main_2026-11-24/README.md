@@ -14,11 +14,14 @@
 
 ## Test entry
 
-- Script: `main_accept.py` (BLE; cancel/duplicate-cancel, BLE-disconnect cleanup, recovery status)
+- Script: `main_accept.py` (BLE; cancel/duplicate-cancel, BLE-disconnect cleanup,
+  recovery status). The script is retained only in the local test workspace and
+  is not included in this publication bundle.
 - Serial: single-reader capture `capture_serial.py /dev/ttyUSB0`
 - No persistent config field was changed. `network.tryconnect` used a deliberately
   wrong password and was always cancelled; cleanup restored the persistent profile.
-- No credentials are recorded in this report or the test logs.
+- No password or token values are published. The BLE username is masked as
+  `<ble-user>` in the published client transcript.
 
 ## Results
 
@@ -60,6 +63,20 @@ SSID `<wifi-ssid>`, `internet_verified=true`, `net_verify_stage=mqtt`,
 - `cleanup_state=ok` was observed while asynchronous Wi-Fi cleanup was still
   running, consistent with the contract wording that `ok` means cleanup
   claim/dispatch, not Wi-Fi restore completion.
+- Device-internal cleanup latency, measured from `CLEANUP_DONE_OK` (or the
+  immediately following `finish`) to `wifi: cleanup complete`, was
+  **2.47–4.23 seconds**:
+
+  | Round | op | `CLEANUP_DONE_OK` → cleanup complete | `finish` → cleanup complete |
+  |---|---|---:|---:|
+  | 1 | `op-817FABFBE2667274` | 4.23 s | 4.21 s |
+  | 2 | `op-8C26C09891553922` | 3.77 s | 3.76 s |
+  | 3 | `op-F8713D39989362CF` | 2.48 s | 2.47 s |
+
+  `cleanup_state=ok` only means the cleanup claim/dispatch succeeded; it does
+  not mean the asynchronous Wi-Fi cleanup or persistent-config restore has
+  completed. It must not be used as a signal that the next network operation
+  can start immediately. Network truth remains `network.status` / `config.get`.
 
 ## Coverage against Host T01–T23
 
