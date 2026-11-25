@@ -1,3 +1,4 @@
+3ebdac8861866a8c5b2657119efcfb437262cd65caddac01b1fdda074e763dea  ./build-env.txt
 d05fce37c7e5b1f610351f935fb09f343cd3c2b60f1daa3d2a9e712bbc07a4fa  ./image-hashes.txt
 2e3bec2dd0b69cea7180134b48f04cfe70fd53e2250aececdbf8cc3a789c8df0  ./nvs-hashes.txt
 5f6d073992b03e2dc3a207184ebf7a8ac2356e7d9cc8f269a5befe361514710d  ./partition-table.txt
@@ -55,7 +56,7 @@ cb6adc1d9847c73a821434df6fa196fcfb74b7898bd69c3f48f08b3c0528279b  ./raw/load-09.
 3794bb8a6fbfee494f4fbd2d75edc823f9a82ce0f1a4f0b40a8003e7c916691c  ./raw/load-10-hold.jsonl
 b851ca82098af2cf90869290079856a84d565dd89171b7331addbc1a524fc517  ./raw/load-10.json
 b738b27314fb74299872853ded45a3486bdfc1a3ae32567c0e2e9e73abe16853  ./raw/load-10.txt
-178f3eb971a20ece10151a916eacba37f6ae9fa3ed5698e3c4fce35cc6ef85ed  ./raw/nvs-diff-summary.txt
+0f8839e303c15e78e39b39c5cafbb956ad2780878455b972f755f29ec4acb246  ./raw/nvs-diff-summary.txt
 fbd25dadf64de1daa8c0f30b056d14b5cb7efb446c515a37eb220487ff99150c  ./raw/pre-config.json
 1e998c0a0867ed6eb20432bf4c593649f7bbc1acfd51605339c75c4b5dc79ced  ./raw/preflight-boot.txt
 83b6d9cb9a241cd2b4286153d69d6a490fbc296613a2bd127463e1cfb1ce2d8c  ./raw/preflight-info.json
@@ -65,6 +66,6 @@ fbd25dadf64de1daa8c0f30b056d14b5cb7efb446c515a37eb220487ff99150c  ./raw/pre-conf
 8b6cc1f1b7b8fb38c5bc9919858401db9cd2e4070e8405a25b6760f25c2b5928  ./raw/recovery-config.json
 83b6d9cb9a241cd2b4286153d69d6a490fbc296613a2bd127463e1cfb1ce2d8c  ./raw/recovery-info.json
 350c24e03d0ce2ecb02065b36d78b4a3b61544c90f4eeddc882d0b69eb4cd6df  ./raw/recovery-status.json
-57be47933bd5375ad44cbef3bddadb3396871d2a6369934fd522b5917ee359ee  ./README.md
-401e234ba894e4d5ef148f6439880e3fb8a4703f705067a04df230cf34d4d4b5  ./REPORT.md
+298768b561371750e044a58b5b6bdcaf1e940635b4e304e0cda012727f3d0f41  ./README.md
+4227025eea7792f3d3f223a0c66a038a3afa561a5be5f4808434cc95803793fc  ./REPORT.md
 3db71ab4fabc1033efdb244166fe9c34a0e2a55ab71cbea137f5e9d45f27a7a4  ./run-summary.tsv

@@ -1,0 +1,5 @@
+ESP-IDF: v6.0.3-707-gdac489c6718
+Source: device 2nd-stage bootloader log line in all captured runs
+        ("I (29) boot: ESP-IDF v6.0.3-707-gdac489c6718 2nd stage bootloader")
+Test image source: 407be43 (wait200 scenario), fw=1.3-407be43, build_sha=2adcbe15b
+Recovery image source: main 956afcd, fw=1.3-956afcd, build_sha=c231c9501

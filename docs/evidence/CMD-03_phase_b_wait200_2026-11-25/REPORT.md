@@ -16,6 +16,7 @@
 | 生产身份（烧写前） | `device_id=IotHub-65D8`、`firmware=1.3-956afcd`、`build_sha=c231c9501` |
 | 生产状态（烧写前） | STA/IP OK、`internet_verified=true`、`net_verify_stage=mqtt`、`mqtt_connected=true`、`trial=idle` |
 | 分区表 | NVS `0x9000`/16K；otadata `0xd000`/8K；ota_0 `0x10000`；ota_1 `0x1f0000` |
+| 构建环境 | ESP-IDF `v6.0.3-707-gdac489c6718`（22 份设备日志的 2nd stage bootloader 行） |
 
 ## 3. 镜像与烧写
 
@@ -93,7 +94,7 @@
 | 20 次运行后 | `849ccdecbc87de904f409b92dd8b9f08e515d2965508d373073cb958e077a301` |
 | 恢复后 | `849ccdecbc87de904f409b92dd8b9f08e515d2965508d373073cb958e077a301` |
 
-- 已用 IDF `nvs_tool.py` 解析：91 个键，**唯一变化为 `phy/cal_data`**（两个 blob：1280→1600 B、624→304 B 且归零）；`iothub`、`nvs.net80211`、`ble_prov`、`misc` 全部键值不变。
+- 已用 IDF `nvs_tool.py` 解析：92 个条目 / 91 个键（`phy/cal_data` 含两个 blob 条目），**唯一变化为 `phy/cal_data`**：blob0 1280→1600 字节（非零 956→1049），blob1 624→304 字节（非零 92→0，归零）。`iothub`、`nvs.net80211`、`ble_prov`、`misc` 全部键值不变。
 - 持久配置子集 SHA-256（排除连接态/计数/IP）：烧写前与恢复后均为 `20cd05f34acf83f791a64ab699473e6051faa46720e1c7d611389e11bf268e3f`。
 - 恢复烧写与恢复启动未再改变 NVS（后两次哈希相同）。
 - 判定：NVS 哈希未保持逐字节一致，按授权该条件未满足；但差异属于 Wi-Fi 驱动 PHY 校准数据，不是 `iothub` 配置或 Wi-Fi profile 凭据变更。阶段 B 不据此单独宣布关闭，待评审处置。

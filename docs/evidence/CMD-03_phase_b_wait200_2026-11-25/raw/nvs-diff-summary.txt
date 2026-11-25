@@ -1,4 +1,8 @@
-entries pre=91 posttest=91 postrecovery=91
-changed pre vs posttest: 1
-phy/cal_data len 832 -> 408
+# NVS diff summary (decoded blob sizes in bytes)
+# Source: IDF nvs_tool.py -d minimal -f json; raw NVS binaries withheld.
+raw entries pre=92 posttest=92 postrecovery=92; distinct keys=91
+changed keys: 1
+phy/cal_data blob0: 1280 -> 1600 bytes (nonzero 956 -> 1049)
+phy/cal_data blob1: 624 -> 304 bytes (nonzero 92 -> 0)
+all other keys unchanged
 posttest == postrecovery: yes
