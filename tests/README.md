@@ -13,6 +13,9 @@ make -C tests/token_store audit
 # 统一命令上下文
 make -C tests/cmd_context run
 
+# CMD-03 network job/trial ownership
+make -C tests/cmd_net_job run
+
 # Operation expiring 窄窗口与可证伪性
 make -C tests/operation_host run
 make -C tests/operation_host falsify
