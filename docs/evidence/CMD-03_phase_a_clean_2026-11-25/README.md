@@ -4,10 +4,12 @@
 
 ## 结论
 
-阶段 A v2 通过：clean-tree 测试镜像、设备日志、NVS 前后镜像和生产恢复身份链完整。
+阶段 A v2 证据链通过：clean-tree 测试镜像、设备日志、NVS 前后镜像和生产恢复身份链完整。
 
 - 测试镜像均从干净 `407be43` 构建，`fw=1.3-407be43`。
-- T13/T19/WAIT200 clean-cycle 全部 PASS（WAIT200 为 pilot_pending）。
+- T13：设备侧 PASS。
+- T19：设备侧 PASS。
+- WAIT200：`pilot_pending`，不计为验收 PASS；200 ms 容差未冻结。
 - NVS 前后 16 KiB 镜像逐字节一致。
 - 生产 main 已恢复并核验 STA/IP/MQTT。
 
@@ -23,7 +25,7 @@
 
 - T13 PASS final: run `C23744B0000DA195`, op `op-913F5BC0C67B3277`; second finish PENDING; claim=1 restore=1 restore_ok=1; cancelled/OK; settle stable.
 - T19 PASS final: run `923D7FDB000E16C0`, op `op-FCDA6C82F415B451`; job cleared/trial retained; required finish DONE; claim=1 restore=1; cancelled/OK.
-- WAIT200 PASS pilot_pending: run `584C5972000DD72E`, op `op-31047E39FE8FBAC1`; 190090 us, 20/20 ticks, claim at return=RUNNING; first cleanup later OK; final cancelled/OK.
+- WAIT200 `pilot_pending`（不计为验收 PASS）：run `584C5972000DD72E`, op `op-31047E39FE8FBAC1`; 190090 us, 20/20 ticks, claim at return=RUNNING; first cleanup later OK; final cancelled/OK.
 
 ## NVS
 
