@@ -1,0 +1,18 @@
+cc -Istub -I../../main -DAPP_C1_TEST_HOOKS=1 -std=c11 -O2 -g -Wall -Wextra -Werror -pthread -o operation_window_test test_operation_window.c rtos_shim.c ../../main/operation.c ../../main/operation_state.c
+./operation_window_test
+SCN S1_cancel: 50/50 iterations passed
+SCN S2_expire: 50/50 iterations passed
+SCN S3_success: 50/50 iterations passed
+SCN S4_cleanup_fail: 50/50 iterations passed
+SCN S5_negative_control: 50/50 iterations passed
+
+=== 逐项断言汇总 ===
+  A1  100/100
+  A2  100/100
+  A3  100/100
+  A4  50/50
+  A5  50/50
+  A5h 50/50
+  A7  50/50
+
+RESULT: PASS
