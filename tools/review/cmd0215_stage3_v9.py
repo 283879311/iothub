@@ -1428,9 +1428,9 @@ if __name__ == "__main__":
     ap.add_argument("--selftest", action="store_true")
     ap.add_argument("--out", default="/home/tc/esp/workspace/iothub/artifacts/cmd02_15_stage3_20261122")
     ap.add_argument("--expect-fw", default=None,
-                    help="基线镜像版本，例如 1.3-1ff92db；设备路径必填")
+                    help="基线镜像版本，例如 1.3-956afcd；设备路径必填")
     ap.add_argument("--expect-sha", default=None,
-                    help="基线 build_sha，例如 32b10dfa5；设备路径必填")
+                    help="基线 build_sha，例如 c231c9501；设备路径必填")
     ap.add_argument("--expect-device", default=None,
                     help="授权目标 device_id，例如 IotHub-65D8；设备路径必填")
     a = ap.parse_args()
