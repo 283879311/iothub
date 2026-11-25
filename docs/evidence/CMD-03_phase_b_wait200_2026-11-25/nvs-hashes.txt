@@ -1,0 +1,5 @@
+# NVS partition 0x9000, 16 KiB (0x4000); read-only dumps
+# Binary images withheld: may contain device configuration/credentials.
+c1e04bc96a88f60f41c7b5d8a2a54473edca548d15d1d01dcbc8f7fc2f3f5dc6  pre-test
+849ccdecbc87de904f409b92dd8b9f08e515d2965508d373073cb958e077a301  after 20 runs
+849ccdecbc87de904f409b92dd8b9f08e515d2965508d373073cb958e077a301  after recovery

@@ -1,0 +1,19 @@
+WARNING: Deprecated: Choice 'default_reset' for option '--before' is deprecated. Use 'default-reset' instead.
+WARNING: Deprecated: Choice 'no_reset' for option '--after' is deprecated. Use 'no-reset' instead.
+WARNING: Deprecated: Command 'read_mac' is deprecated. Use 'read-mac' instead.
+esptool v5.6.0
+Serial port /dev/ttyUSB0:
+Connecting....
+Connected to ESP32 on /dev/ttyUSB0:
+Chip type:          ESP32-D0WD-V3 (revision v3.0)
+Features:           Wi-Fi, BT, Dual Core + LP Core, 240MHz, Vref calibration in eFuse, Coding Scheme None
+Crystal frequency:  40MHz
+MAC:                <device-mac>
+
+Uploading stub flasher...
+Running stub flasher...
+Stub flasher running.
+
+MAC:                <device-mac>
+
+Staying in bootloader.

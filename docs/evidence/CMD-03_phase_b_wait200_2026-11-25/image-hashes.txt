@@ -1,0 +1,4 @@
+5baef00206b66d916e5ca1e7a848d00a82cb180ca2807122e2c163bd162964b2  test/iothub.bin (407be43, wait200)
+2adcbe15b90d33c46d8b1d21f2f1591a3934cc8b409a56aca6e996f057cb08f8  test/iothub.elf (device report build_sha=2adcbe15b)
+fe63007484cb11782da1c8642d4b0f080800607e9605363706fba20f199ac995  recovery/iothub.bin (main 956afcd)
+c231c9501909eb9ce6dcdf687c812690eeba216502a576aa9ccc1c68eb1b2138  recovery/iothub.elf (device report build_sha=c231c9501)

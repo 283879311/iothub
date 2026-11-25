@@ -1,0 +1,77 @@
+{
+ "boot": "run_id=A952C5ED000DB05B scenario=wait200 build_sha=2adcbe15b fw=1.3-407be43",
+ "wait_start_ms": 8985,
+ "wait_end_ms": 9195,
+ "wait_elapsed_us": 190841,
+ "waited_ticks": 20,
+ "limit_ticks": 20,
+ "claim_at_return": 1,
+ "second_result": 0,
+ "timeout_lines": 1,
+ "cleanup_done_ok": 1,
+ "cleanup_request_lines": 1,
+ "first_cleanup_claim": 2,
+ "final_state": 7,
+ "final_error": 6,
+ "final_cleanup": 2,
+ "counters": {
+  "claim": 1,
+  "restore": 1,
+  "restore_ok": 1,
+  "state": 7,
+  "cleanup": 2
+ },
+ "worker_settle": "settle_ms=100 terminal_before=7 terminal_after=7 job_active_after=0 running_observed=unknown evidence=weak",
+ "result": "PASS",
+ "acceptance": "pilot_pending",
+ "state_line": "wait200 state=cancelled cleanup=ok op=op-1A9110E77767B2B0",
+ "anomaly_lines": 0,
+ "resource_lines": 0,
+ "panic": false,
+ "result_ms": 9385,
+ "cleanup_done_ms": 9225,
+ "net_ready_ms": 8945,
+ "assertions": {
+  "enter_wait": true,
+  "claim_running_at_return": true,
+  "first_cleanup_ok": true,
+  "single_cleanup": true,
+  "single_restore": true,
+  "terminal": true,
+  "no_panic": true,
+  "waiter_returned_false": true
+ },
+ "issues": [],
+ "run_pass": true,
+ "ticks_semantics": "normal_exhaustion",
+ "call_ms_serial": 210,
+ "cleanup_delay_ms": 30,
+ "captured": true,
+ "mode": "load",
+ "file": "raw/load-01.txt",
+ "hold_events": [
+  {
+   "event": "connected",
+   "t_rel_s": 4.753,
+   "address": "<device-ble-mac>",
+   "name": "IotHubBLE-65D8"
+  },
+  {
+   "event": "stop_file",
+   "t_rel_s": 11.763
+  },
+  {
+   "event": "hold_end",
+   "t_rel_s": 11.763
+  },
+  {
+   "event": "closed",
+   "t_rel_s": 14.112
+  }
+ ],
+ "ble_connected": true,
+ "ble_disconnect_event": false,
+ "ble_connect_t_rel": 4.753,
+ "net_ready_s": 8.945,
+ "ble_cover_ok": true
+}

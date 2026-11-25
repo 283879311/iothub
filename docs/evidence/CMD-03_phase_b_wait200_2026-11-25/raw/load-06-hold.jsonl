@@ -1,0 +1,4 @@
+{"event": "connected", "t_rel_s": 3.898, "address": "<device-ble-mac>", "name": "IotHubBLE-65D8"}
+{"event": "stop_file", "t_rel_s": 11.407}
+{"event": "hold_end", "t_rel_s": 11.407}
+{"event": "closed", "t_rel_s": 13.396}
