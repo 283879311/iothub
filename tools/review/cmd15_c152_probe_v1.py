@@ -232,23 +232,43 @@ async def call(sess, cmd, args, rid, timeout=10):
     return resp.obj
 
 
-async def poll_status(sess, cmd, pred, total, prefix, args=None):
-    """只读轮询：单次超时继续，总预算内返回 (ok, last_obj, samples)。"""
+async def poll_read(sess, cmd, pred, total, prefix, args=None, interval=2.0,
+                    timeout_cap=10.0, backoff=0.5, max_backoff=5.0):
+    """只读轮询：单次超时/异常记录后按有界退避继续；单次等待不超过剩余预算。"""
     deadline = time.monotonic() + total
     samples = []
-    while time.monotonic() < deadline:
+    last = {}
+    delay = backoff
+    while True:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0.05:
+            break
+        per = min(timeout_cap, remaining)
+        rid = "%s%d" % (prefix, int(time.time() * 1000))
         try:
-            obj = await call(sess, cmd, args or {}, "%s%d" % (prefix, int(time.time() * 1000)))
+            obj = await call(sess, cmd, args or {}, rid, timeout=per)
         except asyncio.TimeoutError:
-            samples.append({"ts": time.time(), "timeout": True}); continue
+            samples.append({"ts": time.time(), "kind": "timeout",
+                            "budget_left_s": round(remaining, 3),
+                            "request_timeout_s": round(per, 3)})
+            await asyncio.sleep(min(delay, max(0.0, deadline - time.monotonic())))
+            delay = min(max_backoff, delay * 2)
+            continue
         except Exception as exc:
-            samples.append({"ts": time.time(), "error": type(exc).__name__}); continue
+            samples.append({"ts": time.time(), "kind": type(exc).__name__,
+                            "budget_left_s": round(remaining, 3),
+                            "request_timeout_s": round(per, 3)})
+            await asyncio.sleep(min(delay, max(0.0, deadline - time.monotonic())))
+            delay = min(max_backoff, delay * 2)
+            continue
         data = obj.get("data") or {}
-        samples.append({"ts": time.time(), "data": data})
+        last = data
+        samples.append({"ts": time.time(), "kind": "ok", "ok": obj.get("ok"),
+                        "state": data.get("state"), "data": data})
         if obj.get("ok") and pred(data):
             return True, data, samples
-        await asyncio.sleep(2)
-    last = samples[-1].get("data", {}) if samples else {}
+        delay = backoff
+        await asyncio.sleep(min(interval, max(0.0, deadline - time.monotonic())))
     return False, last, samples
 
 
@@ -338,34 +358,26 @@ async def run_device(expect_fw, expect_sha, expect_device, outdir):
         if not (res.get("ok") and oid):
             raise RuntimeError("tryconnect 未被受理，停止")
 
-        term = {}
-        deadline = time.monotonic() + 45
-        while time.monotonic() < deadline:
-            try:
-                obj = await call(sess, "operation.get", {"operation_id": oid},
-                                 "term%d" % int(time.time() * 1000), timeout=15)
-                term = obj.get("data") or {}
-            except asyncio.TimeoutError:
-                await asyncio.sleep(1); continue
-            except Exception:
-                await asyncio.sleep(1); continue
-            if term.get("state") in TERMINAL:
-                break
-            await asyncio.sleep(1)
-        rec("C15-2 终态", term.get("state") == "failed"
+        term_ok, term, term_samples = await poll_read(
+            sess, "operation.get", lambda d: d.get("state") in TERMINAL,
+            45, "term", args={"operation_id": oid}, interval=1.0,
+            timeout_cap=15.0, backoff=0.5, max_backoff=5.0)
+        rec("C15-2 终态", term_ok and term.get("state") == "failed"
             and term.get("error") in ("wrong_password", "ap_not_found"),
-            "state=%s error=%s" % (term.get("state"), term.get("error")))
+            "state=%s error=%s samples=%d" % (
+                term.get("state"), term.get("error"), len(term_samples)),
+            samples=term_samples)
         if not (term.get("state") == "failed"
                 and term.get("error") in ("wrong_password", "ap_not_found")):
             raise RuntimeError("终态不符，停止")
 
-        recovered, post, samples = await poll_status(
+        recovered, post, samples = await poll_read(
             sess, "network.status",
             lambda d: (d.get("sta_connected") is True and d.get("sta_has_ip") is True
                        and d.get("internet_verified") is True
                        and d.get("mqtt_connected") is True
                        and (d.get("trial") or {}).get("state") == "idle"),
-            70, "rec")
+            70, "rec", interval=2.0, timeout_cap=10.0)
         rec("STA 恢复", recovered, "samples=%d last_trial=%s" % (
             len(samples), (post.get("trial") or {}).get("state")))
         if not recovered:
@@ -436,6 +448,67 @@ async def selftest():
     chk("verdict-terminal", not evaluate(bad_term, good_attrs, good_post, "S")[0])
     ok, why = device_preconditions({}, "fw", "sha", "dev")
     chk("preconditions-refuse", not ok and "IOTHUB_MQTT_TOKEN" in why)
+
+    class FakeSess:
+        def __init__(self, script):
+            self.script, self.calls, self.token = list(script), 0, "t"
+
+        async def send_request(self, req, timeout=0, retries=0, **kw):
+            self.calls += 1
+            item = self.script.pop(0) if self.script else {"ok": True, "data": {}}
+            if isinstance(item, BaseException):
+                raise item
+            return type("Resp", (), {"obj": item})()
+
+    class AlwaysTimeout:
+        def __init__(self):
+            self.calls, self.token = 0, "t"
+
+        async def send_request(self, req, timeout=0, retries=0, **kw):
+            self.calls += 1
+            raise asyncio.TimeoutError()
+
+    s = FakeSess([asyncio.TimeoutError(), asyncio.TimeoutError(),
+                  {"ok": True, "data": {"state": "ok"}}])
+    okp, _, ps = await poll_read(s, "device.status", lambda d: True, 2.0, "t",
+                                 interval=0.01, timeout_cap=0.05,
+                                 backoff=0.01, max_backoff=0.02)
+    chk("poll-timeout-recover", okp and s.calls == 3
+        and [x["kind"] for x in ps] == ["timeout", "timeout", "ok"])
+
+    s = FakeSess([ValueError("x"), ValueError("x"),
+                  {"ok": True, "data": {"state": "ok"}}])
+    okp, _, ps = await poll_read(s, "device.status", lambda d: True, 2.0, "t",
+                                 interval=0.01, timeout_cap=0.05,
+                                 backoff=0.01, max_backoff=0.02)
+    chk("poll-exception-recover", okp and s.calls == 3
+        and [x["kind"] for x in ps] == ["ValueError", "ValueError", "ok"])
+
+    s = AlwaysTimeout(); t0 = time.monotonic()
+    okp, _, ps = await poll_read(s, "network.status", lambda d: True, 0.12, "t",
+                                 interval=0.01, timeout_cap=0.05,
+                                 backoff=0.02, max_backoff=0.05)
+    chk("poll-budget-exhausted", not okp and s.calls <= 6
+        and all(x["kind"] == "timeout" for x in ps)
+        and time.monotonic() - t0 < 0.5)
+    chk("poll-timeout-bounded", all(
+        x["request_timeout_s"] <= x["budget_left_s"] + 0.001 for x in ps))
+
+    s = FakeSess([asyncio.TimeoutError(),
+                  {"ok": True, "data": {"state": "failed", "error": "wrong_password"}}])
+    okp, term, ps = await poll_read(
+        s, "operation.get", lambda d: d.get("state") in TERMINAL, 1.0, "t",
+        interval=0.01, timeout_cap=0.05, backoff=0.01, max_backoff=0.02)
+    chk("opget-timeout-then-terminal", okp and term.get("state") == "failed"
+        and [x["kind"] for x in ps] == ["timeout", "ok"])
+
+    s = AlwaysTimeout()
+    okp, _, ps = await poll_read(
+        s, "operation.get", lambda d: d.get("state") in TERMINAL, 0.12, "t",
+        interval=0.01, timeout_cap=0.05, backoff=0.02, max_backoff=0.05)
+    chk("opget-budget-exhausted", not okp and s.calls <= 6
+        and all(x["kind"] == "timeout" for x in ps))
+
     print("SELFTEST:", "PASS" if all(checks) else "FAIL",
           "(%d/%d)" % (sum(checks), len(checks)))
     return 0 if all(checks) else 1

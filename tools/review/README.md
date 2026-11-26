@@ -4,13 +4,15 @@
 
 ## `cmd15_c152_probe_v1.py`（待审，C15-2 专项）
 
-- 状态：**待审**，未真机运行；`--selftest` 7/7。
-- SHA-256 `74c1ade35ecd70a64e137c32c91e80c6ff4b954d0692d86e0bea0d9751c36c2c`，461 行。
+- 状态：**待审**，未真机运行；`--selftest` 13/13。
+- SHA-256 `2f9e6897e1c829eb0c6a1f35b9db544169263c822dea6ab01aa253782df9d404`，534 行。
 - 范围：仅 C15-2。不执行 C2/C15-1，不切 MQTT 端口，不写配置；写命令只有一次
   `network.tryconnect`（错误口令），结果不确定即停止、不重发。
 - 21883 使用 `IOTHUB_MQTT_TOKEN` 仅订阅 attributes；`sta_has_ip` 由 BLE
   `network.status` 核验，attributes 只断言实际发布字段（net_mode/sta_ssid/sta_ip/uart_baudrate）。
-- 只读轮询（device.status/network.status/operation.get）单次超时记录后继续，总预算不变。
+- 只读轮询（network.status/operation.get）单次超时/异常记录后按有界退避继续；单次等待不超过剩余预算，
+  预算耗尽即停止。`device.status` 身份/基线为写命令前的一次性核验，超时即停止，不属轮询容错范围。
+- `operation.get` 轮询输出结构化样本（时间戳、timeout/异常类型、成功状态），保留 45s 总预算。
 - 运行：
   ```bash
   export IOTHUB_BLE_USER=... IOTHUB_BLE_PASSWORD=... IOTHUB_MQTT_TOKEN=...
