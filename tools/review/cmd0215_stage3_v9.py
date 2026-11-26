@@ -141,6 +141,11 @@ def device_preconditions(env=None, expect_fw=None, expect_sha=None, expect_devic
 
 # ---------------------------------------------------------------- 状态/证据
 
+def rc_int(rc):
+    """paho 1.x 传 int，2.x 传 ReasonCode(.value)；None 记为 -1。"""
+    return -1 if rc is None else int(getattr(rc, "value", rc))
+
+
 def suback_ok(granted_codes):
     """SUBACK 判定：任一 reason code >= 0x80 即拒绝。"""
     for code in granted_codes or []:
@@ -204,7 +209,7 @@ class AttrTap:
             raise RuntimeError("SUBACK 被拒: %r" % (codes,))
 
     def _on_connect(self, _c, _u, _flags, rc, _props=None):
-        self.rc = int(rc) if rc is not None else -1
+        self.rc = rc_int(rc)
         self.connect_ts = time.time()
         if self.rc == 0:
             self.connected.set()
@@ -676,20 +681,31 @@ async def case_c151(sess, st, expect_device, attr_factory=None, attr_wait=20.0):
                     merged, n_attr, n_tel = merge_attrs(tap.snapshot(), w0, time.time())
                     if n_attr:
                         break
-                w1 = time.time()
-                need = {"net_mode", "sta_ssid", "sta_has_ip", "sta_ip", "uart_baudrate"}
+                # 2026-11-26：attributes 实际字段不含 sta_has_ip（该字段仅在 telemetry）；
+                # attributes 断言改为 net_mode/sta_ssid/sta_ip/uart_baudrate，
+                # sta_has_ip 由同一窗口的 network.status 只读核验。
+                need = {"net_mode", "sta_ssid", "sta_ip", "uart_baudrate"}
                 field_ok = n_attr > 0 and need.issubset(set(merged.keys()))
                 consistent = (merged.get("net_mode") == "sta"
                               and merged.get("sta_ssid") == "CMCC-502"
-                              and merged.get("sta_has_ip") is True
                               and bool(merged.get("sta_ip")))
-                attr_ok = bool(field_ok and consistent)
+                status = ((await call(sess, st, "network.status", {}, "c151ns"))
+                          .get("data", {}) or {})
+                w1 = time.time()
+                status_ok = (status.get("sta_has_ip") is True
+                             and bool(status.get("sta_ip")))
+                ip_match = bool(merged.get("sta_ip")) and \
+                    merged.get("sta_ip") == status.get("sta_ip")
+                attr_ok = bool(field_ok and consistent and status_ok and ip_match)
                 st.rec("C15-1 属性快照", attr_ok,
-                       "窗口 attributes=%d telemetry=%d fields=%s consistent=%s" %
-                       (n_attr, n_tel, field_ok, consistent),
+                       "窗口 attributes=%d telemetry=%d fields=%s consistent=%s "
+                       "status_ok=%s ip_match=%s" %
+                       (n_attr, n_tel, field_ok, consistent, status_ok, ip_match),
                        window={"w0": w0, "w1": w1, "start": "SUBACK 确认",
-                               "end": "采样结束"},
-                       sample={k: merged.get(k) for k in sorted(need)})
+                               "end": "network.status 核验"},
+                       sample={k: merged.get(k) for k in sorted(need)},
+                       status={"sta_has_ip": status.get("sta_has_ip"),
+                               "sta_ip": status.get("sta_ip")})
     finally:
         if tap is not None:
             tap.stop()
@@ -1205,6 +1221,9 @@ async def selftest():
             if c == "device.status":
                 return FakeResp({"ok": True, "data": {"device_id": "A",
                                                       "mqtt": {"connected": True}}})
+            if c == "network.status":
+                return FakeResp({"ok": True, "data": {"sta_has_ip": True,
+                                                      "sta_ip": "1.2.3.4"}})
             return await super().send_request(req, timeout, retries)
 
     st = RunState()
@@ -1265,6 +1284,9 @@ async def selftest():
             if c == "device.status":
                 return FakeResp({"ok": True, "data": {"device_id": "A",
                                                       "mqtt": {"connected": True}}})
+            if c == "network.status":
+                return FakeResp({"ok": True, "data": {"sta_has_ip": True,
+                                                      "sta_ip": "1.2.3.4"}})
             return await super().send_request(req, timeout, retries)
 
     st = RunState()
@@ -1298,6 +1320,9 @@ async def selftest():
             if c == "device.status":
                 return FakeResp({"ok": True, "data": {"device_id": "A",
                                                       "mqtt": {"connected": True}}})
+            if c == "network.status":
+                return FakeResp({"ok": True, "data": {"sta_has_ip": True,
+                                                      "sta_ip": "1.2.3.4"}})
             return await super().send_request(req, timeout, retries)
 
     st = RunState()
@@ -1418,6 +1443,13 @@ async def selftest():
         sys.modules.pop("cmd0215_v9_probe", None)
         sys.modules.pop("p0_acceptance", None)
     check("no-unpinned-p0-import", t30)
+
+    # T31 paho 1.x int / 2.x ReasonCode(.value) / None 兼容
+    class _ReasonCode:
+        value = 0
+
+    check("connack-reasoncode-int", rc_int(0) == 0 and rc_int(_ReasonCode()) == 0
+          and rc_int(None) == -1)
 
     print("SELFTEST:", "PASS" if ok_all else "FAIL", "(%d/%d)" % (n_pass, n_checks))
     return 0 if ok_all else 1

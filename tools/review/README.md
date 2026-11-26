@@ -6,10 +6,16 @@
 
 - 状态：**待审**。未在真机运行；`--selftest` 只用 mock 验证控制流，不需要凭据、
   不加载 `p0_acceptance`、不连接设备、不打开串口。
-- SHA-256 `88ede887142b5d385dd161088a95153dee4572812951f1e59b9079022a633ca0`，1445 行。
+- SHA-256 `dc9ab8b63dee527d6825d0d235cfee86bd1153b6a1d0881682ae51ada1eca978`，1477 行。
 - 修订（2026-11-25）：仅将 `--expect-fw/--expect-sha` 的帮助示例更新为当前生产基线
   `1.3-956afcd` / `c231c9501`；控制流、C2/C15 判据、串口/停止/恢复逻辑未变。
   原示例基线为 `1.3-1ff92db` / `32b10dfa5`（历史对照，不用于本次执行）。
+- 修订（2026-11-26，test-only）：`_on_connect` 改用 `rc_int()`，兼容 paho-mqtt 2.x
+  `ReasonCode.value` 与 1.x 整数 rc；新增 selftest T31，`--selftest` 31/31。
+  不涉及设备协议、生产代码、判据或配置写入范围。
+- 修订（2026-11-26，判据）：C15-1 attributes 断言改为实际发布字段
+  （net_mode/sta_ssid/sta_ip/uart_baudrate）；`sta_has_ip` 改由同一窗口
+  `network.status` 核验。原因：该字段仅在 telemetry，attributes 从 1ff92db 起即未发布。
 - 只修 v8 初审的 **BLOCKER-3（未锁定导入）**：
   - 删除顶部的 `from p0_acceptance import ConnectionLost`。该语句会在 SHA-256 校验
     之前从当前 `sys.path` 尝试导入任意同名模块，破坏依赖锁定边界。
@@ -17,7 +23,7 @@
     `load_p0_acceptance()`。
   - 新增 T30：在 `sys.path` 放置会写 sentinel 的同名 `p0_acceptance.py`，
     重新加载 harness 后断言 sentinel 未生成且 `ConnectionLost is None`。
-- 自测：`--selftest` 共 30 项，输出 `SELFTEST: PASS (30/30)`。
+- 自测：`--selftest` 共 31 项，输出 `SELFTEST: PASS (31/31)`。
 - **设备操作前的未决项**：`SERIAL_PORT` 默认 `/dev/ttyUSB0`，但 `2026-11-16` 授权
   文档记录的是 `/dev/ttyUSB1`（且该文档状态为 PENDING）。这不代表串口已获授权；
   任何设备运行前必须核对当前有效授权与实际 boot 后的串口映射，不得默认两者一致。
