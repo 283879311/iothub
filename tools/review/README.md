@@ -282,3 +282,5 @@
   含 `busy_gate`、`mapped_busy_source`、job 与 active operation 快照；
   不新增 BLE 命令、不改变配置写入范围。
 - 设备使用需单独授权；tag、镜像 SHA-256 与证据一并归档。
+- host `tests/cmd_net_job` 增加 D01–D05：4 个最大长度 operation、文本截断、
+  计数截断、终态 job_op、无效 job_op；`truncated` 与 `text_truncated` 分开记录。

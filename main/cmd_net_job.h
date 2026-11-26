@@ -198,6 +198,11 @@ typedef struct {
 } app_c15_busy_event_t;
 
 void app_c15_busy_diag_capture_locked(app_c15_busy_diag_t *out);
+uint32_t app_c15_busy_diag_format_ops(const app_c15_busy_diag_t *diag,
+                                      char *buf, size_t buflen,
+                                      uint32_t *logged, bool *truncated);
+void app_c15_busy_diag_format_job(const app_c15_busy_diag_t *diag,
+                                  char *buf, size_t buflen);
 void app_c15_busy_diag_capture(app_c15_busy_diag_t *out);
 void app_c15_busy_diag_begin_snapshot(app_c15_begin_diag_t *out);
 void app_c15_busy_diag_log(const app_c15_busy_diag_t *diag,

@@ -1,7 +1,7 @@
 CC ?= cc
 CFLAGS ?= -std=c11 -O2 -g -Wall -Wextra -Werror -pthread
 CPPFLAGS ?= -Istub -I../operation_host -I../operation_host/stub -I../../main
-DEFS := -DAPP_CMD_NET_JOB_TEST=1
+DEFS := -DAPP_CMD_NET_JOB_TEST=1 -DAPP_C15_BUSY_DIAG=1
 
 BIN := cmd_net_job_test
 BUILD := build

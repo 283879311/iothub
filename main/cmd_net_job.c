@@ -977,26 +977,83 @@ void app_c15_busy_diag_begin_snapshot(app_c15_begin_diag_t *out)
     }
 }
 
+uint32_t app_c15_busy_diag_format_ops(const app_c15_busy_diag_t *diag,
+                                      char *buf, size_t buflen,
+                                      uint32_t *logged, bool *truncated)
+{
+    uint32_t count = 0;
+    size_t off = 0;
+    bool text_trunc = false;
+
+    if (logged != NULL) {
+        *logged = 0;
+    }
+    if (truncated != NULL) {
+        *truncated = true;
+    }
+    if (diag == NULL || buf == NULL || buflen == 0) {
+        return 0;
+    }
+    buf[0] = '\0';
+    for (uint32_t i = 0; i < diag->ops.printed; i++) {
+        const app_operation_diag_op_t *o = &diag->ops.ops[i];
+        int w = snprintf(buf + off, buflen - off,
+                         "%s%s/{state=%u,run=%d,gen=%lu,cleanup=%u}",
+                         i == 0 ? "" : ",", o->id,
+                         (unsigned)o->state, (int)o->running,
+                         (unsigned long)o->generation,
+                         (unsigned)o->cleanup_state);
+        if (w < 0 || (size_t)w >= buflen - off) {
+            text_trunc = true;
+            break;
+        }
+        off += (size_t)w;
+        count++;
+    }
+    if (logged != NULL) {
+        *logged = count;
+    }
+    if (truncated != NULL) {
+        *truncated = text_trunc || diag->ops.truncated;
+    }
+    return count;
+}
+
+void app_c15_busy_diag_format_job(const app_c15_busy_diag_t *diag,
+                                  char *buf, size_t buflen)
+{
+    if (buf == NULL || buflen == 0) {
+        return;
+    }
+    if (diag == NULL || !diag->job_op_valid) {
+        snprintf(buf, buflen,
+                 "job_op_id=- job_op_state=- job_op_running=- "
+                 "job_op_gen=- job_op_cleanup=-");
+        return;
+    }
+    snprintf(buf, buflen,
+             "job_op_id=%s job_op_state=%u job_op_running=%d "
+             "job_op_gen=%lu job_op_cleanup=%u",
+             diag->ops.job_op.id, (unsigned)diag->ops.job_op.state,
+             (int)diag->ops.job_op.running,
+             (unsigned long)diag->ops.job_op.generation,
+             (unsigned)diag->ops.job_op.cleanup_state);
+}
+
 void app_c15_busy_diag_log(const app_c15_busy_diag_t *diag,
                            const app_c15_busy_event_t *event,
                            const app_c15_begin_diag_t *begin)
 {
-    char ops[240];
-    size_t off = 0;
+    char ops[512];
+    char job[160];
+    uint32_t logged = 0;
+    bool text_trunc = false;
 
     if (diag == NULL || event == NULL) {
         return;
     }
-    ops[0] = '\0';
-    for (uint32_t i = 0; i < diag->ops.printed && off < sizeof(ops); i++) {
-        const app_operation_diag_op_t *o = &diag->ops.ops[i];
-        off += (size_t)snprintf(ops + off, sizeof(ops) - off,
-                                "%s%s/{state=%u,run=%d,gen=%lu,cleanup=%u}",
-                                i == 0 ? "" : ",", o->id,
-                                (unsigned)o->state, (int)o->running,
-                                (unsigned long)o->generation,
-                                (unsigned)o->cleanup_state);
-    }
+    app_c15_busy_diag_format_ops(diag, ops, sizeof(ops), &logged, &text_trunc);
+    app_c15_busy_diag_format_job(diag, job, sizeof(job));
     int br = event->begin_result;
     int jab = -1, sta = -1, serr = -1;
     if (begin != NULL) {
@@ -1010,23 +1067,24 @@ void app_c15_busy_diag_log(const app_c15_busy_diag_t *diag,
              "C15_BUSY_DIAG tag=%s branch=%s response=%s busy_observed=%d "
              "busy_gate=%d begin_failure=%d mapped=%s begin_result=%d "
              "job_active_before=%d start_attempted=%d start_err=%d "
-             "job_active=%d job_op_nonnull=%d job_op_valid=%d job_id=%s "
-             "job_state=%u job_running=%d job_gen=%lu active_ops=%lu printed=%lu "
-             "truncated=%d ops=[%s] busy_us=%lld snapshot_us=%lld delay_ms=%lld "
-             "job_locked=%d ops_locked=%d cross_atomic=%d same_lock=%d phase=%s",
+             "job_active=%d job_op_nonnull=%d job_op_valid=%d job_id=%s %s "
+             "active_ops=%lu printed=%lu logged=%lu truncated=%d "
+             "text_truncated=%d ops=[%s] busy_us=%lld snapshot_us=%lld "
+             "delay_ms=%lld job_locked=%d ops_locked=%d cross_atomic=%d "
+             "same_lock=%d phase=%s",
              APP_C15_BUSY_DIAG_TAG, event->branch, event->response_code,
              (int)event->busy_observed, (int)event->busy_gate,
              (int)event->begin_failure, event->mapped_busy_source, br,
              jab, sta, serr, (int)diag->job_active, (int)diag->job_op_nonnull,
-             (int)diag->job_op_valid, diag->job_operation_id,
-             (unsigned)diag->job_op_state, (int)diag->job_op_running,
-             (unsigned long)diag->job_op_generation,
+             (int)diag->job_op_valid, diag->job_operation_id, job,
              (unsigned long)diag->ops.active_ops,
-             (unsigned long)diag->ops.printed, (int)diag->ops.truncated, ops,
+             (unsigned long)diag->ops.printed, (unsigned long)logged,
+             (int)(diag->ops.truncated || text_trunc), (int)text_trunc, ops,
              (long long)event->busy_observed_us,
              (long long)diag->snapshot_us, delay_ms,
              (int)diag->job_snapshot_locked, (int)diag->ops_snapshot_locked,
              (int)diag->cross_domain_atomic, (int)diag->same_lock_as_decision,
              diag->snapshot_phase != NULL ? diag->snapshot_phase : "unknown");
 }
+
 #endif

@@ -1040,6 +1040,77 @@ typedef struct {
     bool (*fn)(void);
 } test_case_t;
 
+
+#ifdef APP_C15_BUSY_DIAG
+static int diag_format_tests(void)
+{
+    app_c15_busy_diag_t d;
+    char buf[512];
+    char job[160];
+    uint32_t logged = 0;
+    bool trunc = false;
+    int failed = 0;
+
+    memset(&d, 0, sizeof(d));
+    d.ops.printed = 4;
+    d.ops.active_ops = 4;
+    for (int i = 0; i < 4; i++) {
+        snprintf(d.ops.ops[i].id, sizeof(d.ops.ops[i].id),
+                 "op-ABCDEFGHIJKLMNOP");
+        d.ops.ops[i].state = APP_OP_CONNECTING;
+        d.ops.ops[i].running = true;
+        d.ops.ops[i].generation = (uint32_t)(100 + i);
+        d.ops.ops[i].cleanup_state = APP_OPERATION_CLEANUP_RUNNING;
+    }
+    app_c15_busy_diag_format_ops(&d, buf, sizeof(buf), &logged, &trunc);
+    if (logged != 4 || trunc || strstr(buf, "op-ABCDEFGHIJKLMNOP") == NULL) {
+        printf("D01 full-list FAIL\n");
+        failed++;
+    } else {
+        printf("D01 full-list PASS\n");
+    }
+    app_c15_busy_diag_format_ops(&d, buf, 40, &logged, &trunc);
+    if (!trunc || logged == 4) {
+        printf("D02 text-truncation FAIL\n");
+        failed++;
+    } else {
+        printf("D02 text-truncation PASS\n");
+    }
+    d.ops.truncated = true;
+    app_c15_busy_diag_format_ops(&d, buf, sizeof(buf), &logged, &trunc);
+    if (!trunc) {
+        printf("D03 count-truncation FAIL\n");
+        failed++;
+    } else {
+        printf("D03 count-truncation PASS\n");
+    }
+    d.ops.truncated = false;
+    d.job_op_valid = true;
+    snprintf(d.ops.job_op.id, sizeof(d.ops.job_op.id), "op-TERMINAL0000000");
+    d.ops.job_op.state = APP_OP_FAILED;
+    d.ops.job_op.running = false;
+    d.ops.job_op.generation = 7;
+    d.ops.job_op.cleanup_state = APP_OPERATION_CLEANUP_OK;
+    app_c15_busy_diag_format_job(&d, job, sizeof(job));
+    if (strstr(job, "job_op_id=op-TERMINAL0000000") == NULL
+        || strstr(job, "job_op_cleanup=2") == NULL) {
+        printf("D04 job-op-terminal FAIL\n");
+        failed++;
+    } else {
+        printf("D04 job-op-terminal PASS\n");
+    }
+    d.job_op_valid = false;
+    app_c15_busy_diag_format_job(&d, job, sizeof(job));
+    if (strstr(job, "job_op_id=-") == NULL) {
+        printf("D05 job-op-invalid FAIL\n");
+        failed++;
+    } else {
+        printf("D05 job-op-invalid PASS\n");
+    }
+    return failed;
+}
+#endif
+
 int main(void)
 {
     static const test_case_t cases[] = {
@@ -1079,6 +1150,9 @@ int main(void)
             failed++;
         }
     }
+#ifdef APP_C15_BUSY_DIAG
+    failed += diag_format_tests();
+#endif
     printf("summary: %d failed\n", failed);
     return failed == 0 ? 0 : 1;
 }
