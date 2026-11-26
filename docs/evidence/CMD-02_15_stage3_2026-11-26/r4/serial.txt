@@ -1,0 +1,857 @@
+I (37964282) app_bt: conn params: status=531 int=45ms latency=0 I (42772482) mqtt: 3s boost: re-publish attributes + state to ensure liveness
+I (42772602) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=27969 total_published=4354
+I (42772752) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=32567 total_published=4354
+W (42772762) app_bt: adv flag desync: flag=1 host=0 last_writer=restart (treat host as truth)
+I (42772882) bt_gatts: central connected (conn=0) peer_ota=<central-ble-mac> type=0 peer_id=<central-ble-mac> type=0
+I (42772882) bt_gatts: conn params policy: itvl=45ms lat=0 sup=420ms -> out of policy, requesting update
+I (42772892) NimBLE: GAP procedure initiated: 
+I (42772892) NimBLE: connection parameter update; conn_handle=0 itvl_min=24 itvl_max=40 latency=0 supervision_timeout=600 min_ce_len=0 max_ce_len=0
+I (42772902) NimBLE: 
+
+I (42773012) bt_gatts: mtu negotiated: 256 (payload 253)
+I (42773472) wifi: ble fast retry: link up, timer reset
+I (42774052) bt_gatts: cmd TX subscribe on (handle=10)
+I (42774322) bt_gatts: cmd RX write: 20 byte(s) last=0x72 newline=0
+I (42774452) bt_gatts: cmd RX write: 20 byte(s) last=0x61 newline=0
+I (42774642) bt_gatts: cmd RX write: 20 byte(s) last=0x22 newline=0
+I (42774722) bt_gatts: cmd RX write: 20 byte(s) last=0x70 newline=0
+I (42774812) bt_gatts: cmd RX write: 20 byte(s) last=0x0A newline=1
+I (42774812) ble_cmd: cmd line queued (99 bytes)
+I (42774822) ble_cmd: rx v1 cmd=auth.login id=login-1
+I (42774822) ble_cmd: ble cmd login ok, token issued (ttl=600s)
+I (42774822) NimBLE: GATT procedure initiated: notify; 
+I (42774832) NimBLE: att_handle=10
+
+I (42775132) bt_gatts: cmd RX write: 20 byte(s) last=0x6E newline=0
+I (42775222) bt_gatts: cmd RX write: 20 byte(s) last=0x63 newline=0
+I (42775402) bt_gatts: cmd RX write: 20 byte(s) last=0x2C newline=0
+I (42775492) bt_gatts: cmd RX write: 20 byte(s) last=0x34 newline=0
+I (42775582) bt_gatts: cmd RX write: 20 byte(s) last=0x37 newline=0
+I (42775672) bt_gatts: cmd RX write: 4 byte(s) last=0x0A newline=1
+I (42775672) ble_cmd: cmd line queued (103 bytes)
+I (42775672) ble_cmd: rx v1 cmd=device.status id=pre
+I (42775692) NimBLE: GATT procedure initiated: notify; 
+I (42775692) NimBLE: att_handle=10
+
+I (42775722) NimBLE: GATT procedure initiated: notify; 
+I (42775722) NimBLE: att_handle=10
+
+I (42775742) NimBLE: GATT procedure initiated: notify; 
+I (42775742) NimBLE: att_handle=10
+
+I (42775762) NimBLE: GATT procedure initiated: notify; 
+I (42775762) NimBLE: att_handle=10
+
+I (42775782) NimBLE: GATT procedure initiated: notify; 
+I (42775782) NimBLE: att_handle=10
+
+I (42775802) NimBLE: GATT procedure initiated: notify; 
+I (42775802) NimBLE: att_handle=10
+
+I (42776032) bt_gatts: cmd RX write: 20 byte(s) last=0x6F newline=0
+I (42776122) bt_gatts: cmd RX write: 20 byte(s) last=0x77 newline=0
+I (42776212) bt_gatts: cmd RX write: 20 byte(s) last=0x67 newline=0
+I (42776302) bt_gatts: cmd RX write: 20 byte(s) last=0x65 newline=0
+I (42776392) bt_gatts: cmd RX write: 20 byte(s) last=0x61 newline=0
+I (42776522) bt_gatts: cmd RX write: 20 byte(s) last=0x2D newline=0
+I (42776662) bt_gatts: cmd RX write: 20 byte(s) last=0x22 newline=0
+I (42776752) bt_gatts: cmd RX write: 20 byte(s) last=0x43 newline=0
+I (42776932) bt_gatts: cmd RX write: 17 byte(s) last=0x0A newline=1
+I (42776932) ble_cmd: cmd line queued (176 bytes)
+I (42776932) ble_cmd: rx v1 cmd=network.tryconnect id=c21a
+I (42776932) mqtt: restart deferred (max 15000ms)
+I (42776942) operation: accepted op-F519F7DB44FC640A owner=1 ttl=45000ms got_ip_ttl=300000ms
+I (42776952) operation: run op-F519F7DB44FC640A -> connecting
+I (42776952) cmd: async tryconnect ssid='__ble_selftest_absent__' op=op-F519F7DB44FC640A
+I (42776952) NimBLE: GATT procedure initiated: notify; 
+I (42776962) wifi: op_owner: NONE -> TRYX by tryconnect_begin waiter=0 requested=0
+I (42776972) NimBLE: att_handle=10
+
+I (42777292) bt_gatts: cmd RX write: 20 byte(s) last=0x6F newline=0
+I (42777422) bt_gatts: cmd RX write: 20 byte(s) last=0x77 newline=0
+I (42777612) bt_gatts: cmd RX write: 20 byte(s) last=0x67 newline=0
+I (42777692) bt_gatts: cmd RX write: 20 byte(s) last=0x65 newline=0
+I (42777832) bt_gatts: cmd RX write: 20 byte(s) last=0x61 newline=0
+I (42777922) bt_gatts: cmd RX write: 20 byte(s) last=0x2D newline=0
+I (42778102) bt_gatts: cmd RX write: 20 byte(s) last=0x22 newline=0
+I (42778192) bt_gatts: cmd RX write: 20 byte(s) last=0x43 newline=0
+I (42778372) bt_gatts: cmd RX write: 17 byte(s) last=0x0A newline=1
+I (42778372) ble_cmd: cmd line queued (176 bytes)
+I (42778372) ble_cmd: rx v1 cmd=network.tryconnect id=c21b
+I (42778372) NimBLE: GATT procedure initiated: notify; 
+I (42778382) NimBLE: att_handle=10
+
+I (42778732) bt_gatts: cmd RX write: 20 byte(s) last=0x39 newline=0
+I (42778872) bt_gatts: cmd RX write: 20 byte(s) last=0x30 newline=0
+I (42779002) bt_gatts: cmd RX write: 20 byte(s) last=0x67 newline=0
+I (42779092) bt_gatts: cmd RX write: 20 byte(s) last=0x69 newline=0
+I (42779222) bt_gatts: cmd RX write: 20 byte(s) last=0x34 newline=0
+I (42779362) bt_gatts: cmd RX write: 20 byte(s) last=0x43 newline=0
+I (42779542) bt_gatts: cmd RX write: 20 byte(s) last=0x42 newline=0
+I (42779632) bt_gatts: cmd RX write: 14 byte(s) last=0x0A newline=1
+I (42779632) ble_cmd: cmd line queued (153 bytes)
+I (42779632) ble_cmd: rx v1 cmd=operation.get id=term1795656192016
+I (42779642) NimBLE: GATT procedure initiated: notify; 
+I (42779642) NimBLE: att_handle=10
+
+I (42779662) NimBLE: GATT procedure initiated: notify; 
+I (42779662) NimBLE: att_handle=10
+
+I (42780122) bt_gatts: cmd RX write: 20 byte(s) last=0x39 newline=0
+I (42780262) bt_gatts: cmd RX write: 20 byte(s) last=0x30 newline=0
+I (42780352) bt_gatts: cmd RX write: 20 byte(s) last=0x67 newline=0
+I (42780532) bt_gatts: cmd RX write: 20 byte(s) last=0x69 newline=0
+I (42780662) bt_gatts: cmd RX write: 20 byte(s) last=0x34 newline=0
+I (42780802) bt_gatts: cmd RX write: 20 byte(s) last=0x43 newline=0
+I (42780982) bt_gatts: cmd RX write: 20 byte(s) last=0x42 newline=0
+I (42781162) bt_gatts: cmd RX write: 14 byte(s) last=0x0A newline=1
+I (42781162) ble_cmd: cmd line queued (153 bytes)
+I (42781162) ble_cmd: rx v1 cmd=operation.get id=term1795656193712
+I (42781172) NimBLE: GATT procedure initiated: notify; 
+I (42781172) NimBLE: att_handle=10
+
+I (42781192) NimBLE: GATT procedure initiated: notify; 
+I (42781192) NimBLE: att_handle=10
+
+I (42781652) bt_gatts: cmd RX write: 20 byte(s) last=0x39 newline=0
+I (42781742) bt_gatts: cmd RX write: 20 byte(s) last=0x30 newline=0
+W (42781812) wifi: tryconnect: ssid '__ble_selftest_absent__' not in scan results
+I (42781812) wifi: op_owner: TRYX -> NONE by tryconnect_release waiter=0 requested=0
+I (42781822) wifi: auto_connect: resume by tryconnect_finish
+I (42781822) wifi: auto_connect: scheduled caller=tryconnect_finish delay=400ms owner=NONE op=op-F519F7DB44FC640A gen=13
+I (42781832) mqtt: defer_end site=op_set_state/terminal depth_before=1
+I (42781842) mqtt: restart defer end pending=0
+I (42781872) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=20646 total_published=4355
+I (42781882) bt_gatts: cmd RX write: 20 byte(s) last=0x67 newline=0
+I (42782022) bt_gatts: cmd RX write: 20 byte(s) last=0x69 newline=0
+I (42782152) bt_gatts: cmd RX write: 20 byte(s) last=0x34 newline=0
+I (42782232) wifi: auto_connect: task run caller=tryconnect_finish op=op-F519F7DB44FC640A gen=13 delay_actual=402ms
+I (42782232) wifi: op_owner: NONE -> AUTO by auto_connect waiter=0 requested=0
+I (42782242) bt_gatts: cmd RX write: 20 byte(s) last=0x43 newline=0
+I (42782422) bt_gatts: cmd RX write: 20 byte(s) last=0x42 newline=0
+I (42782552) bt_gatts: cmd RX write: 14 byte(s) last=0x0A newline=1
+I (42782552) ble_cmd: cmd line queued (153 bytes)
+I (42782552) ble_cmd: rx v1 cmd=operation.get id=term1795656195157
+I (42782562) NimBLE: GATT procedure initiated: notify; 
+I (42782562) NimBLE: att_handle=10
+
+I (42782592) NimBLE: GATT procedure initiated: notify; 
+I (42782592) NimBLE: att_handle=10
+
+I (42782912) bt_gatts: cmd RX write: 20 byte(s) last=0x6F newline=0
+I (42783052) bt_gatts: cmd RX write: 20 byte(s) last=0x77 newline=0
+I (42783142) bt_gatts: cmd RX write: 20 byte(s) last=0x67 newline=0
+I (42783322) bt_gatts: cmd RX write: 20 byte(s) last=0x65 newline=0
+I (42783502) bt_gatts: cmd RX write: 20 byte(s) last=0x61 newline=0
+I (42783682) bt_gatts: cmd RX write: 20 byte(s) last=0x2D newline=0
+I (42783862) bt_gatts: cmd RX write: 20 byte(s) last=0x22 newline=0
+I (42784042) bt_gatts: cmd RX write: 20 byte(s) last=0x43 newline=0
+I (42784172) bt_gatts: cmd RX write: 17 byte(s) last=0x0A newline=1
+I (42784172) ble_cmd: cmd line queued (176 bytes)
+I (42784172) ble_cmd: rx v1 cmd=network.tryconnect id=c22a
+I (42784182) mqtt: restart deferred (max 15000ms)
+I (42784182) operation: accepted op-4710E483EA3DA68B owner=1 ttl=45000ms got_ip_ttl=300000ms
+I (42784192) operation: run op-4710E483EA3DA68B -> connecting
+I (42784192) NimBLE: GATT procedure initiated: notify; 
+I (42784202) cmd: async tryconnect ssid='__ble_selftest_absent__' op=op-4710E483EA3DA68B
+I (42784202) NimBLE: att_handle=10
+
+I (42784532) bt_gatts: cmd RX write: 20 byte(s) last=0x69 newline=0
+I (42784622) bt_gatts: cmd RX write: 20 byte(s) last=0x74 newline=0
+I (42784812) bt_gatts: cmd RX write: 20 byte(s) last=0x3A newline=0
+I (42784892) bt_gatts: cmd RX write: 20 byte(s) last=0x2D newline=0
+I (42785072) bt_gatts: cmd RX write: 20 byte(s) last=0x22 newline=0
+I (42785212) bt_gatts: cmd RX write: 20 byte(s) last=0x44 newline=0
+I (42785392) bt_gatts: cmd RX write: 20 byte(s) last=0x44 newline=0
+I (42785522) bt_gatts: cmd RX write: 3 byte(s) last=0x0A newline=1
+I (42785522) ble_cmd: cmd line queued (142 bytes)
+I (42785522) ble_cmd: rx v1 cmd=network.cancel id=c22c1
+W (42785532) cmd: rescue=restore_persistent op=op-4710E483EA3DA68B (cleanup without commit)
+I (42785532) cmd: CLEANUP_DONE_OK op=op-4710E483EA3DA68B
+I (42785542) mqtt: defer_end site=op_finish/terminal depth_before=1
+I (42785552) mqtt: restart defer end pending=0
+I (42785552) operation: finish op-4710E483EA3DA68B gen=4 -> cancelled/cancelled outcome=0
+I (42785562) NimBLE: GATT procedure initiated: notify; 
+I (42785562) NimBLE: att_handle=10
+
+I (42785842) bt_gatts: cmd RX write: 20 byte(s) last=0x6F newline=0
+I (42786022) bt_gatts: cmd RX write: 20 byte(s) last=0x72 newline=0
+I (42786112) bt_gatts: cmd RX write: 20 byte(s) last=0x22 newline=0
+I (42786242) bt_gatts: cmd RX write: 20 byte(s) last=0x37 newline=0
+I (42786332) bt_gatts: cmd RX write: 20 byte(s) last=0x6F newline=0
+I (42786512) bt_gatts: cmd RX write: 20 byte(s) last=0x46 newline=0
+I (42786652) bt_gatts: cmd RX write: 20 byte(s) last=0x7D newline=0
+I (42786652) ble_cmd: cmd frame complete without newline (140 bytes)
+I (42786652) ble_cmd: cmd line queued (140 bytes)
+I (42786652) ble_cmd: rx v1 cmd=operation.get id=c22g
+I (42786662) NimBLE: GATT procedure initiated: notify; 
+I (42786662) NimBLE: att_handle=10
+
+I (42786692) NimBLE: GATT procedure initiated: notify; 
+I (42786692) NimBLE: att_handle=10
+
+I (42786782) bt_gatts: cmd RX write: 1 byte(s) last=0x0A newline=1
+I (42787082) wifi:state: run -> init (0x0)
+I (42787082) wifi:pm stop, total sleep time: 4333488179 us / 4852171868 us
+
+I (42787082) wifi:<ba-del>idx:1, tid:0
+I (42787082) wifi:<ba-del>idx:0, tid:6
+I (42787092) wifi: auto_connect: selected saved profile index=0 ssid=<wifi-ssid> pwd_len=10
+I (42787092) wifi: op_owner: AUTO -> CLEANUP by auto_connect waiter=1 requested=0
+W (42787102) wifi: STA disconnected: reason=8(ASSOC_LEAVE) retries=0 has_sta=1 profile=0
+I (42787112) wifi: STA down with BLE connected: event-chain retry suppressed; 120s formal-only monitor owns recovery
+I (42787112) wifi:I (42787122) mqtt: STA disconnected, stopping MQTT client
+state: init -> auth (0xb0)
+E (42787102) transport_base: tcp_read error, errno=Software caused connection abort
+I (42787132) wifi:E (42787142) mqtt_client: esp_mqtt_handle_transport_read_error: transport_read() error: errno=113
+state: auth -> assoc (0x0)
+E (42787152) mqtt: MQTT_EVENT_ERROR: type=1 connect_rc=0
+I (42787132) mqtt: Restart task exiting on stop event
+E (42787152) mqtt_client: mqtt_process_receive: mqtt_message_receive() returned -2
+I (42787162) wifi:state: assoc -> run (0x10)
+W (42787182) mqtt: MQTT_EVENT_DISCONNECTED
+I (42787192) mqtt: Telemetry task exiting on stop request
+I (42787192) mqtt: Boost task exiting on stop event
+I (42787202) wifi:connected with <wifi-ssid>, aid = 112, channel 8, BW20, bssid = <ap-bssid>
+I (42787202) wifi:security: WPA2-PSK, phy: bgn, rssi: -58, cipher(pairwise:0x3, group:0x1), pmf:0
+I (42787212) wifi:pm start, type: 1
+
+I (42787282) bt_gatts: cmd RX write: 20 byte(s) last=0x69 newline=0
+I (42787282) wifi:AP's beacon interval = 102400 us, DTIM period = 1
+I (42787352) wifi: apply_cfg: ssid='<wifi-ssid>' pwd_len=10 threshold=2(WPA) pmf(capable=1,required=0) scan=0
+I (42787352) wifi: apply_cfg: STA-only sta_pwd_len=10 static=0
+I (42787352) wifi:state: run -> init (0x0)
+I (42787362) wifi:pm stop, total sleep time: 19594 us / 143824 us
+
+I (42787462) bt_gatts: cmd RX write: 20 byte(s) last=0x74 newline=0
+I (42787472) wifi: ble fast retry: first attempt in 120000ms (formal SSID only, no scan)
+I (42787482) wifi:flush txq
+I (42787482) wifi:stop sw txq
+I (42787482) wifi:lmac stop hw txq
+I (42787482) wifi: apply_await_start gen=5
+I (42787482) wifi:mode : sta (<device-mac>)
+I (42787482) wifi:enable tsf
+I (42787602) bt_gatts: cmd RX write: 20 byte(s) last=0x3A newline=0
+W (42787632) wifi:Haven't to connect to a suitable AP now!
+W (42787632) wifi: apply_start_probe gen=5 t=141ms driver_started=1
+W (42787632) wifi: auto_connect: schedule refused caller=apply_start_probe reason=owner_busy op=- gen=14
+W (42787642) wifi: probe first schedule deferred to monitor (gen=5)
+I (42787642) wifi: apply_cfg: started (gen=5)
+I (42787652) wifi: net_config_state=dhcp
+I (42787652) wifi: cleanup complete op=op-4710E483EA3DA68B attempts=1
+I (42787662) wifi: op_owner: NONE -> TRYX by tryconnect_begin waiter=0 requested=0
+I (42787732) bt_gatts: cmd RX write: 20 byte(s) last=0x2D newline=0
+I (42787862) bt_gatts: cmd RX write: 20 byte(s) last=0x22 newline=0
+I (42788002) bt_gatts: cmd RX write: 20 byte(s) last=0x44 newline=0
+I (42788092) bt_gatts: cmd RX write: 20 byte(s) last=0x44 newline=0
+I (42788362) bt_gatts: cmd RX write: 3 byte(s) last=0x0A newline=1
+I (42788362) ble_cmd: cmd line queued (142 bytes)
+I (42788362) ble_cmd: rx v1 cmd=network.cancel id=c22c2
+I (42788362) NimBLE: GATT procedure initiated: notify; 
+I (42788372) NimBLE: att_handle=10
+
+I (42788762) bt_gatts: cmd RX write: 20 byte(s) last=0x6F newline=0
+I (42788852) bt_gatts: cmd RX write: 20 byte(s) last=0x77 newline=0
+I (42789032) bt_gatts: cmd RX write: 20 byte(s) last=0x67 newline=0
+I (42789262) bt_gatts: cmd RX write: 20 byte(s) last=0x65 newline=0
+I (42789352) bt_gatts: cmd RX write: 20 byte(s) last=0x61 newline=0
+W (42789472) wifi: auto_connect: schedule refused caller=monitor_startup reason=suspended op=- gen=14
+I (42789532) bt_gatts: cmd RX write: 20 byte(s) last=0x2D newline=0
+I (42789662) bt_gatts: cmd RX write: 20 byte(s) last=0x22 newline=0
+W (42789682) wifi:Haven't to connect to a suitable AP now!
+I (42789682) wifi: tryconnect: old disconnect consumed reason=8(ASSOC_LEAVE)
+I (42789682) mqtt: STA disconnected, stopping MQTT client
+I (42789692) wifi: sta_start_evt gen=5 await=0 consumed=5 completed=5 probed=1
+W (42789692) wifi: sta_start_evt gen=5 ignored (probe completed this gen)
+I (42789802) bt_gatts: cmd RX write: 20 byte(s) last=0x43 newline=0
+I (42789982) bt_gatts: cmd RX write: 17 byte(s) last=0x0A newline=1
+I (42789982) ble_cmd: cmd line queued (176 bytes)
+I (42789982) ble_cmd: rx v1 cmd=network.tryconnect id=c23a
+I (42789982) mqtt: restart deferred (max 15000ms)
+I (42789992) operation: accepted op-77CED7B4EA3D0A44 owner=1 ttl=45000ms got_ip_ttl=300000ms
+I (42790002) NimBLE: GATT procedure initiated: notify; 
+I (42790002) NimBLE: att_handle=10
+
+I (42790292) bt_gatts: cmd RX write: 20 byte(s) last=0x69 newline=0
+I (42790472) bt_gatts: cmd RX write: 20 byte(s) last=0x74 newline=0
+I (42790562) bt_gatts: cmd RX write: 20 byte(s) last=0x3A newline=0
+I (42790702) bt_gatts: cmd RX write: 20 byte(s) last=0x42 newline=0
+I (42790792) bt_gatts: cmd RX write: 20 byte(s) last=0x37 newline=0
+I (42790972) bt_gatts: cmd RX write: 7 byte(s) last=0x0A newline=1
+I (42790972) ble_cmd: cmd line queued (106 bytes)
+I (42790972) ble_cmd: rx v1 cmd=network.status id=c23s0
+I (42790972) NimBLE: GATT procedure initiated: notify; 
+I (42790982) NimBLE: att_handle=10
+
+I (42791012) NimBLE: GATT procedure initiated: notify; 
+I (42791012) NimBLE: att_handle=10
+
+I (42791032) NimBLE: GATT procedure initiated: notify; 
+I (42791032) NimBLE: att_handle=10
+
+I (42791422) bt_gatts: cmd RX write: 20 byte(s) last=0x69 newline=0
+W (42791472) wifi: auto_connect: schedule refused caller=monitor_startup reason=suspended op=- gen=14
+I (42791512) bt_gatts: cmd RX write: 20 byte(s) last=0x74 newline=0
+I (42791692) bt_gatts: cmd RX write: 20 byte(s) last=0x3A newline=0
+I (42791782) bt_gatts: cmd RX write: 20 byte(s) last=0x42 newline=0
+I (42791922) bt_gatts: cmd RX write: 20 byte(s) last=0x37 newline=0
+I (42792002) bt_gatts: cmd RX write: 7 byte(s) last=0x0A newline=1
+I (42792002) ble_cmd: cmd line queued (106 bytes)
+I (42792002) ble_cmd: rx v1 cmd=network.status id=c23s1
+I (42792012) NimBLE: GATT procedure initiated: notify; 
+I (42792012) NimBLE: att_handle=10
+
+I (42792042) NimBLE: GATT procedure initiated: notify; 
+I (42792042) NimBLE: att_handle=10
+
+I (42792062) NimBLE: GATT procedure initiated: notify; 
+I (42792062) NimBLE: att_handle=10
+
+W (42792502) wifi: tryconnect: ssid '__ble_selftest_absent__' not in scan results
+I (42792512) wifi: op_owner: TRYX -> NONE by tryconnect_release waiter=0 requested=0
+I (42792512) wifi: auto_connect: resume by tryconnect_finish
+I (42792512) wifi: auto_connect: scheduled caller=tryconnect_finish delay=400ms owner=NONE op=- gen=14
+W (42792522) cmd: async tryconnect op=op-4710E483EA3DA68B stale after wait (gen=4 state=7), no job touch
+I (42792532) operation: run op-77CED7B4EA3D0A44 -> connecting
+I (42792542) cmd: async tryconnect ssid='__ble_selftest_absent__' op=op-77CED7B4EA3D0A44
+I (42792542) bt_gatts: cmd RX write: 20 byte(s) last=0x69 newline=0
+I (42792552) wifi: op_owner: NONE -> TRYX by tryconnect_begin waiter=0 requested=0
+I (42792632) bt_gatts: cmd RX write: 20 byte(s) last=0x74 newline=0
+I (42792732) bt_gatts: cmd RX write: 20 byte(s) last=0x3A newline=0
+I (42792812) bt_gatts: cmd RX write: 20 byte(s) last=0x42 newline=0
+I (42792902) bt_gatts: cmd RX write: 20 byte(s) last=0x37 newline=0
+I (42792922) wifi: auto_connect: task run caller=tryconnect_finish op=- gen=14 delay_actual=401ms
+W (42792922) wifi: auto_connect: schedule refused caller=tryconnect_finish reason=owner_busy op=- gen=14
+I (42793082) bt_gatts: cmd RX write: 7 byte(s) last=0x0A newline=1
+I (42793082) ble_cmd: cmd line queued (106 bytes)
+I (42793082) ble_cmd: rx v1 cmd=network.status id=c23s2
+I (42793092) NimBLE: GATT procedure initiated: notify; 
+I (42793092) NimBLE: att_handle=10
+
+I (42793122) NimBLE: GATT procedure initiated: notify; 
+I (42793122) NimBLE: att_handle=10
+
+I (42793142) NimBLE: GATT procedure initiated: notify; 
+I (42793142) NimBLE: att_handle=10
+
+W (42793472) wifi: auto_connect: schedule refused caller=monitor_startup reason=suspended op=op-77CED7B4EA3D0A44 gen=14
+I (42793622) bt_gatts: cmd RX write: 20 byte(s) last=0x69 newline=0
+I (42793712) bt_gatts: cmd RX write: 20 byte(s) last=0x74 newline=0
+I (42793852) bt_gatts: cmd RX write: 20 byte(s) last=0x3A newline=0
+I (42793982) bt_gatts: cmd RX write: 20 byte(s) last=0x42 newline=0
+I (42794122) bt_gatts: cmd RX write: 20 byte(s) last=0x37 newline=0
+I (42794302) bt_gatts: cmd RX write: 7 byte(s) last=0x0A newline=1
+I (42794302) ble_cmd: cmd line queued (106 bytes)
+I (42794302) ble_cmd: rx v1 cmd=network.status id=c23s3
+I (42794302) NimBLE: GATT procedure initiated: notify; 
+I (42794312) NimBLE: att_handle=10
+
+I (42794332) NimBLE: GATT procedure initiated: notify; 
+I (42794332) NimBLE: att_handle=10
+
+I (42794352) NimBLE: GATT procedure initiated: notify; 
+I (42794352) NimBLE: att_handle=10
+
+I (42794792) bt_gatts: cmd RX write: 20 byte(s) last=0x69 newline=0
+I (42794932) bt_gatts: cmd RX write: 20 byte(s) last=0x74 newline=0
+I (42795062) bt_gatts: cmd RX write: 20 byte(s) last=0x3A newline=0
+I (42795202) bt_gatts: cmd RX write: 20 byte(s) last=0x42 newline=0
+I (42795292) bt_gatts: cmd RX write: 20 byte(s) last=0x37 newline=0
+I (42795422) bt_gatts: cmd RX write: 7 byte(s) last=0x0A newline=1
+I (42795422) ble_cmd: cmd line queued (106 bytes)
+I (42795432) ble_cmd: rx v1 cmd=network.status id=c23s4
+I (42795432) NimBLE: GATT procedure initiated: notify; 
+I (42795432) NimBLE: att_handle=10
+
+I (42795462) NimBLE: GATT procedure initiated: notify; 
+I (42795462) NimBLE: att_handle=10
+
+W (42795472) wifi: auto_connect: schedule refused caller=monitor_startup reason=suspended op=op-77CED7B4EA3D0A44 gen=14
+I (42795482) NimBLE: GATT procedure initiated: notify; 
+I (42795482) NimBLE: att_handle=10
+
+I (42795762) diag: core idle: core0=72% core1=95%
+I (42795762) diag: heap free=46940 min=19384 largest=22528 level=normal | wifi mode=1 ch=12/0 adv=0 conn=1 cf=0 rx_age=333 role=ble mqtt_outbox=0 mqtt_shed=0 pipe_yield=0
+I (42796012) bt_gatts: cmd RX write: 20 byte(s) last=0x30 newline=0
+I (42796142) bt_gatts: cmd RX write: 20 byte(s) last=0x30 newline=0
+I (42796282) bt_gatts: cmd RX write: 20 byte(s) last=0x67 newline=0
+I (42796462) bt_gatts: cmd RX write: 20 byte(s) last=0x69 newline=0
+I (42796552) bt_gatts: cmd RX write: 20 byte(s) last=0x45 newline=0
+I (42796732) bt_gatts: cmd RX write: 20 byte(s) last=0x43 newline=0
+I (42796912) bt_gatts: cmd RX write: 20 byte(s) last=0x42 newline=0
+I (42797002) bt_gatts: cmd RX write: 14 byte(s) last=0x0A newline=1
+I (42797002) ble_cmd: cmd line queued (153 bytes)
+I (42797002) ble_cmd: rx v1 cmd=operation.get id=term1795656209475
+I (42797012) NimBLE: GATT procedure initiated: notify; 
+I (42797012) NimBLE: att_handle=10
+
+I (42797042) NimBLE: GATT procedure initiated: notify; 
+I (42797042) NimBLE: att_handle=10
+
+W (42797472) wifi: auto_connect: schedule refused caller=monitor_startup reason=suspended op=op-77CED7B4EA3D0A44 gen=14
+I (42797492) bt_gatts: cmd RX write: 20 byte(s) last=0x31 newline=0
+I (42797672) bt_gatts: cmd RX write: 20 byte(s) last=0x30 newline=0
+I (42797762) bt_gatts: cmd RX write: 20 byte(s) last=0x67 newline=0
+W (42797782) wifi: tryconnect: ssid '__ble_selftest_absent__' not in scan results
+I (42797782) wifi: op_owner: TRYX -> NONE by tryconnect_release waiter=0 requested=0
+I (42797782) wifi: auto_connect: resume by tryconnect_finish
+I (42797792) wifi: auto_connect: scheduled caller=tryconnect_finish delay=400ms owner=NONE op=op-77CED7B4EA3D0A44 gen=14
+I (42797802) mqtt: defer_end site=op_set_state/terminal depth_before=1
+I (42797802) mqtt: restart defer end pending=0
+I (42797852) bt_gatts: cmd RX write: 20 byte(s) last=0x69 newline=0
+I (42797942) bt_gatts: cmd RX write: 20 byte(s) last=0x45 newline=0
+I (42798032) bt_gatts: cmd RX write: 20 byte(s) last=0x43 newline=0
+I (42798122) bt_gatts: cmd RX write: 20 byte(s) last=0x42 newline=0
+I (42798202) wifi: auto_connect: task run caller=tryconnect_finish op=op-77CED7B4EA3D0A44 gen=14 delay_actual=410ms
+I (42798202) wifi: op_owner: NONE -> AUTO by auto_connect waiter=0 requested=0
+I (42798202) wifi: fast_path: ssid='<wifi-ssid>' pwd_len=10 threshold=2(WPA) pmf(capable=1,required=0) scan=0
+I (42798212) bt_gatts: cmd RX write: 14 byte(s) last=0x0A newline=1
+I (42798222) ble_cmd: cmd line queued (153 bytes)
+I (42798222) wifi: auto_connect: fast_path ssid=<wifi-ssid>
+I (42798232) wifi: op_owner: AUTO -> NONE by auto_connect waiter=0 requested=0
+I (42798232) wifi:new:<8,0>, old:<1,0>, ap:<255,255>, sta:<8,0>, prof:1, snd_ch_cfg:0x0I (42798222) ble_cmd: rx v1 cmd=operation.get id=term1795656211037
+
+I (42798252) wifi:state: init -> auth (0xb0)
+I (42798252) NimBLE: GATT procedure initiated: notify; 
+I (42798262) NimBLE: att_handle=10
+
+I (42798262) wifi:state: auth -> assoc (0x0)
+I (42798272) wifi:state: assoc -> run (0x10)
+I (42798292) NimBLE: GATT procedure initiated: notify; 
+I (42798292) NimBLE: att_handle=10
+
+I (42798302) wifi:connected with <wifi-ssid>, aid = 113, channel 8, BW20, bssid = <ap-bssid>
+I (42798302) wifi:security: WPA2-PSK, phy: bgn, rssi: -55, cipher(pairwise:0x3, group:0x1), pmf:0
+I (42798312) wifi:pm start, type: 1
+
+I (42798322) wifi: STA_CONNECTED: dhcpc restarted (connected at t=42797685ms)
+I (42798352) wifi:AP's beacon interval = 102400 us, DTIM period = 1
+I (42798802) bt_gatts: cmd RX write: 20 byte(s) last=0x73 newline=0
+I (42798932) bt_gatts: cmd RX write: 20 byte(s) last=0x65 newline=0
+I (42799072) bt_gatts: cmd RX write: 20 byte(s) last=0x22 newline=0
+I (42799162) bt_gatts: cmd RX write: 20 byte(s) last=0x44 newline=0
+I (42799252) bt_gatts: cmd RX write: 20 byte(s) last=0x36 newline=0
+I (42799342) bt_gatts: cmd RX write: 8 byte(s) last=0x0A newline=1
+I (42799342) ble_cmd: cmd line queued (107 bytes)
+I (42799342) ble_cmd: rx v1 cmd=network.status id=c23end
+I (42799352) NimBLE: GATT procedure initiated: notify; 
+I (42799352) NimBLE: att_handle=10
+
+I (42799382) NimBLE: GATT procedure initiated: notify; 
+I (42799382) NimBLE: att_handle=10
+
+I (42799402) NimBLE: GATT procedure initiated: notify; 
+I (42799402) NimBLE: att_handle=10
+
+I (42799662) bt_gatts: cmd RX write: 20 byte(s) last=0x6F newline=0
+I (42799742) bt_gatts: cmd RX write: 20 byte(s) last=0x77 newline=0
+I (42799832) bt_gatts: cmd RX write: 20 byte(s) last=0x67 newline=0
+I (42799972) bt_gatts: cmd RX write: 20 byte(s) last=0x65 newline=0
+I (42800112) bt_gatts: cmd RX write: 20 byte(s) last=0x61 newline=0
+I (42800192) bt_gatts: cmd RX write: 20 byte(s) last=0x2D newline=0
+I (42800332) bt_gatts: cmd RX write: 20 byte(s) last=0x22 newline=0
+I (42800422) bt_gatts: cmd RX write: 20 byte(s) last=0x43 newline=0
+I (42800552) bt_gatts: cmd RX write: 17 byte(s) last=0x0A newline=1
+I (42800552) ble_cmd: cmd line queued (176 bytes)
+I (42800552) ble_cmd: rx v1 cmd=network.tryconnect id=c24a
+I (42800562) mqtt: restart deferred (max 15000ms)
+I (42800562) operation: accepted op-D6C5CA5E1E7256AF owner=1 ttl=45000ms got_ip_ttl=300000ms
+I (42800572) operation: run op-D6C5CA5E1E7256AF -> connecting
+I (42800572) NimBLE: GATT procedure initiated: notify; 
+I (42800572) cmd: async tryconnect ssid='__ble_selftest_absent__' op=op-D6C5CA5E1E7256AF
+I (42800592) NimBLE: att_handle=10
+
+I (42800592) wifi: op_owner: NONE -> TRYX by tryconnect_begin waiter=0 requested=0
+I (42801052) bt_gatts: cmd RX write: 20 byte(s) last=0x6F newline=0
+I (42801322) bt_gatts: cmd RX write: 20 byte(s) last=0x72 newline=0
+I (42801502) bt_gatts: cmd RX write: 20 byte(s) last=0x22 newline=0
+I (42801612) esp_netif_handlers: sta ip: <device-ip>, mask: <netmask>, gw: <gateway-ip>
+I (42801612) mqtt: restart request deferred/merged
+I (42801862) bt_gatts: cmd RX write: 20 byte(s) last=0x36 newline=0
+I (42802042) bt_gatts: cmd RX write: 20 byte(s) last=0x6F newline=0
+I (42802222) bt_gatts: cmd RX write: 20 byte(s) last=0x46 newline=0
+I (42802402) bt_gatts: cmd RX write: 20 byte(s) last=0x7D newline=0
+I (42802402) ble_cmd: cmd frame complete without newline (140 bytes)
+I (42802402) ble_cmd: cmd line queued (140 bytes)
+I (42802402) ble_cmd: rx v1 cmd=operation.get id=c24g
+I (42802412) NimBLE: GATT procedure initiated: notify; 
+I (42802412) NimBLE: att_handle=10
+
+I (42802442) NimBLE: GATT procedure initiated: notify; 
+I (42802442) NimBLE: att_handle=10
+
+I (42802492) bt_gatts: cmd RX write: 1 byte(s) last=0x0A newline=1
+I (42802942) bt_gatts: cmd RX write: 20 byte(s) last=0x6F newline=0
+I (42803032) bt_gatts: cmd RX write: 20 byte(s) last=0x72 newline=0
+I (42803162) bt_gatts: cmd RX write: 20 byte(s) last=0x22 newline=0
+I (42803252) bt_gatts: cmd RX write: 20 byte(s) last=0x36 newline=0
+I (42803442) bt_gatts: cmd RX write: 20 byte(s) last=0x6F newline=0
+I (42803572) bt_gatts: cmd RX write: 20 byte(s) last=0x46 newline=0
+I (42803702) bt_gatts: cmd RX write: 20 byte(s) last=0x7D newline=0
+I (42803702) ble_cmd: cmd frame complete without newline (140 bytes)
+I (42803712) ble_cmd: cmd line queued (140 bytes)
+I (42803712) ble_cmd: rx v1 cmd=operation.get id=c24g
+I (42803722) NimBLE: GATT procedure initiated: notify; 
+I (42803722) NimBLE: att_handle=10
+
+I (42803752) NimBLE: GATT procedure initiated: notify; 
+I (42803752) NimBLE: att_handle=10
+
+I (42803842) bt_gatts: cmd RX write: 1 byte(s) last=0x0A newline=1
+I (42804202) bt_gatts: cmd RX write: 20 byte(s) last=0x6F newline=0
+I (42804332) bt_gatts: cmd RX write: 20 byte(s) last=0x72 newline=0
+I (42804422) bt_gatts: cmd RX write: 20 byte(s) last=0x22 newline=0
+I (42804562) bt_gatts: cmd RX write: 20 byte(s) last=0x36 newline=0
+I (42804692) bt_gatts: cmd RX write: 20 byte(s) last=0x6F newline=0
+I (42804872) bt_gatts: cmd RX write: 20 byte(s) last=0x46 newline=0
+I (42804962) bt_gatts: cmd RX write: 20 byte(s) last=0x7D newline=0
+I (42804972) ble_cmd: cmd frame complete without newline (140 bytes)
+I (42804972) ble_cmd: cmd line queued (140 bytes)
+I (42804972) ble_cmd: rx v1 cmd=operation.get id=c24g
+I (42804982) NimBLE: GATT procedure initiated: notify; 
+I (42804982) NimBLE: att_handle=10
+
+I (42805012) NimBLE: GATT procedure initiated: notify; 
+I (42805012) NimBLE: att_handle=10
+
+I (42805142) bt_gatts: cmd RX write: 1 byte(s) last=0x0A newline=1
+W (42805452) wifi: tryconnect: ssid '__ble_selftest_absent__' not in scan results
+I (42805452) wifi: op_owner: TRYX -> NONE by tryconnect_release waiter=0 requested=0
+I (42805452) wifi: auto_connect: resume by tryconnect_finish
+I (42805462) wifi: auto_connect: scheduled caller=tryconnect_finish delay=400ms owner=NONE op=op-D6C5CA5E1E7256AF gen=14
+I (42805472) mqtt: defer_end site=op_set_state/terminal depth_before=1
+I (42805472) mqtt: restart defer end pending=1
+W (42805482) mqtt: mqtt restart attempt (backoff step 1)
+I (42805552) bt_gatts: cmd RX write: 20 byte(s) last=0x6F newline=0
+I (42805872) wifi: auto_connect: task run caller=tryconnect_finish op=op-D6C5CA5E1E7256AF gen=14 delay_actual=409ms
+I (42805872) wifi: op_owner: NONE -> AUTO by auto_connect waiter=0 requested=0
+I (42805912) bt_gatts: cmd RX write: 20 byte(s) last=0x72 newline=0
+I (42806092) bt_gatts: cmd RX write: 20 byte(s) last=0x22 newline=0
+I (42806272) bt_gatts: cmd RX write: 20 byte(s) last=0x36 newline=0
+I (42806452) bt_gatts: cmd RX write: 20 byte(s) last=0x6F newline=0
+I (42806582) bt_gatts: cmd RX write: 20 byte(s) last=0x46 newline=0
+I (42806762) bt_gatts: cmd RX write: 20 byte(s) last=0x7D newline=0
+I (42806762) ble_cmd: cmd frame complete without newline (140 bytes)
+I (42806762) ble_cmd: cmd line queued (140 bytes)
+I (42806762) ble_cmd: rx v1 cmd=operation.get id=c24g
+I (42806782) NimBLE: GATT procedure initiated: notify; 
+I (42806782) NimBLE: att_handle=10
+
+I (42806812) NimBLE: GATT procedure initiated: notify; 
+I (42806812) NimBLE: att_handle=10
+
+I (42806902) bt_gatts: cmd RX write: 1 byte(s) last=0x0A newline=1
+I (42807302) bt_gatts: cmd RX write: 20 byte(s) last=0x72 newline=0
+I (42807492) bt_gatts: cmd RX write: 20 byte(s) last=0x63 newline=0
+I (42807622) bt_gatts: cmd RX write: 20 byte(s) last=0x7D newline=0
+I (42807752) bt_gatts: cmd RX write: 20 byte(s) last=0x43 newline=0
+I (42807892) bt_gatts: cmd RX write: 20 byte(s) last=0x44 newline=0
+I (42808072) bt_gatts: cmd RX write: 5 byte(s) last=0x0A newline=1
+I (42808072) ble_cmd: cmd line queued (104 bytes)
+I (42808072) ble_cmd: rx v1 cmd=config.get id=c151pre
+I (42808082) NimBLE: GATT procedure initiated: notify; 
+I (42808082) NimBLE: att_handle=10
+
+I (42808102) NimBLE: GATT procedure initiated: notify; 
+I (42808102) NimBLE: att_handle=10
+
+I (42808122) NimBLE: GATT procedure initiated: notify; 
+I (42808122) NimBLE: att_handle=10
+
+I (42808142) NimBLE: GATT procedure initiated: notify; 
+I (42808142) NimBLE: att_handle=10
+
+I (42808162) NimBLE: GATT procedure initiated: notify; 
+I (42808162) NimBLE: att_handle=10
+
+I (42808472) bt_gatts: cmd RX write: 20 byte(s) last=0x72 newline=0
+I (42808612) bt_gatts: cmd RX write: 20 byte(s) last=0x63 newline=0
+I (42808742) bt_gatts: cmd RX write: 20 byte(s) last=0x22 newline=0
+I (42808922) bt_gatts: cmd RX write: 20 byte(s) last=0x3A newline=0
+I (42809012) bt_gatts: cmd RX write: 20 byte(s) last=0x74 newline=0
+I (42809152) bt_gatts: cmd RX write: 20 byte(s) last=0x6E newline=0
+I (42809242) bt_gatts: cmd RX write: 20 byte(s) last=0x35 newline=0
+I (42809422) bt_gatts: cmd RX write: 18 byte(s) last=0x0A newline=1
+I (42809422) ble_cmd: cmd line queued (157 bytes)
+I (42809422) ble_cmd: rx v1 cmd=config.set id=c151set
+I (42809442) NimBLE: GATT procedure initiated: notify; 
+I (42809442) NimBLE: att_handle=10
+
+I (42809732) bt_gatts: cmd RX write: 20 byte(s) last=0x36 newline=0
+I (42809872) bt_gatts: cmd RX write: 20 byte(s) last=0x31 newline=0
+I (42809962) bt_gatts: cmd RX write: 20 byte(s) last=0x74 newline=0
+I (42810142) bt_gatts: cmd RX write: 20 byte(s) last=0x6B newline=0
+I (42810272) bt_gatts: cmd RX write: 20 byte(s) last=0x33 newline=0
+I (42810412) bt_gatts: cmd RX write: 20 byte(s) last=0x0A newline=1
+I (42810412) ble_cmd: cmd line queued (119 bytes)
+I (42810412) ble_cmd: rx v1 cmd=device.status id=c151st1795656223072
+I (42810432) NimBLE: GATT procedure initiated: notify; 
+I (42810432) NimBLE: att_handle=10
+
+I (42810452) NimBLE: GATT procedure initiated: notify; 
+I (42810452) NimBLE: att_handle=10
+
+I (42810472) NimBLE: GATT procedure initiated: notify; 
+I (42810472) NimBLE: att_handle=10
+
+I (42810492) NimBLE: GATT procedure initiated: notify; 
+I (42810492) NimBLE: att_handle=10
+
+I (42810512) NimBLE: GATT procedure initiated: notify; 
+I (42810512) NimBLE: att_handle=10
+
+I (42810532) NimBLE: GATT procedure initiated: notify; 
+I (42810532) NimBLE: att_handle=10
+
+I (42810712) wifi:state: run -> init (0x0)
+I (42810712) wifi:pm stop, total sleep time: 2014150 us / 12397286 us
+
+I (42810712) wifi: auto_connect: selected saved profile index=0 ssid=<wifi-ssid> pwd_len=10
+I (42810712) wifi: op_owner: AUTO -> NONE by auto_connect waiter=0 requested=0
+W (42810722) wifi: STA disconnected: reason=8(ASSOC_LEAVE) retries=0 has_sta=1 profile=0
+I (42810732) wifi:I (42810732) wifi: STA down with BLE connected: event-chain retry suppressed; 120s formal-only monitor owns recovery
+state: init -> auth (0xb0)I (42810742) mqtt: STA disconnected, stopping MQTT client
+
+I (42810752) wifi:state: auth -> assoc (0x0)
+I (42810762) wifi:state: assoc -> run (0x10)
+I (42810792) wifi:connected with <wifi-ssid>, aid = 97, channel 8, BW20, bssid = <ap-bssid>
+I (42810792) wifi:security: WPA2-PSK, phy: bgn, rssi: -57, cipher(pairwise:0x3, group:0x1), pmf:0
+I (42810802) wifi:pm start, type: 1
+
+I (42810842) wifi:AP's beacon interval = 102400 us, DTIM period = 1
+I (42811442) mqtt: Restart task exiting on stop event
+I (42811462) wifi: STA_CONNECTED: dhcpc restarted (connected at t=42810822ms)
+I (42812702) bt_gatts: cmd RX write: 20 byte(s) last=0x36 newline=0
+I (42812802) bt_gatts: cmd RX write: 20 byte(s) last=0x31 newline=0
+I (42812902) bt_gatts: cmd TX subscribe off (handle=10)
+W (42812912) bt_gatts: central disconnected (reason=0x222)
+I (42812912) ble_cmd: cmd session token invalidated (disconnect)
+I (42812912) NimBLE: GAP procedure initiated: advertise; 
+I (42812912) NimBLE: disc_mode=2
+I (42812922) NimBLE:  adv_channel_map=0 own_addr_type=0 adv_filter_policy=0 adv_itvl_min=32 adv_itvl_max=64
+I (42812922) NimBLE: 
+
+I (42812932) app_bt: advertising restart requested (after disconnect)
+I (42813472) wifi: ble fast retry: link down, timer reset
+I (42814722) esp_netif_handlers: sta ip: <device-ip>, mask: <netmask>, gw: <gateway-ip>
+I (42814722) wifi: IP_EVENT_STA_GOT_IP: <device-ip> (t=42814086ms from boot, 3264ms from connected)
+I (42814732) netcheck: dns host='<mqtt-broker>' err=0 ok_pending=0
+I (42815092) bt_gatts: central connected (conn=0) peer_ota=<central-ble-mac> type=0 peer_id=<central-ble-mac> type=0
+I (42815092) bt_gatts: conn params policy: itvl=45ms lat=0 sup=420ms -> out of policy, requesting update
+I (42815102) NimBLE: GAP procedure initiated: 
+I (42815112) NimBLE: connection parameter update; conn_handle=0 itvl_min=24 itvl_max=40 latency=0 supervision_timeout=600 min_ce_len=0 max_ce_len=0
+I (42815122) NimBLE: 
+
+I (42815222) bt_gatts: mtu negotiated: 256 (payload 253)
+I (42815472) wifi: ble fast retry: link up, timer reset
+I (42815582) bt_gatts: cmd TX subscribe on (handle=10)
+I (42815942) bt_gatts: cmd RX write: 20 byte(s) last=0x72 newline=0
+I (42816082) bt_gatts: cmd RX write: 20 byte(s) last=0x61 newline=0
+I (42816212) bt_gatts: cmd RX write: 20 byte(s) last=0x22 newline=0
+I (42816392) bt_gatts: cmd RX write: 20 byte(s) last=0x70 newline=0
+I (42816532) bt_gatts: cmd RX write: 20 byte(s) last=0x0A newline=1
+I (42816532) ble_cmd: cmd line queued (99 bytes)
+I (42816532) ble_cmd: rx v1 cmd=auth.login id=login-2
+I (42816532) ble_cmd: ble cmd login ok, token issued (ttl=600s)
+I (42816542) NimBLE: GATT procedure initiated: notify; 
+I (42816542) NimBLE: att_handle=10
+
+I (42816892) bt_gatts: cmd RX write: 20 byte(s) last=0x36 newline=0
+I (42816982) bt_gatts: cmd RX write: 20 byte(s) last=0x31 newline=0
+I (42817072) bt_gatts: cmd RX write: 20 byte(s) last=0x74 newline=0
+I (42817162) bt_gatts: cmd RX write: 20 byte(s) last=0x6B newline=0
+I (42817342) bt_gatts: cmd RX write: 20 byte(s) last=0x36 newline=0
+I (42817472) bt_gatts: cmd RX write: 20 byte(s) last=0x0A newline=1
+I (42817472) ble_cmd: cmd line queued (119 bytes)
+I (42817472) ble_cmd: rx v1 cmd=device.status id=c151st1795656226291
+I (42817502) NimBLE: GATT procedure initiated: notify; 
+I (42817502) NimBLE: att_handle=10
+
+I (42817522) NimBLE: GATT procedure initiated: notify; 
+I (42817522) NimBLE: att_handle=10
+
+I (42817542) NimBLE: GATT procedure initiated: notify; 
+I (42817542) NimBLE: att_handle=10
+
+I (42817562) NimBLE: GATT procedure initiated: notify; 
+I (42817562) NimBLE: att_handle=10
+
+I (42817582) NimBLE: GATT procedure initiated: notify; 
+I (42817582) NimBLE: att_handle=10
+
+I (42817602) NimBLE: GATT procedure initiated: notify; 
+I (42817602) NimBLE: att_handle=10
+
+I (42818942) netcheck: mqtt not up after grace -> poke restart
+I (42818942) netcheck: poll n=1 conn=0 fatal=0
+W (42819722) mqtt: mqtt restart attempt (backoff step 1)
+I (42819722) data_pipe: port 2 registered
+I (42819722) mqtt: Starting MQTT: uri=mqtt://<mqtt-broker>:1883, client_id=<client-id>, token_len=13, tls=no, will=v1/devices/me/attributes
+I (42819902) bt_gatts: cmd RX write: 20 byte(s) last=0x36 newline=0
+I (42819962) wifi:<ba-add>idx:0 (ifx:0, <ap-bssid>), tid:6, ssn:4, winSize:64
+I (42820042) netcheck: mqtt wait out: verdict=1 polls=11 conn=1 fatal=0
+I (42820042) netcheck: ok gen=16 stage=mqtt
+I (42820042) netcheck: stack high watermark=2992 bytes
+I (42820042) wifi: netcheck ok: gen=16 stage=mqtt (mask/backoff reset)
+I (42820042) bt_gatts: cmd RX write: 20 byte(s) last=0x31 newline=0
+I (42820222) bt_gatts: cmd RX write: 20 byte(s) last=0x74 newline=0
+I (42820312) mqtt: Requested initial attributes: v1/devices/me/attributes/request/22117
+I (42820312) mqtt: MQTT connected: subscribed RPC + shared attrs, requested initial attrs
+I (42820322) mqtt: MQTT_EVENT_SUBSCRIBED: msg_id=47365
+I (42820322) mqtt: MQTT_EVENT_SUBSCRIBED: msg_id=20404
+I (42820332) mqtt: MQTT_EVENT_SUBSCRIBED: msg_id=39360
+I (42820332) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=6512 total_published=4356
+I (42820342) mqtt: MQTT RX topic='v1/devices/me/attributes' len=312 data_preview='{"fw_version":"1.3-956afcd","net_mode":"sta","sta_ssid":"<wifi-ssid>","sta_ip":"<device-ip>","bt_mode":"ble","uart_frame":"8N1","uart_baudrate":115200,"relay_state":false,"led_state":false,"input_state":false,"io_seq":150,"io_source":"input","relay_power_pol'
+I (42820352) bt_gatts: cmd RX write: 20 byte(s) last=0x6B newline=0
+I (42820472) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=47852 total_published=4356
+I (42820482) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=29063 total_published=4356
+I (42820532) bt_gatts: cmd RX write: 20 byte(s) last=0x36 newline=0
+W (42820732) mqtt: mqtt restart attempt (backoff step 1)
+I (42820732) mqtt: Telemetry task exiting on stop request
+I (42820732) mqtt: Boost task exiting on stop event
+I (42820762) bt_gatts: cmd RX write: 20 byte(s) last=0x0A newline=1
+I (42820762) ble_cmd: cmd line queued (119 bytes)
+I (42820762) ble_cmd: rx v1 cmd=device.status id=c151st1795656233442
+I (42820782) NimBLE: GATT procedure initiated: notify; 
+I (42820782) NimBLE: att_handle=10
+
+I (42820812) NimBLE: GATT procedure initiated: notify; 
+I (42820812) NimBLE: att_handle=10
+
+I (42820822) data_pipe: port 2 registered
+I (42820822) mqtt: Starting MQTT: uri=mqtt://<mqtt-broker>:1883, client_id=<client-id>, token_len=13, tls=no, will=v1/devices/me/attributes
+I (42820832) NimBLE: GATT procedure initiated: notify; 
+I (42820832) NimBLE: att_handle=10
+
+I (42820862) NimBLE: GATT procedure initiated: notify; 
+I (42820862) NimBLE: att_handle=10
+
+I (42820882) NimBLE: GATT procedure initiated: notify; 
+I (42820882) NimBLE: att_handle=10
+
+I (42820902) NimBLE: GATT procedure initiated: notify; 
+I (42820902) NimBLE: att_handle=10
+
+I (42821542) mqtt: Requested initial attributes: v1/devices/me/attributes/request/22234
+I (42821542) mqtt: MQTT connected: subscribed RPC + shared attrs, requested initial attrs
+I (42821552) mqtt: MQTT_EVENT_SUBSCRIBED: msg_id=1022
+I (42821552) mqtt: MQTT_EVENT_SUBSCRIBED: msg_id=26414
+I (42821562) mqtt: MQTT_EVENT_SUBSCRIBED: msg_id=33806
+I (42821562) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=3515 total_published=4357
+I (42821572) mqtt: MQTT RX topic='v1/devices/me/attributes' len=312 data_preview='{"fw_version":"1.3-956afcd","net_mode":"sta","sta_ssid":"<wifi-ssid>","sta_ip":"<device-ip>","bt_mode":"ble","uart_frame":"8N1","uart_baudrate":115200,"relay_state":false,"led_state":false,"input_state":false,"io_seq":150,"io_source":"input","relay_power_pol'
+I (42821632) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=51399 total_published=4357
+I (42821642) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=40071 total_published=4357
+I (42823052) bt_gatts: cmd RX write: 20 byte(s) last=0x36 newline=0
+I (42823142) bt_gatts: cmd RX write: 20 byte(s) last=0x31 newline=0
+I (42823232) bt_gatts: cmd RX write: 20 byte(s) last=0x74 newline=0
+I (42823322) bt_gatts: cmd RX write: 20 byte(s) last=0x6B newline=0
+I (42823462) bt_gatts: cmd RX write: 20 byte(s) last=0x36 newline=0
+I (42823592) bt_gatts: cmd RX write: 20 byte(s) last=0x0A newline=1
+I (42823592) ble_cmd: cmd line queued (119 bytes)
+I (42823592) ble_cmd: rx v1 cmd=device.status id=c151st1795656236631
+I (42823622) NimBLE: GATT procedure initiated: notify; 
+I (42823622) NimBLE: att_handle=10
+
+I (42823642) NimBLE: GATT procedure initiated: notify; 
+I (42823642) NimBLE: att_handle=10
+
+I (42823662) NimBLE: GATT procedure initiated: notify; 
+I (42823662) NimBLE: att_handle=10
+
+I (42823682) NimBLE: GATT procedure initiated: notify; 
+I (42823682) NimBLE: att_handle=10
+
+I (42823702) NimBLE: GATT procedure initiated: notify; 
+I (42823702) NimBLE: att_handle=10
+
+I (42823722) NimBLE: GATT procedure initiated: notify; 
+I (42823722) NimBLE: att_handle=10
+
+I (42824542) mqtt: 3s boost: re-publish attributes + state to ensure liveness
+I (42824672) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=17108 total_published=4358
+I (42824682) mqtt: MQTT RX topic='v1/devices/me/attributes' len=312 data_preview='{"fw_version":"1.3-956afcd","net_mode":"sta","sta_ssid":"<wifi-ssid>","sta_ip":"<device-ip>","bt_mode":"ble","uart_frame":"8N1","uart_baudrate":115200,"relay_state":false,"led_state":false,"input_state":false,"io_seq":150,"io_source":"input","relay_power_pol'
+I (42824772) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=11986 total_published=4358
+I (42825762) diag: core idle: core0=71% core1=94%
+I (42825762) diag: heap free=30400 min=19384 largest=22528 level=normal | wifi mode=1 ch=8/0 adv=0 conn=1 cf=0 rx_age=2167 role=ble mqtt_outbox=0 mqtt_shed=0 pipe_yield=0
+I (42830922) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=10918 total_published=4359
+I (42834032) bt_gatts: cmd RX write: 20 byte(s) last=0x72 newline=0
+I (42834172) bt_gatts: cmd RX write: 20 byte(s) last=0x63 newline=0
+I (42834262) bt_gatts: cmd RX write: 20 byte(s) last=0x22 newline=0
+I (42834352) bt_gatts: cmd RX write: 20 byte(s) last=0x3A newline=0
+I (42834532) bt_gatts: cmd RX write: 20 byte(s) last=0x74 newline=0
+I (42834622) bt_gatts: cmd RX write: 20 byte(s) last=0x65 newline=0
+I (42834752) bt_gatts: cmd RX write: 20 byte(s) last=0x44 newline=0
+I (42834892) bt_gatts: cmd RX write: 19 byte(s) last=0x0A newline=1
+I (42834892) ble_cmd: cmd line queued (158 bytes)
+I (42834892) ble_cmd: rx v1 cmd=config.set id=c151rst
+W (42834912) mqtt: mqtt restart attempt (backoff step 1)
+I (42834912) mqtt: Telemetry task exiting on stop request
+I (42834912) mqtt: Boost task exiting on stop event
+I (42834922) NimBLE: GATT procedure initiated: notify; 
+I (42834922) NimBLE: att_handle=10
+
+I (42834962) data_pipe: port 2 registered
+I (42834962) mqtt: Starting MQTT: uri=mqtt://<mqtt-broker>:21883, client_id=<client-id>, token_len=13, tls=no, will=v1/devices/me/attributes
+I (42835382) bt_gatts: cmd RX write: 20 byte(s) last=0x22 newline=0
+I (42835572) bt_gatts: cmd RX write: 20 byte(s) last=0x22 newline=0
+I (42835702) bt_gatts: cmd RX write: 20 byte(s) last=0x22 newline=0
+I (42835732) mqtt: Requested initial attributes: v1/devices/me/attributes/request/23654
+I (42835732) mqtt: MQTT connected: subscribed RPC + shared attrs, requested initial attrs
+I (42835742) mqtt: MQTT_EVENT_SUBSCRIBED: msg_id=29768
+I (42835752) mqtt: MQTT_EVENT_SUBSCRIBED: msg_id=21885
+I (42835752) mqtt: MQTT_EVENT_SUBSCRIBED: msg_id=29395
+I (42835762) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=49066 total_published=4360
+I (42835762) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=2277 total_published=4360
+I (42835772) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=33725 total_published=4360
+I (42835832) mqtt: MQTT RX topic='v1/devices/me/attributes/response/23654' len=2 data_preview='{}'
+I (42835882) bt_gatts: cmd RX write: 20 byte(s) last=0x36 newline=0
+I (42836192) bt_gatts: cmd RX write: 20 byte(s) last=0x36 newline=0
+I (42836422) bt_gatts: cmd RX write: 8 byte(s) last=0x0A newline=1
+I (42836422) ble_cmd: cmd line queued (107 bytes)
+I (42836422) ble_cmd: rx v1 cmd=config.get id=verify-cfg
+I (42836432) NimBLE: GATT procedure initiated: notify; 
+I (42836432) NimBLE: att_handle=10
+
+I (42836452) NimBLE: GATT procedure initiated: notify; 
+I (42836452) NimBLE: att_handle=10
+
+I (42836472) NimBLE: GATT procedure initiated: notify; 
+I (42836472) NimBLE: att_handle=10
+
+I (42836492) NimBLE: GATT procedure initiated: notify; 
+I (42836492) NimBLE: att_handle=10
+
+I (42836512) NimBLE: GATT procedure initiated: notify; 
+I (42836512) NimBLE: att_handle=10
+
+I (42836782) bt_gatts: cmd RX write: 20 byte(s) last=0x35 newline=0
+I (42836872) bt_gatts: cmd RX write: 20 byte(s) last=0x22 newline=0
+I (42837002) bt_gatts: cmd RX write: 20 byte(s) last=0x65 newline=0
+I (42837092) bt_gatts: cmd RX write: 20 byte(s) last=0x22 newline=0
+I (42837182) bt_gatts: cmd RX write: 20 byte(s) last=0x41 newline=0
+I (42837272) bt_gatts: cmd RX write: 20 byte(s) last=0x38 newline=0
+I (42837412) bt_gatts: cmd RX write: 3 byte(s) last=0x0A newline=1
+I (42837412) ble_cmd: cmd line queued (122 bytes)
+I (42837412) ble_cmd: rx v1 cmd=device.status id=verify-st1795656250340
+I (42837432) NimBLE: GATT procedure initiated: notify; 
+I (42837432) NimBLE: att_handle=10
+
+I (42837462) NimBLE: GATT procedure initiated: notify; 
+I (42837462) NimBLE: att_handle=10
+
+I (42837482) NimBLE: GATT procedure initiated: notify; 
+I (42837482) NimBLE: att_handle=10
+
+I (42837502) NimBLE: GATT procedure initiated: notify; 
+I (42837502) NimBLE: att_handle=10
+
+I (42837522) NimBLE: GATT procedure initiated: notify; 
+I (42837522) NimBLE: att_handle=10
+
+I (42837542) NimBLE: GATT procedure initiated: notify; 
+I (42837542) NimBLE: att_handle=10
+
+I (42838732) mqtt: 3s boost: re-publish attributes + state to ensure liveness
+I (42838842) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=63192 total_published=4361
+I (42838902) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=63531 total_published=4361
+I (42840292) app_bt: conn params
