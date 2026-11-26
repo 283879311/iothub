@@ -8,8 +8,10 @@ option(APP_CMD_MQTT_NET_TXN_TEST_BUILD "Enable MQTT network-transaction test bui
 option(APP_C15_BUSY_DIAG "Build C15-2 BUSY-source diagnostic (test-only, default OFF)" OFF)
 set(APP_C15_BUSY_DIAG_TAG "" CACHE STRING "Build tag for C15-2 BUSY diagnostic (required when ON)")
 
-if(APP_C15_BUSY_DIAG AND NOT APP_C15_BUSY_DIAG_TAG)
-    message(FATAL_ERROR "APP_C15_BUSY_DIAG=ON requires APP_C15_BUSY_DIAG_TAG (C15-BUSY-DIAG-YYYYMMDD-NN)")
+if(APP_C15_BUSY_DIAG)
+    if(NOT APP_C15_BUSY_DIAG_TAG MATCHES "^C15-BUSY-DIAG-[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]-[0-9][0-9]$")
+        message(FATAL_ERROR "APP_C15_BUSY_DIAG=ON requires APP_C15_BUSY_DIAG_TAG=C15-BUSY-DIAG-YYYYMMDD-NN")
+    endif()
 endif()
 
 idf_component_register(
