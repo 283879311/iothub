@@ -1091,8 +1091,14 @@ static int diag_format_tests(void)
     d.ops.job_op.running = false;
     d.ops.job_op.generation = 7;
     d.ops.job_op.cleanup_state = APP_OPERATION_CLEANUP_OK;
+    char expect_state[32];
+    snprintf(expect_state, sizeof(expect_state), "job_op_state=%d",
+             (int)APP_OP_FAILED);
     app_c15_busy_diag_format_job(&d, job, sizeof(job));
     if (strstr(job, "job_op_id=op-TERMINAL0000000") == NULL
+        || strstr(job, expect_state) == NULL
+        || strstr(job, "job_op_running=0") == NULL
+        || strstr(job, "job_op_gen=7") == NULL
         || strstr(job, "job_op_cleanup=2") == NULL) {
         printf("D04 job-op-terminal FAIL\n");
         failed++;
@@ -1101,7 +1107,17 @@ static int diag_format_tests(void)
     }
     d.job_op_valid = false;
     app_c15_busy_diag_format_job(&d, job, sizeof(job));
-    if (strstr(job, "job_op_id=-") == NULL) {
+    const char *invalid_fields[] = {
+        "job_op_id=-", "job_op_state=-", "job_op_running=-",
+        "job_op_gen=-", "job_op_cleanup=-",
+    };
+    bool invalid_ok = true;
+    for (size_t i = 0; i < sizeof(invalid_fields) / sizeof(invalid_fields[0]); i++) {
+        if (strstr(job, invalid_fields[i]) == NULL) {
+            invalid_ok = false;
+        }
+    }
+    if (!invalid_ok) {
         printf("D05 job-op-invalid FAIL\n");
         failed++;
     } else {
