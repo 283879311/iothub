@@ -589,11 +589,45 @@ static bool app_cmd_net_tryconnect_async(const cJSON *params,
                 return true;
             }
             *err_out = "busy";
+#ifdef APP_C15_BUSY_DIAG
+            {
+                int64_t busy_us = esp_timer_get_time();
+                app_c15_busy_diag_t d;
+                app_c15_busy_diag_capture(&d);
+                d.same_lock_as_decision = false;
+                d.snapshot_phase = "after_busy_decision";
+                app_c15_busy_event_t ev = {
+                    .branch = "accept", .response_code = "busy",
+                    .begin_result = -1, .busy_observed = true,
+                    .busy_gate = true, .begin_failure = false,
+                    .mapped_busy_source = "accept_snapshot",
+                    .busy_observed_us = busy_us,
+                };
+                app_c15_busy_diag_log(&d, &ev, NULL);
+            }
+#endif
             return false;
         }
     }
     if (app_cmd_net_trial_busy()) {
         *err_out = "busy";
+#ifdef APP_C15_BUSY_DIAG
+        {
+            int64_t busy_us = esp_timer_get_time();
+            app_c15_busy_diag_t d;
+            app_c15_busy_diag_capture(&d);
+            d.same_lock_as_decision = false;
+            d.snapshot_phase = "after_busy_decision";
+            app_c15_busy_event_t ev = {
+                .branch = "trial", .response_code = "busy",
+                .begin_result = -1, .busy_observed = true,
+                .busy_gate = true, .begin_failure = false,
+                .mapped_busy_source = "trial",
+                .busy_observed_us = busy_us,
+            };
+            app_c15_busy_diag_log(&d, &ev, NULL);
+        }
+#endif
         return false;
     }
 
@@ -612,11 +646,42 @@ static bool app_cmd_net_tryconnect_async(const cJSON *params,
             idem_key, accepted_ttl, 300000, app_cmd_net_async_run, &op);
 
         if (begin != APP_CMD_NET_JOB_BEGIN_OK) {
+#ifdef APP_C15_BUSY_DIAG
+            int64_t busy_us = esp_timer_get_time();
+            app_c15_busy_diag_t d;
+            app_c15_busy_diag_capture_locked(&d);
+            app_c15_begin_diag_t bd;
+            app_c15_busy_diag_begin_snapshot(&bd);
+            d.same_lock_as_decision = true;
+            d.snapshot_phase = "in_j_before_unlock";
+#endif
             app_cmd_net_job_unlock();
             *err_out = (begin == APP_CMD_NET_JOB_BEGIN_BUSY) ? "busy"
                      : (begin == APP_CMD_NET_JOB_BEGIN_NO_SLOT) ? "no_slot"
                      : (begin == APP_CMD_NET_JOB_BEGIN_NO_TXN) ? "busy"
                                                                : "internal_error";
+#ifdef APP_C15_BUSY_DIAG
+            {
+                app_c15_busy_event_t ev = {
+                    .branch = "begin", .response_code = *err_out,
+                    .begin_result = (int)begin,
+                    .busy_observed = (strcmp(*err_out, "busy") == 0),
+                    .busy_gate = (begin == APP_CMD_NET_JOB_BEGIN_BUSY),
+                    .begin_failure = (begin != APP_CMD_NET_JOB_BEGIN_BUSY),
+                    .mapped_busy_source = "begin_other",
+                    .busy_observed_us = busy_us,
+                };
+                if (begin == APP_CMD_NET_JOB_BEGIN_BUSY) {
+                    ev.mapped_busy_source = bd.job_active_before
+                        ? "begin_job_active" : "begin_operation_active";
+                } else if (begin == APP_CMD_NET_JOB_BEGIN_NO_TXN) {
+                    ev.mapped_busy_source = "begin_no_txn";
+                } else if (begin == APP_CMD_NET_JOB_BEGIN_NO_SLOT) {
+                    ev.mapped_busy_source = "begin_no_slot";
+                }
+                app_c15_busy_diag_log(&d, &ev, &bd);
+            }
+#endif
             return false;
         }
         snprintf(accepted_operation_id, sizeof(accepted_operation_id), "%s",

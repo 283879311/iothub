@@ -5,6 +5,12 @@ option(APP_OPERATION_WORKER_STATIC "Use static FreeRTOS stack/TCB for the G3 wor
 option(APP_C1_TEST_HOOKS "Experiment-only C1 review hooks (cleanup pause + state-machine probe, default OFF)" OFF)
 option(APP_WIFI_FAULT_INJECT "Fault-injection hooks (apply/stop fail, connect hold, restart wake fail; default OFF)" OFF)
 option(APP_CMD_MQTT_NET_TXN_TEST_BUILD "Enable MQTT network-transaction test build (default OFF)" OFF)
+option(APP_C15_BUSY_DIAG "Build C15-2 BUSY-source diagnostic (test-only, default OFF)" OFF)
+set(APP_C15_BUSY_DIAG_TAG "" CACHE STRING "Build tag for C15-2 BUSY diagnostic (required when ON)")
+
+if(APP_C15_BUSY_DIAG AND NOT APP_C15_BUSY_DIAG_TAG)
+    message(FATAL_ERROR "APP_C15_BUSY_DIAG=ON requires APP_C15_BUSY_DIAG_TAG (C15-BUSY-DIAG-YYYYMMDD-NN)")
+endif()
 
 idf_component_register(
     SRCS "main.c" "auth.c" "auth_token.c" "ble_cmd.c" "bootstrap.c" "bt.c" "bt_gattc_nimble.c" "bt_gatts_nimble.c" "cmd.c" "cmd_context.c" "cmd_policy.c" "cmd_cfg_txn.c" "cmd_v1.c" "cmd_v1_id.c" "cmd_v1_id_json.c" "cmd_net_job.c" "cmd_error.c" "common.c" "config.c" "config_apply.c" "data_pipe.c" "diag.c" "identity.c" "mem_guard.c" "mqtt.c" "netcheck.c" "netcheck_policy.c" "operation.c" "operation_state.c" "ota.c" "prov_pin.c" "state.c" "transport_ble.c" "uart.c" "wifi.c" "wifi_op_owner.c"
@@ -49,5 +55,10 @@ if(APP_CMD_MQTT_NET_TXN_TEST_BUILD)
     target_compile_definitions(${COMPONENT_LIB} PRIVATE
         APP_CMD_MQTT_NET_TXN_ENABLE=1
         APP_CMD_MQTT_NET_TXN_TEST_BUILD=1)
+endif()
+if(APP_C15_BUSY_DIAG)
+    target_compile_definitions(${COMPONENT_LIB} PRIVATE
+        APP_C15_BUSY_DIAG=1
+        APP_C15_BUSY_DIAG_TAG="${APP_C15_BUSY_DIAG_TAG}")
 endif()
 

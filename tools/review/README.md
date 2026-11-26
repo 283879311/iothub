@@ -265,3 +265,20 @@
 
 本文件通过审查只代表 harness 具备申请下一次设备测试窗口的条件；
 不代表 C15-1 重跑或 C15-2 已获授权。
+
+## C15-2 BUSY 诊断构建（`APP_C15_BUSY_DIAG`）
+
+- test-only，默认 OFF；启用时必须提供 `APP_C15_BUSY_DIAG_TAG`
+  （格式 `C15-BUSY-DIAG-YYYYMMDD-NN`），否则 CMake `FATAL_ERROR`。
+- 构建示例：
+  ```bash
+  idf.py -B /tmp/c15diag-diag \
+    -DAPP_C15_BUSY_DIAG=ON \
+    -DAPP_C15_BUSY_DIAG_TAG=C15-BUSY-DIAG-20261126-01 build
+  ```
+- 生产构建不定义该宏；用 `nm` 检查 `app_c15_busy_diag_*`、
+  `app_operation_diag_snapshot` 符号数量为 0。
+- 诊断构建在 tryconnect BUSY/NO_TXN 时输出一行 `C15_BUSY_DIAG`，
+  含 `busy_gate`、`mapped_busy_source`、job 与 active operation 快照；
+  不新增 BLE 命令、不改变配置写入范围。
+- 设备使用需单独授权；tag、镜像 SHA-256 与证据一并归档。

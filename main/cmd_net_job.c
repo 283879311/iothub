@@ -52,6 +52,12 @@ typedef struct {
 
 static app_cmd_net_trial_t s_trial;
 static app_cmd_net_job_t s_job;
+#ifdef APP_C15_BUSY_DIAG
+#ifndef APP_C15_BUSY_DIAG_TAG
+#define APP_C15_BUSY_DIAG_TAG "untagged"
+#endif
+static app_c15_begin_diag_t s_begin_diag;
+#endif
 static bool s_apply_internal;
 static app_cmd_net_job_port_t s_port;
 static bool s_inited;
@@ -200,15 +206,29 @@ app_cmd_net_job_begin_result_t app_cmd_net_job_begin_locked(
     if (out_op != NULL) {
         *out_op = NULL;
     }
+#ifdef APP_C15_BUSY_DIAG
+    memset(&s_begin_diag, 0, sizeof(s_begin_diag));
+    s_begin_diag.operation_start_err = 0x7fffffff;
+    s_begin_diag.job_active_before = s_job.active;
+#endif
     if (!s_inited) {
+#ifdef APP_C15_BUSY_DIAG
+        s_begin_diag.begin_result = APP_CMD_NET_JOB_BEGIN_NOT_READY;
+#endif
         return APP_CMD_NET_JOB_BEGIN_NOT_READY;
     }
     if (s_job.active) {
+#ifdef APP_C15_BUSY_DIAG
+        s_begin_diag.begin_result = APP_CMD_NET_JOB_BEGIN_BUSY;
+#endif
         return APP_CMD_NET_JOB_BEGIN_BUSY;
     }
     /* 与旧实现一致：受理前 job 必须为空；clear 只处理理论上残留的事务。 */
     app_cmd_net_job_clear_impl_locked();
     if (!app_cmd_cfg_txn_begin(&txn)) {
+#ifdef APP_C15_BUSY_DIAG
+        s_begin_diag.begin_result = APP_CMD_NET_JOB_BEGIN_NO_TXN;
+#endif
         return APP_CMD_NET_JOB_BEGIN_NO_TXN;
     }
     s_job.cfg_txn = txn;
@@ -224,13 +244,24 @@ app_cmd_net_job_begin_result_t app_cmd_net_job_begin_locked(
         snprintf(s_job.idem_key, sizeof(s_job.idem_key), "%s", idem_key);
     }
 
+#ifdef APP_C15_BUSY_DIAG
+    s_begin_diag.start_attempted = true;
+#endif
     err = app_operation_start_with_finish(owner, idem_key, accepted_ttl, got_ip_ttl,
                                           run_fn, app_cmd_net_cleanup_run,
                                           app_cmd_net_finish_run, &s_job, &op);
+#ifdef APP_C15_BUSY_DIAG
+    s_begin_diag.operation_start_err = (int)err;
+#endif
     if (err != ESP_OK) {
         app_cmd_net_job_clear_impl_locked();
-        return (err == ESP_ERR_INVALID_STATE) ? APP_CMD_NET_JOB_BEGIN_BUSY
-                                             : APP_CMD_NET_JOB_BEGIN_NO_SLOT;
+        app_cmd_net_job_begin_result_t result =
+            (err == ESP_ERR_INVALID_STATE) ? APP_CMD_NET_JOB_BEGIN_BUSY
+                                           : APP_CMD_NET_JOB_BEGIN_NO_SLOT;
+#ifdef APP_C15_BUSY_DIAG
+        s_begin_diag.begin_result = result;
+#endif
+        return result;
     }
     s_job.op = op;
     snprintf(s_job.operation_id, sizeof(s_job.operation_id), "%s",
@@ -238,6 +269,9 @@ app_cmd_net_job_begin_result_t app_cmd_net_job_begin_locked(
     if (out_op != NULL) {
         *out_op = op;
     }
+#ifdef APP_C15_BUSY_DIAG
+    s_begin_diag.begin_result = APP_CMD_NET_JOB_BEGIN_OK;
+#endif
     return APP_CMD_NET_JOB_BEGIN_OK;
 }
 
@@ -900,5 +934,99 @@ esp_err_t app_cmd_net_job_init_with_port(const app_cmd_net_job_port_t *port)
     s_port = *port;
     s_inited = true;
     return ESP_OK;
+}
+#endif
+
+#ifdef APP_C15_BUSY_DIAG
+void app_c15_busy_diag_capture_locked(app_c15_busy_diag_t *out)
+{
+    if (out == NULL) {
+        return;
+    }
+    memset(out, 0, sizeof(*out));
+    out->job_snapshot_locked = true;
+    out->cross_domain_atomic = false;
+    out->job_active = s_job.active;
+    out->job_op_nonnull = (s_job.op != NULL);
+    snprintf(out->job_operation_id, sizeof(out->job_operation_id), "%s",
+             s_job.operation_id);
+    out->job_owner = (uint8_t)s_job.owner;
+    out->idem_key_present = (s_job.idem_key[0] != '\0');
+    out->cfg_txn_valid = s_job.cfg_txn_valid;
+    out->ops_snapshot_locked = app_operation_diag_snapshot(&out->ops, s_job.op);
+    out->job_op_valid = out->ops.job_op_found;
+    if (out->job_op_valid) {
+        out->job_op_state = out->ops.job_op.state;
+        out->job_op_running = out->ops.job_op.running;
+        out->job_op_generation = out->ops.job_op.generation;
+    }
+    out->snapshot_us = esp_timer_get_time();
+}
+
+void app_c15_busy_diag_capture(app_c15_busy_diag_t *out)
+{
+    app_cmd_net_job_lock();
+    app_c15_busy_diag_capture_locked(out);
+    app_cmd_net_job_unlock();
+}
+
+void app_c15_busy_diag_begin_snapshot(app_c15_begin_diag_t *out)
+{
+    if (out != NULL) {
+        *out = s_begin_diag;
+    }
+}
+
+void app_c15_busy_diag_log(const app_c15_busy_diag_t *diag,
+                           const app_c15_busy_event_t *event,
+                           const app_c15_begin_diag_t *begin)
+{
+    char ops[240];
+    size_t off = 0;
+
+    if (diag == NULL || event == NULL) {
+        return;
+    }
+    ops[0] = '\0';
+    for (uint32_t i = 0; i < diag->ops.printed && off < sizeof(ops); i++) {
+        const app_operation_diag_op_t *o = &diag->ops.ops[i];
+        off += (size_t)snprintf(ops + off, sizeof(ops) - off,
+                                "%s%s/{state=%u,run=%d,gen=%lu,cleanup=%u}",
+                                i == 0 ? "" : ",", o->id,
+                                (unsigned)o->state, (int)o->running,
+                                (unsigned long)o->generation,
+                                (unsigned)o->cleanup_state);
+    }
+    int br = event->begin_result;
+    int jab = -1, sta = -1, serr = -1;
+    if (begin != NULL) {
+        br = begin->begin_result;
+        jab = (int)begin->job_active_before;
+        sta = (int)begin->start_attempted;
+        serr = begin->operation_start_err;
+    }
+    long long delay_ms = (long long)((diag->snapshot_us - event->busy_observed_us) / 1000);
+    ESP_LOGW(TAG,
+             "C15_BUSY_DIAG tag=%s branch=%s response=%s busy_observed=%d "
+             "busy_gate=%d begin_failure=%d mapped=%s begin_result=%d "
+             "job_active_before=%d start_attempted=%d start_err=%d "
+             "job_active=%d job_op_nonnull=%d job_op_valid=%d job_id=%s "
+             "job_state=%u job_running=%d job_gen=%lu active_ops=%lu printed=%lu "
+             "truncated=%d ops=[%s] busy_us=%lld snapshot_us=%lld delay_ms=%lld "
+             "job_locked=%d ops_locked=%d cross_atomic=%d same_lock=%d phase=%s",
+             APP_C15_BUSY_DIAG_TAG, event->branch, event->response_code,
+             (int)event->busy_observed, (int)event->busy_gate,
+             (int)event->begin_failure, event->mapped_busy_source, br,
+             jab, sta, serr, (int)diag->job_active, (int)diag->job_op_nonnull,
+             (int)diag->job_op_valid, diag->job_operation_id,
+             (unsigned)diag->job_op_state, (int)diag->job_op_running,
+             (unsigned long)diag->job_op_generation,
+             (unsigned long)diag->ops.active_ops,
+             (unsigned long)diag->ops.printed, (int)diag->ops.truncated, ops,
+             (long long)event->busy_observed_us,
+             (long long)diag->snapshot_us, delay_ms,
+             (int)diag->job_snapshot_locked, (int)diag->ops_snapshot_locked,
+             (int)diag->cross_domain_atomic, (int)diag->same_lock_as_decision,
+             diag->snapshot_phase != NULL ? diag->snapshot_phase : "unknown");
 }
 #endif

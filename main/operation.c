@@ -786,6 +786,52 @@ bool app_operation_get_status(const app_operation_t *op, app_operation_status_t 
     return ok;
 }
 
+#ifdef APP_C15_BUSY_DIAG
+bool app_operation_diag_snapshot(app_operation_diag_t *out,
+                                 const app_operation_t *job_op)
+{
+    if (out == NULL) {
+        return false;
+    }
+    memset(out, 0, sizeof(*out));
+    if (!s_initialized) {
+        return false;
+    }
+    portENTER_CRITICAL(&s_ops_mux);
+    for (size_t i = 0; i < APP_OPERATION_MAX_SLOTS; i++) {
+        const app_operation_t *op = &s_ops[i];
+        if (!op->used) {
+            continue;
+        }
+        if (job_op != NULL && op == job_op) {
+            out->job_op_found = true;
+            memcpy(out->job_op.id, op->id, sizeof(out->job_op.id) - 1);
+            out->job_op.id[sizeof(out->job_op.id) - 1] = '\0';
+            out->job_op.state = (uint8_t)op->state;
+            out->job_op.running = op->running;
+            out->job_op.generation = op->generation;
+            out->job_op.cleanup_state = op->net_cleanup_state;
+        }
+        if (!app_op_state_is_active(op->state)) {
+            continue;
+        }
+        out->active_ops++;
+        if (out->printed < APP_OPERATION_MAX_SLOTS) {
+            app_operation_diag_op_t *d = &out->ops[out->printed++];
+            memcpy(d->id, op->id, sizeof(d->id) - 1);
+            d->id[sizeof(d->id) - 1] = '\0';
+            d->state = (uint8_t)op->state;
+            d->running = op->running;
+            d->generation = op->generation;
+            d->cleanup_state = op->net_cleanup_state;
+        }
+    }
+    out->truncated = out->active_ops > out->printed;
+    portEXIT_CRITICAL(&s_ops_mux);
+    return true;
+}
+#endif
+
 bool app_operation_generation_matches(const app_operation_t *op, uint32_t expected_generation)
 {
     bool match = false;

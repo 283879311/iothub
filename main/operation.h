@@ -118,6 +118,30 @@ typedef enum {
     APP_OPERATION_CLEANUP_STALE,
 } app_operation_cleanup_claim_t;
 
+#ifdef APP_C15_BUSY_DIAG
+/* 仅 BUSY 诊断构建：在 s_ops_mux 内一次性复制 operation 表；
+ * 只读，不 reclaim、不调用回调、不改变状态。 */
+typedef struct {
+    char id[APP_OPERATION_ID_LEN];
+    uint8_t state;
+    bool running;
+    uint32_t generation;
+    uint8_t cleanup_state;
+} app_operation_diag_op_t;
+
+typedef struct {
+    uint32_t active_ops;
+    uint32_t printed;
+    bool truncated;
+    bool job_op_found;
+    app_operation_diag_op_t job_op;
+    app_operation_diag_op_t ops[APP_OPERATION_MAX_SLOTS];
+} app_operation_diag_t;
+
+bool app_operation_diag_snapshot(app_operation_diag_t *out,
+                                 const app_operation_t *job_op);
+#endif
+
 /* 以下 API 只在 s_ops_mux 内读写 claim；不改变 operation 状态迁移语义。
  * claim 准入：槽位有效、generation 匹配、state 为活动态、claim==NONE；
  * expiring/running 不作为拒绝条件（P4/P5 的正常入口）。 */

@@ -155,3 +155,52 @@ typedef void (*app_cmd_net_job_test_hook_fn)(const char *point,
                                              uint32_t expected_gen);
 void app_cmd_net_job_test_hook_set(app_cmd_net_job_test_hook_fn fn);
 #endif
+
+#ifdef APP_C15_BUSY_DIAG
+/* C15-2 BUSY 来源诊断（test-only）。capture_locked 要求调用方持 J；
+ * capture 仅用于明确未持 J 的调用点。两入口都只读、不改变状态。 */
+typedef struct {
+    bool job_active_before;
+    bool start_attempted;
+    int operation_start_err;
+    int begin_result;
+} app_c15_begin_diag_t;
+
+typedef struct {
+    bool job_active;
+    bool job_op_nonnull;
+    bool job_op_valid;
+    char job_operation_id[APP_OPERATION_ID_LEN];
+    uint8_t job_owner;
+    uint8_t job_op_state;
+    bool job_op_running;
+    uint32_t job_op_generation;
+    bool idem_key_present;
+    bool cfg_txn_valid;
+    app_operation_diag_t ops;
+    bool job_snapshot_locked;
+    bool ops_snapshot_locked;
+    bool cross_domain_atomic;   /* 固定 false：不宣称 J/O 跨域原子 */
+    bool same_lock_as_decision;
+    const char *snapshot_phase;
+    int64_t snapshot_us;
+} app_c15_busy_diag_t;
+
+typedef struct {
+    const char *branch;
+    const char *response_code;
+    int begin_result;
+    bool busy_observed;
+    bool busy_gate;
+    bool begin_failure;
+    const char *mapped_busy_source;
+    int64_t busy_observed_us;
+} app_c15_busy_event_t;
+
+void app_c15_busy_diag_capture_locked(app_c15_busy_diag_t *out);
+void app_c15_busy_diag_capture(app_c15_busy_diag_t *out);
+void app_c15_busy_diag_begin_snapshot(app_c15_begin_diag_t *out);
+void app_c15_busy_diag_log(const app_c15_busy_diag_t *diag,
+                           const app_c15_busy_event_t *event,
+                           const app_c15_begin_diag_t *begin);
+#endif
