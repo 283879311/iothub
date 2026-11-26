@@ -88,6 +88,13 @@ def evaluate(terminal, attrs, post, expect_ssid):
         terminal.get("state"), terminal.get("error"), len(attrs), post.get("sta_ip"))
 
 
+def terminal_ok(term_ok, term):
+    """ok=False 的响应不得作为有效终态证据。"""
+    return bool(term_ok
+                and term.get("state") == "failed"
+                and term.get("error") in ("wrong_password", "ap_not_found"))
+
+
 def load_p0(path=P0_PATH):
     data = Path(path).read_bytes()
     got = hashlib.sha256(data).hexdigest()
@@ -362,14 +369,13 @@ async def run_device(expect_fw, expect_sha, expect_device, outdir):
             sess, "operation.get", lambda d: d.get("state") in TERMINAL,
             45, "term", args={"operation_id": oid}, interval=1.0,
             timeout_cap=15.0, backoff=0.5, max_backoff=5.0)
-        rec("C15-2 终态", term_ok and term.get("state") == "failed"
-            and term.get("error") in ("wrong_password", "ap_not_found"),
-            "state=%s error=%s samples=%d" % (
-                term.get("state"), term.get("error"), len(term_samples)),
+        term_valid = terminal_ok(term_ok, term)
+        rec("C15-2 终态", term_valid,
+            "state=%s error=%s samples=%d term_ok=%s" % (
+                term.get("state"), term.get("error"), len(term_samples), term_ok),
             samples=term_samples)
-        if not (term.get("state") == "failed"
-                and term.get("error") in ("wrong_password", "ap_not_found")):
-            raise RuntimeError("终态不符，停止")
+        if not term_valid:
+            raise RuntimeError("终态不符或响应 ok=False，停止")
 
         recovered, post, samples = await poll_read(
             sess, "network.status",
@@ -508,6 +514,25 @@ async def selftest():
         interval=0.01, timeout_cap=0.05, backoff=0.02, max_backoff=0.05)
     chk("opget-budget-exhausted", not okp and s.calls <= 6
         and all(x["kind"] == "timeout" for x in ps))
+
+    class OkFalseTerminal:
+        def __init__(self):
+            self.calls, self.token = 0, "t"
+
+        async def send_request(self, req, timeout=0, retries=0, **kw):
+            self.calls += 1
+            return type("Resp", (), {"obj": {"ok": False, "data": {
+                "state": "failed", "error": "wrong_password"}}})()
+
+    s = OkFalseTerminal()
+    okp, term, ps = await poll_read(
+        s, "operation.get", lambda d: d.get("state") in TERMINAL, 0.12, "t",
+        interval=0.01, timeout_cap=0.05, backoff=0.02, max_backoff=0.05)
+    chk("opget-ok-false-rejected", not okp
+        and all(x["kind"] == "ok" and x["ok"] is False for x in ps))
+    chk("terminal-requires-ok", terminal_ok(True, good_term)
+        and not terminal_ok(False, good_term)
+        and not terminal_ok(True, {"state": "success", "error": None}))
 
     print("SELFTEST:", "PASS" if all(checks) else "FAIL",
           "(%d/%d)" % (sum(checks), len(checks)))
