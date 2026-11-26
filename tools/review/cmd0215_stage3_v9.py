@@ -176,7 +176,8 @@ def merge_attrs(msgs, t0, t1):
 class AttrTap:
     """订阅属性/遥测；必须 CONNACK + SUBACK 成功才返回。消息带 topic/ts。"""
 
-    def __init__(self, host, port, timeout=10.0):
+    def __init__(self, host, port, timeout=10.0, username=None,
+                 subscribe_telemetry=True):
         import paho.mqtt.client as mqtt
         self.msgs = []
         self.lock = threading.Lock()
@@ -187,6 +188,9 @@ class AttrTap:
         self.rc = None
         self.suback_codes = None
         self.cli = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, protocol=mqtt.MQTTv311)
+        if username:
+            # ThingsBoard (21883) 需要设备 token 作为 MQTT username；不记录该值。
+            self.cli.username_pw_set(username)
         self.cli.on_message = self._on
         self.cli.on_connect = self._on_connect
         self.cli.on_subscribe = self._on_subscribe
@@ -195,8 +199,10 @@ class AttrTap:
         if not self.connected.wait(timeout):
             self.stop()
             raise RuntimeError("mqtt CONNACK 未确认")
-        rc, _mid = self.cli.subscribe([("v1/devices/me/attributes", 1),
-                                       ("v1/devices/me/telemetry", 1)])
+        topics = [("v1/devices/me/attributes", 1)]
+        if subscribe_telemetry:
+            topics.append(("v1/devices/me/telemetry", 1))
+        rc, _mid = self.cli.subscribe(topics)
         if int(rc) != int(mqtt.MQTT_ERR_SUCCESS):
             self.stop()
             raise RuntimeError("subscribe() 本地返回码=%s" % rc)
@@ -244,7 +250,16 @@ class AttrTap:
 
 
 def make_attr_tap(host, port):
-    return AttrTap(host, port)
+    # 1883 为匿名测试 broker；21883 为 ThingsBoard，需要 IOTHUB_MQTT_TOKEN。
+    username = None
+    if port == 21883:
+        username = os.environ.get("IOTHUB_MQTT_TOKEN")
+        if not username:
+            raise RuntimeError("21883 需要 IOTHUB_MQTT_TOKEN（设备 token）")
+    # ThingsBoard 设备 token 可订阅 attributes，但 telemetry 订阅会被拒（0x80），
+    # 因此 21883 只订阅 attributes；1883 测试 broker 仍订阅两者。
+    return AttrTap(host, port, username=username,
+                   subscribe_telemetry=(port != 21883))
 
 
 class RunState:
@@ -337,7 +352,8 @@ async def wait_sta(sess, st, want, timeout=60, prefix="sta"):
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         n = ((await call(sess, st, "device.status", {},
-                         "%s%d" % (prefix, int(time.time() * 1000)))).get("data", {}) or {}).get("network", {})
+                         "%s%d" % (prefix, int(time.time() * 1000)),
+                         timeout=30)).get("data", {}) or {}).get("network", {})
         if bool(n.get("sta_connected")) == want:
             return True
         await asyncio.sleep(1.5)
@@ -352,7 +368,8 @@ async def wait_mqtt_connected(sess, st, timeout=70, expect_device=None, prefix="
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         d = (await call(sess, st, "device.status", {},
-                        "%s%d" % (prefix, int(time.time() * 1000)))).get("data", {})
+                        "%s%d" % (prefix, int(time.time() * 1000)),
+                        timeout=30)).get("data", {})
         dev = d.get("device_id")
         conn = bool((d.get("mqtt") or {}).get("connected"))
         samples.append({"ts": time.time(), "device_id": dev,
@@ -689,8 +706,8 @@ async def case_c151(sess, st, expect_device, attr_factory=None, attr_wait=20.0):
                 consistent = (merged.get("net_mode") == "sta"
                               and merged.get("sta_ssid") == "CMCC-502"
                               and bool(merged.get("sta_ip")))
-                status = ((await call(sess, st, "network.status", {}, "c151ns"))
-                          .get("data", {}) or {})
+                status = ((await call(sess, st, "network.status", {}, "c151ns",
+                                     timeout=30)).get("data", {}) or {})
                 w1 = time.time()
                 status_ok = (status.get("sta_has_ip") is True
                              and bool(status.get("sta_ip")))
@@ -751,7 +768,27 @@ async def case_c151(sess, st, expect_device, attr_factory=None, attr_wait=20.0):
 
 
 async def case_c152(sess, st, expect_device, attr_factory=None):
-    pre = (await call(sess, st, "network.status", {}, "c152pre")).get("data", {})
+    # C15-1 恢复写触发 MQTT/配置应用，立即 tryconnect 可能命中瞬时 busy；
+    # 先做有界就绪等待（trial=idle 且 MQTT 已连接），不改变 tryconnect 判据。
+    ready = False
+    stable = 0
+    deadline = time.monotonic() + 30.0
+    while time.monotonic() < deadline:
+        await asyncio.sleep(1.0)
+        s0 = (await call(sess, st, "network.status", {}, "c152wait",
+                         timeout=30)).get("data", {})
+        ok0 = (s0.get("trial", {}).get("state") == "idle"
+               and s0.get("mqtt_connected") is True
+               and s0.get("sta_connected") is True)
+        stable = stable + 1 if ok0 else 0
+        if stable >= 10:  # 连续 10s 稳定
+            ready = True
+            break
+    st.rec("C15-2 前置就绪", ready, "trial=idle/mqtt/sta 连续 5s 稳定=%s" % ready)
+    if not ready:
+        return False
+    pre = (await call(sess, st, "network.status", {}, "c152pre",
+                      timeout=30)).get("data", {})
     if not pre.get("sta_connected"):
         st.rec("C15-2 前置", False, "STA 未连接")
         return False
@@ -781,7 +818,8 @@ async def case_c152(sess, st, expect_device, attr_factory=None):
         if not term_ok:
             return False
         restored = await wait_sta(sess, st, True, 60)
-        ident = ((await call(sess, st, "device.status", {}, "c152id")).get("data", {}) or {})
+        ident = ((await call(sess, st, "device.status", {}, "c152id",
+                             timeout=30)).get("data", {}) or {})
         if expect_device and ident.get("device_id") != expect_device:
             st.rec("C15-2 身份核验", False, "device_id=%s（期望 %s）" %
                    (ident.get("device_id"), expect_device))
@@ -1057,7 +1095,9 @@ async def selftest():
             if req["cmd"] == "network.status":
                 return FakeResp({"ok": True, "data": {"sta_connected": True,
                                                       "sta_has_ip": True,
-                                                      "sta_ip": "1.2.3.4"}})
+                                                      "sta_ip": "1.2.3.4",
+                                                      "mqtt_connected": True,
+                                                      "trial": {"state": "idle"}}})
             if req["cmd"] == "device.status":
                 return FakeResp({"ok": True, "data": {"device_id": "A",
                                                       "network": {"sta_connected": True}}})
