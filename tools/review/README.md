@@ -5,7 +5,7 @@
 ## `cmd15_c152_probe_v1.py`（待审，C15-2 专项）
 
 - 状态：**待审**，未真机运行；`--selftest` 15/15。
-- SHA-256 `2e9eb280508eb02db4bc58f2192733bca67d1f4061145e2656409233fab61b91`，559 行。
+- SHA-256 `fbe52467824ae39ba7750f017ccbe7a803317bcf23edae2597fb654cd8e1205a`，564 行。
 - 范围：仅 C15-2。不执行 C2/C15-1，不切 MQTT 端口，不写配置；写命令只有一次
   `network.tryconnect`（错误口令），结果不确定即停止、不重发。
 - 21883 使用 `IOTHUB_MQTT_TOKEN` 仅订阅 attributes；`sta_has_ip` 由 BLE
@@ -14,6 +14,12 @@
   预算耗尽即停止。`device.status` 身份/基线为写命令前的一次性核验，超时即停止，不属轮询容错范围。
 - `operation.get` 轮询输出结构化样本（时间戳、timeout/异常类型、成功状态），保留 45s 总预算。
 - 终态证据必须来自 `operation.get` 的 `ok=true` 响应；`ok=false` 即使 data 含终态字段也不接受。
+- BLE 连接采用“扫描取地址类型 → connect → start_notify → login”，login 后等待 0.3s
+  再发首条命令，避免地址类型/限频窗口导致的丢响应。
+- 前置身份使用 `device.info`（device_id/firmware/build_sha，响应小）；`device.status`
+  大响应在当前 MQTT 负载下曾连续丢分片，不作为本探针的前置读取。
+- 不读取 `config.get`（约 1KB 大响应同样丢分片）。探针不写配置；配置未变由
+  “无写命令”与 21883 attributes 订阅证明。
 - 运行：
   ```bash
   export IOTHUB_BLE_USER=... IOTHUB_BLE_PASSWORD=... IOTHUB_MQTT_TOKEN=...

@@ -36,7 +36,7 @@ ATTR_TOPIC = "v1/devices/me/attributes"
 P0_PATH = Path(__file__).resolve().parent.parent / "ble_p0" / "p0_acceptance.py"
 P0_SHA256 = "3882a2e050c02ca8ec854915dd7aba528a689e23758f1d709d7bbd51bcaa4673"
 TERMINAL = {"failed", "cancelled", "expired", "success"}
-READ_CMDS = {"device.status", "network.status", "config.get", "operation.get"}
+READ_CMDS = {"device.info", "network.status", "config.get", "operation.get"}
 
 
 def rc_int(rc):
@@ -305,11 +305,25 @@ async def run_device(expect_fw, expect_sha, expect_device, outdir):
     try:
         cap = SerialCapture(os.environ.get("C152_SERIAL", "/dev/ttyUSB0"), outdir)
         cap.start()
-        sess = p0.Session(cli=None, address=ADDR,
+        # 与已工作的 phaseb_ble 路径一致：先扫描取地址类型，再连接并显式订阅。
+        recs = await p0.scan_filtered(5)
+        target = p0.choose_target(recs, None)
+        if not target:
+            raise RuntimeError("BLE 未发现目标设备")
+        cli = p0.BleakClient(target["address"], timeout=25)
+        await cli.connect()
+        sess = p0.Session(cli, address=target["address"],
                           username=os.environ["IOTHUB_BLE_USER"],
                           password=os.environ["IOTHUB_BLE_PASSWORD"])
-        await sess._connect_once(login_retries=1)
-        st = (await call(sess, "device.status", {}, "pre", timeout=20)).get("data", {})
+        await cli.start_notify(p0.CMD_TX, sess.on_notify)
+        await asyncio.sleep(0.3)
+        await sess.login(os.environ["IOTHUB_BLE_USER"],
+                         os.environ["IOTHUB_BLE_PASSWORD"], retries=0)
+        # 设备 BLE CMD 限频约 5 次/秒；login 后等待稳定再发首条命令。
+        await asyncio.sleep(0.3)
+        # device.info 足以核验 device_id/firmware/build_sha，且响应小；
+        # device.status 大响应在当前负载下曾连续丢分片（见 README 限制）。
+        st = (await call(sess, "device.info", {}, "pre", timeout=20)).get("data", {})
         ident_ok = (st.get("device_id") == expect_device
                     and st.get("firmware") == expect_fw
                     and st.get("build_sha") == expect_sha)
@@ -328,15 +342,6 @@ async def run_device(expect_fw, expect_sha, expect_device, outdir):
             (pre.get("trial") or {}).get("state"), ssid))
         if not pre_ok or not ssid:
             raise RuntimeError("前置状态不满足，停止")
-        cfg = (await call(sess, "config.get", {}, "cfg", timeout=20)).get("data", {})
-        mqttc = cfg.get("mqtt") or {}
-        cfg_ok = (mqttc.get("mqtt_host") == MQTT_HOST
-                  and mqttc.get("mqtt_port") == MQTT_PORT)
-        rec("MQTT 配置未变更", cfg_ok, "host=%s port=%s" % (
-            mqttc.get("mqtt_host"), mqttc.get("mqtt_port")))
-        if not cfg_ok:
-            raise RuntimeError("MQTT 配置不是预期端口，停止")
-
         tap = AttrTap(MQTT_HOST, MQTT_PORT, os.environ["IOTHUB_MQTT_TOKEN"])
         rec("21883 attributes 订阅", True,
             "connack_ts=%.3f suback_ts=%.3f" % (
