@@ -2,6 +2,27 @@
 
 本目录存放**等待代码审查**的测试 harness 快照，不参与固件构建，也不随固件发布。
 
+## `cmd15_c152_probe_v1.py`（待审，C15-2 专项）
+
+- 状态：**待审**，未真机运行；`--selftest` 7/7。
+- SHA-256 `74c1ade35ecd70a64e137c32c91e80c6ff4b954d0692d86e0bea0d9751c36c2c`，461 行。
+- 范围：仅 C15-2。不执行 C2/C15-1，不切 MQTT 端口，不写配置；写命令只有一次
+  `network.tryconnect`（错误口令），结果不确定即停止、不重发。
+- 21883 使用 `IOTHUB_MQTT_TOKEN` 仅订阅 attributes；`sta_has_ip` 由 BLE
+  `network.status` 核验，attributes 只断言实际发布字段（net_mode/sta_ssid/sta_ip/uart_baudrate）。
+- 只读轮询（device.status/network.status/operation.get）单次超时记录后继续，总预算不变。
+- 运行：
+  ```bash
+  export IOTHUB_BLE_USER=... IOTHUB_BLE_PASSWORD=... IOTHUB_MQTT_TOKEN=...
+  .venv-bleak/bin/python tools/review/cmd15_c152_probe_v1.py --selftest
+  .venv-bleak/bin/python tools/review/cmd15_c152_probe_v1.py \
+    --expect-device IotHub-65D8 \
+    --expect-fw 1.3-956afcd \
+    --expect-sha c231c9501 \
+    --out artifacts/c152_probe_YYYYmmdd
+  ```
+- 限制：窗口 `[w0,w1]` 覆盖 tryconnect 到 STA 恢复，不证明瞬时断开窗口；设备执行需单独授权。
+
 ## `cmd0215_stage3_v9.py`（已退役，2026-11-26）
 
 - 状态：**已退役**。已用于 CMD-02/15 阶段 3 r1–r7；不再用于 C15-2 或全量重跑。
