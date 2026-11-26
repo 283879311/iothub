@@ -1,0 +1,8 @@
+run	harness_sha	fatal	pass	C2-1	C2-2	C2-3_absent	C2-3_got_ip	C2-4	C15-1_switch	C15-1_attr	C15-1_restore	C15-2_sub	C15-2_term
+r1	88ede887	异常退出：RuntimeError: mqtt CONNACK 未确认	False	PASS	PASS	PASS	NOT_COVERED	PASS	PASS	-	PASS	-	-
+r2	d6c62316	停止条件：case_c151 失败	False	PASS	PASS	PASS	NOT_COVERED	PASS	PASS	FAIL	PASS	-	-
+r3	dc9ab8b6	停止条件：case_c152 失败	False	PASS	PASS	PASS	NOT_COVERED	PASS	PASS	PASS	PASS	FAIL	-
+r4	09346297	异常退出：RuntimeError: mqtt SUBACK 未确认	False	PASS	PASS	PASS	NOT_COVERED	PASS	PASS	-	PASS	-	-
+r5	4191be15	停止条件：case_c152 失败	False	PASS	PASS	PASS	NOT_COVERED	PASS	PASS	PASS	PASS	PASS	FAIL
+r6	d05c8976	异常退出：TimeoutError: no complete JSON for id=c151st1795656668278 within 15s	False	PASS	PASS	PASS	NOT_COVERED	PASS	-	-	PASS	-	-
+r7	fb79bd7a	异常退出：TimeoutError: no complete JSON for id=c151st1795657587943 within 30s	False	PASS	PASS	PASS	NOT_COVERED	PASS	-	-	PASS	-	-

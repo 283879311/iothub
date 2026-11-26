@@ -12,8 +12,8 @@
 | ID | 优先级 | 当前事项 | 状态 | 当前结论 / 关闭条件 |
 |---|---|---|---|---|
 | CMD-01 | P0 | `io.get` Wi-Fi runtime 读取快照 | PASS | 修复 `add93e7`；构建通过；BLE/MQTT `io.get` 与 `network.status` 一致性对读通过（[复测记录](../reviews/WIFI-OP-RESOURCE-RACE_CMD-01_设备复测记录_2026-11-22.md)，设备 65D8 / `1.3-1ff92db`） |
-| CMD-02 | P0 | `s_net_async` 字段所有权与读点 | TEST_PENDING | 七处读点已实施（`28f9090`）；阶段 1 ESP-IDF fullclean/build 和阶段 2 host tests 按执行报告通过；阶段 3 设备回归未执行、未授权 |
-| CMD-03 | P0 | operation 锁序、回调时序及 expiring 窄窗口 | PASS | H1-P1 已进入 `main`：本轮执行基线 `0e4d49c`（PR #4 merge；全局源码维护基线见 `docs/baseline/`），证据文档 `956afcd`。Host `tests/cmd_net_job` 为 24 个可执行用例（T09 拆为 T09a/T09b）：23 PASS + T09a EXPECTED、0 failed；`tests/operation_host` S1–S5 各 50/50；断言 A1/A2/A3/A4/A5/A5h/A7 均 PASS（无独立 A6 断言）；ESP-IDF build 证据来自 `0e4d49c`（PASS），`956afcd` 仅证据文档合并。设备 65D8 / `1.3-0e4d49c` / `build_sha=659cf7f1c` 的外部可触发 cancel、重复 cancel、BLE 断连 cleanup、持久恢复、网络/MQTT 恢复 PASS（[证据](../evidence/H1-P1_device_main_2026-11-24/README.md)）。阶段 A v2 clean-cycle（测试专用 helper 分支 `407be43`，未合入 `main`）设备侧 T13/T19 PASS，NVS 前后一致，生产 `main` `956afcd` 已恢复并核验（[证据](../evidence/CMD-03_phase_a_clean_2026-11-25/README.md)）。阶段 B WAIT200 于 2026-11-25 完成：空闲 10/10 + BLE 负载 10/10 PASS，全调用墙钟 200–210 ms，`T_max=250 ms` 已冻结；NVS 整分区不一致（仅 `phy/cal_data`），按 D1 记为系统管理数据例外，持久配置一致（[证据](../evidence/CMD-03_phase_b_wait200_2026-11-25/README.md)，[验收规范](../reviews/CMD/CMD-03_WAIT200与NVS验收规范_2026-11-25.md)）。阶段 B 已按定义 A 关闭（限 WAIT200 测量与验收决策，见[规范 §4](../reviews/CMD/CMD-03_WAIT200与NVS验收规范_2026-11-25.md)）。CMD-03 已按路径 A 关闭为 `PASS`（2026-11-25 独立评审，依据上述 Host/设备证据与路径 A 设备适用性口径）；P0 仍为 `OPEN`，原因是 CMD-02 `TEST_PENDING`（路径 A 第 1 条）。设备侧 T01–T12、T14–T18、T20–T23 按路径 A 以 Host 证据验收，不纳入设备补测（设备侧 NOT_COVERED）。P0 处置为 `OPEN`（见 §2.1）。 |
+| CMD-02 | P0 | `s_net_async` 字段所有权与读点 | PASS | 七处读点已实施（`28f9090`）；阶段 1 ESP-IDF fullclean/build 和阶段 2 host tests 按执行报告通过；阶段 3 于 2026-11-26 执行 r1–r7：C2-1、C2-2、C2-3 absent、C2-4 每轮 PASS，C2-3 `got_ip` NOT_COVERED（整体 PARTIAL，按授权接受），判定 PASS（[报告](../reports/CMD-02_15_阶段3设备回归结果_2026-11-26.md)，[证据](../evidence/CMD-02_15_stage3_2026-11-26/README.md)） |
+| CMD-03 | P0 | operation 锁序、回调时序及 expiring 窄窗口 | PASS | H1-P1 已进入 `main`：本轮执行基线 `0e4d49c`（PR #4 merge；全局源码维护基线见 `docs/baseline/`），证据文档 `956afcd`。Host `tests/cmd_net_job` 为 24 个可执行用例（T09 拆为 T09a/T09b）：23 PASS + T09a EXPECTED、0 failed；`tests/operation_host` S1–S5 各 50/50；断言 A1/A2/A3/A4/A5/A5h/A7 均 PASS（无独立 A6 断言）；ESP-IDF build 证据来自 `0e4d49c`（PASS），`956afcd` 仅证据文档合并。设备 65D8 / `1.3-0e4d49c` / `build_sha=659cf7f1c` 的外部可触发 cancel、重复 cancel、BLE 断连 cleanup、持久恢复、网络/MQTT 恢复 PASS（[证据](../evidence/H1-P1_device_main_2026-11-24/README.md)）。阶段 A v2 clean-cycle（测试专用 helper 分支 `407be43`，未合入 `main`）设备侧 T13/T19 PASS，NVS 前后一致，生产 `main` `956afcd` 已恢复并核验（[证据](../evidence/CMD-03_phase_a_clean_2026-11-25/README.md)）。阶段 B WAIT200 于 2026-11-25 完成：空闲 10/10 + BLE 负载 10/10 PASS，全调用墙钟 200–210 ms，`T_max=250 ms` 已冻结；NVS 整分区不一致（仅 `phy/cal_data`），按 D1 记为系统管理数据例外，持久配置一致（[证据](../evidence/CMD-03_phase_b_wait200_2026-11-25/README.md)，[验收规范](../reviews/CMD/CMD-03_WAIT200与NVS验收规范_2026-11-25.md)）。阶段 B 已按定义 A 关闭（限 WAIT200 测量与验收决策，见[规范 §4](../reviews/CMD/CMD-03_WAIT200与NVS验收规范_2026-11-25.md)）。CMD-03 已按路径 A 关闭为 `PASS`（2026-11-25 独立评审，依据上述 Host/设备证据与路径 A 设备适用性口径）；P0 已按路径 A 关闭（2026-11-26，CMD-02 阶段 3 PASS）。设备侧 T01–T12、T14–T18、T20–T23 按路径 A 以 Host 证据验收，不纳入设备补测（设备侧 NOT_COVERED）。P0 处置为 `OPEN`（见 §2.1）。 |
 | CMD-04 | P1 | status 响应快照化 | IN_PROGRESS | `main/cmd.c` 中已存在 04a `app_cmd_net_operation_status` / `app_cmd_net_op_status_capture` 与 04b `app_cmd_build_network_status` / `app_cmd_network_status_snap_t` 实现入口；目前仅确认源码存在，尚未完成对冻结设计的逐分支静态复核及完整验收。04c 已实施部分仍以专项审查记录为准。
 | CMD-05 | P1 | config/profile 全局锁序 | REVIEWED | 静态审查确认偏序 `J → C → P`；未测持锁时长，CMD-06 必须遵守递归锁和锁序约束 |
 | CMD-06 | P1 | 网络异步事务迁移到 `cmd_net_txn.c` | TODO | 等待阶段 A 相关风险与验证收口；迁移不得改变状态机、owner、generation、cleanup 和锁序 |
@@ -25,13 +25,13 @@
 | CMD-12 | P2 | CMD 内部重复 helper 与旧 wrapper 清理 | TODO | 先核对全仓调用者；再评估 owner 映射、domain 白名单、管理员密码校验命名等重复点；无调用证据前不删除 |
 | CMD-13 | P2 | 收敛 `cmd.c` 入口职责 | TODO | 仅保留 context、policy、分发和统一收尾；以实际代码结构为准更新 README |
 | CMD-14 | P1 | 测量 `apply_async` 持 job 锁跨 NVS 的时间 | TODO | 先定义测量方法并取得相应授权；测量前不得缩短锁区 |
-| CMD-15 | P1 | MQTT 运行态读取 `s_config` 的一致性 | TEST_PENDING | R1/R2（`999db00`）及 R4（`8d7d768`）已实施；联合构建和 host tests 按执行报告通过；阶段 3 设备回归未执行、未授权；R3/R5 未授权 |
+| CMD-15 | P1 | MQTT 运行态读取 `s_config` 的一致性 | TEST_PENDING | R1/R2（`999db00`）及 R4（`8d7d768`）已实施；联合构建和 host tests 按执行报告通过；阶段 3 于 2026-11-26：C15-1 PASS（r3/r5），C15-2 NOT_COVERED（attributes/telemetry 字段来源冲突、时序抖动；v9 退役，需专项修正后重测）；整体保持 TEST_PENDING（[报告](../reports/CMD-02_15_阶段3设备回归结果_2026-11-26.md)）；R3/R5 未授权 |
 
 ## 2. 当前未关闭事项与推进依赖
 
-1. **CMD-02 / CMD-15**：阶段 1 ESP-IDF fullclean/build 和阶段 2 host tests 于 2026-11-16 按执行报告通过；阶段 3 设备回归没有执行，也没有授权。执行方报告及本地忽略目录中的证据未上传仓库，因此不能标记 PASS。执行事实（BIN/ELF SHA256、run_id、warning 清单）见 [执行记录](../reports/CMD-02_15_执行记录_2026-11-16.md)。
+1. **CMD-02 / CMD-15**：阶段 1 ESP-IDF fullclean/build 和阶段 2 host tests 于 2026-11-16 按执行报告通过。阶段 3 于 2026-11-26 执行 r1–r7：CMD-02 的 C2-1/C2-2/C2-3 absent/C2-4 每轮 PASS，C2-3 `got_ip` NOT_COVERED（整体 PARTIAL，按授权接受），判定 PASS；CMD-15 的 C15-1 在 r3/r5 PASS，C15-2 NOT_COVERED，整体保持 TEST_PENDING。证据：[阶段 3 报告](../reports/CMD-02_15_阶段3设备回归结果_2026-11-26.md)、[证据目录](../evidence/CMD-02_15_stage3_2026-11-26/README.md)。
 2. **CMD-01**：已闭环（`add93e7` + 构建 + BLE/MQTT 回归），状态转 PASS；证据见 [复测记录](../reviews/WIFI-OP-RESOURCE-RACE_CMD-01_设备复测记录_2026-11-22.md)。不能用 CMD-02/15 的联合 host 结果替代该结论。
-3. **CMD-03**：H1-P1 已合入 `main`（本轮执行基线 `0e4d49c`；全局源码维护基线见 `docs/baseline/`，证据归档 `956afcd`）。Host `tests/cmd_net_job` 为 24 个可执行用例（T09 拆为 T09a/T09b）：23 PASS + T09a EXPECTED、0 failed，`tests/operation_host` S1–S5 各 50/50、断言 A1/A2/A3/A4/A5/A5h/A7 均 PASS（无独立 A6 断言）；ESP-IDF build 证据来自 `0e4d49c`（PASS），`956afcd` 仅证据文档合并。设备 65D8 / `1.3-0e4d49c` 的外部可触发 cancel、重复 cancel、BLE 断连 cleanup、持久恢复、网络/MQTT 恢复 PASS。阶段 A v2 clean-cycle 使用测试专用 helper 分支 `407be43`（未合入 `main`）完成设备侧 T13/T19 PASS、NVS 前后一致和生产 `main` `956afcd` 恢复核验（[证据](../evidence/CMD-03_phase_a_clean_2026-11-25/README.md)）。阶段 B WAIT200 于 2026-11-25 完成：空闲 10/10 + BLE 负载 10/10 PASS，全调用墙钟 200–210 ms，`T_max=250 ms` 已冻结；NVS 整分区不一致（仅 `phy/cal_data`），按 D1 记为系统管理数据例外，持久配置一致（[证据](../evidence/CMD-03_phase_b_wait200_2026-11-25/README.md)，[验收规范](../reviews/CMD/CMD-03_WAIT200与NVS验收规范_2026-11-25.md)）。T01–T12、T14–T18、T20–T23 按路径 A 以 Host 证据验收，设备侧 NOT_COVERED，不纳入设备补测。因此 CMD-03 已按路径 A 关闭为 `PASS`（2026-11-25 独立评审）；阶段 B 已按定义 A 关闭（限 WAIT200 测量与验收决策，见[规范 §4](../reviews/CMD/CMD-03_WAIT200与NVS验收规范_2026-11-25.md)）。P0 仍处置为 `OPEN`，原因是 CMD-02 `TEST_PENDING`（路径 A 第 1 条）。
+3. **CMD-03**：H1-P1 已合入 `main`（本轮执行基线 `0e4d49c`；全局源码维护基线见 `docs/baseline/`，证据归档 `956afcd`）。Host `tests/cmd_net_job` 为 24 个可执行用例（T09 拆为 T09a/T09b）：23 PASS + T09a EXPECTED、0 failed，`tests/operation_host` S1–S5 各 50/50、断言 A1/A2/A3/A4/A5/A5h/A7 均 PASS（无独立 A6 断言）；ESP-IDF build 证据来自 `0e4d49c`（PASS），`956afcd` 仅证据文档合并。设备 65D8 / `1.3-0e4d49c` 的外部可触发 cancel、重复 cancel、BLE 断连 cleanup、持久恢复、网络/MQTT 恢复 PASS。阶段 A v2 clean-cycle 使用测试专用 helper 分支 `407be43`（未合入 `main`）完成设备侧 T13/T19 PASS、NVS 前后一致和生产 `main` `956afcd` 恢复核验（[证据](../evidence/CMD-03_phase_a_clean_2026-11-25/README.md)）。阶段 B WAIT200 于 2026-11-25 完成：空闲 10/10 + BLE 负载 10/10 PASS，全调用墙钟 200–210 ms，`T_max=250 ms` 已冻结；NVS 整分区不一致（仅 `phy/cal_data`），按 D1 记为系统管理数据例外，持久配置一致（[证据](../evidence/CMD-03_phase_b_wait200_2026-11-25/README.md)，[验收规范](../reviews/CMD/CMD-03_WAIT200与NVS验收规范_2026-11-25.md)）。T01–T12、T14–T18、T20–T23 按路径 A 以 Host 证据验收，设备侧 NOT_COVERED，不纳入设备补测。因此 CMD-03 已按路径 A 关闭为 `PASS`（2026-11-25 独立评审）；阶段 B 已按定义 A 关闭（限 WAIT200 测量与验收决策，见[规范 §4](../reviews/CMD/CMD-03_WAIT200与NVS验收规范_2026-11-25.md)）。P0 已按路径 A 关闭（2026-11-26，CMD-02 阶段 3 PASS）。
 4. **CMD-04**：04a/04b 的实现入口已存在于当前 `main/cmd.c`，但尚未完成按设计清单逐分支核对，不能仅凭函数存在标记完成或 PASS；对应设计文件仍标记 PENDING，表示设计材料本身的生命周期，不替代本台账中的实施状态。后续需核对 wire 字段/分支、失败路径、锁内外边界、资源预算及回归证据。04c 已实施部分不代表整个 CMD-04 关闭；其中同步 tryconnect 分支已确认不属于当前 v1 wire 可达路径，不得写成 wire 真机验收 PASS；apply dispatcher 的 trial patch 路径仍需按 async apply 全流程理解。
 5. **CMD-05 / CMD-14**：锁序静态审查完成，但长持锁尚未实测。CMD-14 测量前不得因“看起来持锁过久”直接缩短临界区。
 6. **CMD-06 及后续模块迁移**：须等待相关锁契约、所有权边界和必要验证收口，再单独评审实施；不得把文件迁移与行为变化混在同一增量中。
@@ -40,7 +40,13 @@
 
 > 本小节是 P0 正式状态、关闭路径、处置词表和关闭条件的唯一维护入口；阶段性基线 §2 仅提供审核依据和技术解释。
 
-当前 P0 处置：`OPEN`（未关闭）。
+当前 P0 处置：`CLOSED`（2026-11-26 按路径 A 关闭）。
+
+**2026-11-26 关闭记录（路径 A）**
+
+- CMD-02 阶段 3 PASS：r1–r7 的 C2-1/C2-2/C2-3 absent/C2-4 均 PASS；C2-3 `got_ip` NOT_COVERED，整体 PARTIAL 按授权接受；
+- CMD-03 PASS：2026-11-25 独立评审，见 CMD-03 行；
+- P0 处置改为 `CLOSED`；CMD-15 仍 `TEST_PENDING`（P1，非路径 A 前置条件），不得隐式带过。
 
 处置值：`OPEN` / `CLOSED` / `CLOSED_WITH_RISK_ACCEPTANCE`。
 
@@ -66,7 +72,7 @@
 - 路径 A/B 互斥，不得混用。
 - `PASS` 只适用于路径 A 中完成的测试闭环。
 - `CLOSED_WITH_RISK_ACCEPTANCE` 是 P0 处置结果，不是 CMD 任务状态，也不是测试 PASS。
-- 当前 P0 处置为 `OPEN`，直到上述任一路径被正式记录。
+- 当前 P0 处置为 `CLOSED`（2026-11-26 路径 A 已记录）。
 
 ## 3. 必须保持的实现约束
 

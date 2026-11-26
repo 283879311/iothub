@@ -1,0 +1,537 @@
+{
+  "results": [
+    {
+      "case": "设备身份核验",
+      "ok": true,
+      "detail": "",
+      "ts": 1795656289.8130434
+    },
+    {
+      "case": "基线镜像核验",
+      "ok": true,
+      "detail": "firmware=1.3-956afcd/1.3-956afcd build_sha=c231c9501/c231c9501",
+      "ts": 1795656289.8130503
+    },
+    {
+      "case": "C2-1 活动 job 时第二次 tryconnect",
+      "ok": true,
+      "detail": "A=True 第二次=busy",
+      "ts": 1795656296.956082
+    },
+    {
+      "case": "C2-2 cancel 幂等",
+      "ok": true,
+      "detail": "取消→cancelled 终态=cancelled 重复→cancelled",
+      "ts": 1795656302.671616
+    },
+    {
+      "case": "C2-3 absent 路径（无 trial 残留/终态）",
+      "ok": true,
+      "detail": "states=['idle', 'idle', 'idle', 'idle', 'idle'] issues=[] job=failed/ap_not_found",
+      "ts": 1795656313.5735652,
+      "coverage": "absent_path_checked"
+    },
+    {
+      "case": "C2-3 got_ip trial/job 关联",
+      "ok": false,
+      "detail": "NOT_COVERED：absent SSID 不产生 trial，需已知口令 AP 才能覆盖",
+      "ts": 1795656313.5735774,
+      "not_covered": true
+    },
+    {
+      "case": "C2-4 在飞 operation.get 快照",
+      "ok": true,
+      "detail": "序列=['connecting', 'connecting', 'connecting', 'failed'] 单调=True 终态=failed/ap_not_found content=True",
+      "ts": 1795656320.8908756
+    },
+    {
+      "case": "C15-1 改端口后连接",
+      "ok": true,
+      "detail": "connected=True/connected",
+      "ts": 1795656335.2161422
+    },
+    {
+      "case": "C15-1 属性快照",
+      "ok": true,
+      "detail": "窗口 attributes=1 telemetry=1 fields=True consistent=True status_ok=True ip_match=True",
+      "ts": 1795656340.3456328,
+      "window": {
+        "w0": 1795656335.4085019,
+        "w1": 1795656340.345565,
+        "start": "SUBACK 确认",
+        "end": "network.status 核验"
+      },
+      "sample": {
+        "net_mode": "sta",
+        "sta_ip": "<device-ip>",
+        "sta_ssid": "<wifi-ssid>",
+        "uart_baudrate": 115200
+      },
+      "status": {
+        "sta_has_ip": true,
+        "sta_ip": "<device-ip>"
+      }
+    },
+    {
+      "case": "C15-1 恢复并核验",
+      "ok": true,
+      "detail": "send=ok verify={\"stages\": [{\"stage\": \"config\", \"ok\": true, \"ts\": 1795656342.7957733, \"host\": \"<mqtt-broker>\", \"port\": 21883}, {\"stage\": \"mqtt\", \"ok\": true, \"ts\": 1795656344.4362025, \"reason\": \"connected\", \"samples\": 1, \"device_id\": \"IotHub-65D8\"}], \"ok\": true}",
+      "ts": 1795656344.4362695,
+      "restore_send": "ok"
+    },
+    {
+      "case": "C15-2 属性订阅建立",
+      "ok": true,
+      "detail": "connack=1795656345.1086597 suback=1795656345.1753867",
+      "ts": 1795656345.175488
+    },
+    {
+      "case": "C15-2 抖动终态",
+      "ok": false,
+      "detail": "未取得 operation_id",
+      "ts": 1795656346.0516608
+    }
+  ],
+  "attempts": [
+    {
+      "rid": "pre",
+      "cmd": "device.status",
+      "ts": 1795656288.9466224,
+      "attempt": 1,
+      "allow_reconnect": true,
+      "action": "ok",
+      "error": null,
+      "exc_class": null,
+      "response_ok": true,
+      "code": null
+    },
+    {
+      "rid": "c21a",
+      "cmd": "network.tryconnect",
+      "ts": 1795656289.8130589,
+      "attempt": 1,
+      "allow_reconnect": false,
+      "action": "ok",
+      "error": null,
+      "exc_class": null,
+      "response_ok": true,
+      "code": null
+    },
+    {
+      "rid": "c21b",
+      "cmd": "network.tryconnect",
+      "ts": 1795656290.922354,
+      "attempt": 1,
+      "allow_reconnect": false,
+      "action": "device_rejected",
+      "error": null,
+      "exc_class": null,
+      "response_ok": false,
+      "code": "busy"
+    },
+    {
+      "rid": "term1795656292232",
+      "cmd": "operation.get",
+      "ts": 1795656292.232688,
+      "attempt": 1,
+      "allow_reconnect": true,
+      "action": "ok",
+      "error": null,
+      "exc_class": null,
+      "response_ok": true,
+      "code": null
+    },
+    {
+      "rid": "term1795656293798",
+      "cmd": "operation.get",
+      "ts": 1795656293.798374,
+      "attempt": 1,
+      "allow_reconnect": true,
+      "action": "ok",
+      "error": null,
+      "exc_class": null,
+      "response_ok": true,
+      "code": null
+    },
+    {
+      "rid": "term1795656295639",
+      "cmd": "operation.get",
+      "ts": 1795656295.6391337,
+      "attempt": 1,
+      "allow_reconnect": true,
+      "action": "ok",
+      "error": null,
+      "exc_class": null,
+      "response_ok": true,
+      "code": null
+    },
+    {
+      "rid": "c22a",
+      "cmd": "network.tryconnect",
+      "ts": 1795656296.9561155,
+      "attempt": 1,
+      "allow_reconnect": false,
+      "action": "ok",
+      "error": null,
+      "exc_class": null,
+      "response_ok": true,
+      "code": null
+    },
+    {
+      "rid": "c22c1",
+      "cmd": "network.cancel",
+      "ts": 1795656298.622483,
+      "attempt": 1,
+      "allow_reconnect": false,
+      "action": "ok",
+      "error": null,
+      "exc_class": null,
+      "response_ok": true,
+      "code": null
+    },
+    {
+      "rid": "c22g",
+      "cmd": "operation.get",
+      "ts": 1795656299.8822227,
+      "attempt": 1,
+      "allow_reconnect": true,
+      "action": "ok",
+      "error": null,
+      "exc_class": null,
+      "response_ok": true,
+      "code": null
+    },
+    {
+      "rid": "c22c2",
+      "cmd": "network.cancel",
+      "ts": 1795656301.3163478,
+      "attempt": 1,
+      "allow_reconnect": false,
+      "action": "ok",
+      "error": null,
+      "exc_class": null,
+      "response_ok": true,
+      "code": null
+    },
+    {
+      "rid": "c23a",
+      "cmd": "network.tryconnect",
+      "ts": 1795656302.6716821,
+      "attempt": 1,
+      "allow_reconnect": false,
+      "action": "ok",
+      "error": null,
+      "exc_class": null,
+      "response_ok": true,
+      "code": null
+    },
+    {
+      "rid": "c23s0",
+      "cmd": "network.status",
+      "ts": 1795656304.023041,
+      "attempt": 1,
+      "allow_reconnect": true,
+      "action": "ok",
+      "error": null,
+      "exc_class": null,
+      "response_ok": true,
+      "code": null
+    },
+    {
+      "rid": "c23s1",
+      "cmd": "network.status",
+      "ts": 1795656305.4592366,
+      "attempt": 1,
+      "allow_reconnect": true,
+      "action": "ok",
+      "error": null,
+      "exc_class": null,
+      "response_ok": true,
+      "code": null
+    },
+    {
+      "rid": "c23s2",
+      "cmd": "network.status",
+      "ts": 1795656306.6279774,
+      "attempt": 1,
+      "allow_reconnect": true,
+      "action": "ok",
+      "error": null,
+      "exc_class": null,
+      "response_ok": true,
+      "code": null
+    },
+    {
+      "rid": "c23s3",
+      "cmd": "network.status",
+      "ts": 1795656307.7981286,
+      "attempt": 1,
+      "allow_reconnect": true,
+      "action": "ok",
+      "error": null,
+      "exc_class": null,
+      "response_ok": true,
+      "code": null
+    },
+    {
+      "rid": "c23s4",
+      "cmd": "network.status",
+      "ts": 1795656309.242752,
+      "attempt": 1,
+      "allow_reconnect": true,
+      "action": "ok",
+      "error": null,
+      "exc_class": null,
+      "response_ok": true,
+      "code": null
+    },
+    {
+      "rid": "term1795656310411",
+      "cmd": "operation.get",
+      "ts": 1795656310.4111576,
+      "attempt": 1,
+      "allow_reconnect": true,
+      "action": "ok",
+      "error": null,
+      "exc_class": null,
+      "response_ok": true,
+      "code": null
+    },
+    {
+      "rid": "term1795656311844",
+      "cmd": "operation.get",
+      "ts": 1795656311.844398,
+      "attempt": 1,
+      "allow_reconnect": true,
+      "action": "ok",
+      "error": null,
+      "exc_class": null,
+      "response_ok": true,
+      "code": null
+    },
+    {
+      "rid": "c23end",
+      "cmd": "network.status",
+      "ts": 1795656312.88783,
+      "attempt": 1,
+      "allow_reconnect": true,
+      "action": "ok",
+      "error": null,
+      "exc_class": null,
+      "response_ok": true,
+      "code": null
+    },
+    {
+      "rid": "c24a",
+      "cmd": "network.tryconnect",
+      "ts": 1795656313.5735917,
+      "attempt": 1,
+      "allow_reconnect": false,
+      "action": "ok",
+      "error": null,
+      "exc_class": null,
+      "response_ok": true,
+      "code": null
+    },
+    {
+      "rid": "c24g",
+      "cmd": "operation.get",
+      "ts": 1795656315.0025525,
+      "attempt": 1,
+      "allow_reconnect": true,
+      "action": "ok",
+      "error": null,
+      "exc_class": null,
+      "response_ok": true,
+      "code": null
+    },
+    {
+      "rid": "c24g",
+      "cmd": "operation.get",
+      "ts": 1795656316.6020794,
+      "attempt": 1,
+      "allow_reconnect": true,
+      "action": "ok",
+      "error": null,
+      "exc_class": null,
+      "response_ok": true,
+      "code": null
+    },
+    {
+      "rid": "c24g",
+      "cmd": "operation.get",
+      "ts": 1795656318.0429735,
+      "attempt": 1,
+      "allow_reconnect": true,
+      "action": "ok",
+      "error": null,
+      "exc_class": null,
+      "response_ok": true,
+      "code": null
+    },
+    {
+      "rid": "c24g",
+      "cmd": "operation.get",
+      "ts": 1795656319.3104312,
+      "attempt": 1,
+      "allow_reconnect": true,
+      "action": "ok",
+      "error": null,
+      "exc_class": null,
+      "response_ok": true,
+      "code": null
+    },
+    {
+      "rid": "c151pre",
+      "cmd": "config.get",
+      "ts": 1795656320.8908916,
+      "attempt": 1,
+      "allow_reconnect": true,
+      "action": "ok",
+      "error": null,
+      "exc_class": null,
+      "response_ok": true,
+      "code": null
+    },
+    {
+      "rid": "c151set",
+      "cmd": "config.set",
+      "ts": 1795656322.0671139,
+      "attempt": 1,
+      "allow_reconnect": false,
+      "action": "ok",
+      "error": null,
+      "exc_class": null,
+      "response_ok": true,
+      "code": null
+    },
+    {
+      "rid": "c151st1795656323512",
+      "cmd": "device.status",
+      "ts": 1795656323.5128827,
+      "attempt": 1,
+      "allow_reconnect": true,
+      "action": "ok",
+      "error": null,
+      "exc_class": null,
+      "response_ok": true,
+      "code": null
+    },
+    {
+      "rid": "c151st1795656326993",
+      "cmd": "device.status",
+      "ts": 1795656326.9933927,
+      "attempt": 1,
+      "allow_reconnect": true,
+      "action": "raise",
+      "error": "write failed after disconnect: (<BleakGATTProtocolErrorCode.UNLIKELY_ERROR: 14>, 'GATT Protocol Error: Unlikely Error')",
+      "exc_class": "ConnectionLost",
+      "response_ok": null,
+      "code": null,
+      "kind": "transport"
+    },
+    {
+      "rid": "c151st1795656326993",
+      "cmd": "device.status",
+      "ts": 1795656330.3027883,
+      "attempt": 2,
+      "allow_reconnect": true,
+      "action": "ok",
+      "error": null,
+      "exc_class": null,
+      "response_ok": true,
+      "code": null
+    },
+    {
+      "rid": "c151st1795656333435",
+      "cmd": "device.status",
+      "ts": 1795656333.4354494,
+      "attempt": 1,
+      "allow_reconnect": true,
+      "action": "ok",
+      "error": null,
+      "exc_class": null,
+      "response_ok": true,
+      "code": null
+    },
+    {
+      "rid": "c151ns",
+      "cmd": "network.status",
+      "ts": 1795656339.4124758,
+      "attempt": 1,
+      "allow_reconnect": true,
+      "action": "ok",
+      "error": null,
+      "exc_class": null,
+      "response_ok": true,
+      "code": null
+    },
+    {
+      "rid": "c151rst",
+      "cmd": "config.set",
+      "ts": 1795656340.3463502,
+      "attempt": 1,
+      "allow_reconnect": false,
+      "action": "ok",
+      "error": null,
+      "exc_class": null,
+      "response_ok": true,
+      "code": null
+    },
+    {
+      "rid": "verify-cfg",
+      "cmd": "config.get",
+      "ts": 1795656341.7785196,
+      "attempt": 1,
+      "allow_reconnect": true,
+      "action": "ok",
+      "error": null,
+      "exc_class": null,
+      "response_ok": true,
+      "code": null
+    },
+    {
+      "rid": "verify-st1795656342795",
+      "cmd": "device.status",
+      "ts": 1795656342.7957892,
+      "attempt": 1,
+      "allow_reconnect": true,
+      "action": "ok",
+      "error": null,
+      "exc_class": null,
+      "response_ok": true,
+      "code": null
+    },
+    {
+      "rid": "c152pre",
+      "cmd": "network.status",
+      "ts": 1795656344.436309,
+      "attempt": 1,
+      "allow_reconnect": true,
+      "action": "ok",
+      "error": null,
+      "exc_class": null,
+      "response_ok": true,
+      "code": null
+    },
+    {
+      "rid": "c152a",
+      "cmd": "network.tryconnect",
+      "ts": 1795656345.1755083,
+      "attempt": 1,
+      "allow_reconnect": false,
+      "action": "device_rejected",
+      "error": null,
+      "exc_class": null,
+      "response_ok": false,
+      "code": "busy"
+    }
+  ],
+  "reconnects": 1,
+  "fatal": "停止条件：case_c152 失败",
+  "pass": false,
+  "not_covered": [
+    "C2-3 got_ip trial/job 关联"
+  ],
+  "ts": 1795656347.9138422
+}

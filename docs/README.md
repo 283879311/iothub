@@ -40,13 +40,15 @@
 
 - [S6 阶段 A owner 回归结果](reports/S6阶段A回归结果_R1R2R3R5_2026-11-15.md)
 - [S6 阶段 A 烧录事故记录](reports/S6烧录事故记录_2026-11-15.md)
-- [CMD-02/15 联合验证执行记录](reports/CMD-02_15_执行记录_2026-11-16.md)：阶段 1/2 执行事实；阶段 3 未授权。
+- [CMD-02/15 联合验证执行记录](reports/CMD-02_15_执行记录_2026-11-16.md)：阶段 1/2 执行事实；阶段 3 见 2026-11-26 报告。
+- [CMD-02/15 阶段 3 设备回归结果（2026-11-26）](reports/CMD-02_15_阶段3设备回归结果_2026-11-26.md)：CMD-02 阶段 3 PASS；CMD-15 C15-1 PASS、C15-2 NOT_COVERED；P0 按路径 A 关闭。
 - [S6 阶段 A 分区证据](evidence/S6_stageA/README.md)
 - [S6 阶段 B 镜像 manifest](evidence/S6_stageB/images_manifest.md)
 - [S6 阶段 B 身份采集](evidence/S6_stageB/identity_2026-11-15/README.md)
 - [CMD-03 Phase A clean-cycle 设备与 NVS 核验（2026-11-25）](evidence/CMD-03_phase_a_clean_2026-11-25/README.md)：clean-tree T13/T19 PASS、WAIT200 pilot、NVS 前后一致、生产 main 恢复。
 - [CMD-03 Phase B WAIT200 重复测量（2026-11-25）](evidence/CMD-03_phase_b_wait200_2026-11-25/README.md)：空闲与 BLE 负载两臂各 10/10 PASS；NVS 整分区 SHA 不一致仍保留 FAIL，`phy/cal_data` 按 D1 作为系统管理数据例外记录；阶段 B 已按定义 A 关闭（仅限 WAIT200 测量与验收决策）。
 - [H1-P1 main 固件设备验收（2026-11-24）](evidence/H1-P1_device_main_2026-11-24/README.md)：设备 `IotHub-65D8`；构建/设备证据执行于 `0e4d49c`，证据文档合入 `956afcd`；设备侧 200 ms 与设备侧完整并发矩阵为 NOT_COVERED。
+- [CMD-02/15 阶段 3 证据（2026-11-26）](evidence/CMD-02_15_stage3_2026-11-26/README.md)：r1–r7 原始结果、harness 缺陷与恢复核验。
 
 ## 历史材料
 
