@@ -126,6 +126,7 @@ make -C tests/cmd_net_job run
 - H10 使用 test-only force 构造 terminal 目标，不是自然槽位复用。
 - H16 是两个并发 `request_finish`，不是 op_worker 与 expire 任务的身份级交错。
 - H25 直接调用按值 notify 验证身份匹配，未制造真实 notify 前槽位复用窗口。
+- `tests/c15_hook/test_c15_hook.c` 为 857 行的一次性矩阵，超过项目测试文件建议阈值，未在本次拆分；作为后续维护项保留。
 - 未进行设备烧录、设备实验、main 合入或 P2。
 
 ## 8. 边界
