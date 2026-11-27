@@ -434,6 +434,48 @@ static void *h15_finish_thread(void *v)
     return NULL;
 }
 
+typedef struct {
+    pthread_barrier_t *barrier;
+    const char *op_id;
+    uint32_t generation;
+    int role;
+    int loops;
+} h15_race_arg_t;
+
+static void *h15_race_worker(void *v)
+{
+    h15_race_arg_t *a = (h15_race_arg_t *)v;
+
+    for (int i = 0; i < a->loops; i++) {
+        pthread_barrier_wait(a->barrier);
+        if (a->role == 0) {
+            uint32_t g = 0;
+            int64_t d = 0;
+            (void)app_operation_test_hook_arm_target(a->op_id, 360000, 0,
+                                                     &g, &d);
+        } else if (a->role == 1) {
+            app_operation_test_hook_clear();
+        } else {
+            app_operation_test_hook_notify_target_inactive_for_test("op-other",
+                                                                    a->generation);
+        }
+        pthread_barrier_wait(a->barrier);
+    }
+    return NULL;
+}
+
+static bool h15_hook_state_valid(const char *op_id, uint32_t generation)
+{
+    app_operation_test_hook_status_t hs;
+
+    app_operation_test_hook_get_status(&hs);
+    if (!hs.armed) {
+        return true;
+    }
+    return hs.targeted && hs.generation == generation &&
+           strcmp(hs.op_id, op_id) == 0;
+}
+
 static void h15_concurrent(void)
 {
     app_operation_t *op = start_op(APP_OPERATION_OWNER_BLE, finish_ok, run_got_ip);
@@ -447,6 +489,14 @@ static void h15_concurrent(void)
     pthread_t finisher;
     pthread_t drv;
     h15_arg_t arg;
+    app_operation_t *op2 = NULL;
+    app_operation_status_t st2;
+    char op2_id[APP_OPERATION_ID_LEN] = "";
+    pthread_barrier_t race_bar;
+    pthread_t race_th[3];
+    h15_race_arg_t race_args[3];
+    bool race_ok = true;
+    uint32_t race_gen = 0;
 
     report("H15a", op != NULL && app_operation_get_status(op, &st));
     if (op == NULL) {
@@ -487,6 +537,43 @@ static void h15_concurrent(void)
     /* 关键：在任何 teardown/clear 之前检查最终 hook 状态。 */
     app_operation_test_hook_get_status(&hs);
     report("H15j", !hs.armed && !hs.targeted);
+
+    /* 并发阶段：新目标保持 GOT_IP，arm/clear/notify 三线程同时竞争 O。
+     * 不变量：每轮结束后要么 disarmed，要么 armed 且指向本轮有效目标。 */
+    op2 = start_op(APP_OPERATION_OWNER_BLE, NULL, run_got_ip);
+    report("H15k", op2 != NULL && app_operation_get_status(op2, &st2));
+    if (op2 == NULL) {
+        return;
+    }
+    memcpy(op2_id, app_operation_id(op2), sizeof(op2_id));
+    race_gen = st2.generation;
+    pthread_barrier_init(&race_bar, NULL, 4);
+    for (int i = 0; i < 3; i++) {
+        race_args[i].barrier = &race_bar;
+        race_args[i].op_id = op2_id;
+        race_args[i].generation = race_gen;
+        race_args[i].role = i;
+        race_args[i].loops = 200;
+        pthread_create(&race_th[i], NULL, h15_race_worker, &race_args[i]);
+    }
+    for (int i = 0; i < 200; i++) {
+        pthread_barrier_wait(&race_bar);
+        pthread_barrier_wait(&race_bar);
+        if (!h15_hook_state_valid(op2_id, race_gen)) {
+            race_ok = false;
+        }
+    }
+    for (int i = 0; i < 3; i++) {
+        pthread_join(race_th[i], NULL);
+    }
+    pthread_barrier_destroy(&race_bar);
+    report("H15l", race_ok);
+    report("H15m", h15_hook_state_valid(op2_id, race_gen));
+    report("H15n", op_test_hook_pause_count() == 1);
+
+    /* 记录完成后的显式 teardown；断言已在 clear 之前完成。 */
+    app_operation_test_hook_clear();
+    report("H15o", !hook_armed());
 }
 
 static void h10_slot_reuse(void)

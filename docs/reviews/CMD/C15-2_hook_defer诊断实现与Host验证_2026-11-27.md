@@ -6,6 +6,7 @@
 > 当前状态：C15-2 `BUSY_REJECTED / NOT_COVERED`，CMD-15 `TEST_PENDING`，P0 `CLOSED`，P2 未启动。
 >
 > rev2 修订（2026-11-27）：修复 `request_finish` 解锁后读取 `finish_target_state`；H15 改为真实 expire pause + pause 窗口内 clear/notify/arm 交错，并在 teardown 前断言；D3/D4 重新判定。
+> rev3 修订（2026-11-27）：H15 增加 barrier 对齐的 arm/clear/notify 三线程并发竞争 O 锁阶段（200 轮，含每轮不变量检查）；A1–A7 按本轮 `OPS_REPS=20` 实测口径记录（A1–A3 每轮 2 断言为 40/40，A4–A7 为 20/20），早期 50 次仅作基线。
 
 ## 1. 实施范围
 
@@ -47,8 +48,8 @@ make -C tests/cmd_net_job run
 
 | 项 | 结果 |
 |---|---|
-| `tests/c15_hook` | `PASS_WITH_NOT_COVERED`（H21/H27 NOT_COVERED） |
-| `tests/operation_host` | `RESULT: PASS`，A1–A7 全通过（50 次/项） |
+| `tests/c15_hook` | `PASS_WITH_NOT_COVERED`（H21/H27 NOT_COVERED）；H15 并发阶段连续 10 次运行一致 |
+| `tests/operation_host` | `RESULT: PASS`；本轮 `OPS_REPS=20`：A1–A3 各 40/40（每轮 2 条断言），A4/A5/A5h/A7 各 20/20；早期 50 次基线单列，不与本轮混用 |
 | `tests/cmd_net_job` | `summary: 0 failed`，T01–T23、D01–D05、D06（begin diag 复制）通过 |
 | 语法检查 | `operation.c` / `cmd.c` / `cmd_net_job.c`，3/3 OK（strict） |
 
@@ -70,7 +71,7 @@ make -C tests/cmd_net_job run
 | H12 | PASS | clear 后 disarmed |
 | H13 | PASS | 将 hold 设为 remaining+11 s，跳过 deadline 后 pause 走 timeout；未 pause |
 | H14 | PASS | 旧全局 hook 超时后 arm 清除并成功 |
-| H15 | PASS | 真实 expire pause；pause 进入后、显式 clear 前断言 disarmed；窗口内交错 clear/notify/arm；finish 后再断言；pause 计数=1 |
+| H15 | PASS | 真实 expire pause；pause 进入后、显式 clear 前断言 disarmed；finish 后再断言；另加 barrier 对齐的 3 工作线程 arm/clear/notify 并发竞争 O 锁 200 轮，主线程逐轮检查 disarmed 或 armed 且指向有效目标；pause 计数=1 |
 | H16 | PARTIAL | 两个并发 `request_finish(EXPIRED)`：一个 DONE、一个 PENDING、hook 只命中一次；未覆盖 op_worker/expire 任务身份交错 |
 | H17 | PASS | defer `INVALID_STATE`：attempted/记结果/未进 active 检查 |
 | H18 | PASS | defer OK + active operation：记录 operation 来源 |
@@ -91,7 +92,7 @@ make -C tests/cmd_net_job run
 | D1 目标 cancel/terminal/stale 清理 | PASS（限定） | H6/H7/H10/H11/H14/H25；H10 为注入构造 |
 | D2 非目标 expire 不消费 | PARTIAL | H9 用非目标 notify；真实其他 operation expire 不可构造 |
 | D3 解锁后仅快照 | PASS（静态） | P1 修复后复核：request_finish 使用 `pause_expire` 快照；hook 路径无 op 字段解锁读取 |
-| D4 O 保护 | PASS | H15 真实 pause + 并发 clear/notify/arm + 静态审查 |
+| D4 O 保护 | PASS | H15 真实 pause + barrier 三线程 O 锁竞争 + 静态审查 |
 | D5 `s_begin_diag` J 同步 | PASS | D06 begin-diag-copy + 静态审查；写/读均在 J |
 | D6 defer 锁路径 | PASS（静态） | §3.4 设计表；源码逐路径复核 |
 | D7 H1–H27 | PARTIAL | H21/H27 NOT_COVERED；H9/H10/H16/H25 为限定构造 |
@@ -119,7 +120,7 @@ make -C tests/cmd_net_job run
 - PENDING/STALE/apply 失败不冒充终态；hook 保留到 timeout 或后续失效检查。
 - `app_operation_cleanup_complete()` 不发布终态，未通知。
 - `s_begin_diag` 写/读都在 J 临界区；per-call diag 不再共享。
-- H15 在真实 expire pause 进入后、显式 clear 前断言 hook 已被 pause 消费；pause 窗口内执行 clear/notify/arm 交错，finish 后再检查最终状态。
+- H15 在真实 expire pause 进入后、显式 clear 前断言 hook 已被 pause 消费；另加 barrier 对齐的 3 工作线程竞争 O 锁 200 轮，主线程逐轮检查 hook 状态不变量。
 - 未发现 O→J、O→M、M→O 嵌套；生产 defer 调用顺序未改变。
 
 ## 7. 未覆盖与限制
@@ -130,7 +131,7 @@ make -C tests/cmd_net_job run
 - H10 使用 test-only force 构造 terminal 目标，不是自然槽位复用。
 - H16 是两个并发 `request_finish`，不是 op_worker 与 expire 任务的身份级交错。
 - H25 直接调用按值 notify 验证身份匹配，未制造真实 notify 前槽位复用窗口。
-- `tests/c15_hook/test_c15_hook.c` 为 866 行的一次性矩阵，超过项目测试文件建议阈值，未在本次拆分；作为后续维护项保留。
+- `tests/c15_hook/test_c15_hook.c` 为 953 行的一次性矩阵，超过项目测试文件建议阈值，未在本次拆分；作为后续维护项保留。
 - 未进行设备烧录、设备实验、main 合入或 P2。
 
 ## 8. 边界
