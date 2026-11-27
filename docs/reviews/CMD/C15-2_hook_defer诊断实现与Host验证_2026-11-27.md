@@ -70,7 +70,7 @@ make -C tests/cmd_net_job run
 | H12 | PASS | clear 后 disarmed |
 | H13 | PASS | 将 hold 设为 remaining+11 s，跳过 deadline 后 pause 走 timeout；未 pause |
 | H14 | PASS | 旧全局 hook 超时后 arm 清除并成功 |
-| H15 | PASS | 真实 expire pause；pause 窗口内交错 clear/notify/arm；teardown 前断言无残留 hook；pause 计数=1 |
+| H15 | PASS | 真实 expire pause；pause 进入后、显式 clear 前断言 disarmed；窗口内交错 clear/notify/arm；finish 后再断言；pause 计数=1 |
 | H16 | PARTIAL | 两个并发 `request_finish(EXPIRED)`：一个 DONE、一个 PENDING、hook 只命中一次；未覆盖 op_worker/expire 任务身份交错 |
 | H17 | PASS | defer `INVALID_STATE`：attempted/记结果/未进 active 检查 |
 | H18 | PASS | defer OK + active operation：记录 operation 来源 |
@@ -119,7 +119,7 @@ make -C tests/cmd_net_job run
 - PENDING/STALE/apply 失败不冒充终态；hook 保留到 timeout 或后续失效检查。
 - `app_operation_cleanup_complete()` 不发布终态，未通知。
 - `s_begin_diag` 写/读都在 J 临界区；per-call diag 不再共享。
-- H15 在真实 expire pause 期间执行 clear/notify/arm 交错，且在任何 teardown/clear 前检查最终 hook 状态。
+- H15 在真实 expire pause 进入后、显式 clear 前断言 hook 已被 pause 消费；pause 窗口内执行 clear/notify/arm 交错，finish 后再检查最终状态。
 - 未发现 O→J、O→M、M→O 嵌套；生产 defer 调用顺序未改变。
 
 ## 7. 未覆盖与限制
