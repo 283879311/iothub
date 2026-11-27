@@ -1042,6 +1042,30 @@ typedef struct {
 
 
 #ifdef APP_C15_BUSY_DIAG
+static bool d06_begin_diag_copy(void)
+{
+    app_cmd_context_t ctx = app_cmd_ctx_entry(APP_CMD_SOURCE_BLE);
+    app_operation_t *op = NULL;
+    app_cmd_net_job_begin_result_t r;
+    app_c15_begin_diag_t bd;
+
+    init_all();
+    op_test_set_defer_begin_result(ESP_ERR_INVALID_STATE);
+    app_cmd_net_job_lock();
+    r = app_cmd_net_job_begin_locked(APP_CMD_SOURCE_BLE, APP_OPERATION_OWNER_BLE,
+                                     &ctx, "D6", "pass", NULL, 45000, 300000,
+                                     test_run, &op);
+    app_c15_busy_diag_begin_snapshot(&bd);
+    app_cmd_net_job_unlock();
+    op_test_set_defer_begin_result(ESP_OK);
+
+    return r == APP_CMD_NET_JOB_BEGIN_BUSY && bd.start_attempted &&
+           bd.defer_attempted && !bd.defer_started &&
+           bd.defer_result == ESP_ERR_INVALID_STATE &&
+           !bd.active_check_done &&
+           bd.operation_start_err == ESP_ERR_INVALID_STATE;
+}
+
 static int diag_format_tests(void)
 {
     app_c15_busy_diag_t d;
@@ -1167,6 +1191,12 @@ int main(void)
         }
     }
 #ifdef APP_C15_BUSY_DIAG
+    if (!d06_begin_diag_copy()) {
+        printf("D06 begin-diag-copy FAIL\n");
+        failed++;
+    } else {
+        printf("D06 begin-diag-copy PASS\n");
+    }
     failed += diag_format_tests();
 #endif
     printf("summary: %d failed\n", failed);

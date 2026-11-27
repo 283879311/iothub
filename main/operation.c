@@ -82,57 +82,471 @@ static uint32_t s_retention_ms = APP_OPERATION_DEFAULT_RETENTION_MS;
  * 单次武装;探针在 ops_mux 临界区外调用(此刻两把锁都空闲),安全。
  * ------------------------------------------------------------------------- */
 #ifdef APP_C1_TEST_HOOKS
+#define APP_OPERATION_TEST_HOOK_MAX_HOLD_MS 360000u
+#define APP_OPERATION_TEST_HOOK_MARGIN_MS 10000u
+
+typedef enum {
+    APP_OP_HOOK_TRIGGER_CANCEL_POST_CLEANUP,
+    APP_OP_HOOK_TRIGGER_EXPIRE_POST_CLEANUP,
+} app_operation_hook_trigger_t;
+
 static int64_t app_operation_now_ms(void);
 static bool s_c1_hook_armed;
 static int64_t s_c1_hook_until_ms;
 static bool s_c1_hook_probe;
 static app_op_state_t s_c1_hook_probe_to;
+#ifdef APP_C15_HOOK_TARGET
+static bool s_c15_hook_targeted;
+static char s_c15_hook_op_id[APP_OPERATION_ID_LEN];
+static uint32_t s_c15_hook_generation;
+#endif
+
+static const char *app_operation_hook_trigger_name(app_operation_hook_trigger_t trigger)
+{
+    return trigger == APP_OP_HOOK_TRIGGER_CANCEL_POST_CLEANUP
+               ? "cancel_post_cleanup" : "expire_post_cleanup";
+}
+
+#ifdef APP_C15_HOOK_TARGET
+static app_operation_t *app_operation_hook_find_locked(const char *op_id,
+                                                       uint32_t generation)
+{
+    size_t i;
+
+    if (op_id == NULL || op_id[0] == '\0') {
+        return NULL;
+    }
+    for (i = 0; i < APP_OPERATION_MAX_SLOTS; i++) {
+        if (s_ops[i].used && s_ops[i].generation == generation &&
+            strcmp(s_ops[i].id, op_id) == 0) {
+            return &s_ops[i];
+        }
+    }
+    return NULL;
+}
+
+static bool app_operation_hook_pending_expire_locked(const app_operation_t *op)
+{
+    return op != NULL && op->used && op->state == APP_OP_GOT_IP &&
+           op->finish_registered && op->expiring &&
+           op->finish_target_state == APP_OP_EXPIRED;
+}
+#endif
 
 void app_operation_test_hook_arm(uint32_t hold_ms, int probe_to_state)
 {
-    s_c1_hook_until_ms = app_operation_now_ms() + (int64_t)hold_ms;
-    s_c1_hook_probe = (probe_to_state > (int)APP_OP_FREE &&
-                       probe_to_state < (int)APP_OP_STATE_COUNT);
-    s_c1_hook_probe_to = (app_op_state_t)probe_to_state;
-    s_c1_hook_armed = true;
+    bool ignored = false;
+    int64_t now_ms = app_operation_now_ms();
+
+    portENTER_CRITICAL(&s_ops_mux);
+    if (s_c1_hook_armed) {
+        ignored = true;
+    } else {
+        s_c1_hook_until_ms = now_ms + (int64_t)hold_ms;
+        s_c1_hook_probe = (probe_to_state > (int)APP_OP_FREE &&
+                           probe_to_state < (int)APP_OP_STATE_COUNT);
+        s_c1_hook_probe_to = (app_op_state_t)probe_to_state;
+        s_c1_hook_armed = true;
+#ifdef APP_C15_HOOK_TARGET
+        s_c15_hook_targeted = false;
+        memset(s_c15_hook_op_id, 0, sizeof(s_c15_hook_op_id));
+        s_c15_hook_generation = 0;
+#endif
+    }
+    portEXIT_CRITICAL(&s_ops_mux);
+
+    if (ignored) {
+        ESP_LOGW(TAG, "C1 hook arm ignored: already armed");
+        return;
+    }
     ESP_LOGW(TAG, "C1 hook armed: hold=%ums probe=%s", (unsigned)hold_ms,
              s_c1_hook_probe ? app_op_state_name(s_c1_hook_probe_to) : "none");
 }
 
 void app_operation_test_hook_clear(void)
 {
+    portENTER_CRITICAL(&s_ops_mux);
     s_c1_hook_armed = false;
     s_c1_hook_probe = false;
+#ifdef APP_C15_HOOK_TARGET
+    s_c15_hook_targeted = false;
+    memset(s_c15_hook_op_id, 0, sizeof(s_c15_hook_op_id));
+    s_c15_hook_generation = 0;
+#endif
+    portEXIT_CRITICAL(&s_ops_mux);
     ESP_LOGW(TAG, "C1 hook cleared");
 }
 
-static void app_operation_test_hook_pause(const char *tag, app_operation_t *op)
+#ifdef APP_C15_HOOK_TARGET
+esp_err_t app_operation_test_hook_arm_target(const char *op_id,
+                                             uint32_t hold_ms,
+                                             int probe_to_state,
+                                             uint32_t *out_generation,
+                                             int64_t *out_deadline_ms)
 {
-    int64_t until;
+    app_operation_t *target = NULL;
+    app_operation_t *old = NULL;
+    bool timeout_cleared = false;
+    bool stale_cleared = false;
+    bool probe = false;
+    char stale_id[APP_OPERATION_ID_LEN] = "";
+    uint32_t stale_gen = 0;
+    uint32_t generation = 0;
+    int64_t deadline_ms = 0;
+    int64_t remaining_ms = 0;
+    int64_t now_ms = app_operation_now_ms();
+    esp_err_t result = ESP_OK;
 
-    if (!s_c1_hook_armed) {
+    if (out_generation != NULL) {
+        *out_generation = 0;
+    }
+    if (out_deadline_ms != NULL) {
+        *out_deadline_ms = 0;
+    }
+    if (op_id == NULL || op_id[0] == '\0' ||
+        strlen(op_id) >= APP_OPERATION_ID_LEN ||
+        hold_ms < 100 || hold_ms > APP_OPERATION_TEST_HOOK_MAX_HOLD_MS) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    if (probe_to_state != 0 &&
+        (probe_to_state <= (int)APP_OP_FREE ||
+         probe_to_state >= (int)APP_OP_STATE_COUNT)) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    probe = probe_to_state != 0;
+
+    portENTER_CRITICAL(&s_ops_mux);
+    if (s_c1_hook_armed) {
+        if (now_ms > s_c1_hook_until_ms) {
+            s_c1_hook_armed = false;
+            s_c1_hook_probe = false;
+            s_c15_hook_targeted = false;
+            s_c15_hook_op_id[0] = '\0';
+            s_c15_hook_generation = 0;
+            timeout_cleared = true;
+        } else if (s_c15_hook_targeted) {
+            old = app_operation_hook_find_locked(s_c15_hook_op_id,
+                                                 s_c15_hook_generation);
+            if (old == NULL) {
+                memcpy(stale_id, s_c15_hook_op_id, sizeof(stale_id));
+                stale_gen = s_c15_hook_generation;
+                s_c1_hook_armed = false;
+                s_c1_hook_probe = false;
+                s_c15_hook_targeted = false;
+                s_c15_hook_op_id[0] = '\0';
+                s_c15_hook_generation = 0;
+                stale_cleared = true;
+            } else if (app_operation_hook_pending_expire_locked(old)) {
+                result = ESP_ERR_INVALID_STATE;
+                goto out_locked;
+            } else if (old->state == APP_OP_GOT_IP && !old->expiring &&
+                       !old->finish_registered && old->deadline_ms > now_ms) {
+                result = ESP_ERR_INVALID_STATE;
+                goto out_locked;
+            } else {
+                memcpy(stale_id, s_c15_hook_op_id, sizeof(stale_id));
+                stale_gen = s_c15_hook_generation;
+                s_c1_hook_armed = false;
+                s_c1_hook_probe = false;
+                s_c15_hook_targeted = false;
+                s_c15_hook_op_id[0] = '\0';
+                s_c15_hook_generation = 0;
+                stale_cleared = true;
+            }
+        } else {
+            result = ESP_ERR_INVALID_STATE;
+            goto out_locked;
+        }
+    }
+
+    for (size_t i = 0; i < APP_OPERATION_MAX_SLOTS; i++) {
+        if (s_ops[i].used && strcmp(s_ops[i].id, op_id) == 0) {
+            target = &s_ops[i];
+            break;
+        }
+    }
+    if (target == NULL) {
+        result = ESP_ERR_NOT_FOUND;
+        goto out_locked;
+    }
+    deadline_ms = target->deadline_ms;
+    generation = target->generation;
+    if (target->state != APP_OP_GOT_IP || now_ms >= deadline_ms ||
+        target->expiring || target->finish_registered || deadline_ms == 0) {
+        result = ESP_ERR_INVALID_STATE;
+        goto out_locked;
+    }
+    remaining_ms = deadline_ms - now_ms;
+    if ((int64_t)hold_ms < remaining_ms + APP_OPERATION_TEST_HOOK_MARGIN_MS) {
+        result = ESP_ERR_INVALID_ARG;
+        goto out_locked;
+    }
+
+    s_c1_hook_until_ms = now_ms + (int64_t)hold_ms;
+    s_c1_hook_probe = probe;
+    s_c1_hook_probe_to = (app_op_state_t)probe_to_state;
+    s_c1_hook_armed = true;
+    s_c15_hook_targeted = true;
+    memcpy(s_c15_hook_op_id, target->id, sizeof(s_c15_hook_op_id));
+    s_c15_hook_generation = target->generation;
+
+out_locked:
+    portEXIT_CRITICAL(&s_ops_mux);
+
+    if (timeout_cleared) {
+        ESP_LOGW(TAG, "C15 hook: timeout cleared before arm");
+    }
+    if (stale_cleared) {
+        ESP_LOGW(TAG, "C15 hook: target_stale cleared before arm (%s gen=%u)",
+                 stale_id, (unsigned)stale_gen);
+    }
+    if (result == ESP_OK) {
+        if (out_generation != NULL) {
+            *out_generation = generation;
+        }
+        if (out_deadline_ms != NULL) {
+            *out_deadline_ms = deadline_ms;
+        }
+        ESP_LOGW(TAG, "C15 hook armed target=%s gen=%u hold=%ums remaining=%lldms",
+                 op_id, (unsigned)generation, (unsigned)hold_ms,
+                 (long long)remaining_ms);
+    }
+    return result;
+}
+
+void app_operation_test_hook_get_status(app_operation_test_hook_status_t *out)
+{
+    if (out == NULL) {
         return;
     }
-    s_c1_hook_armed = false;
-    until = s_c1_hook_until_ms;
+    portENTER_CRITICAL(&s_ops_mux);
+    memset(out, 0, sizeof(*out));
+    out->armed = s_c1_hook_armed;
+    out->targeted = s_c15_hook_targeted;
+    memcpy(out->op_id, s_c15_hook_op_id, sizeof(out->op_id));
+    out->generation = s_c15_hook_generation;
+    out->until_ms = s_c1_hook_until_ms;
+    portEXIT_CRITICAL(&s_ops_mux);
+}
+
+static void app_operation_test_hook_notify_target_inactive(const char *op_id,
+                                                           uint32_t generation)
+{
+    app_operation_t *target = NULL;
+    bool cleared = false;
+    const char *reason = "target_terminal";
+    app_op_state_t state = APP_OP_FREE;
+    app_op_state_t finish_target = APP_OP_FREE;
+    char log_id[APP_OPERATION_ID_LEN] = "";
+    uint32_t log_gen = 0;
+
+    if (op_id == NULL || op_id[0] == '\0') {
+        return;
+    }
+    portENTER_CRITICAL(&s_ops_mux);
+    if (s_c1_hook_armed && s_c15_hook_targeted &&
+        s_c15_hook_generation == generation &&
+        strcmp(s_c15_hook_op_id, op_id) == 0) {
+        target = app_operation_hook_find_locked(op_id, generation);
+        if (target == NULL) {
+            reason = "target_stale";
+        } else {
+            state = target->state;
+            finish_target = target->finish_target_state;
+            reason = (state == APP_OP_CANCELLED ||
+                      finish_target == APP_OP_CANCELLED)
+                         ? "target_cancelled" : "target_terminal";
+        }
+        memcpy(log_id, s_c15_hook_op_id, sizeof(log_id));
+        log_gen = s_c15_hook_generation;
+        s_c1_hook_armed = false;
+        s_c1_hook_probe = false;
+        s_c15_hook_targeted = false;
+        s_c15_hook_op_id[0] = '\0';
+        s_c15_hook_generation = 0;
+        cleared = true;
+    }
+    portEXIT_CRITICAL(&s_ops_mux);
+
+    if (cleared) {
+        ESP_LOGW(TAG, "C15 hook: %s target=%s gen=%u state=%s finish=%s",
+                 reason, log_id, (unsigned)log_gen, app_op_state_name(state),
+                 app_op_state_name(finish_target));
+    }
+}
+
+void app_operation_test_hook_notify_target_inactive_for_test(const char *op_id,
+                                                             uint32_t generation)
+{
+    app_operation_test_hook_notify_target_inactive(op_id, generation);
+}
+
+void app_operation_test_hook_force_target_for_test(const char *op_id,
+                                                   uint32_t generation,
+                                                   int64_t until_ms)
+{
+    if (op_id == NULL || op_id[0] == '\0' ||
+        strlen(op_id) >= APP_OPERATION_ID_LEN) {
+        return;
+    }
+    portENTER_CRITICAL(&s_ops_mux);
+    s_c1_hook_armed = true;
+    s_c1_hook_probe = false;
+    s_c1_hook_until_ms = until_ms;
+    s_c15_hook_targeted = true;
+    memset(s_c15_hook_op_id, 0, sizeof(s_c15_hook_op_id));
+    memcpy(s_c15_hook_op_id, op_id, strlen(op_id));
+    s_c15_hook_generation = generation;
+    portEXIT_CRITICAL(&s_ops_mux);
+    ESP_LOGW(TAG, "C15 hook: force target=%s gen=%u until=%lld",
+             op_id, (unsigned)generation, (long long)until_ms);
+}
+#else
+static void app_operation_test_hook_notify_target_inactive(const char *op_id,
+                                                           uint32_t generation)
+{
+    (void)op_id;
+    (void)generation;
+}
+#endif
+
+static void app_operation_test_hook_pause(app_operation_hook_trigger_t trigger,
+                                          app_operation_t *op)
+{
+#ifdef APP_C15_HOOK_TARGET
+    bool targeted = false;
+#endif
+    bool hit = false;
+    bool clear = false;
+    bool timed_out = false;
+    bool skip = false;
+    bool probe = false;
+    const char *reason = "";
+    char op_id[APP_OPERATION_ID_LEN] = "";
+    uint32_t generation = 0;
+    app_op_state_t state = APP_OP_FREE;
+#ifdef APP_C15_HOOK_TARGET
+    bool finish_registered = false;
+#endif
+    app_op_state_t finish_target = APP_OP_FREE;
+    bool expiring = false;
+    app_op_state_t probe_to = APP_OP_FREE;
+    int64_t until_ms = 0;
+#ifdef APP_C15_HOOK_TARGET
+    int64_t now_ms = app_operation_now_ms();
+#endif
+
+    portENTER_CRITICAL(&s_ops_mux);
+    if (!s_c1_hook_armed || op == NULL) {
+        portEXIT_CRITICAL(&s_ops_mux);
+        return;
+    }
+    until_ms = s_c1_hook_until_ms;
+    probe = s_c1_hook_probe;
+    probe_to = s_c1_hook_probe_to;
+    memcpy(op_id, op->id, sizeof(op_id));
+    generation = op->generation;
+    state = op->state;
+#ifdef APP_C15_HOOK_TARGET
+    finish_registered = op->finish_registered;
+#endif
+    finish_target = op->finish_target_state;
+    expiring = op->expiring;
+#ifdef APP_C15_HOOK_TARGET
+    targeted = s_c15_hook_targeted;
+    if (targeted) {
+        if (now_ms > until_ms) {
+            clear = true;
+            timed_out = true;
+            reason = "timeout";
+        } else if (s_c15_hook_generation == generation &&
+                   strcmp(s_c15_hook_op_id, op_id) == 0) {
+            if (trigger == APP_OP_HOOK_TRIGGER_EXPIRE_POST_CLEANUP &&
+                state == APP_OP_GOT_IP && finish_registered &&
+                finish_target == APP_OP_EXPIRED && expiring) {
+                hit = true;
+                clear = true;
+                reason = "hit";
+            } else if (trigger == APP_OP_HOOK_TRIGGER_CANCEL_POST_CLEANUP) {
+                clear = true;
+                reason = "target_cancelled";
+            } else {
+                clear = true;
+                reason = finish_target == APP_OP_CANCELLED
+                             ? "target_cancelled" : "target_stale";
+            }
+        } else {
+            app_operation_t *t = app_operation_hook_find_locked(s_c15_hook_op_id,
+                                                                s_c15_hook_generation);
+            if (t == NULL) {
+                clear = true;
+                reason = "target_stale";
+            } else if (app_operation_hook_pending_expire_locked(t)) {
+                skip = true;
+                reason = "skip_pending_expire";
+            } else if (t->state != APP_OP_GOT_IP || t->expiring ||
+                       t->finish_registered || t->deadline_ms == 0) {
+                clear = true;
+                reason = "target_stale";
+            } else {
+                skip = true;
+                reason = "skip_non_target";
+            }
+        }
+    } else
+#endif
+    {
+        hit = true;
+        clear = true;
+        reason = "hit";
+    }
+    if (clear) {
+        s_c1_hook_armed = false;
+        s_c1_hook_probe = false;
+#ifdef APP_C15_HOOK_TARGET
+        s_c15_hook_targeted = false;
+        s_c15_hook_op_id[0] = '\0';
+        s_c15_hook_generation = 0;
+#endif
+    }
+    portEXIT_CRITICAL(&s_ops_mux);
+
+    if (timed_out) {
+        ESP_LOGW(TAG, "C15 hook: timeout cleared");
+        return;
+    }
+    if (skip) {
+        ESP_LOGW(TAG, "C15 hook: %s target=%s gen=%u state=%s trigger=%s",
+                 reason, op_id, (unsigned)generation, app_op_state_name(state),
+                 app_operation_hook_trigger_name(trigger));
+        return;
+    }
+    if (!hit) {
+        if (clear) {
+            ESP_LOGW(TAG, "C15 hook: %s target=%s gen=%u state=%s finish=%s",
+                     reason, op_id, (unsigned)generation,
+                     app_op_state_name(state), app_op_state_name(finish_target));
+        }
+        return;
+    }
+
     ESP_LOGW(TAG, "C1 hook: pause %s enter (expiring=%d state=%s gen=%u)",
-             tag, (int)op->expiring, app_op_state_name(op->state),
-             (unsigned)op->generation);
-    if (s_c1_hook_probe) {
-        esp_err_t probe_err = app_operation_set_state(op, s_c1_hook_probe_to,
+             app_operation_hook_trigger_name(trigger), (int)expiring,
+             app_op_state_name(state), (unsigned)generation);
+    if (probe) {
+        esp_err_t probe_err = app_operation_set_state(op, probe_to,
                                                       APP_OPERATION_ERR_NONE);
         ESP_LOGW(TAG, "C1 hook: probe set_state(%s) -> %s (0x%x)%s",
-                 app_op_state_name(s_c1_hook_probe_to),
-                 esp_err_to_name(probe_err), (unsigned)probe_err,
+                 app_op_state_name(probe_to), esp_err_to_name(probe_err),
+                 (unsigned)probe_err,
                  probe_err == ESP_ERR_INVALID_STATE
-                     ? " [rejected by expiring gate]"
-                     : "");
-        s_c1_hook_probe = false;
+                     ? " [rejected by expiring gate]" : "");
     }
-    while (app_operation_now_ms() < until) {
+    while (app_operation_now_ms() < until_ms) {
         vTaskDelay(pdMS_TO_TICKS(50));
     }
-    ESP_LOGW(TAG, "C1 hook: pause %s exit", tag);
+    ESP_LOGW(TAG, "C1 hook: pause %s exit",
+             app_operation_hook_trigger_name(trigger));
 }
 #endif
 
@@ -321,23 +735,49 @@ esp_err_t app_operation_init(void)
     return ESP_OK;
 }
 
-esp_err_t app_operation_start_with_finish(app_operation_owner_t owner, const char *idem_key,
-                                          uint32_t accepted_ttl_ms, uint32_t got_ip_ttl_ms,
-                                          app_operation_run_fn run_fn,
-                                          app_operation_cleanup_fn cleanup_fn,
-                                          app_operation_finish_fn finish_fn,
-                                          void *ctx, app_operation_t **out)
+#ifdef APP_C15_BUSY_DIAG
+static esp_err_t app_operation_start_diag_return(void *raw, esp_err_t err)
+{
+    app_operation_start_diag_t *diag = (app_operation_start_diag_t *)raw;
+
+    if (diag != NULL) {
+        diag->start_result = (int)err;
+    }
+    return err;
+}
+#else
+#define app_operation_start_diag_return(raw, err) (err)
+#endif
+
+static esp_err_t app_operation_start_with_finish_impl(
+    app_operation_owner_t owner, const char *idem_key,
+    uint32_t accepted_ttl_ms, uint32_t got_ip_ttl_ms,
+    app_operation_run_fn run_fn,
+    app_operation_cleanup_fn cleanup_fn,
+    app_operation_finish_fn finish_fn,
+    void *ctx, app_operation_t **out, void *diag_raw)
 {
     int64_t now_ms;
     app_operation_t *slot = NULL;
     size_t i;
     bool defer_started = false;
+#ifdef APP_C15_BUSY_DIAG
+    app_operation_start_diag_t *diag = (app_operation_start_diag_t *)diag_raw;
+#else
+    (void)diag_raw;
+#endif
 
     if (out != NULL) {
         *out = NULL;
     }
+#ifdef APP_C15_BUSY_DIAG
+    if (diag != NULL) {
+        memset(diag, 0, sizeof(*diag));
+        diag->start_result = ESP_OK;
+    }
+#endif
     if (!s_initialized || run_fn == NULL) {
-        return ESP_ERR_INVALID_ARG;
+        return app_operation_start_diag_return(diag_raw, ESP_ERR_INVALID_ARG);
     }
     if (accepted_ttl_ms == 0) {
         accepted_ttl_ms = APP_OPERATION_DEFAULT_ACCEPTED_TTL_MS;
@@ -349,11 +789,28 @@ esp_err_t app_operation_start_with_finish(app_operation_owner_t owner, const cha
     /* 网络 operation 开始前先与 MQTT rebuild 协调；如已有 rebuild 在跑则
      * 明确返回 busy，不能先受理再面对并发峰值。内部测试 operation 不参与。 */
     if (owner != APP_OPERATION_OWNER_INTERNAL) {
-        esp_err_t defer_err = app_mqtt_defer_restart_begin();
+        esp_err_t defer_err;
+
+#ifdef APP_C15_BUSY_DIAG
+        if (diag != NULL) {
+            diag->defer_attempted = true;
+        }
+#endif
+        defer_err = app_mqtt_defer_restart_begin();
+#ifdef APP_C15_BUSY_DIAG
+        if (diag != NULL) {
+            diag->defer_result = (int)defer_err;
+        }
+#endif
         if (defer_err != ESP_OK) {
-            return defer_err;
+            return app_operation_start_diag_return(diag_raw, defer_err);
         }
         defer_started = true;
+#ifdef APP_C15_BUSY_DIAG
+        if (diag != NULL) {
+            diag->defer_started = true;
+        }
+#endif
     }
 
     now_ms = app_operation_now_ms();
@@ -362,12 +819,18 @@ esp_err_t app_operation_start_with_finish(app_operation_owner_t owner, const cha
     int64_t reclaimed_age_ms = -1;
     portENTER_CRITICAL(&s_ops_mux);
     app_operation_reclaim_terminal_locked(now_ms);
+#ifdef APP_C15_BUSY_DIAG
+    if (diag != NULL) {
+        diag->active_check_done = true;
+        diag->active_check_result = app_operation_has_active_locked();
+    }
+#endif
     if (app_operation_has_active_locked()) {
         portEXIT_CRITICAL(&s_ops_mux);
         if (defer_started) {
             app_mqtt_defer_restart_end_at("op_create/busy");
         }
-        return ESP_ERR_INVALID_STATE;   /* busy */
+        return app_operation_start_diag_return(diag_raw, ESP_ERR_INVALID_STATE);
     }
     for (i = 0; i < APP_OPERATION_MAX_SLOTS; i++) {
         if (!s_ops[i].used) {
@@ -384,7 +847,7 @@ esp_err_t app_operation_start_with_finish(app_operation_owner_t owner, const cha
             if (defer_started) {
                 app_mqtt_defer_restart_end_at("op_create/no_slot");
             }
-            return ESP_ERR_NO_MEM;      /* 理论不可达：无活动且无终态却无空槽 */
+            return app_operation_start_diag_return(diag_raw, ESP_ERR_NO_MEM);
         }
         /* 临界区内只取证，日志在锁外打 */
         snprintf(reclaimed_id, sizeof(reclaimed_id), "%s", slot->id);
@@ -433,7 +896,7 @@ esp_err_t app_operation_start_with_finish(app_operation_owner_t owner, const cha
         if (defer_started) {
             app_mqtt_defer_restart_end_at("op_create/error");
         }
-        return ESP_ERR_NO_MEM;
+        return app_operation_start_diag_return(diag_raw, ESP_ERR_NO_MEM);
     }
 
     ESP_LOGI(TAG, "accepted %s owner=%d ttl=%ums got_ip_ttl=%ums",
@@ -443,8 +906,36 @@ esp_err_t app_operation_start_with_finish(app_operation_owner_t owner, const cha
     if (out != NULL) {
         *out = slot;
     }
-    return ESP_OK;
+    return app_operation_start_diag_return(diag_raw, ESP_OK);
 }
+
+esp_err_t app_operation_start_with_finish(app_operation_owner_t owner, const char *idem_key,
+                                          uint32_t accepted_ttl_ms, uint32_t got_ip_ttl_ms,
+                                          app_operation_run_fn run_fn,
+                                          app_operation_cleanup_fn cleanup_fn,
+                                          app_operation_finish_fn finish_fn,
+                                          void *ctx, app_operation_t **out)
+{
+    return app_operation_start_with_finish_impl(owner, idem_key, accepted_ttl_ms,
+                                                got_ip_ttl_ms, run_fn, cleanup_fn,
+                                                finish_fn, ctx, out, NULL);
+}
+
+#ifdef APP_C15_BUSY_DIAG
+esp_err_t app_operation_start_with_finish_diag(
+    app_operation_owner_t owner, const char *idem_key,
+    uint32_t accepted_ttl_ms, uint32_t got_ip_ttl_ms,
+    app_operation_run_fn run_fn,
+    app_operation_cleanup_fn cleanup_fn,
+    app_operation_finish_fn finish_fn,
+    void *ctx, app_operation_t **out,
+    app_operation_start_diag_t *diag)
+{
+    return app_operation_start_with_finish_impl(owner, idem_key, accepted_ttl_ms,
+                                                got_ip_ttl_ms, run_fn, cleanup_fn,
+                                                finish_fn, ctx, out, diag);
+}
+#endif
 
 esp_err_t app_operation_start(app_operation_owner_t owner, const char *idem_key,
                               uint32_t accepted_ttl_ms, uint32_t got_ip_ttl_ms,
@@ -461,6 +952,11 @@ esp_err_t app_operation_set_state(app_operation_t *op, app_op_state_t state,
 {
     int64_t now_ms;
     bool terminal;
+#ifdef APP_C1_TEST_HOOKS
+    bool notify_terminal = false;
+    char terminal_id[APP_OPERATION_ID_LEN] = "";
+    uint32_t terminal_generation = 0;
+#endif
 
     if (!app_operation_valid(op)) {
         return ESP_ERR_INVALID_ARG;
@@ -495,10 +991,21 @@ esp_err_t app_operation_set_state(app_operation_t *op, app_op_state_t state,
     } else if (terminal) {
         op->deadline_ms = 0;
         op->terminal_ms = now_ms;
+#ifdef APP_C1_TEST_HOOKS
+        memcpy(terminal_id, op->id, sizeof(terminal_id));
+        terminal_generation = op->generation;
+        notify_terminal = true;
+#endif
     }
     portEXIT_CRITICAL(&s_ops_mux);
     if (terminal) {
         app_mqtt_defer_restart_end_at("op_set_state/terminal");
+#ifdef APP_C1_TEST_HOOKS
+        if (notify_terminal) {
+            app_operation_test_hook_notify_target_inactive(terminal_id,
+                                                           terminal_generation);
+        }
+#endif
     }
     return ESP_OK;
 }
@@ -510,6 +1017,11 @@ esp_err_t app_operation_cancel(app_operation_t *op)
     uint32_t generation;
     bool need_cleanup = false;
     bool terminal = false;
+#ifdef APP_C1_TEST_HOOKS
+    bool notify_terminal = false;
+    char terminal_id[APP_OPERATION_ID_LEN] = "";
+    uint32_t terminal_generation = 0;
+#endif
 
     if (!app_operation_valid(op)) {
         return ESP_ERR_INVALID_ARG;
@@ -543,17 +1055,28 @@ esp_err_t app_operation_cancel(app_operation_t *op)
             op->deadline_ms = 0;
             op->terminal_ms = app_operation_now_ms();
             op->expiring = false;
+#ifdef APP_C1_TEST_HOOKS
+            memcpy(terminal_id, op->id, sizeof(terminal_id));
+            terminal_generation = op->generation;
+            notify_terminal = true;
+#endif
             terminal = true;
         }
         portEXIT_CRITICAL(&s_ops_mux);
         if (terminal) {
             app_mqtt_defer_restart_end_at("op_cancel/cleanup_failed");
+#ifdef APP_C1_TEST_HOOKS
+            if (notify_terminal) {
+                app_operation_test_hook_notify_target_inactive(terminal_id,
+                                                               terminal_generation);
+            }
+#endif
         }
         return ESP_FAIL;
     }
 
 #ifdef APP_C1_TEST_HOOKS
-    app_operation_test_hook_pause("cancel_post_cleanup", op);
+    app_operation_test_hook_pause(APP_OP_HOOK_TRIGGER_CANCEL_POST_CLEANUP, op);
 #endif
     portENTER_CRITICAL(&s_ops_mux);
     if (op->used && op->generation == generation && app_op_state_is_active(op->state)) {
@@ -561,12 +1084,23 @@ esp_err_t app_operation_cancel(app_operation_t *op)
         op->error = APP_OPERATION_ERR_CANCELLED;
         op->deadline_ms = 0;
         op->terminal_ms = app_operation_now_ms();
+#ifdef APP_C1_TEST_HOOKS
+        memcpy(terminal_id, op->id, sizeof(terminal_id));
+        terminal_generation = op->generation;
+        notify_terminal = true;
+#endif
         terminal = true;
     }
     op->expiring = false;
     portEXIT_CRITICAL(&s_ops_mux);
     if (terminal) {
         app_mqtt_defer_restart_end_at("op_cancel/terminal");
+#ifdef APP_C1_TEST_HOOKS
+        if (notify_terminal) {
+            app_operation_test_hook_notify_target_inactive(terminal_id,
+                                                           terminal_generation);
+        }
+#endif
     }
     return ESP_OK;
 }
@@ -693,6 +1227,9 @@ app_operation_request_finish(app_operation_t *op, uint32_t expected_generation,
             return APP_OPERATION_FINISH_STALE;
         }
         app_mqtt_defer_restart_end_at("op_finish/no_resource");
+#ifdef APP_C1_TEST_HOOKS
+        app_operation_test_hook_notify_target_inactive(op_id, log_gen);
+#endif
         ESP_LOGI(TAG, "finish %s gen=%u -> %s (no callback)",
                  op_id, (unsigned)log_gen, app_op_state_name(target_state));
         return APP_OPERATION_FINISH_DONE;
@@ -712,7 +1249,7 @@ app_operation_request_finish(app_operation_t *op, uint32_t expected_generation,
     if (outcome != APP_OPERATION_CLEANUP_OUTCOME_PENDING &&
         outcome != APP_OPERATION_CLEANUP_OUTCOME_STALE &&
         op->finish_target_state == APP_OP_EXPIRED) {
-        app_operation_test_hook_pause("expire_post_cleanup", op);
+        app_operation_test_hook_pause(APP_OP_HOOK_TRIGGER_EXPIRE_POST_CLEANUP, op);
     }
 #endif
 
@@ -753,6 +1290,9 @@ app_operation_request_finish(app_operation_t *op, uint32_t expected_generation,
 
         portEXIT_CRITICAL(&s_ops_mux);
         app_mqtt_defer_restart_end_at("op_finish/terminal");
+#ifdef APP_C1_TEST_HOOKS
+        app_operation_test_hook_notify_target_inactive(op_id, log_gen);
+#endif
         ESP_LOGI(TAG, "finish %s gen=%u -> %s/%s outcome=%d",
                  op_id, (unsigned)log_gen, app_op_state_name(final_state),
                  app_operation_error_name(final_error), (int)outcome);
@@ -957,6 +1497,11 @@ static void app_operation_run_pending(void)
     if (err != ESP_OK) {
         bool failed = false;
         bool skip_for_cleanup = false;
+#ifdef APP_C1_TEST_HOOKS
+        bool notify_terminal = false;
+        char terminal_id[APP_OPERATION_ID_LEN] = "";
+        uint32_t terminal_generation = 0;
+#endif
 
         ESP_LOGW(TAG, "run %s failed: %s", op->id, esp_err_to_name(err));
         /* 评审 R4:expiring=true 表示 cleanup 已在飞 —— run_fn 的 set_state
@@ -974,6 +1519,11 @@ static void app_operation_run_pending(void)
             op->error = APP_OPERATION_ERR_INTERNAL;
             op->deadline_ms = 0;
             op->terminal_ms = app_operation_now_ms();
+#ifdef APP_C1_TEST_HOOKS
+            memcpy(terminal_id, op->id, sizeof(terminal_id));
+            terminal_generation = op->generation;
+            notify_terminal = true;
+#endif
             failed = true;
         }
         portEXIT_CRITICAL(&s_ops_mux);
@@ -983,6 +1533,12 @@ static void app_operation_run_pending(void)
         }
         if (failed) {
             app_mqtt_defer_restart_end_at("worker/run_failed");
+#ifdef APP_C1_TEST_HOOKS
+            if (notify_terminal) {
+                app_operation_test_hook_notify_target_inactive(terminal_id,
+                                                               terminal_generation);
+            }
+#endif
         }
     }
 }

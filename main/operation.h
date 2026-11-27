@@ -201,6 +201,27 @@ void app_operation_set_test_retention_ms(uint32_t ms);
 void app_operation_lifecycle_test_start(void);
 #endif
 
+#ifdef APP_C15_BUSY_DIAG
+typedef struct {
+    bool defer_attempted;
+    bool defer_started;
+    int defer_result;
+    bool active_check_done;
+    bool active_check_result;
+    int start_result;
+} app_operation_start_diag_t;
+
+/* 仅 BUSY 诊断构建：调用方持 per-call diag；生产入口签名不变。 */
+esp_err_t app_operation_start_with_finish_diag(
+    app_operation_owner_t owner, const char *idem_key,
+    uint32_t accepted_ttl_ms, uint32_t got_ip_ttl_ms,
+    app_operation_run_fn run_fn,
+    app_operation_cleanup_fn cleanup_fn,
+    app_operation_finish_fn finish_fn,
+    void *ctx, app_operation_t **out,
+    app_operation_start_diag_t *diag);
+#endif
+
 /* ---------------------------------------------------------------------------
  * 实验构建专用(C1 复审确定性钩子,APP_C1_TEST_HOOKS=ON 才编译):
  * 武装后,下一次 cancel/expire 的 cleanup 返回、finalize 之前会暂停
@@ -210,4 +231,34 @@ void app_operation_lifecycle_test_start(void);
 #ifdef APP_C1_TEST_HOOKS
 void app_operation_test_hook_arm(uint32_t hold_ms, int probe_to_state);
 void app_operation_test_hook_clear(void);
+#endif
+
+#ifdef APP_C15_HOOK_TARGET
+typedef struct {
+    bool armed;
+    bool targeted;
+    char op_id[APP_OPERATION_ID_LEN];
+    uint32_t generation;
+    int64_t until_ms;
+} app_operation_test_hook_status_t;
+
+/* 仅 C15 目标过滤实验构建：按 operation_id 捕获 generation 后武装。
+ * 成功返回 ESP_OK；目标不存在/非 GOT_IP/已 finish/已有有效 hook 时拒绝。 */
+esp_err_t app_operation_test_hook_arm_target(const char *op_id,
+                                             uint32_t hold_ms,
+                                             int probe_to_state,
+                                             uint32_t *out_generation,
+                                             int64_t *out_deadline_ms);
+
+/* 只读 hook 状态；测试结束核验用。 */
+void app_operation_test_hook_get_status(app_operation_test_hook_status_t *out);
+
+/* 直接按值调用内部失效通知；仅用于验证按值匹配语义，不替代真实终态路径。 */
+void app_operation_test_hook_notify_target_inactive_for_test(const char *op_id,
+                                                             uint32_t generation);
+
+/* 强制写入目标 hook 身份；仅用于构造 stale/超时防御路径，不替代真实 arm。 */
+void app_operation_test_hook_force_target_for_test(const char *op_id,
+                                                   uint32_t generation,
+                                                   int64_t until_ms);
 #endif

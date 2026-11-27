@@ -20,6 +20,9 @@ make -C tests/cmd_net_job run
 make -C tests/operation_host run
 make -C tests/operation_host falsify
 
+# C15-2 test-only hook/defer 诊断矩阵
+make -C tests/c15_hook run
+
 # Wi-Fi owner 状态机
 make -C tests/wifi_owner run
 

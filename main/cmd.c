@@ -2476,14 +2476,69 @@ esp_err_t app_cmd_execute_method(const app_cmd_context_t *ctx, const char *metho
                 err = "params_required";
             } else if (strcmp(action->valuestring, "arm") == 0) {
                 const cJSON *probe = cJSON_GetObjectItemCaseSensitive(params, "probe_to");
+                const cJSON *op_item = cJSON_GetObjectItemCaseSensitive(params,
+                                                                       "operation_id");
                 int probe_state = 0;
+
+                if (op_item != NULL && !cJSON_IsString(op_item)) {
+                    err = "invalid_param";
+                }
                 if (cJSON_IsString(probe) && probe->valuestring != NULL) {
                     if (strcmp(probe->valuestring, "got_ip") == 0) probe_state = (int)APP_OP_GOT_IP;
                     else if (strcmp(probe->valuestring, "committing") == 0) probe_state = (int)APP_OP_COMMITTING;
                     else if (strcmp(probe->valuestring, "failed") == 0) probe_state = (int)APP_OP_FAILED;
                     else { err = "invalid_param"; }
                 }
-                if (err == NULL) {
+                if (err == NULL && op_item != NULL) {
+#ifdef APP_C15_HOOK_TARGET
+                    const cJSON *hold = cJSON_GetObjectItemCaseSensitive(params, "hold_ms");
+                    uint32_t hold_ms = 310000;
+                    uint32_t generation = 0;
+                    int64_t deadline_ms = 0;
+                    esp_err_t arm_err;
+
+                    if (cJSON_IsNumber(hold)) {
+                        if (hold->valueint < 100 || hold->valueint > 360000) {
+                            err = "invalid_param";
+                        } else {
+                            hold_ms = (uint32_t)hold->valueint;
+                        }
+                    }
+                    if (err == NULL) {
+                        arm_err = app_operation_test_hook_arm_target(
+                            op_item->valuestring, hold_ms, probe_state,
+                            &generation, &deadline_ms);
+                        if (arm_err == ESP_ERR_NOT_FOUND) {
+                            err = "not_found";
+                        } else if (arm_err == ESP_ERR_INVALID_STATE) {
+                            err = "not_active";
+                        } else if (arm_err == ESP_ERR_INVALID_ARG) {
+                            err = "invalid_param";
+                        } else if (arm_err != ESP_OK) {
+                            err = "internal_error";
+                        } else {
+                            int64_t now_ms = esp_timer_get_time() / 1000;
+                            int64_t remaining_ms = deadline_ms > now_ms
+                                                       ? deadline_ms - now_ms : 0;
+
+                            resp = cJSON_CreateObject();
+                            if (resp != NULL) {
+                                cJSON_AddBoolToObject(resp, "armed", true);
+                                cJSON_AddNumberToObject(resp, "generation",
+                                                        (double)generation);
+                                cJSON_AddNumberToObject(resp, "deadline_ms",
+                                                        (double)deadline_ms);
+                                cJSON_AddNumberToObject(resp, "remaining_ms",
+                                                        (double)remaining_ms);
+                                cJSON_AddNumberToObject(resp, "hold_ms",
+                                                        (double)hold_ms);
+                            }
+                        }
+                    }
+#else
+                    err = "not_active";
+#endif
+                } else if (err == NULL) {
                     const cJSON *hold = cJSON_GetObjectItemCaseSensitive(params, "hold_ms");
                     uint32_t hold_ms = 8000;
 

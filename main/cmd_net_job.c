@@ -246,10 +246,25 @@ app_cmd_net_job_begin_result_t app_cmd_net_job_begin_locked(
 
 #ifdef APP_C15_BUSY_DIAG
     s_begin_diag.start_attempted = true;
-#endif
+    {
+        app_operation_start_diag_t start_diag;
+
+        memset(&start_diag, 0, sizeof(start_diag));
+        err = app_operation_start_with_finish_diag(
+            owner, idem_key, accepted_ttl, got_ip_ttl,
+            run_fn, app_cmd_net_cleanup_run,
+            app_cmd_net_finish_run, &s_job, &op, &start_diag);
+        s_begin_diag.defer_attempted = start_diag.defer_attempted;
+        s_begin_diag.defer_started = start_diag.defer_started;
+        s_begin_diag.defer_result = start_diag.defer_result;
+        s_begin_diag.active_check_done = start_diag.active_check_done;
+        s_begin_diag.active_check_result = start_diag.active_check_result;
+    }
+#else
     err = app_operation_start_with_finish(owner, idem_key, accepted_ttl, got_ip_ttl,
                                           run_fn, app_cmd_net_cleanup_run,
                                           app_cmd_net_finish_run, &s_job, &op);
+#endif
 #ifdef APP_C15_BUSY_DIAG
     s_begin_diag.operation_start_err = (int)err;
 #endif
@@ -1056,17 +1071,25 @@ void app_c15_busy_diag_log(const app_c15_busy_diag_t *diag,
     app_c15_busy_diag_format_job(diag, job, sizeof(job));
     int br = event->begin_result;
     int jab = -1, sta = -1, serr = -1;
+    int deft = -1, defs = -1, defr = -1, acd = -1, acr = -1;
     if (begin != NULL) {
         br = begin->begin_result;
         jab = (int)begin->job_active_before;
         sta = (int)begin->start_attempted;
         serr = begin->operation_start_err;
+        deft = (int)begin->defer_attempted;
+        defs = (int)begin->defer_started;
+        defr = begin->defer_result;
+        acd = (int)begin->active_check_done;
+        acr = (int)begin->active_check_result;
     }
     long long delay_ms = (long long)((diag->snapshot_us - event->busy_observed_us) / 1000);
     ESP_LOGW(TAG,
              "C15_BUSY_DIAG tag=%s branch=%s response=%s busy_observed=%d "
              "busy_gate=%d begin_failure=%d mapped=%s begin_result=%d "
              "job_active_before=%d start_attempted=%d start_err=%d "
+             "defer_attempted=%d defer_started=%d defer_result=%d "
+             "active_check_done=%d active_check_result=%d "
              "job_active=%d job_op_nonnull=%d job_op_valid=%d job_id=%s %s "
              "active_ops=%lu printed=%lu logged=%lu truncated=%d "
              "text_truncated=%d ops=[%s] busy_us=%lld snapshot_us=%lld "
@@ -1075,7 +1098,8 @@ void app_c15_busy_diag_log(const app_c15_busy_diag_t *diag,
              APP_C15_BUSY_DIAG_TAG, event->branch, event->response_code,
              (int)event->busy_observed, (int)event->busy_gate,
              (int)event->begin_failure, event->mapped_busy_source, br,
-             jab, sta, serr, (int)diag->job_active, (int)diag->job_op_nonnull,
+             jab, sta, serr, deft, defs, defr, acd, acr,
+             (int)diag->job_active, (int)diag->job_op_nonnull,
              (int)diag->job_op_valid, diag->job_operation_id, job,
              (unsigned long)diag->ops.active_ops,
              (unsigned long)diag->ops.printed, (unsigned long)logged,

@@ -42,6 +42,7 @@ static pthread_mutex_t s_ev_m = PTHREAD_MUTEX_INITIALIZER;
 static int s_entered = 0;
 static int s_exited = 0;
 static char s_probe[1024] = "";
+static char s_hook_event[1024] = "";
 static int s_verbose = 0;
 
 static void ev_lock(void) { pthread_mutex_lock(&s_ev_m); }
@@ -66,6 +67,11 @@ const char *op_test_hook_probe_log(void)
     return s_probe;
 }
 
+const char *op_test_hook_event_log(void)
+{
+    return s_hook_event;
+}
+
 void op_test_set_verbose(int on)
 {
     s_verbose = on;
@@ -85,6 +91,11 @@ static void note_log(const char *msg)
     if (strstr(msg, "probe set_state(") != NULL) {
         ev_lock();
         snprintf(s_probe, sizeof(s_probe), "%s", msg);
+        ev_unlock();
+    }
+    if (strstr(msg, "C15 hook:") != NULL) {
+        ev_lock();
+        snprintf(s_hook_event, sizeof(s_hook_event), "%s", msg);
         ev_unlock();
     }
 }
@@ -271,11 +282,13 @@ size_t heap_caps_get_largest_free_block(uint32_t caps)
 
 static _Atomic int s_defer_begin_count;
 static _Atomic int s_defer_end_count;
+static _Atomic int s_defer_begin_result = ESP_OK;
 
 void op_test_reset_defer_counts(void)
 {
     atomic_store(&s_defer_begin_count, 0);
     atomic_store(&s_defer_end_count, 0);
+    atomic_store(&s_defer_begin_result, ESP_OK);
 }
 
 int op_test_defer_begin_count(void)
@@ -288,10 +301,15 @@ int op_test_defer_end_count(void)
     return atomic_load(&s_defer_end_count);
 }
 
+void op_test_set_defer_begin_result(int err)
+{
+    atomic_store(&s_defer_begin_result, err);
+}
+
 esp_err_t app_mqtt_defer_restart_begin(void)
 {
     atomic_fetch_add(&s_defer_begin_count, 1);
-    return ESP_OK;
+    return atomic_load(&s_defer_begin_result);
 }
 
 void app_mqtt_defer_restart_end_at(const char *tag)

@@ -164,6 +164,11 @@ typedef struct {
     bool start_attempted;
     int operation_start_err;
     int begin_result;
+    bool defer_attempted;
+    bool defer_started;
+    int defer_result;
+    bool active_check_done;
+    bool active_check_result;
 } app_c15_begin_diag_t;
 
 typedef struct {
