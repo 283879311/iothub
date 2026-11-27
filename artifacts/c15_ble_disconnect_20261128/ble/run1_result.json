@@ -1,0 +1,66 @@
+{
+ "ok": false,
+ "events": [
+  {
+   "ts": 1795791889.1285014,
+   "name": "device_info",
+   "obj": {
+    "device_id": "IotHub-65D8",
+    "firmware": "1.3-65f6dbb",
+    "build_sha": "981fd6552"
+   }
+  },
+  {
+   "ts": 1795791890.2077773,
+   "name": "pre_network",
+   "obj": {
+    "ok": true,
+    "sta": true,
+    "ip": true,
+    "mqtt": true,
+    "inet": true,
+    "trial": "idle"
+   }
+  },
+  {
+   "ts": 1795791891.3299756,
+   "name": "first_tryconnect",
+   "obj": {
+    "ok": true,
+    "error": null
+   }
+  },
+  {
+   "ts": 1795791907.618735,
+   "name": "got_ip",
+   "obj": {
+    "ok": true,
+    "state": "got_ip",
+    "cleanup": "none"
+   }
+  },
+  {
+   "ts": 1795791908.9716158,
+   "name": "arm",
+   "obj": {
+    "ok": true,
+    "data": {
+     "armed": true,
+     "generation": 1,
+     "deadline_ms": 395405,
+     "remaining_ms": 297795,
+     "hold_ms": 310000
+    },
+    "error": null
+   }
+  },
+  {
+   "ts": 1795792238.99393,
+   "name": "pause_entered",
+   "obj": {
+    "ok": false
+   }
+  }
+ ],
+ "finished_at": 1795792238.9941275
+}

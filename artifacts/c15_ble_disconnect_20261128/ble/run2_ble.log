@@ -1,0 +1,124 @@
+/home/tc/esp/workspace/iothub/.venv-bleak/lib/python3.12/site-packages/bleak/backends/bluezdbus/client.py:646: UserWarning: Using default MTU value. Call _acquire_mtu() or set _mtu_size first to avoid this warning.
+  warnings.warn(
+[scan-filtered] 1 hit(s) in 10s
+  HIT <device-mac> name='IotHubBLE-65D8' local_name='IotHubBLE-65D8' rssi=-41 uuids=['6e400001-b5a3-f393-e0a9-e50e24dcca9e']
+>12.080s TX id=login-1 100B {"id": "login-1", "version": "1.0", "cmd": "auth.login", "args": {"username": "admin", "password": "<redacted>"}}
+[tx] chunked 100B into 5 GATT writes (<= 20B each)
+<12.505s> RX id=login-1 95B frags=1 sizes=[95] {"id": "login-1", "ok": true, "data": {"token": "<redacted>", "expires_in": 600}}
+[auth] login ok (token redacted)
+>12.811s TX id=info 103B {"id": "info", "version": "1.0", "cmd": "device.info", "args": {}, "token": "<redacted>"}
+[tx] chunked 103B into 6 GATT writes (<= 20B each)
+<13.446s> RX id=info 287B frags=2 sizes=[253, 34] {"id": "info", "ok": true, "data": {"model": "iothub", "firmware": "1.3-65f6dbb", "build_sha": "981fd6552", "device_id": "IotHub-65D8", "build_variant": "mqtt_net_txn=on", "protocol_versions": ["1.0"], "security": {"link_encrypted": false, "bonded": false, "l2_ready": false, "sensitive_writes_allowed": false}}}
+device_info {"device_id": "IotHub-65D8", "firmware": "1.3-65f6dbb", "build_sha": "981fd6552"}
+>13.447s TX id=ns1795792280444 117B {"id": "ns1795792280444", "version": "1.0", "cmd": "network.status", "args": {}, "token": "<redacted>"}
+[tx] chunked 117B into 6 GATT writes (<= 20B each)
+<14.390s> RX id=ns1795792280444 543B frags=3 sizes=[253, 253, 37] {"id": "ns1795792280444", "ok": true, "data": {"sta_connected": true, "sta_has_ip": true, "sta_ip": "<sta-ip>", "last_disconnect": "none", "connected_ssid": "<wifi-ssid>", "connected_profile": 0, "internet_verified": true, "net_verify_stage": "mqtt", "nc_tcp_fails_last": 0, "nc_tcp_last_errno": 0, "rssi": -59, "channel": 8, "bssid": "<bssid>", "rssi_valid": true, "sta_ssid": "<wifi-ssid>", "password_set": true, "mode": "sta", "persistent_use_static": false, "persistent_static_ip": "", "cfg_state": "dhcp", "mqtt_connected": true, "mqtt_last_error": "", "trial": {"state": "idle"}}}
+pre_network {"ok": true, "sta": true, "ip": true, "mqtt": true, "inet": true, "trial": "idle"}
+>14.393s TX id=tc1 190B {"id": "tc1", "version": "1.0", "cmd": "network.tryconnect", "args": {"ssid": "<wifi-ssid>", "password": "<redacted>", "idempotency_key": "c15begin-1795792281"}, "token": "<redacted>"}
+[tx] chunked 190B into 10 GATT writes (<= 20B each)
+<15.380s> RX id=tc1 87B frags=1 sizes=[87] {"id": "tc1", "ok": true, "data": {"operation_id": "op-69491E56CE4AF662", "state": "accepted"}}
+first_tryconnect {"ok": true, "error": null}
+>15.384s TX id=op1795792282381 152B {"id": "op1795792282381", "version": "1.0", "cmd": "operation.get", "args": {"operation_id": "op-69491E56CE4AF662"}, "token": "<redacted>"}
+[tx] chunked 152B into 8 GATT writes (<= 20B each)
+<16.818s> RX id=op1795792282381 317B frags=2 sizes=[253, 64] {"id": "op1795792282381", "ok": true, "data": {"operation_id": "op-69491E56CE4AF662", "state": "connecting", "cleanup_state": "none", "error": "none", "error_detail": {"code": "none", "message": "none"}, "stages": {"wifi_connected": false, "ip_acquired": false, "internet_verified": false, "mqtt_connected": false}, "stages_source": "snapshot"}}
+>17.820s TX id=op1795792284817 152B {"id": "op1795792284817", "version": "1.0", "cmd": "operation.get", "args": {"operation_id": "op-69491E56CE4AF662"}, "token": "<redacted>"}
+[tx] chunked 152B into 8 GATT writes (<= 20B each)
+<18.980s> RX id=op1795792284817 317B frags=2 sizes=[253, 64] {"id": "op1795792284817", "ok": true, "data": {"operation_id": "op-69491E56CE4AF662", "state": "connecting", "cleanup_state": "none", "error": "none", "error_detail": {"code": "none", "message": "none"}, "stages": {"wifi_connected": false, "ip_acquired": false, "internet_verified": false, "mqtt_connected": false}, "stages_source": "snapshot"}}
+>19.981s TX id=op1795792286978 152B {"id": "op1795792286978", "version": "1.0", "cmd": "operation.get", "args": {"operation_id": "op-69491E56CE4AF662"}, "token": "<redacted>"}
+[tx] chunked 152B into 8 GATT writes (<= 20B each)
+<21.139s> RX id=op1795792286978 317B frags=2 sizes=[253, 64] {"id": "op1795792286978", "ok": true, "data": {"operation_id": "op-69491E56CE4AF662", "state": "connecting", "cleanup_state": "none", "error": "none", "error_detail": {"code": "none", "message": "none"}, "stages": {"wifi_connected": false, "ip_acquired": false, "internet_verified": false, "mqtt_connected": false}, "stages_source": "snapshot"}}
+>22.144s TX id=op1795792289141 152B {"id": "op1795792289141", "version": "1.0", "cmd": "operation.get", "args": {"operation_id": "op-69491E56CE4AF662"}, "token": "<redacted>"}
+[tx] chunked 152B into 8 GATT writes (<= 20B each)
+<23.254s> RX id=op1795792289141 317B frags=2 sizes=[253, 64] {"id": "op1795792289141", "ok": true, "data": {"operation_id": "op-69491E56CE4AF662", "state": "connecting", "cleanup_state": "none", "error": "none", "error_detail": {"code": "none", "message": "none"}, "stages": {"wifi_connected": false, "ip_acquired": false, "internet_verified": false, "mqtt_connected": false}, "stages_source": "snapshot"}}
+>24.257s TX id=op1795792291254 152B {"id": "op1795792291254", "version": "1.0", "cmd": "operation.get", "args": {"operation_id": "op-69491E56CE4AF662"}, "token": "<redacted>"}
+[tx] chunked 152B into 8 GATT writes (<= 20B each)
+<25.414s> RX id=op1795792291254 317B frags=2 sizes=[253, 64] {"id": "op1795792291254", "ok": true, "data": {"operation_id": "op-69491E56CE4AF662", "state": "connecting", "cleanup_state": "none", "error": "none", "error_detail": {"code": "none", "message": "none"}, "stages": {"wifi_connected": false, "ip_acquired": false, "internet_verified": false, "mqtt_connected": false}, "stages_source": "snapshot"}}
+>26.420s TX id=op1795792293417 152B {"id": "op1795792293417", "version": "1.0", "cmd": "operation.get", "args": {"operation_id": "op-69491E56CE4AF662"}, "token": "<redacted>"}
+[tx] chunked 152B into 8 GATT writes (<= 20B each)
+<27.529s> RX id=op1795792293417 317B frags=2 sizes=[253, 64] {"id": "op1795792293417", "ok": true, "data": {"operation_id": "op-69491E56CE4AF662", "state": "connecting", "cleanup_state": "none", "error": "none", "error_detail": {"code": "none", "message": "none"}, "stages": {"wifi_connected": false, "ip_acquired": false, "internet_verified": false, "mqtt_connected": false}, "stages_source": "snapshot"}}
+>28.535s TX id=op1795792295532 152B {"id": "op1795792295532", "version": "1.0", "cmd": "operation.get", "args": {"operation_id": "op-69491E56CE4AF662"}, "token": "<redacted>"}
+[tx] chunked 152B into 8 GATT writes (<= 20B each)
+<29.870s> RX id=op1795792295532 317B frags=2 sizes=[253, 64] {"id": "op1795792295532", "ok": true, "data": {"operation_id": "op-69491E56CE4AF662", "state": "connecting", "cleanup_state": "none", "error": "none", "error_detail": {"code": "none", "message": "none"}, "stages": {"wifi_connected": false, "ip_acquired": false, "internet_verified": false, "mqtt_connected": false}, "stages_source": "snapshot"}}
+>30.873s TX id=op1795792297870 152B {"id": "op1795792297870", "version": "1.0", "cmd": "operation.get", "args": {"operation_id": "op-69491E56CE4AF662"}, "token": "<redacted>"}
+[tx] chunked 152B into 8 GATT writes (<= 20B each)
+<31.985s> RX id=op1795792297870 355B frags=2 sizes=[253, 102] {"id": "op1795792297870", "ok": true, "data": {"operation_id": "op-69491E56CE4AF662", "state": "got_ip", "cleanup_state": "none", "error": "none", "error_detail": {"code": "none", "message": "none"}, "trial_id": "trial-8F724FAE", "ssid": "<wifi-ssid>", "stages": {"wifi_connected": true, "ip_acquired": true, "internet_verified": true, "mqtt_connected": true}, "stages_source": "snapshot"}}
+got_ip {"ok": true, "state": "got_ip", "cleanup": "none"}
+>31.990s TX id=arm 172B {"id": "arm", "version": "1.0", "cmd": "diag.testhook", "args": {"action": "arm", "operation_id": "op-69491E56CE4AF662", "hold_ms": 310000}, "token": "<redacted>"}
+[tx] chunked 172B into 9 GATT writes (<= 20B each)
+<33.292s> RX id=arm 119B frags=1 sizes=[119] {"id": "arm", "ok": true, "data": {"armed": true, "generation": 1, "deadline_ms": 786456, "remaining_ms": 297573, "hold_ms": 310000}}
+arm {"ok": true, "data": {"armed": true, "generation": 1, "deadline_ms": 786456, "remaining_ms": 297573, "hold_ms": 310000}, "error": null}
+>33.295s TX id=hb1795792300292 114B {"id": "hb1795792300292", "version": "1.0", "cmd": "device.info", "args": {}, "token": "<redacted>"}
+[tx] chunked 114B into 6 GATT writes (<= 20B each)
+<34.328s> RX id=hb1795792300292 298B frags=2 sizes=[253, 45] {"id": "hb1795792300292", "ok": true, "data": {"model": "iothub", "firmware": "1.3-65f6dbb", "build_sha": "981fd6552", "device_id": "IotHub-65D8", "build_variant": "mqtt_net_txn=on", "protocol_versions": ["1.0"], "security": {"link_encrypted": false, "bonded": false, "l2_ready": false, "sensitive_writes_allowed": false}}}
+>39.336s TX id=hb1795792306333 114B {"id": "hb1795792306333", "version": "1.0", "cmd": "device.info", "args": {}, "token": "<redacted>"}
+[tx] chunked 114B into 6 GATT writes (<= 20B each)
+<40.448s> RX id=hb1795792306333 298B frags=2 sizes=[253, 45] {"id": "hb1795792306333", "ok": true, "data": {"model": "iothub", "firmware": "1.3-65f6dbb", "build_sha": "981fd6552", "device_id": "IotHub-65D8", "build_variant": "mqtt_net_txn=on", "protocol_versions": ["1.0"], "security": {"link_encrypted": false, "bonded": false, "l2_ready": false, "sensitive_writes_allowed": false}}}
+>45.454s TX id=hb1795792312451 114B {"id": "hb1795792312451", "version": "1.0", "cmd": "device.info", "args": {}, "token": "<redacted>"}
+[tx] chunked 114B into 6 GATT writes (<= 20B each)
+<46.072s> RX id=hb1795792312451 298B frags=2 sizes=[253, 45] {"id": "hb1795792312451", "ok": true, "data": {"model": "iothub", "firmware": "1.3-65f6dbb", "build_sha": "981fd6552", "device_id": "IotHub-65D8", "build_variant": "mqtt_net_txn=on", "protocol_versions": ["1.0"], "security": {"link_encrypted": false, "bonded": false, "l2_ready": false, "sensitive_writes_allowed": false}}}
+>51.081s TX id=hb1795792318078 114B {"id": "hb1795792318078", "version": "1.0", "cmd": "device.info", "args": {}, "token": "<redacted>"}
+[tx] chunked 114B into 6 GATT writes (<= 20B each)
+>56.525s TX id=hb1795792323522 114B {"id": "hb1795792323522", "version": "1.0", "cmd": "device.info", "args": {}, "token": "<redacted>"}
+>61.530s TX id=hb1795792328527 114B {"id": "hb1795792328527", "version": "1.0", "cmd": "device.info", "args": {}, "token": "<redacted>"}
+>66.535s TX id=hb1795792333532 114B {"id": "hb1795792333532", "version": "1.0", "cmd": "device.info", "args": {}, "token": "<redacted>"}
+>71.540s TX id=hb1795792338537 114B {"id": "hb1795792338537", "version": "1.0", "cmd": "device.info", "args": {}, "token": "<redacted>"}
+>76.545s TX id=hb1795792343542 114B {"id": "hb1795792343542", "version": "1.0", "cmd": "device.info", "args": {}, "token": "<redacted>"}
+>81.550s TX id=hb1795792348547 114B {"id": "hb1795792348547", "version": "1.0", "cmd": "device.info", "args": {}, "token": "<redacted>"}
+>86.555s TX id=hb1795792353552 114B {"id": "hb1795792353552", "version": "1.0", "cmd": "device.info", "args": {}, "token": "<redacted>"}
+>91.560s TX id=hb1795792358557 114B {"id": "hb1795792358557", "version": "1.0", "cmd": "device.info", "args": {}, "token": "<redacted>"}
+>96.565s TX id=hb1795792363562 114B {"id": "hb1795792363562", "version": "1.0", "cmd": "device.info", "args": {}, "token": "<redacted>"}
+>101.570s TX id=hb1795792368567 114B {"id": "hb1795792368567", "version": "1.0", "cmd": "device.info", "args": {}, "token": "<redacted>"}
+>106.575s TX id=hb1795792373572 114B {"id": "hb1795792373572", "version": "1.0", "cmd": "device.info", "args": {}, "token": "<redacted>"}
+>111.580s TX id=hb1795792378577 114B {"id": "hb1795792378577", "version": "1.0", "cmd": "device.info", "args": {}, "token": "<redacted>"}
+>116.586s TX id=hb1795792383583 114B {"id": "hb1795792383583", "version": "1.0", "cmd": "device.info", "args": {}, "token": "<redacted>"}
+>121.591s TX id=hb1795792388588 114B {"id": "hb1795792388588", "version": "1.0", "cmd": "device.info", "args": {}, "token": "<redacted>"}
+>126.596s TX id=hb1795792393593 114B {"id": "hb1795792393593", "version": "1.0", "cmd": "device.info", "args": {}, "token": "<redacted>"}
+>131.601s TX id=hb1795792398598 114B {"id": "hb1795792398598", "version": "1.0", "cmd": "device.info", "args": {}, "token": "<redacted>"}
+>136.606s TX id=hb1795792403603 114B {"id": "hb1795792403603", "version": "1.0", "cmd": "device.info", "args": {}, "token": "<redacted>"}
+>141.611s TX id=hb1795792408608 114B {"id": "hb1795792408608", "version": "1.0", "cmd": "device.info", "args": {}, "token": "<redacted>"}
+>146.616s TX id=hb1795792413613 114B {"id": "hb1795792413613", "version": "1.0", "cmd": "device.info", "args": {}, "token": "<redacted>"}
+>151.621s TX id=hb1795792418618 114B {"id": "hb1795792418618", "version": "1.0", "cmd": "device.info", "args": {}, "token": "<redacted>"}
+>156.626s TX id=hb1795792423623 114B {"id": "hb1795792423623", "version": "1.0", "cmd": "device.info", "args": {}, "token": "<redacted>"}
+>161.631s TX id=hb1795792428628 114B {"id": "hb1795792428628", "version": "1.0", "cmd": "device.info", "args": {}, "token": "<redacted>"}
+>166.636s TX id=hb1795792433633 114B {"id": "hb1795792433633", "version": "1.0", "cmd": "device.info", "args": {}, "token": "<redacted>"}
+>171.641s TX id=hb1795792438638 114B {"id": "hb1795792438638", "version": "1.0", "cmd": "device.info", "args": {}, "token": "<redacted>"}
+>176.646s TX id=hb1795792443643 114B {"id": "hb1795792443643", "version": "1.0", "cmd": "device.info", "args": {}, "token": "<redacted>"}
+>181.651s TX id=hb1795792448648 114B {"id": "hb1795792448648", "version": "1.0", "cmd": "device.info", "args": {}, "token": "<redacted>"}
+>186.656s TX id=hb1795792453653 114B {"id": "hb1795792453653", "version": "1.0", "cmd": "device.info", "args": {}, "token": "<redacted>"}
+>191.661s TX id=hb1795792458658 114B {"id": "hb1795792458658", "version": "1.0", "cmd": "device.info", "args": {}, "token": "<redacted>"}
+>196.666s TX id=hb1795792463663 114B {"id": "hb1795792463663", "version": "1.0", "cmd": "device.info", "args": {}, "token": "<redacted>"}
+>201.671s TX id=hb1795792468668 114B {"id": "hb1795792468668", "version": "1.0", "cmd": "device.info", "args": {}, "token": "<redacted>"}
+>206.676s TX id=hb1795792473673 114B {"id": "hb1795792473673", "version": "1.0", "cmd": "device.info", "args": {}, "token": "<redacted>"}
+>211.681s TX id=hb1795792478678 114B {"id": "hb1795792478678", "version": "1.0", "cmd": "device.info", "args": {}, "token": "<redacted>"}
+>216.686s TX id=hb1795792483683 114B {"id": "hb1795792483683", "version": "1.0", "cmd": "device.info", "args": {}, "token": "<redacted>"}
+>221.691s TX id=hb1795792488688 114B {"id": "hb1795792488688", "version": "1.0", "cmd": "device.info", "args": {}, "token": "<redacted>"}
+>226.696s TX id=hb1795792493693 114B {"id": "hb1795792493693", "version": "1.0", "cmd": "device.info", "args": {}, "token": "<redacted>"}
+>231.701s TX id=hb1795792498698 114B {"id": "hb1795792498698", "version": "1.0", "cmd": "device.info", "args": {}, "token": "<redacted>"}
+>236.706s TX id=hb1795792503703 114B {"id": "hb1795792503703", "version": "1.0", "cmd": "device.info", "args": {}, "token": "<redacted>"}
+>241.711s TX id=hb1795792508708 114B {"id": "hb1795792508708", "version": "1.0", "cmd": "device.info", "args": {}, "token": "<redacted>"}
+>246.716s TX id=hb1795792513713 114B {"id": "hb1795792513713", "version": "1.0", "cmd": "device.info", "args": {}, "token": "<redacted>"}
+>251.721s TX id=hb1795792518718 114B {"id": "hb1795792518718", "version": "1.0", "cmd": "device.info", "args": {}, "token": "<redacted>"}
+>256.726s TX id=hb1795792523723 114B {"id": "hb1795792523723", "version": "1.0", "cmd": "device.info", "args": {}, "token": "<redacted>"}
+>261.731s TX id=hb1795792528728 114B {"id": "hb1795792528728", "version": "1.0", "cmd": "device.info", "args": {}, "token": "<redacted>"}
+>266.736s TX id=hb1795792533733 114B {"id": "hb1795792533733", "version": "1.0", "cmd": "device.info", "args": {}, "token": "<redacted>"}
+>271.741s TX id=hb1795792538738 114B {"id": "hb1795792538738", "version": "1.0", "cmd": "device.info", "args": {}, "token": "<redacted>"}
+>276.742s TX id=hb1795792543739 114B {"id": "hb1795792543739", "version": "1.0", "cmd": "device.info", "args": {}, "token": "<redacted>"}
+>281.747s TX id=hb1795792548744 114B {"id": "hb1795792548744", "version": "1.0", "cmd": "device.info", "args": {}, "token": "<redacted>"}
+>286.752s TX id=hb1795792553749 114B {"id": "hb1795792553749", "version": "1.0", "cmd": "device.info", "args": {}, "token": "<redacted>"}
+>291.757s TX id=hb1795792558754 114B {"id": "hb1795792558754", "version": "1.0", "cmd": "device.info", "args": {}, "token": "<redacted>"}
+>296.762s TX id=hb1795792563759 114B {"id": "hb1795792563759", "version": "1.0", "cmd": "device.info", "args": {}, "token": "<redacted>"}
+>301.767s TX id=hb1795792568764 114B {"id": "hb1795792568764", "version": "1.0", "cmd": "device.info", "args": {}, "token": "<redacted>"}
+>306.772s TX id=hb1795792573769 114B {"id": "hb1795792573769", "version": "1.0", "cmd": "device.info", "args": {}, "token": "<redacted>"}
+>311.777s TX id=hb1795792578774 114B {"id": "hb1795792578774", "version": "1.0", "cmd": "device.info", "args": {}, "token": "<redacted>"}
+>316.782s TX id=hb1795792583779 114B {"id": "hb1795792583779", "version": "1.0", "cmd": "device.info", "args": {}, "token": "<redacted>"}
+>321.787s TX id=hb1795792588784 114B {"id": "hb1795792588784", "version": "1.0", "cmd": "device.info", "args": {}, "token": "<redacted>"}
+>326.792s TX id=hb1795792593789 114B {"id": "hb1795792593789", "version": "1.0", "cmd": "device.info", "args": {}, "token": "<redacted>"}
+>331.797s TX id=hb1795792598794 114B {"id": "hb1795792598794", "version": "1.0", "cmd": "device.info", "args": {}, "token": "<redacted>"}
+>336.802s TX id=hb1795792603799 114B {"id": "hb1795792603799", "version": "1.0", "cmd": "device.info", "args": {}, "token": "<redacted>"}
+>341.807s TX id=hb1795792608804 114B {"id": "hb1795792608804", "version": "1.0", "cmd": "device.info", "args": {}, "token": "<redacted>"}
+>346.812s TX id=hb1795792613809 114B {"id": "hb1795792613809", "version": "1.0", "cmd": "device.info", "args": {}, "token": "<redacted>"}
+>351.817s TX id=hb1795792618814 114B {"id": "hb1795792618814", "version": "1.0", "cmd": "device.info", "args": {}, "token": "<redacted>"}
+>356.822s TX id=hb1795792623819 114B {"id": "hb1795792623819", "version": "1.0", "cmd": "device.info", "args": {}, "token": "<redacted>"}
+>361.827s TX id=hb1795792628824 114B {"id": "hb1795792628824", "version": "1.0", "cmd": "device.info", "args": {}, "token": "<redacted>"}
+pause_entered {"ok": false}
+RESULT: FAIL
