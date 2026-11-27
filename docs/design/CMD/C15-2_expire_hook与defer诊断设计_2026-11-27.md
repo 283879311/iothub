@@ -1,9 +1,10 @@
 # C15-2 test-only expire hook 目标过滤、并发同步与 MQTT defer 诊断设计（2026-11-27）
 
-> 文档状态：PENDING（设计待审）。设计成熟度：DESIGN_CANDIDATE（rev2，处理 R1–R4）。
+> 文档状态：PENDING（设计待审）。设计成熟度：DESIGN_CANDIDATE（rev3，处理 R1 生命周期竞态与终态覆盖）。
 > 范围：仅 test-only 诊断与 hook 增强设计；不修改生产行为、不构建设备镜像、不操作设备。
 > 关联：[C15-2 剩余覆盖设计](C15-2_BUSY剩余覆盖设计_2026-11-26.md)。
 >
+> rev3 处理：notify 改为捕获 ID/generation 后按值调用；补终态路径覆盖表；明确 PENDING/STALE 清理责任与最长占用；收敛 hold 默认值和 deadline 余量。
 > rev2 处理：R1 目标 cancel/失效生命周期；R2 解锁后快照约束；R3 `s_begin_diag` 同步；R4 MQTT defer 锁序逐路径证明。
 
 ## 1. 源码事实（main@5aaabea）
@@ -71,7 +72,10 @@ void app_operation_test_hook_clear(void);
 ```c
 static void app_operation_test_hook_pause(app_operation_hook_trigger_t trigger,
                                           app_operation_t *op);
-static void app_operation_test_hook_notify_target_inactive(app_operation_t *op);
+/* 只按值接收身份；op_id/generation 必须在发布终态或登记 finish 的同一 O
+ * 临界区内捕获。禁止在解锁后把 op 指针传进来重新取身份。 */
+static void app_operation_test_hook_notify_target_inactive(const char *op_id,
+                                                           uint32_t generation);
 ```
 
 目标 hook 只能单次武装；旧全局 hook 与目标 hook 共用同一 `armed` 状态，互斥。
@@ -79,7 +83,7 @@ static void app_operation_test_hook_notify_target_inactive(app_operation_t *op);
 ### 2.2 arm 条件与 stale 兜底（在 `s_ops_mux` 内）
 
 - `op_id` 非空且长度小于 `APP_OPERATION_ID_LEN`；按 `op_id` 找到 `used` 槽位；
-- 目标 `state == APP_OP_GOT_IP`，且 `deadline_ms != 0`；
+- 目标 `state == APP_OP_GOT_IP`，且 `now_ms < deadline_ms`；
 - `!expiring` 且 `!finish_registered`（目标尚未进入 finish）；
 - 若已有 hook：
   - 若 `now_ms > until_ms`：清除旧 hook 并记录 `timeout`，然后继续本次 arm；
@@ -87,8 +91,9 @@ static void app_operation_test_hook_notify_target_inactive(app_operation_t *op);
   - 目标 hook 且目标仍有效：返回 `INVALID_STATE`；若目标正在 pending expire（`finish_registered`、`finish_target_state==EXPIRED`、`expiring`、state 仍为 GOT_IP），也视为仍有效，不清除；
   - 目标 hook 但目标已失效（ID/generation 找不到、state 非 GOT_IP、terminal、非 pending-expire 的 `finish_registered`、无 finish 的 `expiring`、deadline 为 0）：清除旧目标并记录 `target_stale`，然后继续本次 arm；
 - `hold_ms` 在 `[100, 360000]`；`probe_to_state` 为 `APP_OP_FREE` 或合法状态；
+- 计算 `remaining_ms = deadline_ms - now_ms`，要求 `hold_ms >= remaining_ms + APP_OPERATION_TEST_HOOK_MARGIN_MS`（草案取 10000 ms）；不满足时返回 `INVALID_ARG`，不武装；
 - 检查通过后在 O 内用有界 `memcpy` 发布 `targeted/op_id/generation/until/probe`（不用 `snprintf`）；`out_generation/out_deadline_ms` 先在 O 内复制到局部变量，释放 O 后再写出；
-- 日志在 O 外打印，包含 `op_id`、`generation`、`deadline_ms`、`hold_ms`。
+- 日志在 O 外打印，包含 `op_id`、`generation`、`deadline_ms`、`remaining_ms`、`hold_ms`。
 
 只接受 `GOT_IP` 的理由：GOT_IP 的 deadline 为 `now + 300000 ms`，在目标 operation 上稳定；若在 `ACCEPTED/CONNECTING` 武装，目标进入 GOT_IP 时 deadline 会被重写为 300 s，早先的 `until_ms` 可能提前超时。
 
@@ -110,32 +115,58 @@ arm 时的 stale 兜底保证：即使目标通过未覆盖的 terminal 路径�
 
 匹配时的字段在 O 内复制到局部快照；释放 O 后只使用快照。cancel 路径不会消费 expire pause。
 
-### 2.4 finish/terminal 观察点（R1 核心）
+### 2.4 目标失效通知（R1 核心：按值通知）
 
-仅靠 pause 不能覆盖生产 cancel。新增 test-only `app_operation_test_hook_notify_target_inactive(op)`，在 operation 发布终态或完成 finish 后调用；它只做目标失效清除，不做暂停。
+仅靠 pause 不能覆盖生产 cancel。新增 test-only `app_operation_test_hook_notify_target_inactive(op_id, generation)`，在 operation 发布终态或完成 finish 后调用；它只做目标失效清除，不做暂停。
 
-调用点：
+**身份捕获规则（消除指针复用竞态）**
 
-| 调用点 | 调用时机 | 目的 |
-|---|---|---|
-| `app_operation_request_finish` | finish_fn/cleanup 返回后，O 外；先 expire pause，再 notify | 目标 cancel/其他终态 finish 时清除目标 hook |
-| `app_operation_cancel` | cleanup 失败终态后、成功终态后，O 外 | selftest cancel 路径清除 |
-| `app_operation_set_state` | state 进入 terminal、O 外 | 异步 SUCCESS/FAILED/CANCELLED 清除 |
-| worker run 失败直接置 FAILED | O 外 | 目标异常失败清除 |
-| `app_operation_request_finish` no-callback | apply 后 O 外 | 无回调 finish 清除 |
+- 必须在发布终态的同一个 O 临界区内，把 `operation_id + generation` 复制到局部变量；
+- 或在 `request_finish` 登记 finish 的同一个 O 临界区内捕获（现有 `op_id`/`log_gen` 已在回调前捕获，可直接复用）；
+- 解锁后只把 `op_id`/generation 的**值**传给 notify，禁止传 `app_operation_t *`；
+- notify 取得 O 后按 ID/generation 查找，不依赖原 operation 指针；
+- 新增捕获使用有界 `memcpy`，不在 O 内引入 `snprintf`；`request_finish` 既有的 `snprintf` 保持原样；
+- 没有发布终态、也没有登记 finish 的路径不调用 notify。
 
-`request_finish` 的 test-only 观察条件从“仅 EXPIRED 调用 pause”扩展为：`outcome != PENDING/STALE` 时，EXPIRED 先 pause 再 notify，非 EXPIRED 只 notify；生产状态机与 finish 顺序不变。
+**终态发布路径覆盖表**
 
-behavior：
+| 路径 | 身份捕获点 | 通知安排 | 说明 |
+|---|---|---|---|
+| `request_finish` 有回调，DONE_OK | 登记 finish 的 O 内：`op_id`、`log_gen` | cleanup 返回后先 expire pause（仅 EXPIRED）；apply 成功后 O 外 notify 按值 | cancel/SUCCESS/FAILED 目标均覆盖；apply 失败不 notify |
+| `request_finish` 有回调，DONE_FAIL | 同上 | 同上 | DONE_FAIL 也通知；最终态由 apply 决定 |
+| `request_finish` 无回调 | 登记 finish 的 O 内：`op_id`、`log_gen` | apply 成功后 O 外 notify 按值 | 此路径 outcome 固定 DONE_OK；apply 失败返回 STALE，不 notify |
+| `request_finish` PENDING | 同上 | 不 notify | 目标仍在 finish/expiring；当前源码未找到后续 resume 终态发布点；hook 占用到 timeout |
+| `request_finish` STALE | 同上 | 不 notify | 未发布终态；目标身份可能已变，由 arm stale/pause/timeout 兜底 |
+| `app_operation_cancel` 成功 | 入口 O 内捕获 generation；终态 O 内捕获 `op_id` | cancel pause 按 ID/gen 匹配清除；终态 O 外再 notify 按值 | pause 已清除时 notify 为 no-op |
+| `app_operation_cancel` cleanup 失败 | 入口 O 内捕获 generation；失败终态 O 内捕获 `op_id` | 失败终态 O 外 notify 按值 | 最终态 FAILED/CLEANUP_FAILED；generation 不匹配时未发布终态，不 notify |
+| `app_operation_set_state` terminal | 同一次 O 内设置 terminal 并捕获 `op_id`/generation | O 外 notify 按值 | 消除解锁到通知之间的槽位复用窗口 |
+| worker run 失败直接置 FAILED | 同一次 O 内设置 FAILED 并捕获 `op_id`/generation | O 外 notify 按值 | 目标异常失败清除 |
+| 槽位回收/复用 | 无终态发布 | 不 notify | 下一次 arm 找不到旧 ID/generation，清除 `target_stale`；否则 timeout |
+| `app_operation_cleanup_complete` | 不发布终态 | 不 notify | 只更新 cleanup claim，不能当作终态通知点 |
+
+`app_operation_finish_apply_locked()` 是 `request_finish` 内部 helper，不单独设置通知点；其终态发布由调用方按上表处理。
+
+`request_finish` 的 notify 只在 apply 成功后发生；PENDING、STALE、apply 失败均不 notify，目标 hook 由后续 arm stale/pause/timeout 兜底。若 EXPIRED pause 已命中但 apply 随后失败，hook 已被消费且目标可能仍未终态；实验必须判失败，不能记为已清理。
+
+**notify 行为**
 
 - 若 hook 未 armed 或为旧全局 hook：不动作；
-- 若目标 ID/generation 匹配：
-  - `finish_target_state == CANCELLED` 或 state 为 CANCELLED：清除，记录 `target_cancelled`；
-  - 其他 terminal/finish：清除，记录 `target_terminal`；
-- 若目标 ID/generation 不匹配：不动作（可能是其他 operation 的 terminal）；
-- `request_finish` 返回 PENDING/STALE 时不调用 notify；此时目标可能仍 active，后续 terminal/arm 失效检查或 timeout 兜底。
+- 取得 O 后先比较传入 `op_id + generation` 是否等于目标 hook 的身份：
+  - 不相等：不动作（其他 operation 的终态）；
+  - 相等：在表中查找该 ID/generation：
+    - 找到：清除目标 hook；若状态/`finish_target_state` 为 CANCELLED，记录 `target_cancelled`；否则记录 `target_terminal`；
+    - 找不到：清除目标 hook，记录 `target_stale`（槽位已回收/复用）；
+- 只使用 O 内快照记日志；解锁后不引用 operation 指针。
+- cancel 请求伴随 `DONE_FAIL` 时，notify 仍按 `finish_target_state==CANCELLED` 记 `target_cancelled`；最终状态由 apply 决定，可能是 `FAILED/CLEANUP_FAILED`。
 
-这样 cancel 不消费 expire hook，但会立即清除目标 hook，后续实验可马上重新 arm。
+**PENDING/STALE 的清理责任**
+
+- `request_finish` 返回 PENDING 时不发布终态，也不通知；当前 `main` 中未找到后续 resume 终态发布点（`app_operation_cleanup_complete()` 只更新 claim）；
+- 因此目标 hook 会保留到 `until_ms` 超时，最长占用为 `hold_ms`（默认 310000 ms，上限 360000 ms）；这属于有界资源占用，不得记录为“目标已清除”；
+- 实验遇到 PENDING/STALE 必须判失败并显式 `diag.testhook clear`，不得继续第二次请求；
+- STALE 不保证目标已终态，只保证本次 finish 没有发布终态；由 arm stale/pause/timeout 兜底。
+
+这样 cancel 不消费 expire hook，但会立即清除目标 hook，新目标到达 GOT_IP 后可马上重新 arm。
 
 ### 2.5 锁序与执行上下文
 
@@ -153,7 +184,7 @@ behavior：
 | arm/clear（BLE 命令任务） | O → 释放；无 J/M/W | O 是叶子锁 |
 | pause（expire，经 `finish_fn` 返回后） | O → 释放 → probe `set_state` 再取 O → 延时 | 无 J/M/W；O 内无阻塞 |
 | pause（cancel，经 cleanup 返回后） | O → 释放；若调用方持有 J，则仅 J→O；hook 不取 J | 与既有 J→O 顺序不冲突 |
-| notify（finish/cancel/set_state/worker 返回后） | O → 释放；若调用方持有 J，则仅 J→O；hook 不取 J/M/W | 与既有 J→O 顺序不冲突 |
+| notify（finish/cancel/set_state/worker 返回后） | O → 释放；只传 ID/gen 值；若调用方持有 J，则仅 J→O；hook 不取 J/M/W | 与既有 J→O 顺序不冲突 |
 | MQTT defer diag（cmd_net_job begin 路径） | 调用方持 J → M → 释放 M → O | defer 的 M 在 O 之前且已释放，无 M→O 嵌套 |
 
 新增代码不形成 O→J、O→M、O→W；不把 O 带入 `ESP_LOG`/`vTaskDelay`；`app_operation_set_state` 只在 O 释放后调用，其内部重新取 O，不与外层 O 嵌套。
@@ -182,6 +213,7 @@ typedef struct {
 - 释放 O 后，日志只能使用局部快照；
 - 不得在解锁后再次读取 `op->id`、`op->generation`、`op->state`、`op->finish_*`；
 - 不得通过解锁后的 `app_operation_valid(op)` 补做匹配判断；
+- notify 不接收 `app_operation_t *`；终态路径在发布终态的同一 O 内捕获 ID/generation，解锁后按值调用；
 - probe 只允许把 `op` 作为不透明句柄传给 `app_operation_set_state()`，由后者在 O 内重新校验；不得在调用前解引用 `op`。
 
 这是 pause/notify 接口的强制实现约束，不是编码建议。
@@ -198,15 +230,19 @@ typedef struct {
 | 已存在已超时的旧全局 hook | arm 清除 timeout 后成功 |
 | 已存在有效目标 hook | 目标 arm 返回 `INVALID_STATE`，不覆盖 |
 | 已存在失效目标 hook | arm 清除 `target_stale` 后重新武装 |
-| 生产 cancel（`request_finish(CANCELLED)`） | notify 清除 `target_cancelled`，不 pause；可立即重新 arm |
+| 生产 cancel（`request_finish(CANCELLED)`） | notify 清除 `target_cancelled`，不 pause；新目标可立即 arm |
 | `app_operation_cancel` 的 cancel pause | 清除 `target_cancelled`，不 pause |
-| cancel 后立即重新 arm | 成功（不再等待 360 s timeout） |
+| cancel 后新目标到达 GOT_IP | 可立即 arm，不等待旧 hook timeout |
 | 其他 operation expire | 目标仍有效则 skip、不消费；目标已失效则 `target_stale` |
 | 目标 terminal 后槽位复用 | 下一次 arm 按 ID/generation 找不到目标，清除 `target_stale` |
 | arm/clear 并发 | O 串行化，最后一次操作生效，无撕裂 |
 | pause/notify 与 clear 并发 | O 内串行；命中前 clear 则 skip |
 | 超时未命中 | pause 时自动清除并记录 timeout；再次 arm 前也检查并清除 |
 | 超时后再次 arm | 成功，不等待外部 clear |
+| `request_finish` PENDING | 不发布终态、不 notify；hook 保留到 timeout；不得记为已清除 |
+| `request_finish` STALE | 不发布终态、不 notify；由 arm stale/pause/timeout 兜底 |
+| hold_ms 小于 remaining+10 s | arm 返回 `INVALID_ARG`，不武装 |
+| `app_operation_cleanup_complete` | 不发布终态，不触发 notify |
 | op_worker 与 expire 任务同时到期 | 两者都在 O 内选目标；`expiring` 使第二个跳过；hook 只命中一次 |
 | arm 后目标 GOT_IP deadline 被重写 | 设计禁止在非 GOT_IP 武装，避免该窗口 |
 
@@ -214,9 +250,10 @@ typedef struct {
 
 复用 `diag.testhook`（仅 `APP_C1_TEST_HOOKS`，仅 BLE 来源，非 v1 Contract）：
 
-- `action=arm` 且带 `operation_id`：调用目标 arm；响应返回 `armed`、`generation`、`deadline_ms`、`remaining_ms`、`hold_ms`；
+- `action=arm` 且带 `operation_id`：调用目标 arm；未提供 `hold_ms` 时默认 `310000`；响应返回 `armed`、`generation`、`deadline_ms`、`remaining_ms`、`hold_ms`；
 - `action=arm` 不带 `operation_id`：保持旧全局 hook 的现有行为（`hold_ms` 取值 100–30000，非法值回落 8000）；
-- 目标 arm 的 `hold_ms` 允许 100–360000，覆盖 300 s GOT_IP TTL；
+- 目标 arm 的 `hold_ms` 允许 100–360000；实验默认 `310000`（GOT_IP TTL 300 s + 10 s 余量），`360000` 只是上限，不是常规等待时间；
+- arm 时计算 `remaining_ms = deadline_ms - now_ms`；若 `hold_ms < remaining_ms + 10000` 返回 `invalid_param`，不武装；成功响应必须回传 `remaining_ms`，供操作者判断余量；
 - 目标不存在时返回 `not_found`；非 GOT_IP、已 finish 或已有有效 hook 时返回现有 test-only 错误名 `not_active`；参数非法返回 `invalid_param`；均不改变 hook；
 - 若已有目标 hook 但目标已失效，arm 先清除 stale 再武装，响应仍为成功；
 - `action=clear` 清除任一 hook。
@@ -305,7 +342,7 @@ diag 结构只写调用方栈，不修改 `s_restart_defer_depth`、`s_restart_d
 | H5 | 已有全局 hook 时目标 arm | `INVALID_STATE`，旧 hook 保留 |
 | H6 | 生产 cancel（request_finish CANCELLED） | notify 清除 `target_cancelled`，不 pause |
 | H7 | `app_operation_cancel` cancel pause | 清除 `target_cancelled`，不 pause |
-| H8 | cancel 后立即重新 arm | 成功，不等待 timeout |
+| H8 | cancel 后新目标到达 GOT_IP | 立即 arm 成功，不等待旧 hook timeout |
 | H9 | 其他 operation expire | 目标仍有效则 skip、不消费 |
 | H10 | 目标 terminal 后槽位复用 | arm 清除 `target_stale` 并成功 |
 | H11 | 目标经 `set_state(FAILED/CANCELLED)` 终态 | notify 清除 `target_terminal`/`target_cancelled` |
@@ -319,6 +356,12 @@ diag 结构只写调用方栈，不修改 `s_restart_defer_depth`、`s_restart_d
 | H19 | defer 返回 `ESP_ERR_NO_MEM` | 原错误返回，不映射 busy |
 | H20 | INTERNAL owner | `defer_attempted=false` |
 | H21 | 解锁后日志路径 | 仅使用局部快照；静态审查无 `op->` 解锁读取 |
+| H22 | hold_ms 小于 remaining+10 s | arm `INVALID_ARG`，不武装 |
+| H23 | `request_finish` PENDING | 不 notify；hook 保留到 timeout，测试不得记为已清除 |
+| H24 | `request_finish` STALE | 不 notify；stale 失效路径清除 |
+| H25 | 终态发布后、notify 前槽位复用 | notify 按旧 ID/gen 只清旧目标，不读取新 operation 字段 |
+| H26 | `cleanup_complete` 调用 | 不发布终态、不触发 notify |
+| H27 | `request_finish` apply 失败 | 不 notify；目标 hook 保留，由 stale/timeout 兜底 |
 
 Host 测试需覆盖 `APP_C1_TEST_HOOKS`、`APP_C15_HOOK_TARGET`、`APP_C15_BUSY_DIAG` 的组合编译；测试构建单独定义，生产构建不定义。
 
@@ -335,24 +378,23 @@ Host 测试需覆盖 `APP_C1_TEST_HOOKS`、`APP_C15_HOOK_TARGET`、`APP_C15_BUSY
 
 | 编号 | 验收条件 | 证据 |
 |---|---|---|
-| D1 | 目标 cancel、目标 terminal、槽位复用均能清除对应目标 hook | H6–H11、H14；cancel 后立即 arm |
+| D1 | 目标 cancel、目标 terminal、槽位复用均能清除对应目标 hook | H6–H11、H14、H25；新目标 cancel 后立即 arm |
 | D2 | 非目标 expire 不消费 hook | H9 |
-| D3 | pause/notify 解锁后只使用局部快照，不再读取 operation 实时字段 | H21 + 静态审查 |
+| D3 | pause/notify 解锁后只使用局部快照，不再读取 operation 实时字段 | H21/H25 + 静态审查 |
 | D4 | arm/clear/pause/notify 及旧全局 hook 均由 O 保护 | H15 + 静态审查 |
 | D5 | `s_begin_diag` 读写同步约束明确 | §3.2；写/读均在 J 内 |
 | D6 | MQTT defer 的锁获取、释放及错误返回路径有源码依据 | §3.4 |
-| D7 | H1–H21 对应更新后的行为，含 cancel 后立即重新 arm | Host 结果 |
+| D7 | H1–H27 对应更新后的行为，含新目标 cancel 后立即 arm、PENDING/STALE、apply 失败 | Host 结果 |
 | D8 | 生产构建仍不包含新增 test-only 符号 | `nm` 检查 |
 
 D3/D5/D6/D8 属静态审查或构建验证，不以 Host 测试结果替代；Host 通过不证明设备行为。
 
 ## 7. 未决问题
 
-1. 目标 hook 的 `hold_ms` 上限 360000 是否足够覆盖 BLE 连接保持与调度抖动；
-2. `request_finish` 返回 PENDING/STALE 时，目标 hook 的最终清理是否只依赖后续 terminal/arm 失效或 timeout；
-3. `diag.testhook` 目标 arm 的响应是否再增加 `state` 字段（当前草案已含 `deadline_ms`/`remaining_ms`）；
-4. Host 并发压力测试的线程模型与可重复性；
-5. `APP_C15_HOOK_TARGET` 是否与 `APP_C15_BUSY_DIAG` 合并为单一实验宏，或继续保持独立以缩小组合面。
+1. `diag.testhook` 目标 arm 的响应是否再增加 `state` 字段（当前草案已含 `deadline_ms`/`remaining_ms`）；
+2. Host 并发压力测试的线程模型与可重复性；
+3. `APP_C15_HOOK_TARGET` 是否与 `APP_C15_BUSY_DIAG` 合并为单一实验宏，或继续保持独立以缩小组合面；
+4. 实现阶段需复核 `main@5aaabea` 是否确实没有 PENDING finish 的外部 resume 路径；若未来新增，必须在该终态发布点补按值 notify，不能依赖 timeout 兜底。
 
 ## 8. 边界
 
