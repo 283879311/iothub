@@ -29,6 +29,7 @@
 - [P0/P1 阶段性基线与客户端审查输入（2026-11-24）](reviews/CMD/P0-P1阶段性基线_2026-11-24.md)：P0 审核依据（正式处置见 CMD 台账 §2.1）、H1-P1 设备覆盖分层与 cleanup 时序输入。
 - [CMD-03 WAIT200 与 NVS 验收规范（2026-11-25）](reviews/CMD/CMD-03_WAIT200与NVS验收规范_2026-11-25.md)：WAIT200 全调用 250 ms 上限、cleanup 1 s 观察窗口与 NVS 系统管理数据例外口径；§4 含阶段 B 关闭记录（限 WAIT200，不关闭 CMD-03/P0）。
 - [C15-2 BUSY 剩余覆盖设计（2026-11-26）](design/CMD/C15-2_BUSY剩余覆盖设计_2026-11-26.md)：begin expire-hook 方案前置条件；trial/终态 job_op 当前 NOT_COVERED；原始 BUSY 未解释、BLE 大响应观察。
+- [C15-2 expire hook 与 defer 诊断设计（2026-11-27）](design/CMD/C15-2_expire_hook与defer诊断设计_2026-11-27.md)：test-only hook 目标过滤/同步、MQTT defer per-call 诊断、锁序、Host 矩阵与编译隔离候选。
 - [MQTT 运行态与 config 同步实施证据](reviews/MQTT/MQTT运行态与config同步复核_2026-11-15.md)
 
 设计文件说明设计约束，审查文件保存限定时点的证据；任务状态只在对应台账维护，专项材料不另行维护状态。
