@@ -9,6 +9,7 @@ void op_test_advance_us(int64_t us);
 /* 由 stub 日志回调置位：识别产品代码既有的 hook 打印 */
 bool op_test_hook_entered(void);
 bool op_test_hook_exited(void);
+int op_test_hook_pause_count(void);
 const char *op_test_hook_probe_log(void);
 const char *op_test_hook_event_log(void);
 

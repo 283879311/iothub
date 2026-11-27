@@ -41,6 +41,7 @@ void op_test_advance_us(int64_t us)
 static pthread_mutex_t s_ev_m = PTHREAD_MUTEX_INITIALIZER;
 static int s_entered = 0;
 static int s_exited = 0;
+static int s_pause_count = 0;
 static char s_probe[1024] = "";
 static char s_hook_event[1024] = "";
 static int s_verbose = 0;
@@ -60,6 +61,13 @@ bool op_test_hook_exited(void)
     int v;
     ev_lock(); v = s_exited; ev_unlock();
     return v != 0;
+}
+
+int op_test_hook_pause_count(void)
+{
+    int v;
+    ev_lock(); v = s_pause_count; ev_unlock();
+    return v;
 }
 
 const char *op_test_hook_probe_log(void)
@@ -82,7 +90,7 @@ static void note_log(const char *msg)
 {
     if (strstr(msg, "C1 hook: pause") != NULL) {
         if (strstr(msg, " enter") != NULL) {
-            ev_lock(); s_entered = 1; ev_unlock();
+            ev_lock(); s_entered = 1; s_pause_count++; ev_unlock();
         }
         if (strstr(msg, " exit") != NULL) {
             ev_lock(); s_exited = 1; ev_unlock();

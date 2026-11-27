@@ -1150,6 +1150,9 @@ app_operation_request_finish(app_operation_t *op, uint32_t expected_generation,
     app_operation_cleanup_outcome_t outcome;
     char op_id[APP_OPERATION_ID_LEN] = "";
     uint32_t log_gen = 0;
+#ifdef APP_C1_TEST_HOOKS
+    bool pause_expire = false;
+#endif
 
     if (!app_operation_in_table(op)) {
         return APP_OPERATION_FINISH_STALE;
@@ -1211,6 +1214,9 @@ app_operation_request_finish(app_operation_t *op, uint32_t expected_generation,
     op->expiring = true;
     snprintf(op_id, sizeof(op_id), "%s", op->id);
     log_gen = op->generation;
+#ifdef APP_C1_TEST_HOOKS
+    pause_expire = (target_state == APP_OP_EXPIRED);
+#endif
     if (run_callback) {
         op->finish_phase = APP_OPERATION_FINISH_PHASE_CALLBACK_RUNNING;
     }
@@ -1248,7 +1254,7 @@ app_operation_request_finish(app_operation_t *op, uint32_t expected_generation,
      * 仅测试构建存在，不改变生产路径。 */
     if (outcome != APP_OPERATION_CLEANUP_OUTCOME_PENDING &&
         outcome != APP_OPERATION_CLEANUP_OUTCOME_STALE &&
-        op->finish_target_state == APP_OP_EXPIRED) {
+        pause_expire) {
         app_operation_test_hook_pause(APP_OP_HOOK_TRIGGER_EXPIRE_POST_CLEANUP, op);
     }
 #endif

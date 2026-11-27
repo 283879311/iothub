@@ -419,65 +419,74 @@ static void h14_timeout_then_arm(void)
 }
 
 typedef struct {
-    pthread_barrier_t *barrier;
-    const char *op_id;
+    app_operation_t *op;
     uint32_t generation;
-    int role;
-    int loops;
+    app_operation_finish_result_t result;
 } h15_arg_t;
 
-static void *h15_worker(void *v)
+static void *h15_finish_thread(void *v)
 {
     h15_arg_t *a = (h15_arg_t *)v;
 
-    for (int i = 0; i < a->loops; i++) {
-        pthread_barrier_wait(a->barrier);
-        if (a->role == 0) {
-            uint32_t g = 0;
-            int64_t d = 0;
-            (void)app_operation_test_hook_arm_target(a->op_id, 360000, 0, &g, &d);
-        } else if (a->role == 1) {
-            app_operation_test_hook_clear();
-        } else {
-            app_operation_test_hook_notify_target_inactive_for_test("op-other",
-                                                                    a->generation);
-            (void)hook_armed();
-        }
-        pthread_barrier_wait(a->barrier);
-    }
+    a->result = app_operation_request_finish(
+        a->op, a->generation, APP_OP_EXPIRED, APP_OPERATION_ERR_TIMEOUT,
+        APP_OPERATION_CLEANUP_REQUIRED);
     return NULL;
 }
 
 static void h15_concurrent(void)
 {
-    enum { THREADS = 3, LOOPS = 300 };
-    app_operation_t *op = start_op(APP_OPERATION_OWNER_BLE, NULL, run_got_ip);
+    app_operation_t *op = start_op(APP_OPERATION_OWNER_BLE, finish_ok, run_got_ip);
     app_operation_status_t st;
-    pthread_barrier_t barrier;
-    pthread_t th[THREADS];
-    h15_arg_t args[THREADS];
+    app_operation_test_hook_status_t hs;
+    uint32_t gen = 0;
+    uint32_t rearm_gen = 0;
+    int64_t deadline = 0;
+    int64_t rearm_deadline = 0;
     char op_id[APP_OPERATION_ID_LEN];
+    pthread_t finisher;
+    pthread_t drv;
+    h15_arg_t arg;
 
     report("H15a", op != NULL && app_operation_get_status(op, &st));
     if (op == NULL) {
         return;
     }
     memcpy(op_id, app_operation_id(op), sizeof(op_id));
-    pthread_barrier_init(&barrier, NULL, THREADS);
-    for (int i = 0; i < THREADS; i++) {
-        args[i].barrier = &barrier;
-        args[i].op_id = op_id;
-        args[i].generation = st.generation;
-        args[i].role = i;
-        args[i].loops = LOOPS;
-        pthread_create(&th[i], NULL, h15_worker, &args[i]);
+    report("H15b", arm_target(op, 360000, &gen, &deadline) == ESP_OK);
+    arg.op = op;
+    arg.generation = st.generation;
+    arg.result = APP_OPERATION_FINISH_REJECTED;
+    pthread_create(&finisher, NULL, h15_finish_thread, &arg);
+
+    /* 等待真实 expire pause 进入；此时 hook 已被 pause 消费。 */
+    for (int i = 0; i < 2000 && !op_test_hook_entered(); i++) {
+        usleep(1000);
     }
-    for (int i = 0; i < THREADS; i++) {
-        pthread_join(th[i], NULL);
-    }
-    pthread_barrier_destroy(&barrier);
+    report("H15c", op_test_hook_entered());
+    app_operation_test_hook_get_status(&hs);
+    report("H15d", !hs.armed);
+
+    /* pause 窗口内交错 arm / clear / notify；三者都不得复活 hook。 */
     app_operation_test_hook_clear();
-    report("H15b", !hook_armed());
+    app_operation_test_hook_notify_target_inactive_for_test(op_id, st.generation);
+    report("H15e", app_operation_test_hook_arm_target(op_id, 360000, 0,
+                                                      &rearm_gen,
+                                                      &rearm_deadline) ==
+                    ESP_ERR_INVALID_STATE);
+    app_operation_test_hook_get_status(&hs);
+    report("H15f", !hs.armed);
+
+    pthread_create(&drv, NULL, expire_driver, NULL);
+    pthread_join(finisher, NULL);
+    pthread_join(drv, NULL);
+
+    report("H15g", arg.result == APP_OPERATION_FINISH_DONE);
+    report("H15h", wait_state(op, APP_OP_EXPIRED, 3000));
+    report("H15i", op_test_hook_pause_count() == 1);
+    /* 关键：在任何 teardown/clear 之前检查最终 hook 状态。 */
+    app_operation_test_hook_get_status(&hs);
+    report("H15j", !hs.armed && !hs.targeted);
 }
 
 static void h10_slot_reuse(void)
