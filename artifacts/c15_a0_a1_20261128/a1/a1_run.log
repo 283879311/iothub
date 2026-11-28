@@ -1,0 +1,232 @@
+/tmp/iothub-c152/.venv-bleak/lib/python3.12/site-packages/bleak/backends/bluezdbus/client.py:646: UserWarning: Using default MTU value. Call _acquire_mtu() or set _mtu_size first to avoid this warning.
+  warnings.warn(
+[scan-filtered] 1 hit(s) in 10s
+  HIT <device-mac> name='IotHubBLE-65D8' local_name='IotHubBLE-65D8' rssi=-43 uuids=['6e400001-b5a3-f393-e0a9-e50e24dcca9e']
+>11.973s TX id=login-1 100B {"id": "login-1", "version": "1.0", "cmd": "auth.login", "args": {"username": "admin", "password": "<redacted>"}}
+[tx] chunked 100B into 5 GATT writes (<= 20B each)
+<12.482s> RX id=login-1 95B frags=1 sizes=[95] {"id": "login-1", "ok": true, "data": {"token": "<redacted>", "expires_in": 600}}
+[auth] login ok (token redacted)
+>12.788s TX id=info 103B {"id": "info", "version": "1.0", "cmd": "device.info", "args": {}, "token": "<redacted>"}
+[tx] chunked 103B into 6 GATT writes (<= 20B each)
+<13.382s> RX id=info 287B frags=2 sizes=[253, 34] {"id": "info", "ok": true, "data": {"model": "iothub", "firmware": "1.3-65f6dbb", "build_sha": "981fd6552", "device_id": "IotHub-65D8", "build_variant": "mqtt_net_txn=on", "protocol_versions": ["1.0"], "security": {"link_encrypted": false, "bonded": false, "l2_ready": false, "sensitive_writes_allowed": false}}}
+device_info {"device_id": "IotHub-65D8", "firmware": "1.3-65f6dbb", "build_sha": "981fd6552", "build_variant": "mqtt_net_txn=on"}
+device_policy {"satisfied": true, "out_of_policy": false}
+>13.385s TX id=ns1795828454921 117B {"id": "ns1795828454921", "version": "1.0", "cmd": "network.status", "args": {}, "token": "<redacted>"}
+[tx] chunked 117B into 6 GATT writes (<= 20B each)
+<14.192s> RX id=ns1795828454921 543B frags=3 sizes=[253, 253, 37] {"id": "ns1795828454921", "ok": true, "data": {"sta_connected": true, "sta_has_ip": true, "sta_ip": "<sta-ip>", "last_disconnect": "none", "connected_ssid": "<wifi-ssid>", "connected_profile": 0, "internet_verified": true, "net_verify_stage": "mqtt", "nc_tcp_fails_last": 0, "nc_tcp_last_errno": 0, "rssi": -63, "channel": 8, "bssid": "<bssid>", "rssi_valid": true, "sta_ssid": "<wifi-ssid>", "password_set": true, "mode": "sta", "persistent_use_static": false, "persistent_static_ip": "", "cfg_state": "dhcp", "mqtt_connected": true, "mqtt_last_error": "", "trial": {"state": "idle"}}}
+pre_network {"ok": true, "sta": true, "ip": true, "mqtt": true, "inet": true, "trial": "idle"}
+>14.195s TX id=tc1 189B {"id": "tc1", "version": "1.0", "cmd": "network.tryconnect", "args": {"ssid": "<wifi-ssid>", "password": "<redacted>", "idempotency_key": "a1begin-1795828455"}, "token": "<redacted>"}
+[tx] chunked 189B into 10 GATT writes (<= 20B each)
+<15.588s> RX id=tc1 87B frags=1 sizes=[87] {"id": "tc1", "ok": true, "data": {"operation_id": "op-2CB87A304B620A66", "state": "accepted"}}
+first_tryconnect {"ok": true, "error": null}
+>15.591s TX id=op1795828457127 152B {"id": "op1795828457127", "version": "1.0", "cmd": "operation.get", "args": {"operation_id": "op-2CB87A304B620A66"}, "token": "<redacted>"}
+[tx] chunked 152B into 8 GATT writes (<= 20B each)
+<16.847s> RX id=op1795828457127 317B frags=2 sizes=[253, 64] {"id": "op1795828457127", "ok": true, "data": {"operation_id": "op-2CB87A304B620A66", "state": "connecting", "cleanup_state": "none", "error": "none", "error_detail": {"code": "none", "message": "none"}, "stages": {"wifi_connected": false, "ip_acquired": false, "internet_verified": false, "mqtt_connected": false}, "stages_source": "snapshot"}}
+>17.849s TX id=op1795828459385 152B {"id": "op1795828459385", "version": "1.0", "cmd": "operation.get", "args": {"operation_id": "op-2CB87A304B620A66"}, "token": "<redacted>"}
+[tx] chunked 152B into 8 GATT writes (<= 20B each)
+<18.874s> RX id=op1795828459385 317B frags=2 sizes=[253, 64] {"id": "op1795828459385", "ok": true, "data": {"operation_id": "op-2CB87A304B620A66", "state": "connecting", "cleanup_state": "none", "error": "none", "error_detail": {"code": "none", "message": "none"}, "stages": {"wifi_connected": false, "ip_acquired": false, "internet_verified": false, "mqtt_connected": false}, "stages_source": "snapshot"}}
+>19.875s TX id=op1795828461412 152B {"id": "op1795828461412", "version": "1.0", "cmd": "operation.get", "args": {"operation_id": "op-2CB87A304B620A66"}, "token": "<redacted>"}
+[tx] chunked 152B into 8 GATT writes (<= 20B each)
+<21.032s> RX id=op1795828461412 317B frags=2 sizes=[253, 64] {"id": "op1795828461412", "ok": true, "data": {"operation_id": "op-2CB87A304B620A66", "state": "connecting", "cleanup_state": "none", "error": "none", "error_detail": {"code": "none", "message": "none"}, "stages": {"wifi_connected": false, "ip_acquired": false, "internet_verified": false, "mqtt_connected": false}, "stages_source": "snapshot"}}
+>22.038s TX id=op1795828463574 152B {"id": "op1795828463574", "version": "1.0", "cmd": "operation.get", "args": {"operation_id": "op-2CB87A304B620A66"}, "token": "<redacted>"}
+[tx] chunked 152B into 8 GATT writes (<= 20B each)
+<23.147s> RX id=op1795828463574 317B frags=2 sizes=[253, 64] {"id": "op1795828463574", "ok": true, "data": {"operation_id": "op-2CB87A304B620A66", "state": "connecting", "cleanup_state": "none", "error": "none", "error_detail": {"code": "none", "message": "none"}, "stages": {"wifi_connected": false, "ip_acquired": false, "internet_verified": false, "mqtt_connected": false}, "stages_source": "snapshot"}}
+>24.153s TX id=op1795828465689 152B {"id": "op1795828465689", "version": "1.0", "cmd": "operation.get", "args": {"operation_id": "op-2CB87A304B620A66"}, "token": "<redacted>"}
+[tx] chunked 152B into 8 GATT writes (<= 20B each)
+<25.217s> RX id=op1795828465689 317B frags=2 sizes=[253, 64] {"id": "op1795828465689", "ok": true, "data": {"operation_id": "op-2CB87A304B620A66", "state": "connecting", "cleanup_state": "none", "error": "none", "error_detail": {"code": "none", "message": "none"}, "stages": {"wifi_connected": false, "ip_acquired": false, "internet_verified": false, "mqtt_connected": false}, "stages_source": "snapshot"}}
+>26.220s TX id=op1795828467756 152B {"id": "op1795828467756", "version": "1.0", "cmd": "operation.get", "args": {"operation_id": "op-2CB87A304B620A66"}, "token": "<redacted>"}
+[tx] chunked 152B into 8 GATT writes (<= 20B each)
+<27.153s> RX id=op1795828467756 317B frags=2 sizes=[253, 64] {"id": "op1795828467756", "ok": true, "data": {"operation_id": "op-2CB87A304B620A66", "state": "connecting", "cleanup_state": "none", "error": "none", "error_detail": {"code": "none", "message": "none"}, "stages": {"wifi_connected": false, "ip_acquired": false, "internet_verified": false, "mqtt_connected": false}, "stages_source": "snapshot"}}
+>28.156s TX id=op1795828469693 152B {"id": "op1795828469693", "version": "1.0", "cmd": "operation.get", "args": {"operation_id": "op-2CB87A304B620A66"}, "token": "<redacted>"}
+[tx] chunked 152B into 8 GATT writes (<= 20B each)
+<29.401s> RX id=op1795828469693 317B frags=2 sizes=[253, 64] {"id": "op1795828469693", "ok": true, "data": {"operation_id": "op-2CB87A304B620A66", "state": "connecting", "cleanup_state": "none", "error": "none", "error_detail": {"code": "none", "message": "none"}, "stages": {"wifi_connected": false, "ip_acquired": false, "internet_verified": false, "mqtt_connected": false}, "stages_source": "snapshot"}}
+>30.406s TX id=op1795828471942 152B {"id": "op1795828471942", "version": "1.0", "cmd": "operation.get", "args": {"operation_id": "op-2CB87A304B620A66"}, "token": "<redacted>"}
+[tx] chunked 152B into 8 GATT writes (<= 20B each)
+<31.383s> RX id=op1795828471942 355B frags=2 sizes=[253, 102] {"id": "op1795828471942", "ok": true, "data": {"operation_id": "op-2CB87A304B620A66", "state": "got_ip", "cleanup_state": "none", "error": "none", "error_detail": {"code": "none", "message": "none"}, "trial_id": "trial-A986C7F5", "ssid": "<wifi-ssid>", "stages": {"wifi_connected": true, "ip_acquired": true, "internet_verified": true, "mqtt_connected": true}, "stages_source": "snapshot"}}
+got_ip {"ok": true, "state": "got_ip", "cleanup": "none", "stages": {"wifi_connected": true, "ip_acquired": true, "internet_verified": true, "mqtt_connected": true}}
+>31.388s TX id=arm 172B {"id": "arm", "version": "1.0", "cmd": "diag.testhook", "args": {"action": "arm", "operation_id": "op-2CB87A304B620A66", "hold_ms": 310000}, "token": "<redacted>"}
+[tx] chunked 172B into 9 GATT writes (<= 20B each)
+<32.686s> RX id=arm 119B frags=1 sizes=[119] {"id": "arm", "ok": true, "data": {"armed": true, "generation": 1, "deadline_ms": 647712, "remaining_ms": 298408, "hold_ms": 310000}}
+arm {"ok": true, "data": {"armed": true, "generation": 1, "deadline_ms": 647712, "remaining_ms": 298408, "hold_ms": 310000}, "error": null}
+>32.692s TX id=hb1795828474229 114B {"id": "hb1795828474229", "version": "1.0", "cmd": "device.info", "args": {}, "token": "<redacted>"}
+[tx] chunked 114B into 6 GATT writes (<= 20B each)
+<33.766s> RX id=hb1795828474229 298B frags=2 sizes=[253, 45] {"id": "hb1795828474229", "ok": true, "data": {"model": "iothub", "firmware": "1.3-65f6dbb", "build_sha": "981fd6552", "device_id": "IotHub-65D8", "build_variant": "mqtt_net_txn=on", "protocol_versions": ["1.0"], "security": {"link_encrypted": false, "bonded": false, "l2_ready": false, "sensitive_writes_allowed": false}}}
+>38.774s TX id=hb1795828480310 114B {"id": "hb1795828480310", "version": "1.0", "cmd": "device.info", "args": {}, "token": "<redacted>"}
+[tx] chunked 114B into 6 GATT writes (<= 20B each)
+<39.573s> RX id=hb1795828480310 298B frags=2 sizes=[253, 45] {"id": "hb1795828480310", "ok": true, "data": {"model": "iothub", "firmware": "1.3-65f6dbb", "build_sha": "981fd6552", "device_id": "IotHub-65D8", "build_variant": "mqtt_net_txn=on", "protocol_versions": ["1.0"], "security": {"link_encrypted": false, "bonded": false, "l2_ready": false, "sensitive_writes_allowed": false}}}
+>44.584s TX id=hb1795828486120 114B {"id": "hb1795828486120", "version": "1.0", "cmd": "device.info", "args": {}, "token": "<redacted>"}
+[tx] chunked 114B into 6 GATT writes (<= 20B each)
+<45.194s> RX id=hb1795828486120 298B frags=2 sizes=[253, 45] {"id": "hb1795828486120", "ok": true, "data": {"model": "iothub", "firmware": "1.3-65f6dbb", "build_sha": "981fd6552", "device_id": "IotHub-65D8", "build_variant": "mqtt_net_txn=on", "protocol_versions": ["1.0"], "security": {"link_encrypted": false, "bonded": false, "l2_ready": false, "sensitive_writes_allowed": false}}}
+>50.201s TX id=hb1795828491737 114B {"id": "hb1795828491737", "version": "1.0", "cmd": "device.info", "args": {}, "token": "<redacted>"}
+[tx] chunked 114B into 6 GATT writes (<= 20B each)
+<50.820s> RX id=hb1795828491737 298B frags=2 sizes=[253, 45] {"id": "hb1795828491737", "ok": true, "data": {"model": "iothub", "firmware": "1.3-65f6dbb", "build_sha": "981fd6552", "device_id": "IotHub-65D8", "build_variant": "mqtt_net_txn=on", "protocol_versions": ["1.0"], "security": {"link_encrypted": false, "bonded": false, "l2_ready": false, "sensitive_writes_allowed": false}}}
+>55.826s TX id=hb1795828497362 114B {"id": "hb1795828497362", "version": "1.0", "cmd": "device.info", "args": {}, "token": "<redacted>"}
+[tx] chunked 114B into 6 GATT writes (<= 20B each)
+<56.534s> RX id=hb1795828497362 298B frags=2 sizes=[253, 45] {"id": "hb1795828497362", "ok": true, "data": {"model": "iothub", "firmware": "1.3-65f6dbb", "build_sha": "981fd6552", "device_id": "IotHub-65D8", "build_variant": "mqtt_net_txn=on", "protocol_versions": ["1.0"], "security": {"link_encrypted": false, "bonded": false, "l2_ready": false, "sensitive_writes_allowed": false}}}
+>61.542s TX id=hb1795828503078 114B {"id": "hb1795828503078", "version": "1.0", "cmd": "device.info", "args": {}, "token": "<redacted>"}
+[tx] chunked 114B into 6 GATT writes (<= 20B each)
+<62.340s> RX id=hb1795828503078 298B frags=2 sizes=[253, 45] {"id": "hb1795828503078", "ok": true, "data": {"model": "iothub", "firmware": "1.3-65f6dbb", "build_sha": "981fd6552", "device_id": "IotHub-65D8", "build_variant": "mqtt_net_txn=on", "protocol_versions": ["1.0"], "security": {"link_encrypted": false, "bonded": false, "l2_ready": false, "sensitive_writes_allowed": false}}}
+>67.347s TX id=hb1795828508883 114B {"id": "hb1795828508883", "version": "1.0", "cmd": "device.info", "args": {}, "token": "<redacted>"}
+[tx] chunked 114B into 6 GATT writes (<= 20B each)
+<68.055s> RX id=hb1795828508883 298B frags=2 sizes=[253, 45] {"id": "hb1795828508883", "ok": true, "data": {"model": "iothub", "firmware": "1.3-65f6dbb", "build_sha": "981fd6552", "device_id": "IotHub-65D8", "build_variant": "mqtt_net_txn=on", "protocol_versions": ["1.0"], "security": {"link_encrypted": false, "bonded": false, "l2_ready": false, "sensitive_writes_allowed": false}}}
+>73.061s TX id=hb1795828514597 114B {"id": "hb1795828514597", "version": "1.0", "cmd": "device.info", "args": {}, "token": "<redacted>"}
+[tx] chunked 114B into 6 GATT writes (<= 20B each)
+<73.679s> RX id=hb1795828514597 298B frags=2 sizes=[253, 45] {"id": "hb1795828514597", "ok": true, "data": {"model": "iothub", "firmware": "1.3-65f6dbb", "build_sha": "981fd6552", "device_id": "IotHub-65D8", "build_variant": "mqtt_net_txn=on", "protocol_versions": ["1.0"], "security": {"link_encrypted": false, "bonded": false, "l2_ready": false, "sensitive_writes_allowed": false}}}
+>78.686s TX id=hb1795828520222 114B {"id": "hb1795828520222", "version": "1.0", "cmd": "device.info", "args": {}, "token": "<redacted>"}
+[tx] chunked 114B into 6 GATT writes (<= 20B each)
+<79.304s> RX id=hb1795828520222 298B frags=2 sizes=[253, 45] {"id": "hb1795828520222", "ok": true, "data": {"model": "iothub", "firmware": "1.3-65f6dbb", "build_sha": "981fd6552", "device_id": "IotHub-65D8", "build_variant": "mqtt_net_txn=on", "protocol_versions": ["1.0"], "security": {"link_encrypted": false, "bonded": false, "l2_ready": false, "sensitive_writes_allowed": false}}}
+>84.313s TX id=hb1795828525849 114B {"id": "hb1795828525849", "version": "1.0", "cmd": "device.info", "args": {}, "token": "<redacted>"}
+[tx] chunked 114B into 6 GATT writes (<= 20B each)
+<84.928s> RX id=hb1795828525849 298B frags=2 sizes=[253, 45] {"id": "hb1795828525849", "ok": true, "data": {"model": "iothub", "firmware": "1.3-65f6dbb", "build_sha": "981fd6552", "device_id": "IotHub-65D8", "build_variant": "mqtt_net_txn=on", "protocol_versions": ["1.0"], "security": {"link_encrypted": false, "bonded": false, "l2_ready": false, "sensitive_writes_allowed": false}}}
+>89.936s TX id=hb1795828531473 114B {"id": "hb1795828531473", "version": "1.0", "cmd": "device.info", "args": {}, "token": "<redacted>"}
+[tx] chunked 114B into 6 GATT writes (<= 20B each)
+<90.644s> RX id=hb1795828531473 298B frags=2 sizes=[253, 45] {"id": "hb1795828531473", "ok": true, "data": {"model": "iothub", "firmware": "1.3-65f6dbb", "build_sha": "981fd6552", "device_id": "IotHub-65D8", "build_variant": "mqtt_net_txn=on", "protocol_versions": ["1.0"], "security": {"link_encrypted": false, "bonded": false, "l2_ready": false, "sensitive_writes_allowed": false}}}
+>95.649s TX id=hb1795828537185 114B {"id": "hb1795828537185", "version": "1.0", "cmd": "device.info", "args": {}, "token": "<redacted>"}
+[tx] chunked 114B into 6 GATT writes (<= 20B each)
+<96.269s> RX id=hb1795828537185 298B frags=2 sizes=[253, 45] {"id": "hb1795828537185", "ok": true, "data": {"model": "iothub", "firmware": "1.3-65f6dbb", "build_sha": "981fd6552", "device_id": "IotHub-65D8", "build_variant": "mqtt_net_txn=on", "protocol_versions": ["1.0"], "security": {"link_encrypted": false, "bonded": false, "l2_ready": false, "sensitive_writes_allowed": false}}}
+>101.275s TX id=hb1795828542811 114B {"id": "hb1795828542811", "version": "1.0", "cmd": "device.info", "args": {}, "token": "<redacted>"}
+[tx] chunked 114B into 6 GATT writes (<= 20B each)
+<101.983s> RX id=hb1795828542811 298B frags=2 sizes=[253, 45] {"id": "hb1795828542811", "ok": true, "data": {"model": "iothub", "firmware": "1.3-65f6dbb", "build_sha": "981fd6552", "device_id": "IotHub-65D8", "build_variant": "mqtt_net_txn=on", "protocol_versions": ["1.0"], "security": {"link_encrypted": false, "bonded": false, "l2_ready": false, "sensitive_writes_allowed": false}}}
+>106.990s TX id=hb1795828548526 114B {"id": "hb1795828548526", "version": "1.0", "cmd": "device.info", "args": {}, "token": "<redacted>"}
+[tx] chunked 114B into 6 GATT writes (<= 20B each)
+<107.698s> RX id=hb1795828548526 298B frags=2 sizes=[253, 45] {"id": "hb1795828548526", "ok": true, "data": {"model": "iothub", "firmware": "1.3-65f6dbb", "build_sha": "981fd6552", "device_id": "IotHub-65D8", "build_variant": "mqtt_net_txn=on", "protocol_versions": ["1.0"], "security": {"link_encrypted": false, "bonded": false, "l2_ready": false, "sensitive_writes_allowed": false}}}
+>112.707s TX id=hb1795828554244 114B {"id": "hb1795828554244", "version": "1.0", "cmd": "device.info", "args": {}, "token": "<redacted>"}
+[tx] chunked 114B into 6 GATT writes (<= 20B each)
+<113.547s> RX id=hb1795828554244 298B frags=2 sizes=[253, 45] {"id": "hb1795828554244", "ok": true, "data": {"model": "iothub", "firmware": "1.3-65f6dbb", "build_sha": "981fd6552", "device_id": "IotHub-65D8", "build_variant": "mqtt_net_txn=on", "protocol_versions": ["1.0"], "security": {"link_encrypted": false, "bonded": false, "l2_ready": false, "sensitive_writes_allowed": false}}}
+>118.554s TX id=hb1795828560090 114B {"id": "hb1795828560090", "version": "1.0", "cmd": "device.info", "args": {}, "token": "<redacted>"}
+[tx] chunked 114B into 6 GATT writes (<= 20B each)
+<119.443s> RX id=hb1795828560090 298B frags=2 sizes=[253, 45] {"id": "hb1795828560090", "ok": true, "data": {"model": "iothub", "firmware": "1.3-65f6dbb", "build_sha": "981fd6552", "device_id": "IotHub-65D8", "build_variant": "mqtt_net_txn=on", "protocol_versions": ["1.0"], "security": {"link_encrypted": false, "bonded": false, "l2_ready": false, "sensitive_writes_allowed": false}}}
+>124.451s TX id=hb1795828565987 114B {"id": "hb1795828565987", "version": "1.0", "cmd": "device.info", "args": {}, "token": "<redacted>"}
+[tx] chunked 114B into 6 GATT writes (<= 20B each)
+<125.203s> RX id=hb1795828565987 298B frags=2 sizes=[253, 45] {"id": "hb1795828565987", "ok": true, "data": {"model": "iothub", "firmware": "1.3-65f6dbb", "build_sha": "981fd6552", "device_id": "IotHub-65D8", "build_variant": "mqtt_net_txn=on", "protocol_versions": ["1.0"], "security": {"link_encrypted": false, "bonded": false, "l2_ready": false, "sensitive_writes_allowed": false}}}
+>130.211s TX id=hb1795828571747 114B {"id": "hb1795828571747", "version": "1.0", "cmd": "device.info", "args": {}, "token": "<redacted>"}
+[tx] chunked 114B into 6 GATT writes (<= 20B each)
+<130.871s> RX id=hb1795828571747 298B frags=2 sizes=[253, 45] {"id": "hb1795828571747", "ok": true, "data": {"model": "iothub", "firmware": "1.3-65f6dbb", "build_sha": "981fd6552", "device_id": "IotHub-65D8", "build_variant": "mqtt_net_txn=on", "protocol_versions": ["1.0"], "security": {"link_encrypted": false, "bonded": false, "l2_ready": false, "sensitive_writes_allowed": false}}}
+>135.880s TX id=hb1795828577416 114B {"id": "hb1795828577416", "version": "1.0", "cmd": "device.info", "args": {}, "token": "<redacted>"}
+[tx] chunked 114B into 6 GATT writes (<= 20B each)
+<136.585s> RX id=hb1795828577416 298B frags=2 sizes=[253, 45] {"id": "hb1795828577416", "ok": true, "data": {"model": "iothub", "firmware": "1.3-65f6dbb", "build_sha": "981fd6552", "device_id": "IotHub-65D8", "build_variant": "mqtt_net_txn=on", "protocol_versions": ["1.0"], "security": {"link_encrypted": false, "bonded": false, "l2_ready": false, "sensitive_writes_allowed": false}}}
+>141.592s TX id=hb1795828583128 114B {"id": "hb1795828583128", "version": "1.0", "cmd": "device.info", "args": {}, "token": "<redacted>"}
+[tx] chunked 114B into 6 GATT writes (<= 20B each)
+<142.346s> RX id=hb1795828583128 298B frags=2 sizes=[253, 45] {"id": "hb1795828583128", "ok": true, "data": {"model": "iothub", "firmware": "1.3-65f6dbb", "build_sha": "981fd6552", "device_id": "IotHub-65D8", "build_variant": "mqtt_net_txn=on", "protocol_versions": ["1.0"], "security": {"link_encrypted": false, "bonded": false, "l2_ready": false, "sensitive_writes_allowed": false}}}
+>147.353s TX id=hb1795828588889 114B {"id": "hb1795828588889", "version": "1.0", "cmd": "device.info", "args": {}, "token": "<redacted>"}
+[tx] chunked 114B into 6 GATT writes (<= 20B each)
+<147.926s> RX id=hb1795828588889 298B frags=2 sizes=[253, 45] {"id": "hb1795828588889", "ok": true, "data": {"model": "iothub", "firmware": "1.3-65f6dbb", "build_sha": "981fd6552", "device_id": "IotHub-65D8", "build_variant": "mqtt_net_txn=on", "protocol_versions": ["1.0"], "security": {"link_encrypted": false, "bonded": false, "l2_ready": false, "sensitive_writes_allowed": false}}}
+>152.933s TX id=hb1795828594470 114B {"id": "hb1795828594470", "version": "1.0", "cmd": "device.info", "args": {}, "token": "<redacted>"}
+[tx] chunked 114B into 6 GATT writes (<= 20B each)
+<153.550s> RX id=hb1795828594470 298B frags=2 sizes=[253, 45] {"id": "hb1795828594470", "ok": true, "data": {"model": "iothub", "firmware": "1.3-65f6dbb", "build_sha": "981fd6552", "device_id": "IotHub-65D8", "build_variant": "mqtt_net_txn=on", "protocol_versions": ["1.0"], "security": {"link_encrypted": false, "bonded": false, "l2_ready": false, "sensitive_writes_allowed": false}}}
+>158.555s TX id=hb1795828600092 114B {"id": "hb1795828600092", "version": "1.0", "cmd": "device.info", "args": {}, "token": "<redacted>"}
+[tx] chunked 114B into 6 GATT writes (<= 20B each)
+<159.175s> RX id=hb1795828600092 298B frags=2 sizes=[253, 45] {"id": "hb1795828600092", "ok": true, "data": {"model": "iothub", "firmware": "1.3-65f6dbb", "build_sha": "981fd6552", "device_id": "IotHub-65D8", "build_variant": "mqtt_net_txn=on", "protocol_versions": ["1.0"], "security": {"link_encrypted": false, "bonded": false, "l2_ready": false, "sensitive_writes_allowed": false}}}
+>164.183s TX id=hb1795828605719 114B {"id": "hb1795828605719", "version": "1.0", "cmd": "device.info", "args": {}, "token": "<redacted>"}
+[tx] chunked 114B into 6 GATT writes (<= 20B each)
+<164.890s> RX id=hb1795828605719 298B frags=2 sizes=[253, 45] {"id": "hb1795828605719", "ok": true, "data": {"model": "iothub", "firmware": "1.3-65f6dbb", "build_sha": "981fd6552", "device_id": "IotHub-65D8", "build_variant": "mqtt_net_txn=on", "protocol_versions": ["1.0"], "security": {"link_encrypted": false, "bonded": false, "l2_ready": false, "sensitive_writes_allowed": false}}}
+>169.893s TX id=hb1795828611429 114B {"id": "hb1795828611429", "version": "1.0", "cmd": "device.info", "args": {}, "token": "<redacted>"}
+[tx] chunked 114B into 6 GATT writes (<= 20B each)
+<170.559s> RX id=hb1795828611429 298B frags=2 sizes=[253, 45] {"id": "hb1795828611429", "ok": true, "data": {"model": "iothub", "firmware": "1.3-65f6dbb", "build_sha": "981fd6552", "device_id": "IotHub-65D8", "build_variant": "mqtt_net_txn=on", "protocol_versions": ["1.0"], "security": {"link_encrypted": false, "bonded": false, "l2_ready": false, "sensitive_writes_allowed": false}}}
+>175.567s TX id=hb1795828617104 114B {"id": "hb1795828617104", "version": "1.0", "cmd": "device.info", "args": {}, "token": "<redacted>"}
+[tx] chunked 114B into 6 GATT writes (<= 20B each)
+<176.185s> RX id=hb1795828617104 298B frags=2 sizes=[253, 45] {"id": "hb1795828617104", "ok": true, "data": {"model": "iothub", "firmware": "1.3-65f6dbb", "build_sha": "981fd6552", "device_id": "IotHub-65D8", "build_variant": "mqtt_net_txn=on", "protocol_versions": ["1.0"], "security": {"link_encrypted": false, "bonded": false, "l2_ready": false, "sensitive_writes_allowed": false}}}
+>181.192s TX id=hb1795828622728 114B {"id": "hb1795828622728", "version": "1.0", "cmd": "device.info", "args": {}, "token": "<redacted>"}
+[tx] chunked 114B into 6 GATT writes (<= 20B each)
+<182.124s> RX id=hb1795828622728 298B frags=2 sizes=[253, 45] {"id": "hb1795828622728", "ok": true, "data": {"model": "iothub", "firmware": "1.3-65f6dbb", "build_sha": "981fd6552", "device_id": "IotHub-65D8", "build_variant": "mqtt_net_txn=on", "protocol_versions": ["1.0"], "security": {"link_encrypted": false, "bonded": false, "l2_ready": false, "sensitive_writes_allowed": false}}}
+>187.132s TX id=hb1795828628668 114B {"id": "hb1795828628668", "version": "1.0", "cmd": "device.info", "args": {}, "token": "<redacted>"}
+[tx] chunked 114B into 6 GATT writes (<= 20B each)
+<187.749s> RX id=hb1795828628668 298B frags=2 sizes=[253, 45] {"id": "hb1795828628668", "ok": true, "data": {"model": "iothub", "firmware": "1.3-65f6dbb", "build_sha": "981fd6552", "device_id": "IotHub-65D8", "build_variant": "mqtt_net_txn=on", "protocol_versions": ["1.0"], "security": {"link_encrypted": false, "bonded": false, "l2_ready": false, "sensitive_writes_allowed": false}}}
+>192.757s TX id=hb1795828634293 114B {"id": "hb1795828634293", "version": "1.0", "cmd": "device.info", "args": {}, "token": "<redacted>"}
+[tx] chunked 114B into 6 GATT writes (<= 20B each)
+<193.373s> RX id=hb1795828634293 298B frags=2 sizes=[253, 45] {"id": "hb1795828634293", "ok": true, "data": {"model": "iothub", "firmware": "1.3-65f6dbb", "build_sha": "981fd6552", "device_id": "IotHub-65D8", "build_variant": "mqtt_net_txn=on", "protocol_versions": ["1.0"], "security": {"link_encrypted": false, "bonded": false, "l2_ready": false, "sensitive_writes_allowed": false}}}
+>198.383s TX id=hb1795828639919 114B {"id": "hb1795828639919", "version": "1.0", "cmd": "device.info", "args": {}, "token": "<redacted>"}
+[tx] chunked 114B into 6 GATT writes (<= 20B each)
+<199.223s> RX id=hb1795828639919 298B frags=2 sizes=[253, 45] {"id": "hb1795828639919", "ok": true, "data": {"model": "iothub", "firmware": "1.3-65f6dbb", "build_sha": "981fd6552", "device_id": "IotHub-65D8", "build_variant": "mqtt_net_txn=on", "protocol_versions": ["1.0"], "security": {"link_encrypted": false, "bonded": false, "l2_ready": false, "sensitive_writes_allowed": false}}}
+>204.232s TX id=hb1795828645769 114B {"id": "hb1795828645769", "version": "1.0", "cmd": "device.info", "args": {}, "token": "<redacted>"}
+[tx] chunked 114B into 6 GATT writes (<= 20B each)
+<204.848s> RX id=hb1795828645769 298B frags=2 sizes=[253, 45] {"id": "hb1795828645769", "ok": true, "data": {"model": "iothub", "firmware": "1.3-65f6dbb", "build_sha": "981fd6552", "device_id": "IotHub-65D8", "build_variant": "mqtt_net_txn=on", "protocol_versions": ["1.0"], "security": {"link_encrypted": false, "bonded": false, "l2_ready": false, "sensitive_writes_allowed": false}}}
+>209.856s TX id=hb1795828651392 114B {"id": "hb1795828651392", "version": "1.0", "cmd": "device.info", "args": {}, "token": "<redacted>"}
+[tx] chunked 114B into 6 GATT writes (<= 20B each)
+<210.608s> RX id=hb1795828651392 298B frags=2 sizes=[253, 45] {"id": "hb1795828651392", "ok": true, "data": {"model": "iothub", "firmware": "1.3-65f6dbb", "build_sha": "981fd6552", "device_id": "IotHub-65D8", "build_variant": "mqtt_net_txn=on", "protocol_versions": ["1.0"], "security": {"link_encrypted": false, "bonded": false, "l2_ready": false, "sensitive_writes_allowed": false}}}
+>215.615s TX id=hb1795828657151 114B {"id": "hb1795828657151", "version": "1.0", "cmd": "device.info", "args": {}, "token": "<redacted>"}
+[tx] chunked 114B into 6 GATT writes (<= 20B each)
+<216.323s> RX id=hb1795828657151 298B frags=2 sizes=[253, 45] {"id": "hb1795828657151", "ok": true, "data": {"model": "iothub", "firmware": "1.3-65f6dbb", "build_sha": "981fd6552", "device_id": "IotHub-65D8", "build_variant": "mqtt_net_txn=on", "protocol_versions": ["1.0"], "security": {"link_encrypted": false, "bonded": false, "l2_ready": false, "sensitive_writes_allowed": false}}}
+>221.329s TX id=hb1795828662865 114B {"id": "hb1795828662865", "version": "1.0", "cmd": "device.info", "args": {}, "token": "<redacted>"}
+[tx] chunked 114B into 6 GATT writes (<= 20B each)
+<221.947s> RX id=hb1795828662865 298B frags=2 sizes=[253, 45] {"id": "hb1795828662865", "ok": true, "data": {"model": "iothub", "firmware": "1.3-65f6dbb", "build_sha": "981fd6552", "device_id": "IotHub-65D8", "build_variant": "mqtt_net_txn=on", "protocol_versions": ["1.0"], "security": {"link_encrypted": false, "bonded": false, "l2_ready": false, "sensitive_writes_allowed": false}}}
+>226.953s TX id=hb1795828668489 114B {"id": "hb1795828668489", "version": "1.0", "cmd": "device.info", "args": {}, "token": "<redacted>"}
+[tx] chunked 114B into 6 GATT writes (<= 20B each)
+<227.662s> RX id=hb1795828668489 298B frags=2 sizes=[253, 45] {"id": "hb1795828668489", "ok": true, "data": {"model": "iothub", "firmware": "1.3-65f6dbb", "build_sha": "981fd6552", "device_id": "IotHub-65D8", "build_variant": "mqtt_net_txn=on", "protocol_versions": ["1.0"], "security": {"link_encrypted": false, "bonded": false, "l2_ready": false, "sensitive_writes_allowed": false}}}
+>232.670s TX id=hb1795828674206 114B {"id": "hb1795828674206", "version": "1.0", "cmd": "device.info", "args": {}, "token": "<redacted>"}
+[tx] chunked 114B into 6 GATT writes (<= 20B each)
+<233.287s> RX id=hb1795828674206 298B frags=2 sizes=[253, 45] {"id": "hb1795828674206", "ok": true, "data": {"model": "iothub", "firmware": "1.3-65f6dbb", "build_sha": "981fd6552", "device_id": "IotHub-65D8", "build_variant": "mqtt_net_txn=on", "protocol_versions": ["1.0"], "security": {"link_encrypted": false, "bonded": false, "l2_ready": false, "sensitive_writes_allowed": false}}}
+>238.295s TX id=hb1795828679832 114B {"id": "hb1795828679832", "version": "1.0", "cmd": "device.info", "args": {}, "token": "<redacted>"}
+[tx] chunked 114B into 6 GATT writes (<= 20B each)
+<239.000s> RX id=hb1795828679832 298B frags=2 sizes=[253, 45] {"id": "hb1795828679832", "ok": true, "data": {"model": "iothub", "firmware": "1.3-65f6dbb", "build_sha": "981fd6552", "device_id": "IotHub-65D8", "build_variant": "mqtt_net_txn=on", "protocol_versions": ["1.0"], "security": {"link_encrypted": false, "bonded": false, "l2_ready": false, "sensitive_writes_allowed": false}}}
+>244.010s TX id=hb1795828685547 114B {"id": "hb1795828685547", "version": "1.0", "cmd": "device.info", "args": {}, "token": "<redacted>"}
+[tx] chunked 114B into 6 GATT writes (<= 20B each)
+<244.715s> RX id=hb1795828685547 298B frags=2 sizes=[253, 45] {"id": "hb1795828685547", "ok": true, "data": {"model": "iothub", "firmware": "1.3-65f6dbb", "build_sha": "981fd6552", "device_id": "IotHub-65D8", "build_variant": "mqtt_net_txn=on", "protocol_versions": ["1.0"], "security": {"link_encrypted": false, "bonded": false, "l2_ready": false, "sensitive_writes_allowed": false}}}
+>249.725s TX id=hb1795828691261 114B {"id": "hb1795828691261", "version": "1.0", "cmd": "device.info", "args": {}, "token": "<redacted>"}
+[tx] chunked 114B into 6 GATT writes (<= 20B each)
+<250.341s> RX id=hb1795828691261 298B frags=2 sizes=[253, 45] {"id": "hb1795828691261", "ok": true, "data": {"model": "iothub", "firmware": "1.3-65f6dbb", "build_sha": "981fd6552", "device_id": "IotHub-65D8", "build_variant": "mqtt_net_txn=on", "protocol_versions": ["1.0"], "security": {"link_encrypted": false, "bonded": false, "l2_ready": false, "sensitive_writes_allowed": false}}}
+>255.348s TX id=hb1795828696884 114B {"id": "hb1795828696884", "version": "1.0", "cmd": "device.info", "args": {}, "token": "<redacted>"}
+[tx] chunked 114B into 6 GATT writes (<= 20B each)
+<256.146s> RX id=hb1795828696884 298B frags=2 sizes=[253, 45] {"id": "hb1795828696884", "ok": true, "data": {"model": "iothub", "firmware": "1.3-65f6dbb", "build_sha": "981fd6552", "device_id": "IotHub-65D8", "build_variant": "mqtt_net_txn=on", "protocol_versions": ["1.0"], "security": {"link_encrypted": false, "bonded": false, "l2_ready": false, "sensitive_writes_allowed": false}}}
+>261.157s TX id=hb1795828702693 114B {"id": "hb1795828702693", "version": "1.0", "cmd": "device.info", "args": {}, "token": "<redacted>"}
+[tx] chunked 114B into 6 GATT writes (<= 20B each)
+<261.772s> RX id=hb1795828702693 298B frags=2 sizes=[253, 45] {"id": "hb1795828702693", "ok": true, "data": {"model": "iothub", "firmware": "1.3-65f6dbb", "build_sha": "981fd6552", "device_id": "IotHub-65D8", "build_variant": "mqtt_net_txn=on", "protocol_versions": ["1.0"], "security": {"link_encrypted": false, "bonded": false, "l2_ready": false, "sensitive_writes_allowed": false}}}
+>266.775s TX id=hb1795828708311 114B {"id": "hb1795828708311", "version": "1.0", "cmd": "device.info", "args": {}, "token": "<redacted>"}
+[tx] chunked 114B into 6 GATT writes (<= 20B each)
+<267.395s> RX id=hb1795828708311 298B frags=2 sizes=[253, 45] {"id": "hb1795828708311", "ok": true, "data": {"model": "iothub", "firmware": "1.3-65f6dbb", "build_sha": "981fd6552", "device_id": "IotHub-65D8", "build_variant": "mqtt_net_txn=on", "protocol_versions": ["1.0"], "security": {"link_encrypted": false, "bonded": false, "l2_ready": false, "sensitive_writes_allowed": false}}}
+>272.402s TX id=hb1795828713938 114B {"id": "hb1795828713938", "version": "1.0", "cmd": "device.info", "args": {}, "token": "<redacted>"}
+[tx] chunked 114B into 6 GATT writes (<= 20B each)
+<273.019s> RX id=hb1795828713938 298B frags=2 sizes=[253, 45] {"id": "hb1795828713938", "ok": true, "data": {"model": "iothub", "firmware": "1.3-65f6dbb", "build_sha": "981fd6552", "device_id": "IotHub-65D8", "build_variant": "mqtt_net_txn=on", "protocol_versions": ["1.0"], "security": {"link_encrypted": false, "bonded": false, "l2_ready": false, "sensitive_writes_allowed": false}}}
+>278.030s TX id=hb1795828719566 114B {"id": "hb1795828719566", "version": "1.0", "cmd": "device.info", "args": {}, "token": "<redacted>"}
+[tx] chunked 114B into 6 GATT writes (<= 20B each)
+<278.645s> RX id=hb1795828719566 298B frags=2 sizes=[253, 45] {"id": "hb1795828719566", "ok": true, "data": {"model": "iothub", "firmware": "1.3-65f6dbb", "build_sha": "981fd6552", "device_id": "IotHub-65D8", "build_variant": "mqtt_net_txn=on", "protocol_versions": ["1.0"], "security": {"link_encrypted": false, "bonded": false, "l2_ready": false, "sensitive_writes_allowed": false}}}
+>283.652s TX id=hb1795828725188 114B {"id": "hb1795828725188", "version": "1.0", "cmd": "device.info", "args": {}, "token": "<redacted>"}
+[tx] chunked 114B into 6 GATT writes (<= 20B each)
+<284.313s> RX id=hb1795828725188 298B frags=2 sizes=[253, 45] {"id": "hb1795828725188", "ok": true, "data": {"model": "iothub", "firmware": "1.3-65f6dbb", "build_sha": "981fd6552", "device_id": "IotHub-65D8", "build_variant": "mqtt_net_txn=on", "protocol_versions": ["1.0"], "security": {"link_encrypted": false, "bonded": false, "l2_ready": false, "sensitive_writes_allowed": false}}}
+>289.321s TX id=hb1795828730858 114B {"id": "hb1795828730858", "version": "1.0", "cmd": "device.info", "args": {}, "token": "<redacted>"}
+[tx] chunked 114B into 6 GATT writes (<= 20B each)
+<289.984s> RX id=hb1795828730858 298B frags=2 sizes=[253, 45] {"id": "hb1795828730858", "ok": true, "data": {"model": "iothub", "firmware": "1.3-65f6dbb", "build_sha": "981fd6552", "device_id": "IotHub-65D8", "build_variant": "mqtt_net_txn=on", "protocol_versions": ["1.0"], "security": {"link_encrypted": false, "bonded": false, "l2_ready": false, "sensitive_writes_allowed": false}}}
+>294.992s TX id=hb1795828736528 114B {"id": "hb1795828736528", "version": "1.0", "cmd": "device.info", "args": {}, "token": "<redacted>"}
+[tx] chunked 114B into 6 GATT writes (<= 20B each)
+<295.879s> RX id=hb1795828736528 298B frags=2 sizes=[253, 45] {"id": "hb1795828736528", "ok": true, "data": {"model": "iothub", "firmware": "1.3-65f6dbb", "build_sha": "981fd6552", "device_id": "IotHub-65D8", "build_variant": "mqtt_net_txn=on", "protocol_versions": ["1.0"], "security": {"link_encrypted": false, "bonded": false, "l2_ready": false, "sensitive_writes_allowed": false}}}
+>300.889s TX id=hb1795828742425 114B {"id": "hb1795828742425", "version": "1.0", "cmd": "device.info", "args": {}, "token": "<redacted>"}
+[tx] chunked 114B into 6 GATT writes (<= 20B each)
+<301.729s> RX id=hb1795828742425 298B frags=2 sizes=[253, 45] {"id": "hb1795828742425", "ok": true, "data": {"model": "iothub", "firmware": "1.3-65f6dbb", "build_sha": "981fd6552", "device_id": "IotHub-65D8", "build_variant": "mqtt_net_txn=on", "protocol_versions": ["1.0"], "security": {"link_encrypted": false, "bonded": false, "l2_ready": false, "sensitive_writes_allowed": false}}}
+>306.735s TX id=hb1795828748271 114B {"id": "hb1795828748271", "version": "1.0", "cmd": "device.info", "args": {}, "token": "<redacted>"}
+[tx] chunked 114B into 6 GATT writes (<= 20B each)
+<307.353s> RX id=hb1795828748271 298B frags=2 sizes=[253, 45] {"id": "hb1795828748271", "ok": true, "data": {"model": "iothub", "firmware": "1.3-65f6dbb", "build_sha": "981fd6552", "device_id": "IotHub-65D8", "build_variant": "mqtt_net_txn=on", "protocol_versions": ["1.0"], "security": {"link_encrypted": false, "bonded": false, "l2_ready": false, "sensitive_writes_allowed": false}}}
+>312.362s TX id=hb1795828753898 114B {"id": "hb1795828753898", "version": "1.0", "cmd": "device.info", "args": {}, "token": "<redacted>"}
+[tx] chunked 114B into 6 GATT writes (<= 20B each)
+<312.980s> RX id=hb1795828753898 298B frags=2 sizes=[253, 45] {"id": "hb1795828753898", "ok": true, "data": {"model": "iothub", "firmware": "1.3-65f6dbb", "build_sha": "981fd6552", "device_id": "IotHub-65D8", "build_variant": "mqtt_net_txn=on", "protocol_versions": ["1.0"], "security": {"link_encrypted": false, "bonded": false, "l2_ready": false, "sensitive_writes_allowed": false}}}
+>317.991s TX id=hb1795828759527 114B {"id": "hb1795828759527", "version": "1.0", "cmd": "device.info", "args": {}, "token": "<redacted>"}
+[tx] chunked 114B into 6 GATT writes (<= 20B each)
+<318.649s> RX id=hb1795828759527 298B frags=2 sizes=[253, 45] {"id": "hb1795828759527", "ok": true, "data": {"model": "iothub", "firmware": "1.3-65f6dbb", "build_sha": "981fd6552", "device_id": "IotHub-65D8", "build_variant": "mqtt_net_txn=on", "protocol_versions": ["1.0"], "security": {"link_encrypted": false, "bonded": false, "l2_ready": false, "sensitive_writes_allowed": false}}}
+>323.652s TX id=hb1795828765189 114B {"id": "hb1795828765189", "version": "1.0", "cmd": "device.info", "args": {}, "token": "<redacted>"}
+[tx] chunked 114B into 6 GATT writes (<= 20B each)
+<324.275s> RX id=hb1795828765189 298B frags=2 sizes=[253, 45] {"id": "hb1795828765189", "ok": true, "data": {"model": "iothub", "firmware": "1.3-65f6dbb", "build_sha": "981fd6552", "device_id": "IotHub-65D8", "build_variant": "mqtt_net_txn=on", "protocol_versions": ["1.0"], "security": {"link_encrypted": false, "bonded": false, "l2_ready": false, "sensitive_writes_allowed": false}}}
+>329.286s TX id=hb1795828770822 114B {"id": "hb1795828770822", "version": "1.0", "cmd": "device.info", "args": {}, "token": "<redacted>"}
+[tx] chunked 114B into 6 GATT writes (<= 20B each)
+<329.989s> RX id=hb1795828770822 298B frags=2 sizes=[253, 45] {"id": "hb1795828770822", "ok": true, "data": {"model": "iothub", "firmware": "1.3-65f6dbb", "build_sha": "981fd6552", "device_id": "IotHub-65D8", "build_variant": "mqtt_net_txn=on", "protocol_versions": ["1.0"], "security": {"link_encrypted": false, "bonded": false, "l2_ready": false, "sensitive_writes_allowed": false}}}
+pause_entered {"ok": true}
+>334.995s TX id=tc2 190B {"id": "tc2", "version": "1.0", "cmd": "network.tryconnect", "args": {"ssid": "<wifi-ssid>", "password": "<redacted>", "idempotency_key": "a1begin2-1795828776"}, "token": "<redacted>"}
+[tx] chunked 190B into 10 GATT writes (<= 20B each)
+<336.197s> RX id=tc2 64B frags=1 sizes=[64] {"id": "tc2", "ok": false, "error": {"code": "busy", "message": "busy"}}
+second_tryconnect {"ok": false, "error": "busy", "operation_id": null}
+>336.202s TX id=op1795828777738 152B {"id": "op1795828777738", "version": "1.0", "cmd": "operation.get", "args": {"operation_id": "op-2CB87A304B620A66"}, "token": "<redacted>"}
+[tx] chunked 152B into 8 GATT writes (<= 20B each)
+<337.414s> RX id=op1795828777738 307B frags=2 sizes=[253, 54] {"id": "op1795828777738", "ok": true, "data": {"operation_id": "op-2CB87A304B620A66", "state": "got_ip", "cleanup_state": "ok", "error": "none", "error_detail": {"code": "none", "message": "none"}, "stages": {"wifi_connected": true, "ip_acquired": true, "internet_verified": true, "mqtt_connected": true}, "stages_source": "snapshot"}}
+>338.421s TX id=op1795828779957 152B {"id": "op1795828779957", "version": "1.0", "cmd": "operation.get", "args": {"operation_id": "op-2CB87A304B620A66"}, "token": "<redacted>"}
+[tx] chunked 152B into 8 GATT writes (<= 20B each)
+<339.439s> RX id=op1795828779957 307B frags=2 sizes=[253, 54] {"id": "op1795828779957", "ok": true, "data": {"operation_id": "op-2CB87A304B620A66", "state": "got_ip", "cleanup_state": "ok", "error": "none", "error_detail": {"code": "none", "message": "none"}, "stages": {"wifi_connected": true, "ip_acquired": true, "internet_verified": true, "mqtt_connected": true}, "stages_source": "snapshot"}}
+>340.446s TX id=op1795828781982 152B {"id": "op1795828781982", "version": "1.0", "cmd": "operation.get", "args": {"operation_id": "op-2CB87A304B620A66"}, "token": "<redacted>"}
+[tx] chunked 152B into 8 GATT writes (<= 20B each)
+<341.464s> RX id=op1795828781982 307B frags=2 sizes=[253, 54] {"id": "op1795828781982", "ok": true, "data": {"operation_id": "op-2CB87A304B620A66", "state": "got_ip", "cleanup_state": "ok", "error": "none", "error_detail": {"code": "none", "message": "none"}, "stages": {"wifi_connected": true, "ip_acquired": true, "internet_verified": true, "mqtt_connected": true}, "stages_source": "snapshot"}}
+>342.468s TX id=op1795828784005 152B {"id": "op1795828784005", "version": "1.0", "cmd": "operation.get", "args": {"operation_id": "op-2CB87A304B620A66"}, "token": "<redacted>"}
+[tx] chunked 152B into 8 GATT writes (<= 20B each)
+<343.218s> RX id=op1795828784005 345B frags=2 sizes=[253, 92] {"id": "op1795828784005", "ok": true, "data": {"operation_id": "op-2CB87A304B620A66", "state": "expired", "cleanup_state": "ok", "error": "timeout", "error_detail": {"code": "timeout", "message": "timeout"}, "finished_uptime_ms": 659314, "stages": {"wifi_connected": true, "ip_acquired": true, "internet_verified": true, "mqtt_connected": true}, "stages_source": "snapshot"}}
+terminal {"ok": true, "state": "expired", "error": "timeout", "cleanup": "ok"}
+>343.218s TX id=ns1795828784755 117B {"id": "ns1795828784755", "version": "1.0", "cmd": "network.status", "args": {}, "token": "<redacted>"}
+[tx] chunked 117B into 6 GATT writes (<= 20B each)
+<344.074s> RX id=ns1795828784755 543B frags=3 sizes=[253, 253, 37] {"id": "ns1795828784755", "ok": true, "data": {"sta_connected": true, "sta_has_ip": true, "sta_ip": "<sta-ip>", "last_disconnect": "none", "connected_ssid": "<wifi-ssid>", "connected_profile": 0, "internet_verified": true, "net_verify_stage": "mqtt", "nc_tcp_fails_last": 0, "nc_tcp_last_errno": 0, "rssi": -63, "channel": 8, "bssid": "<bssid>", "rssi_valid": true, "sta_ssid": "<wifi-ssid>", "password_set": true, "mode": "sta", "persistent_use_static": false, "persistent_static_ip": "", "cfg_state": "dhcp", "mqtt_connected": true, "mqtt_last_error": "", "trial": {"state": "idle"}}}
+post_network {"ok": true, "sta": true, "ip": true, "mqtt": true, "inet": true, "trial": "idle"}
+RESULT: PASS

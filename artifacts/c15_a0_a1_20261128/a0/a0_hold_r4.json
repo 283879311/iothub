@@ -1,0 +1,60 @@
+{
+ "ok": true,
+ "mode": "no_auth_device_info_only",
+ "events": [
+  {
+   "ts": 1795827650.6968465,
+   "name": "target",
+   "obj": {
+    "addr": "<device-mac>"
+   }
+  },
+  {
+   "ts": 1795827652.1698558,
+   "name": "connected",
+   "obj": {
+    "after_s": 1.47
+   }
+  },
+  {
+   "ts": 1795827652.883947,
+   "name": "identity",
+   "obj": {
+    "ok": true,
+    "device_id": "IotHub-65D8",
+    "firmware": "1.3-956afcd",
+    "build_sha": "c231c9501"
+   }
+  },
+  {
+   "ts": 1795827652.8841336,
+   "name": "device_policy",
+   "obj": {
+    "satisfied": true,
+    "out_of_policy": false
+   }
+  },
+  {
+   "ts": 1795827712.8854177,
+   "name": "hold_done",
+   "obj": {
+    "hold_s": 60.0,
+    "hb_ok": 11,
+    "hb_err": 0
+   }
+  },
+  {
+   "ts": 1795827712.885594,
+   "name": "link_still_up",
+   "obj": {
+    "no_disconnect": true
+   }
+  },
+  {
+   "ts": 1795827714.8594055,
+   "name": "disconnected",
+   "obj": {}
+  }
+ ],
+ "finished_at": 1795827714.8594775
+}

@@ -1,0 +1,112 @@
+{
+ "ok": true,
+ "events": [
+  {
+   "ts": 1795828454.92142,
+   "name": "device_info",
+   "obj": {
+    "device_id": "IotHub-65D8",
+    "firmware": "1.3-65f6dbb",
+    "build_sha": "981fd6552",
+    "build_variant": "mqtt_net_txn=on"
+   }
+  },
+  {
+   "ts": 1795828454.9216602,
+   "name": "device_policy",
+   "obj": {
+    "satisfied": true,
+    "out_of_policy": false
+   }
+  },
+  {
+   "ts": 1795828455.7323768,
+   "name": "pre_network",
+   "obj": {
+    "ok": true,
+    "sta": true,
+    "ip": true,
+    "mqtt": true,
+    "inet": true,
+    "trial": "idle"
+   }
+  },
+  {
+   "ts": 1795828457.1277514,
+   "name": "first_tryconnect",
+   "obj": {
+    "ok": true,
+    "error": null
+   }
+  },
+  {
+   "ts": 1795828472.9252522,
+   "name": "got_ip",
+   "obj": {
+    "ok": true,
+    "state": "got_ip",
+    "cleanup": "none",
+    "stages": {
+     "wifi_connected": true,
+     "ip_acquired": true,
+     "internet_verified": true,
+     "mqtt_connected": true
+    }
+   }
+  },
+  {
+   "ts": 1795828474.228763,
+   "name": "arm",
+   "obj": {
+    "ok": true,
+    "data": {
+     "armed": true,
+     "generation": 1,
+     "deadline_ms": 647712,
+     "remaining_ms": 298408,
+     "hold_ms": 310000
+    },
+    "error": null
+   }
+  },
+  {
+   "ts": 1795828776.531779,
+   "name": "pause_entered",
+   "obj": {
+    "ok": true
+   }
+  },
+  {
+   "ts": 1795828777.738898,
+   "name": "second_tryconnect",
+   "obj": {
+    "ok": false,
+    "error": "busy",
+    "operation_id": null
+   }
+  },
+  {
+   "ts": 1795828784.7551546,
+   "name": "terminal",
+   "obj": {
+    "ok": true,
+    "state": "expired",
+    "error": "timeout",
+    "cleanup": "ok"
+   }
+  },
+  {
+   "ts": 1795828785.6125193,
+   "name": "post_network",
+   "obj": {
+    "ok": true,
+    "sta": true,
+    "ip": true,
+    "mqtt": true,
+    "inet": true,
+    "trial": "idle"
+   }
+  }
+ ],
+ "finished_at": 1795828787.8715358
+}

@@ -1,0 +1,33 @@
+        Max connection length: 0.000 msec (0x0000)
+> HCI Event: Command Status (0x0f) plen 4                 #551 [hci0] 52.013937
+      LE Create Connection (0x08|0x000d) ncmd 1
+        Status: Success (0x00)
+> HCI Event: LE Meta Event (0x3e) plen 31                 #552 [hci0] 52.047768
+      LE Enhanced Connection Complete (0x0a)
+        Status: Success (0x00)
+        Handle: 15
+        Role: Central (0x00)
+        Peer address type: Public (0x00)
+        Peer address: <device-mac> (Espressif Inc.)
+        Local resolvable private address: 00:00:00:00:00:00 (Non-Resolvable)
+        Peer resolvable private address: 00:00:00:00:00:00 (Non-Resolvable)
+        Connection interval: 45.00 msec (0x0024)
+        Connection latency: 0 (0x0000)
+< HCI Command: Disconnect (0x01|0x0006) plen 3           #758 [hci0] 115.815461
+        Handle: 15 Address: <device-mac> (Espressif Inc.)
+        Reason: Remote User Terminated Connection (0x13)
+> HCI Event: Command Status (0x0f) plen 4                #759 [hci0] 115.817053
+      Disconnect (0x01|0x0006) ncmd 1
+        Status: Success (0x00)
+> HCI Event: Disconnect Complete (0x05) plen 4           #760 [hci0] 115.853047
+        Status: Success (0x00)
+        Handle: 15 Address: <device-mac> (Espressif Inc.)
+        Reason: Connection Terminated By Local Host (0x16)
+@ MGMT Event: Device Disconnected (0x000c) plen 8    {0x0001} [hci0] 115.853097
+        LE Address: <device-mac> (Espressif Inc.)
+        Reason: Connection terminated by local host (0x02)
+@ MGMT Event: Command Complete (0x0001) plen 10      {0x0001} [hci0] 115.868420
+      Disconnect (0x0014) plen 7
+        Status: Success (0x00)
+        LE Address: <device-mac> (Espressif Inc.)
+= bluetoothd: No matching connection for device               [hci0] 115.868715
