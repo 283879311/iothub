@@ -64,7 +64,16 @@
 | 回滚 | `rescue=restore_persistent`；post 网络 sta/ip/mqtt/inet 全 true、trial idle |
 | BLE 链路 | btmon 连续保持 362.9 s，全程无 0x222/0x08、无参数更新过程 |
 
-文件：`a1/a1_begin.json`、`a1/a1_run.log`、`a1/a1_serial.log`、`a1/a1_btmon_params.txt`。
+文件：`a1/a1_begin.json`、`a1/a1_run.log`、`a1/a1_serial.log`、`a1/a1_btmon_params.txt`（btmon 解析已完成，无待处理结果）。
+
+闭环交叉引用（三条关键判据 → 可独立复核的文件与字段）：
+
+| 判据 | 复核位置 |
+|---|---|
+| 第二次 tryconnect 返回 `busy` | `a1/a1_begin.json` → `events[]` 中 `name="second_tryconnect"`：`ok=false`、`error="busy"`、`operation_id=null` |
+| 终态 `expired` 且 cleanup ok | `a1/a1_begin.json` → `name="terminal"`：`state="expired"`、`error="timeout"`、`cleanup="ok"`；`a1/a1_serial.log` 中 `finish op-2CB87A304B620A66 gen=1 -> expired/timeout outcome=0` |
+| 回滚基线一致 | `a1/a1_begin.json` → `name="post_network"`：sta/ip/mqtt/inet 全 true、`trial="idle"`；`a1/a1_serial.log` 中 `rescue=restore_persistent` |
+| BLE 链路参数与无断链 | `a1/a1_btmon_params.txt`：`LE Create Connection`（30–50 ms / 0 / 6000 ms）、`Enhanced Connection Complete`、唯一 `Disconnect Complete`（0x16/0x13，本地发起） |
 
 ## 5. 恢复生产
 
@@ -76,6 +85,12 @@
 | BLE `device.info` | `1.3-956afcd` / `c231c9501` / `IotHub-65D8` |
 
 文件：`restore/prod_serial.log`、`restore/restore_verify.txt`。
+
+"逐字节一致"的独立复核路径：
+
+- `restore/restore_verify.txt` 明确记录：NVS 源文件 `c15_restore_nvs16k.bin` 与写入后回读 `post_restore_nvs.bin` 的 SHA256 均为 `f875681087da135c1b91cc2284859092ef47733ff48b0849f3f501d0af48d13b`；app 源文件 `c15_restore_app.bin` 与测试前回读 `post_app.bin` 的 SHA256 均为 `c6f007f771211710a3b17d1758ebf90fe88eba8f2c97eafdb3799326439aa94c`。
+- `SHA256SUMS` 给出本包内每个文件的 SHA256（含 `restore/restore_verify.txt` 本身），可与 `MANIFEST.json` 中的原始文件哈希对照。
+- 回读的二进制快照（`post_restore_nvs.bin`、`post_app.bin`）仅保留在本地，未上传；审核方可用上述 SHA256 与源文件/`MANIFEST.json` 交叉核对。
 
 ## 6. 凭据与失败的预跑尝试（记录）
 
