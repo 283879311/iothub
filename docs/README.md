@@ -31,6 +31,7 @@
 - [C15-2 BUSY 剩余覆盖设计（2026-11-26）](design/CMD/C15-2_BUSY剩余覆盖设计_2026-11-26.md)：begin expire-hook 方案前置条件；trial/终态 job_op 当前 NOT_COVERED；原始 BUSY 未解释、BLE 大响应观察。
 - [C15-2 expire hook 与 defer 诊断设计（2026-11-27）](design/CMD/C15-2_expire_hook与defer诊断设计_2026-11-27.md)：test-only hook 目标过滤/同步、MQTT defer per-call 诊断、锁序、Host 矩阵与编译隔离候选。
 - [C15-2 Telemetry REST + Attributes + BLE 混合观测判据与 harness 设计（2026-11-28）](design/CMD/C15-2_TelemetryREST混合观测判据与harness设计_2026-11-28.md)：字段唯一来源、样本-操作时间关联、observer/device/operation 三类失败分离、Host 矩阵；设备验证未授权。
+- [C15-2 Telemetry REST 混合观测 Host 验收（2026-11-28）](reviews/CMD/C15-2_TelemetryREST_Host验收_2026-11-28.md)：87 项 Host PASS；`main/`/`contract/` 零变更、无 MQTT/token 依赖；设备阶段未启动。
 - [C15-2 MQTT 路径判据与 harness 设计（2026-11-28，HISTORICAL）](design/CMD/C15-2_MQTT路径判据与harness设计_2026-11-28.md)：被上一份设计取代；保留 attributes 字段来源冲突与第二 MQTT 会话副作用记录。
 - [C15-2 hook/defer 诊断实现与 Host 验证（2026-11-27）](reviews/CMD/C15-2_hook_defer诊断实现与Host验证_2026-11-27.md)：实施基线、H1–H27 结果、构建/符号隔离与 NOT_COVERED 清单。
 - [C15-2 hook 路径设备验证（2026-11-28）](reviews/CMD/C15-2_hook路径设备验证_2026-11-28.md)：A0 连接参数预检 + A1 真 300 s TTL 的 hook 路径结果；C15-2 原始 NOT_COVERED 与 CMD-15 `TEST_PENDING` 不变。
