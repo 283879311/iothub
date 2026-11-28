@@ -80,13 +80,15 @@ class Deps:
     """Injectable dependencies for run_case()."""
 
     def __init__(self, sess, tap_factory, wall=time.time,
-                 mono=time.monotonic, sleep=asyncio.sleep, rids=None):
+                 mono=time.monotonic, sleep=asyncio.sleep, rids=None,
+                 write_timeout=20.0):
         self.sess = sess
         self.tap_factory = tap_factory
         self.wall = wall
         self.mono = mono
         self.sleep = sleep
         self.rids = rids or RequestIds()
+        self.write_timeout = write_timeout
 
 
 class AttrTap:
@@ -181,8 +183,16 @@ async def read_cmd(deps: Deps, cmd: str, args: dict, base_rid: str,
             effective = timeout
         rid = deps.rids.next(base_rid)
         try:
-            resp = await deps.sess.send_request(
-                req(rid, cmd, args, deps.sess.token), timeout=effective, retries=0)
+            # wait_for bounds the WHOLE call: lock wait + rate wait + GATT
+            # writes + response wait, not just the response wait inside
+            # Session.send_request().
+            resp = await asyncio.wait_for(
+                deps.sess.send_request(
+                    req(rid, cmd, args, deps.sess.token),
+                    timeout=effective, retries=0),
+                timeout=effective)
+            if deadline is not None and deps.mono() > deadline:
+                raise ReadTimeout("%s returned after deadline" % cmd)
             return resp.obj or {}
         except asyncio.TimeoutError:
             if not policy.should_retry_read(attempt):
@@ -280,11 +290,19 @@ async def run_case(deps: Deps, ssid: str,
 
         tap = deps.tap_factory()
         w0 = deps.wall()
+        write_deadline = deps.mono() + deps.write_timeout
         try:
-            tc = await deps.sess.send_request(
-                req(deps.rids.next("tc1"), "network.tryconnect",
-                    {"ssid": ssid, "password": WRONG_PASSWORD}, deps.sess.token),
-                timeout=20, retries=0)
+            effective = max(0.001, min(deps.write_timeout,
+                                       write_deadline - deps.mono()))
+            tc = await asyncio.wait_for(
+                deps.sess.send_request(
+                    req(deps.rids.next("tc1"), "network.tryconnect",
+                        {"ssid": ssid, "password": WRONG_PASSWORD},
+                        deps.sess.token),
+                    timeout=effective, retries=0),
+                timeout=effective)
+            if deps.mono() > write_deadline:
+                raise asyncio.TimeoutError("tryconnect returned after deadline")
         except Exception as exc:  # noqa: BLE001
             result.update(verdict="STOP", reason="write_outcome_unknown",
                           detail=type(exc).__name__)

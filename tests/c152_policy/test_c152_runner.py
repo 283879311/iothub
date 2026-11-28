@@ -1,6 +1,7 @@
 """Host tests for the C15-2 runner control flow (fakes only: no BLE, no MQTT)."""
 
 import asyncio
+import inspect
 import sys
 import unittest
 from pathlib import Path
@@ -56,7 +57,10 @@ class FakeSess:
         rid = req["id"]
         if rid in self.pending:  # simulate Session consuming a stored response
             return FakeResp(self.pending.pop(rid))
-        return FakeResp(self.handler(req))
+        result = self.handler(req)
+        if inspect.isawaitable(result):
+            result = await result
+        return FakeResp(result)
 
 
 class FakeTap:
@@ -102,7 +106,8 @@ def make_handler(identity=IDENT, identity_after=None, tryconnect=None,
     return handler
 
 
-def make_deps(handler, clock, attrs=ATTR_OK, tap_error=None, sleep=None):
+def make_deps(handler, clock, attrs=ATTR_OK, tap_error=None, sleep=None,
+              write_timeout=20.0):
     sess = FakeSess(handler)
 
     def factory():
@@ -110,7 +115,8 @@ def make_deps(handler, clock, attrs=ATTR_OK, tap_error=None, sleep=None):
             raise tap_error
         return FakeTap(clock, attrs)
 
-    deps = r.Deps(sess, factory, clock.time, clock.now, sleep or clock.sleep)
+    deps = r.Deps(sess, factory, clock.time, clock.now,
+                  sleep or clock.sleep, write_timeout=write_timeout)
     return deps, sess
 
 
@@ -223,6 +229,43 @@ class ReadCmdTests(unittest.TestCase):
             run(r.read_cmd(deps, "probe", {}, "p", deadline=clock.now() - 1.0))
         self.assertEqual(sess.ids, [])
 
+    def test_request_process_exceeds_deadline(self):
+        clock = Clock()
+
+        def handler(req):
+            clock.mono += 10.0  # whole call overruns the deadline
+            return {"ok": True, "data": {}}
+
+        deps, sess = make_deps(handler, clock)
+        with self.assertRaises(r.ReadTimeout):
+            run(r.read_cmd(deps, "probe", {}, "p",
+                           deadline=clock.now() + 1.0))
+        self.assertEqual(len(sess.ids), 1)
+
+    def test_response_just_after_deadline_rejected(self):
+        clock = Clock()
+
+        def handler(req):
+            clock.mono += 2.0
+            return {"ok": True, "data": {"late": True}}
+
+        deps, sess = make_deps(handler, clock)
+        with self.assertRaises(r.ReadTimeout):
+            run(r.read_cmd(deps, "probe", {}, "p",
+                           deadline=clock.now() + 1.0))
+
+    def test_slow_request_cancelled_by_deadline(self):
+        clock = Clock()
+
+        async def handler(req):
+            await asyncio.sleep(0.2)
+            return {"ok": True, "data": {}}
+
+        deps, sess = make_deps(handler, clock)
+        with self.assertRaises(r.ReadTimeout):
+            run(r.read_cmd(deps, "probe", {}, "p",
+                           deadline=clock.now() + 0.02))
+
     def test_three_timeouts_then_late_response(self):
         clock = Clock()
         calls = {"n": 0}
@@ -271,6 +314,20 @@ class WriteGateTests(unittest.TestCase):
                          ("STOP", "write_outcome_unknown"))
         self.assertEqual(sess.writes, 1)
         self.assertEqual(sess.cmds[-1], "network.tryconnect")
+
+    def test_slow_write_is_not_resent(self):
+        clock = Clock()
+
+        async def tryconnect(req):
+            await asyncio.sleep(0.2)
+            return {"ok": True, "data": {"operation_id": "op-late"}}
+
+        deps, sess = make_deps(make_handler(tryconnect=tryconnect), clock,
+                               write_timeout=0.02)
+        result = run(r.run_case(deps, "ssid"))
+        self.assertEqual((result["verdict"], result["reason"]),
+                         ("STOP", "write_outcome_unknown"))
+        self.assertEqual(sess.writes, 1)
 
     def test_busy_is_not_covered(self):
         clock = Clock()
@@ -337,6 +394,22 @@ class OutcomeTests(unittest.TestCase):
         self.assertEqual((result["verdict"], result["reason"]),
                          ("STOP", "read_timeout"))
         self.assertEqual(sess.writes, 0)
+
+    def test_read_timeout_after_write_no_extra_write(self):
+        clock = Clock()
+
+        def handler(req):
+            if req["cmd"] == "operation.get":
+                raise asyncio.TimeoutError()
+            return make_handler()(req)
+
+        deps, sess = make_deps(handler, clock)
+        result = run(r.run_case(deps, "ssid"))
+        self.assertEqual((result["verdict"], result["reason"]),
+                         ("STOP", "read_timeout"))
+        self.assertEqual(sess.writes, 1)
+        self.assertEqual(sum(1 for c in sess.cmds
+                             if c == "network.tryconnect"), 1)
 
     def test_run_case_ids_unique(self):
         clock = Clock()

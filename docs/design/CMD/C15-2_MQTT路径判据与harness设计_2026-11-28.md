@@ -56,6 +56,8 @@
 | 只读命令超时（最多 3 次、间隔 2 s）仍失败 | `STOP`（记 `NOT_COVERED` 原因） | 不补造采样 |
 | tryconnect 返回 `busy`（就绪门禁之后） | `NOT_COVERED` | 不自动重发写命令 |
 | 写命令 transport 异常 | `STOP` | outcome unknown，不重发 |
+| 请求整体超时 | 每次 `send_request` 由 `asyncio.wait_for` 约束（含锁等待、速率等待、GATT 写、响应等待）；返回后再次检查 deadline | deadline 之后返回的响应不得接受 |
+| 写命令超时/取消 | 受 `write_timeout` 约束；超时或取消只 STOP | 分片写入中途取消不产生第二次写命令 |
 | 身份字段缺失/不匹配（写命令前） | `STOP` | fail-closed，优先于任何写命令 |
 | 两次有效观测间隔 > 3 s | 稳定计时清零 | 不把未观测区间当作稳定 |
 | 对读任一侧 `sta_ip` 为空 | `FAIL` | 两侧都必须非空且相等 |
@@ -71,7 +73,7 @@
 
 runner 以依赖注入（session/tap 工厂/monotonic/wall/sleep）组织，Host 测试使用 fake session、fake tap 与 fake 时钟，不连接 BLE 或 MQTT。
 
-设备选择绑定 `--addr`（默认 `10:97:BD:D3:65:DA`），`--device`/`--expect-fw`/`--expect-sha` 参与身份门，不采用“扫描第一个命中”。`wait_ready`/`wait_terminal`/`wait_sta` 以及身份、post 读取的每次尝试与重试间隔均受剩余 deadline 限制；deadline 耗尽即停止，不会开始预计越界的读取。
+设备选择绑定 `--addr`（默认 `10:97:BD:D3:65:DA`），`--device`/`--expect-fw`/`--expect-sha` 参与身份门，不采用“扫描第一个命中”。`wait_ready`/`wait_terminal`/`wait_sta` 以及身份、post 读取的每次尝试与重试间隔均受剩余 deadline 限制；deadline 耗尽即停止，不会开始预计越界的读取。每次 `send_request` 整体（含 tx_lock 等待、速率等待、GATT 写入与响应等待）由 `asyncio.wait_for` 约束；调用返回后再次检查 monotonic deadline，晚于 deadline 的响应不被接受。写命令同样受 `write_timeout` 约束，超时/取消只 STOP、不重发。
 
 ## 5. Host 测试矩阵
 
@@ -107,6 +109,9 @@ runner 以依赖注入（session/tap 工厂/monotonic/wall/sleep）组织，Host
 | T28 | 设备选择 | 按 `--addr` 绑定，非首个命中 |
 | T29 | 读取 deadline | deadline 已耗尽时不发送请求，直接 STOP |
 | T30 | 三次超时后的迟到响应 | 上一轮旧 ID 响应在下一轮到达，不得影响下一轮结果 |
+| T31 | 请求过程整体超时 | 锁/写/响应耗时越过 deadline → 不接受结果 |
+| T32 | 响应恰在 deadline 之后返回 | 判为超时，不采用该响应 |
+| T33 | 慢写/取消边界 | 写命令超时或取消只 STOP，仅一次发送；读超时后无额外写 |
 
 ## 6. 边界
 
