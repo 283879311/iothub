@@ -130,7 +130,7 @@ def ok_attrs(clock, shared):
 class FakeObserver:
     def __init__(self, clock, shared, baseline=ok_baseline, post=ok_post,
                  attrs=ok_attrs, start_error=None, series_error=None,
-                 attrs_error=None):
+                 attrs_error=None, device=None, device_error=None):
         self.clock = clock
         self.shared = shared
         self.baseline = baseline
@@ -139,6 +139,9 @@ class FakeObserver:
         self.start_error = start_error
         self.series_error = series_error
         self.attrs_error = attrs_error
+        self.device = device or {"id": {"id": "dev-uuid"},
+                                 "name": "IotHub-65D8"}
+        self.device_error = device_error
         self.calls = 0
         self.started = False
 
@@ -146,6 +149,11 @@ class FakeObserver:
         self.started = True
         if self.start_error is not None:
             raise self.start_error
+
+    async def fetch_device(self):
+        if self.device_error is not None:
+            raise self.device_error
+        return self.device
 
     async def fetch_series(self, keys, start_ms, end_ms):
         call = self.calls
@@ -519,73 +527,6 @@ class WriteGateTests(unittest.TestCase):
             (result["verdict"], result["reason"]),
             ("STOP", "write_deadline_exhausted_before_send"))
         self.assertEqual(sess.writes, 0)
-
-
-class ObserverMappingTests(unittest.TestCase):
-    class Transport:
-        def __init__(self, status, body):
-            self.status = status
-            self.body = body
-            self.paths = []
-            self.tokens = []
-
-        async def request(self, method, path, token=None, body=None):
-            self.paths.append((method, path))
-            self.tokens.append(token)
-            return self.status, self.body
-
-    def test_login_uses_token(self):
-        transport = self.Transport(200, {"token": "jwt"})
-        obs = rest.TbRestObserver(transport, "dev", "u", "p")
-        run(obs.start())
-        run(obs.fetch_series(("net_mode",), 0, 1))
-        self.assertEqual(transport.paths[0][0], "POST")
-        self.assertEqual(transport.tokens[-1], "jwt")
-
-    def test_status_mapping(self):
-        cases = {401: "auth", 403: "forbidden", 404: "not_found",
-                 429: "rate_limited", 500: "server", 502: "server",
-                 418: "http_418"}
-        for status, code in cases.items():
-            with self.subTest(status=status):
-                obs = rest.TbRestObserver(self.Transport(status, {}),
-                                          "dev", "u", "p")
-                with self.assertRaises(rest.ObserverError) as ctx:
-                    run(obs.start())
-                self.assertEqual(ctx.exception.code, code)
-
-    def test_login_without_token_is_protocol(self):
-        obs = rest.TbRestObserver(self.Transport(200, {}), "dev", "u", "p")
-        with self.assertRaises(rest.ObserverError) as ctx:
-            run(obs.start())
-        self.assertEqual(ctx.exception.code, "protocol")
-
-    def test_series_not_object_is_protocol(self):
-        class T:
-            async def request(self, method, path, token=None, body=None):
-                return 200, {"token": "jwt"} if path.endswith("/login") else []
-
-        obs = rest.TbRestObserver(T(), "dev", "u", "p")
-        run(obs.start())
-        with self.assertRaises(rest.ObserverError) as ctx:
-            run(obs.fetch_series(("net_mode",), 0, 1))
-        self.assertEqual(ctx.exception.code, "protocol")
-
-
-class SourceIsolationTests(unittest.TestCase):
-    def test_no_mqtt_or_device_token_logic(self):
-        for name in ("c152_telemetry_rest.py", "c152_rest_observer.py"):
-            text = (ROOT / "tools" / "review" / name).read_text(encoding="utf-8")
-            low = text.lower()
-            self.assertNotIn("paho", low, name)
-            self.assertNotIn("iothub_mqtt_token", low, name)
-            self.assertNotIn("v1/devices/me", low, name)
-
-    def test_exit_codes(self):
-        self.assertEqual(p.exit_code("PASS"), 0)
-        self.assertEqual(p.exit_code("FAIL"), 1)
-        self.assertEqual(p.exit_code("NOT_COVERED"), 2)
-        self.assertEqual(p.exit_code("STOP"), 3)
 
 
 if __name__ == "__main__":

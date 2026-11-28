@@ -187,6 +187,50 @@ def window_samples(series: dict, w0: float, w1: float) -> dict:
     return out
 
 
+def fresh_window_samples(series: dict, baseline: dict | None, elapsed: float,
+                         max_delay: float = MAX_DATA_DELAY_S,
+                         skew: float = CLOCK_SKEW_S) -> dict:
+    """Samples strictly newer than the per-key baseline.
+
+    The upper bound is derived from the *measured* monotonic elapsed time
+    between the baseline snapshot and the operation end, not from host wall
+    time: `baseline_ts + elapsed + max_delay + skew`. This keeps freshness
+    independent of any constant host/TB clock offset.
+
+    Freshness itself is `ts > baseline[key].ts`; the baseline sample can never
+    be reused as an in-window sample.
+    """
+    out: dict[str, list[dict]] = {}
+    for key in TELEMETRY_KEYS:
+        base = (baseline or {}).get(key)
+        if base is None:
+            out[key] = []
+            continue
+        w_end = base["ts"] + elapsed + max_delay + skew
+        out[key] = [s for s in series.get(key, [])
+                    if s["ts"] > base["ts"] and s["ts"] <= w_end]
+    return out
+
+
+def classify_freshness(series: dict, fresh: dict) -> tuple[list[str], list[str]]:
+    """Split keys lacking a fresh sample into (no_sample, no_fresh).
+
+    - no_sample: the key has no samples at all in the response.
+    - no_fresh: samples exist but none is newer than the baseline (old or
+      later than the allowed data-delay bound).
+    """
+    missing: list[str] = []
+    stale: list[str] = []
+    for key in TELEMETRY_KEYS:
+        if fresh.get(key):
+            continue
+        if series.get(key):
+            stale.append(key)
+        else:
+            missing.append(key)
+    return missing, stale
+
+
 def missing_window_keys(samples: dict) -> list[str]:
     return [key for key in TELEMETRY_KEYS if not samples.get(key)]
 
@@ -286,6 +330,40 @@ def identity_errors(dev: Any, expected: dict) -> list[str]:
     return errors
 
 
+def rest_identity_errors(device: Any, expected_uuid: str,
+                         expected_name: str) -> list[str]:
+    """Verify the REST device UUID/name before any write.
+
+    This binds the REST observation target to the operator-declared TB device;
+    the BLE identity gate separately binds the BLE target. The name/device_id
+    link is declared by the operator (same name or explicit alias).
+    """
+    if not isinstance(device, dict):
+        return ["rest_device_unreadable"]
+    errors: list[str] = []
+    dev_id = (device.get("id") or {}).get("id")
+    if not _nonempty_str(dev_id) or dev_id != expected_uuid:
+        errors.append("rest_device_id_mismatch")
+    name = device.get("name")
+    if not _nonempty_str(name):
+        errors.append("rest_device_name_missing")
+    elif name != expected_name:
+        errors.append("rest_device_name_mismatch")
+    return errors
+
+
+def binding_kind(tb_name: str, ble_device_id: str,
+                 allow_alias: bool) -> str | None:
+    """Classify the TB-name <-> BLE-device_id binding.
+
+    Returns "same_name" when identical, "operator_alias" when explicitly
+    allowed, or None when an alias was not authorized.
+    """
+    if tb_name == ble_device_id:
+        return "same_name"
+    return "operator_alias" if allow_alias else None
+
+
 def tryconnect_class(ok: bool, op_id: str | None, error: str | None) -> str:
     if ok is True and op_id:
         return "accepted"
@@ -317,6 +395,7 @@ def decide(observer_error: str | None = None,
            sta_restored: bool = True,
            identity_after_ok: bool = True,
            missing_keys: list | None = None,
+           stale_keys: list | None = None,
            telemetry_errors: list | None = None,
            status_errors_list: list | None = None,
            attr_errors: list | None = None) -> tuple[str, str]:
@@ -341,6 +420,8 @@ def decide(observer_error: str | None = None,
         return ("FAIL", "identity_mismatch")
     if missing_keys:
         return ("NOT_COVERED", "telemetry_no_sample_" + missing_keys[0])
+    if stale_keys:
+        return ("NOT_COVERED", "telemetry_no_fresh_sample_" + stale_keys[0])
     if telemetry_errors:
         return ("FAIL", "telemetry_inconsistent")
     if status_errors_list:

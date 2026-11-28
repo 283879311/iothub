@@ -22,6 +22,7 @@
 | `sta_ssid` | attributes | BLE `network.status.sta_ssid`（正式配置） | attributes 非空且与 BLE 相等 |
 | `sta_ip` | BLE `network.status.sta_ip` | attributes 仅记录，不强制相等 | BLE 非空；attributes 陈旧不判失败 |
 | 设备身份 | BLE `device.status` | — | `device_id`/`firmware`/`build_sha` 全部匹配，写前 fail-closed |
+| REST 设备身份 | `GET /api/device/{uuid}` | 运行参数声明的 TB 名称 | `id`/`name` 匹配；与 BLE `device_id` 同名或显式 alias |
 | 操作终态 | BLE `operation.get` | `network.tryconnect` 受理回包 | `state=failed` 且 `error ∈ {wrong_password, ap_not_found}` |
 | 恢复 | BLE `device.status.network` / `network.status` | — | STA 在 60 s 内恢复 |
 
@@ -38,23 +39,26 @@ TB REST 依据（2026-11-28 只读实测）：
 
 ## 3. 修订判据
 
-前提：BLE 登录成功；写前身份匹配；`trial=idle`、`mqtt_connected=true`、`sta_connected=true` 连续稳定 10 s；REST observer 登录与基线读取成功。
+前提：BLE 登录成功；写前身份匹配；`trial=idle`、`mqtt_connected=true`、`sta_connected=true` 连续稳定 10 s；REST observer 登录、REST 设备身份核验与基线读取成功。
 
 | ID | 判据 | 观测点 |
 |---|---|---|
-| C15-2-a | 错误口令 `network.tryconnect` 被受理并返回 `operation_id` | 命令回包 |
-| C15-2-b | 终态 `failed`，错误码 `wrong_password` 或 `ap_not_found` | `operation.get` ≤40 s |
-| C15-2-c | STA 在 60 s 内恢复，写后身份仍匹配 | `device.status` |
-| C15-2-d | telemetry 基线：操作前每键存在样本，`op_start - ts ≤ 30 s` | REST timeseries |
-| C15-2-e | telemetry 窗口内样本：每键至少 1 条，`ts ∈ [op_start - 5 s, op_end + 15 s]`，且不在未来 | REST timeseries |
-| C15-2-f | 窗口内 telemetry 自洽：`net_mode=sta`、`uart_baudrate>0`、`sta_has_ip=true` | REST timeseries |
-| C15-2-g | BLE 状态：`net_mode=sta`、`sta_connected=true`、`sta_has_ip=true`、`sta_ip` 非空 | `network.status` |
-| C15-2-h | attributes：`sta_ssid` 非空且等于 BLE `network.status.sta_ssid`；`sta_ip` 仅记录 | REST attributes + BLE |
+| C15-2-a | REST 设备身份：`GET /api/device/{uuid}` 的 `id`/`name` 与操作者声明的 TB 设备一致；与 BLE `device_id` 的绑定为同名或显式 alias | REST device + 运行参数 |
+| C15-2-b | 错误口令 `network.tryconnect` 被受理并返回 `operation_id` | 命令回包 |
+| C15-2-c | 终态 `failed`，错误码 `wrong_password` 或 `ap_not_found` | `operation.get` ≤40 s |
+| C15-2-d | STA 在 60 s 内恢复，写后身份仍匹配 | `device.status` |
+| C15-2-e | telemetry 基线：操作前每键存在样本，`op_start - ts ≤ 30 s`；记录每键 `baseline_ts` | REST timeseries |
+| C15-2-f | telemetry 新鲜样本：每键至少 1 条且 `ts > baseline_ts`；上界 `baseline_ts + 实测 elapsed + 15 s + 5 s` | REST timeseries |
+| C15-2-g | 新鲜样本自洽：`net_mode=sta`、`uart_baudrate>0`、`sta_has_ip=true` | REST timeseries |
+| C15-2-h | BLE 状态：`net_mode=sta`、`sta_connected=true`、`sta_has_ip=true`、`sta_ip` 非空 | `network.status` |
+| C15-2-i | attributes：`sta_ssid` 非空且等于 BLE `network.status.sta_ssid`；`sta_ip` 仅记录 | REST attributes + BLE |
 
 说明：
 
-- 时间容差：`CLOCK_SKEW_S=5`、`MAX_DATA_DELAY_S=15`、`BASELINE_MAX_AGE_S=30`；窗口上下界含端点。
-- 无基线 → `NOT_COVERED/baseline_missing`；基线超龄 → `NOT_COVERED/baseline_stale`；窗口内某键无样本 → `NOT_COVERED/telemetry_no_sample_<key>`。
+- 样本新鲜度以 **TB 服务器时间** 判定：`ts > baseline_ts`；基线样本永远不能复用为窗口样本。上界用本机 `time.monotonic()` 实测的“基线→终态”耗时，不依赖主机/TB 绝对时间，因此固定时钟偏差不会把操作前样本算入，也不会隐藏有效样本。
+- 时间参数：`CLOCK_SKEW_S=5`（上界余量）、`MAX_DATA_DELAY_S=15`、`BASELINE_MAX_AGE_S=30`。
+- 无基线 → `NOT_COVERED/baseline_missing`；基线超龄 → `NOT_COVERED/baseline_stale`；某键无任何样本 → `NOT_COVERED/telemetry_no_sample_<key>`；样本存在但均 `≤ baseline_ts` 或超出上界 → `NOT_COVERED/telemetry_no_fresh_sample_<key>`。
+- REST 身份不匹配 → `STOP/observer_identity_mismatch`，且发生在写命令之前（写 0 次）。
 - attributes 陈旧（`lastUpdateTs` 早于读取超过 `ATTR_STALE_WARN_S=600`）只记录 `attrs_stale=true`，不单独判失败；`sta_ssid` 以 BLE 当前配置交叉核对。
 - `sta_ip` 不以 attributes 与当前 IP 强制相等：attributes 可能停留在旧 IP；运行态以 BLE `network.status.sta_ip` 为准。
 
@@ -63,6 +67,7 @@ TB REST 依据（2026-11-28 只读实测）：
 | 类别 | 触发 | 结果字段 | 判定 |
 |---|---|---|---|
 | observer failure | REST 登录/查询失败、401/403/404/429/5xx、超时、网络错误、JSON/结构错误 | `observer.state=error`、`observer.error.code` | `STOP/observer_<code>`；**不得**写成设备操作失败 |
+| observer identity | REST UUID/名称与声明不符 | `observer.identity_errors[]` | `STOP/observer_identity_mismatch`，写 0 次 |
 | device observation failure | BLE `device.status`/`network.status`/`operation.get` 读取超时或非法响应 | `device.errors[]` | `STOP/device_observation_<code>` |
 | operation result | `network.tryconnect` 受理、`busy`、拒绝、终态 | `operation.*` | `busy→NOT_COVERED`；拒绝→`FAIL`；终态不符→`FAIL` |
 
@@ -71,22 +76,24 @@ TB REST 依据（2026-11-28 只读实测）：
 ## 5. 判定优先级
 
 1. observer failure → `STOP/observer_*`
-2. device observation failure → `STOP/device_observation_*`
-3. 写前身份不匹配 → `STOP/identity`
-4. 就绪门禁失败 → `STOP/readiness`
-5. 写 deadline 耗尽 → `STOP/write_deadline_exhausted_before_send`
-6. 写 outcome unknown → `STOP/write_outcome_unknown`
-7. `busy` → `NOT_COVERED/tryconnect_busy`
-8. tryconnect 被拒 → `FAIL/tryconnect_rejected`
-9. 终态不符 → `FAIL/terminal_state`
-10. STA 未恢复 → `FAIL/sta_not_restored`
-11. 写后身份不匹配 → `FAIL/identity_mismatch`
-12. 基线缺失/超龄 → `NOT_COVERED/baseline_missing|baseline_stale`
-13. 窗口内无样本 → `NOT_COVERED/telemetry_no_sample_*`
-14. telemetry 自洽失败 → `FAIL/telemetry_inconsistent`
-15. BLE 状态失败 → `FAIL/status_inconsistent`
-16. attributes 失败 → `FAIL/attributes_inconsistent`
-17. 全部通过 → `PASS/ok`
+2. observer identity 不匹配 → `STOP/observer_identity_mismatch`
+3. device observation failure → `STOP/device_observation_*`
+4. 写前 BLE 身份不匹配 → `STOP/identity`
+5. 就绪门禁失败 → `STOP/readiness`
+6. 写 deadline 耗尽 → `STOP/write_deadline_exhausted_before_send`
+7. 写 outcome unknown → `STOP/write_outcome_unknown`
+8. `busy` → `NOT_COVERED/tryconnect_busy`
+9. tryconnect 被拒 → `FAIL/tryconnect_rejected`
+10. 终态不符 → `FAIL/terminal_state`
+11. STA 未恢复 → `FAIL/sta_not_restored`
+12. 写后身份不匹配 → `FAIL/identity_mismatch`
+13. 基线缺失/超龄 → `NOT_COVERED/baseline_missing|baseline_stale`
+14. 某键无样本 → `NOT_COVERED/telemetry_no_sample_*`
+15. 样本存在但无新鲜样本 → `NOT_COVERED/telemetry_no_fresh_sample_*`
+16. telemetry 自洽失败 → `FAIL/telemetry_inconsistent`
+17. BLE 状态失败 → `FAIL/status_inconsistent`
+18. attributes 失败 → `FAIL/attributes_inconsistent`
+19. 全部通过 → `PASS/ok`
 
 补充：终态等待 40 s 到期仍未进入 terminal_states → `FAIL/terminal_state`（操作结果不明确，不算 device observation 失败）；BLE 读在重试后仍超时 → `STOP/device_observation_read_timeout`。
 
@@ -101,7 +108,9 @@ TB REST 依据（2026-11-28 只读实测）：
 | `tests/c152_policy/` | Host 测试：mock REST、fake BLE session、fake 时钟；不连接设备/TB |
 
 - 删除对 paho/MQTT 的依赖；`c152_telemetry_rest.py` 不得引用设备 Access Token。
-- REST 凭据仅从 `IOTHUB_TB_USER`/`IOTHUB_TB_PASSWORD` 读取；`IOTHUB_TB_REST_BASE`、`IOTHUB_TB_DEVICE_ID` 由运行参数提供。
+- **认证方法**：REST 认证使用 `POST /api/auth/login`；业务观测仅使用 GET 查询 device/timeseries/attributes。不调用任何设备配置、RPC 或数据写入接口。
+- REST 凭据仅从 `IOTHUB_TB_USER`/`IOTHUB_TB_PASSWORD` 读取；`IOTHUB_TB_REST_BASE`、`IOTHUB_TB_DEVICE_ID`、`IOTHUB_TB_DEVICE_NAME` 由运行参数/环境提供。密码与 JWT 不写入日志或结果文件。
+- 客户账号查询成功只证明该次查询可用，**不等于**已验证其全部权限均为只读。
 - REST 观测不做自动重试：单次失败即 `STOP/observer_*`（避免观测失败被误当设备结果）。
 - 就绪门禁读 `device.status.network` 的 `trial`/`mqtt_connected`/`sta_connected`（契约已列），不依赖 `network.status.trial`。
 - 所有 BLE 请求仍用全局单调 ID；REST 查询不参与 BLE ID 空间。
@@ -142,6 +151,12 @@ TB REST 依据（2026-11-28 只读实测）：
 | T30 | 三个 telemetry 键分别缺失 | 各自的 `telemetry_no_sample_<key>` |
 | T31 | 40 s 内始终非终态 | `FAIL/terminal_state`（不是 device observation） |
 | T32 | 就绪读取使用 `device.status.network` | 契约字段，不依赖 `network.status.trial` |
+| T33 | 只有写前样本、无写后新样本 | `NOT_COVERED/telemetry_no_fresh_sample_<key>` |
+| T34 | 新样本恰在基线后 1 ms | 计为新鲜 |
+| T35 | 服务器时钟落后主机 8 s | 仍按 `ts > baseline_ts` 判新鲜 |
+| T36 | 样本恰在上界 / 上界 +1 ms | 计入 / 排除 |
+| T37 | REST UUID 或名称与声明不符 | `STOP/observer_identity_mismatch`，0 次写 |
+| T38 | TB 名称 ≠ BLE `device_id` 且未显式 alias | 启动前 REFUSE（不连接设备） |
 
 ## 8. 未授权与不改变项
 

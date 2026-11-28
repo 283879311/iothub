@@ -59,11 +59,22 @@ def _samples_view(samples: dict) -> dict:
             for key in policy.TELEMETRY_KEYS}
 
 
-async def _observer_preflight(deps: Deps, result: dict) -> tuple[str | None, dict]:
-    """Login + pre-operation series fetch; returns (error_code, series)."""
+async def _observer_preflight(deps: Deps, result: dict,
+                              rest_expected: dict) -> tuple[str | None, dict]:
+    """Login + REST device identity + pre-operation series fetch."""
     now = deps.wall()
     try:
         await deps.observer.start()
+        device = await deps.observer.fetch_device()
+        identity_errors = policy.rest_identity_errors(
+            device, rest_expected["uuid"], rest_expected["name"])
+        result["observer"]["device"] = {
+            "id": (device.get("id") or {}).get("id"),
+            "name": device.get("name"),
+        }
+        if identity_errors:
+            result["observer"]["identity_errors"] = identity_errors
+            return "identity_mismatch", {}
         raw = await deps.observer.fetch_series(
             policy.TELEMETRY_KEYS,
             int((now - OBSERVER_PREFLIGHT_WINDOW_S) * 1000),
@@ -73,18 +84,25 @@ async def _observer_preflight(deps: Deps, result: dict) -> tuple[str | None, dic
             raise rest.ObserverError("protocol", errors[0])
         series, _dropped = policy.drop_future(series, now)
     except rest.ObserverError as exc:
-        result["observer"] = {"state": "error",
-                              "error": {"code": exc.code,
-                                        "detail": exc.detail}}
+        result["observer"].update(state="error",
+                                  error={"code": exc.code,
+                                         "detail": exc.detail})
         return exc.code, {}
-    result["observer"] = {"state": "ok", "error": None}
+    result["observer"].update(state="ok", error=None)
     return None, series
 
 
-async def run_case(deps: Deps, ssid: str,
-                   expected: dict | None = None) -> dict:
-    """Run C15-2; returns the full result dict with verdict/reason."""
+async def run_case(deps: Deps, ssid: str, expected: dict | None = None,
+                   rest_expected: dict | None = None) -> dict:
+    """Run C15-2; returns the full result dict with verdict/reason.
+
+    `rest_expected` binds the REST UUID/name to the operator-declared TB
+    device; the default is a Host-test scaffold and production `main()`
+    always supplies real values.
+    """
     expected = expected or EXPECTED
+    rest_expected = rest_expected or {"uuid": "dev-uuid",
+                                      "name": EXPECTED["device_id"]}
     result: dict = {"verdict": "STOP", "reason": "unfinished",
                     "observer": {"state": "unknown", "error": None},
                     "device": {"errors": []},
@@ -100,13 +118,18 @@ async def run_case(deps: Deps, ssid: str,
             result.update(verdict="STOP", reason="readiness")
             return result
 
-        obs_error, pre_series = await _observer_preflight(deps, result)
+        obs_error, pre_series = await _observer_preflight(
+            deps, result, rest_expected)
+        if obs_error == "identity_mismatch":
+            result.update(verdict="STOP", reason="observer_identity_mismatch")
+            return result
         if obs_error is not None:
             result.update(verdict="STOP", reason="observer_" + obs_error)
             return result
 
         op_start = deps.wall()
         baseline, baseline_reason = policy.baseline_check(pre_series, op_start)
+        baseline_mono = deps.mono()
         result["observer"]["baseline"] = baseline
         result["observer"]["baseline_reason"] = baseline_reason
         if baseline_reason is not None:
@@ -151,6 +174,8 @@ async def run_case(deps: Deps, ssid: str,
 
         term = await wait_terminal(deps, op_id, policy.TERMINAL_TIMEOUT_S)
         op_end = deps.wall()
+        op_end_mono = deps.mono()
+        elapsed = op_end_mono - baseline_mono
         result["operation"]["terminal"] = {"state": term.get("state"),
                                            "error": term.get("error")}
         restored = await wait_sta(deps, policy.RECOVERY_TIMEOUT_S)
@@ -164,23 +189,26 @@ async def run_case(deps: Deps, ssid: str,
         device_error = None
         status: dict = {}
         attrs: dict = {}
-        window: dict = {}
+        fresh: dict = {}
         missing: list = []
+        stale: list = []
         dropped = 0
         try:
             now = deps.wall()
+            baseline_min = min(s["ts"] for s in baseline.values())
             raw = await deps.observer.fetch_series(
                 policy.TELEMETRY_KEYS,
-                int((op_start - policy.CLOCK_SKEW_S - 1.0) * 1000),
+                int((baseline_min - 1.0) * 1000),
                 int((now + policy.CLOCK_SKEW_S) * 1000))
             series, errors = policy.parse_series(raw)
             if errors:
                 raise rest.ObserverError("protocol", errors[0])
             series, dropped = policy.drop_future(series, now)
-            window = policy.window_samples(
-                series, op_start - policy.CLOCK_SKEW_S,
-                op_end + policy.MAX_DATA_DELAY_S)
-            missing = policy.missing_window_keys(window)
+            # Freshness is TB-server-time based (ts > per-key baseline ts) and
+            # the upper bound uses measured monotonic elapsed time, so a
+            # constant host/TB clock offset cannot hide or promote samples.
+            fresh = policy.fresh_window_samples(series, baseline, elapsed)
+            missing, stale = policy.classify_freshness(series, fresh)
         except rest.ObserverError as exc:
             observer_error = exc.code
             result["observer"] = {"state": "error",
@@ -220,22 +248,29 @@ async def run_case(deps: Deps, ssid: str,
         status_errs = policy.status_errors(status) if status else []
         attr_errs = (policy.attributes_errors(attrs, status)
                      if status else [])
-        telemetry_errs = ([] if missing
-                          else policy.telemetry_violations(window))
+        telemetry_errs = ([] if (missing or stale)
+                          else policy.telemetry_violations(fresh))
         staleness = policy.attributes_staleness(attrs, deps.wall())
 
         verdict, reason = policy.decide(
             observer_error=observer_error, device_error=device_error,
             terminal_state=term.get("state"), terminal_error=term.get("error"),
             sta_restored=restored, identity_after_ok=identity_ok,
-            missing_keys=missing, telemetry_errors=telemetry_errs,
+            missing_keys=missing, stale_keys=stale,
+            telemetry_errors=telemetry_errs,
             status_errors_list=status_errs, attr_errors=attr_errs)
         result.update(
             verdict=verdict, reason=reason, w0=op_start, op_end=op_end,
-            w1=deps.wall(),
-            window={"samples": _samples_view(window),
-                    "n": {k: len(v) for k, v in window.items()},
-                    "missing": missing, "future_dropped": dropped},
+            w1=deps.wall(), elapsed_s=elapsed,
+            window={"samples": _samples_view(fresh),
+                    "n": {k: len(v) for k, v in fresh.items()},
+                    "missing": missing, "stale": stale,
+                    "baseline_ts": {k: s["ts"] for k, s in baseline.items()},
+                    "window_end": {k: s["ts"] + elapsed
+                                   + policy.MAX_DATA_DELAY_S
+                                   + policy.CLOCK_SKEW_S
+                                   for k, s in baseline.items()},
+                    "future_dropped": dropped},
             telemetry_errors=telemetry_errs, status=status_view,
             status_errors=status_errs, attrs=attrs,
             attrs_staleness=staleness, attr_errors=attr_errs)
@@ -276,6 +311,9 @@ async def main() -> int:
                         default=os.environ.get("IOTHUB_TB_REST_BASE"))
     parser.add_argument("--device-id",
                         default=os.environ.get("IOTHUB_TB_DEVICE_ID"))
+    parser.add_argument("--tb-device-name",
+                        default=os.environ.get("IOTHUB_TB_DEVICE_NAME"))
+    parser.add_argument("--allow-alias-binding", action="store_true")
     parser.add_argument("--out", default="/tmp/c152_telemetry_rest.json")
     args = parser.parse_args()
 
@@ -286,16 +324,27 @@ async def main() -> int:
     if not ble_user or not ble_password:
         print("REFUSE: IOTHUB_BLE_USER/IOTHUB_BLE_PASSWORD missing")
         return 3
-    if not tb_user or not tb_password or not args.rest_base or not args.device_id:
+    if (not tb_user or not tb_password or not args.rest_base
+            or not args.device_id or not args.tb_device_name):
         print("REFUSE: TB REST env/args missing "
-              "(IOTHUB_TB_USER/IOTHUB_TB_PASSWORD/REST_BASE/DEVICE_ID)")
+              "(IOTHUB_TB_USER/IOTHUB_TB_PASSWORD/REST_BASE/DEVICE_ID/"
+              "DEVICE_NAME)")
         return 3
     if not args.ssid:
         print("REFUSE: --ssid or IOTHUB_TEST_SSID missing")
         return 3
+    binding_type = policy.binding_kind(args.tb_device_name, args.device,
+                                       args.allow_alias_binding)
+    if binding_type is None:
+        print("REFUSE: TB device name != BLE device_id; "
+              "pass --allow-alias-binding to declare the mapping")
+        return 3
 
     p0 = load_module("p0_acceptance", P0)
-    result: dict = {"verdict": "STOP", "reason": "unfinished"}
+    result: dict = {"verdict": "STOP", "reason": "unfinished",
+                    "binding": {"tb_name": args.tb_device_name,
+                                "ble_device_id": args.device,
+                                "kind": binding_type}}
     cli = None
     try:
         recs = await p0.scan_filtered(10)
@@ -316,7 +365,12 @@ async def main() -> int:
         deps = Deps(sess, observer)
         expected = {"device_id": args.device, "firmware": args.expect_fw,
                     "build_sha": args.expect_sha}
-        result = await run_case(deps, args.ssid, expected)
+        rest_expected = {"uuid": args.device_id,
+                         "name": args.tb_device_name}
+        result = await run_case(deps, args.ssid, expected, rest_expected)
+        result["binding"] = {"tb_name": args.tb_device_name,
+                             "ble_device_id": args.device,
+                             "kind": binding_type}
         return policy.exit_code(result.get("verdict", "STOP"))
     except StopRun as exc:
         result.update(verdict="STOP", reason="stop", detail=str(exc))

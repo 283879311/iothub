@@ -110,6 +110,16 @@ class TbRestObserver:
             raise ObserverError("auth", "not_logged_in")
         return self._token
 
+    async def fetch_device(self) -> dict:
+        """Read-only device entity used to bind the UUID to a TB device name."""
+        path = "/api/device/" + urllib.parse.quote(self.device_id)
+        status, body = await self.transport.request(
+            "GET", path, token=self._require_token())
+        _classify_status(status)
+        if not isinstance(body, dict):
+            raise ObserverError("protocol", "device_not_object")
+        return body
+
     async def fetch_series(self, keys, start_ms: int, end_ms: int) -> dict:
         query = urllib.parse.urlencode({
             "keys": ",".join(keys),

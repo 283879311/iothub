@@ -108,6 +108,72 @@ class BaselineTests(unittest.TestCase):
         self.assertEqual(sample["ts"], T0)
 
 
+class FreshnessTests(unittest.TestCase):
+    def baseline(self, ts=T0):
+        return {k: {"ts": ts, "value": "x"} for k in p.TELEMETRY_KEYS}
+
+    def test_only_samples_after_baseline_are_fresh(self):
+        s, _ = p.parse_series(series(
+            net_mode=[point(T0, "sta"), point(T0 + 1, "sta"),
+                      point(T0 + 100, "sta")]))
+        fresh = p.fresh_window_samples(s, self.baseline(T0), elapsed=50)
+        self.assertEqual([x["ts"] for x in fresh["net_mode"]], [T0 + 1])
+
+    def test_baseline_sample_excluded(self):
+        s, _ = p.parse_series(series(net_mode=[point(T0, "sta")]))
+        fresh = p.fresh_window_samples(s, self.baseline(T0), elapsed=50)
+        self.assertEqual(fresh["net_mode"], [])
+
+    def test_upper_bound_from_elapsed_and_delay(self):
+        s, _ = p.parse_series(series(net_mode=[point(T0 + 10, "sta"),
+                                               point(T0 + 10.001, "sta")]))
+        fresh = p.fresh_window_samples(s, self.baseline(T0), elapsed=0,
+                                       max_delay=10, skew=0)
+        self.assertEqual([x["ts"] for x in fresh["net_mode"]], [T0 + 10])
+
+    def test_classify_missing_vs_stale(self):
+        fresh = {"net_mode": [], "uart_baudrate": [], "sta_has_ip": []}
+        missing, stale = p.classify_freshness(
+            {"net_mode": [point(T0, "sta")],
+             "uart_baudrate": [point(T0, "115200")],
+             "sta_has_ip": []}, fresh)
+        self.assertEqual(missing, ["sta_has_ip"])
+        self.assertEqual(stale, ["net_mode", "uart_baudrate"])
+
+
+class RestIdentityTests(unittest.TestCase):
+    DEVICE = {"id": {"id": "uuid-1"}, "name": "Test Device C1"}
+
+    def test_ok(self):
+        self.assertEqual(
+            p.rest_identity_errors(self.DEVICE, "uuid-1", "Test Device C1"), [])
+
+    def test_uuid_mismatch(self):
+        self.assertEqual(
+            p.rest_identity_errors(self.DEVICE, "uuid-2", "Test Device C1"),
+            ["rest_device_id_mismatch"])
+
+    def test_name_missing_and_mismatch(self):
+        self.assertIn("rest_device_name_missing",
+                      p.rest_identity_errors({"id": {"id": "uuid-1"}},
+                                             "uuid-1", "X"))
+        self.assertEqual(
+            p.rest_identity_errors(self.DEVICE, "uuid-1", "Other"),
+            ["rest_device_name_mismatch"])
+
+    def test_unreadable(self):
+        self.assertEqual(p.rest_identity_errors(None, "uuid-1", "X"),
+                         ["rest_device_unreadable"])
+
+    def test_binding_kind(self):
+        self.assertEqual(p.binding_kind("IotHub-65D8", "IotHub-65D8", False),
+                         "same_name")
+        self.assertIsNone(p.binding_kind("Test Device C1", "IotHub-65D8", False))
+        self.assertEqual(
+            p.binding_kind("Test Device C1", "IotHub-65D8", True),
+            "operator_alias")
+
+
 class WindowTests(unittest.TestCase):
     def test_boundaries_inclusive(self):
         s, _ = p.parse_series(series(net_mode=[point(T0, "sta"),
@@ -240,8 +306,8 @@ class DecisionTests(unittest.TestCase):
     def pass_kwargs(self, **over):
         kwargs = dict(terminal_state="failed", terminal_error="wrong_password",
                       sta_restored=True, identity_after_ok=True,
-                      missing_keys=[], telemetry_errors=[], status_errors_list=[],
-                      attr_errors=[])
+                      missing_keys=[], stale_keys=[], telemetry_errors=[],
+                      status_errors_list=[], attr_errors=[])
         kwargs.update(over)
         return kwargs
 
@@ -284,6 +350,11 @@ class DecisionTests(unittest.TestCase):
         self.assertEqual(
             p.decide(**self.pass_kwargs(missing_keys=["uart_baudrate"])),
             ("NOT_COVERED", "telemetry_no_sample_uart_baudrate"))
+
+    def test_stale_sample_is_not_covered(self):
+        self.assertEqual(
+            p.decide(**self.pass_kwargs(stale_keys=["net_mode"])),
+            ("NOT_COVERED", "telemetry_no_fresh_sample_net_mode"))
 
     def test_evidence_failures(self):
         self.assertEqual(

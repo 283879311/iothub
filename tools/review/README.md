@@ -291,18 +291,25 @@
 第二 MQTT 会话）。设计见
 `docs/design/CMD/C15-2_TelemetryREST混合观测判据与harness设计_2026-11-28.md`。
 
-- 观测：TB REST 只读 `values/timeseries`（`net_mode`/`uart_baudrate`/`sta_has_ip`，
-  约 10 s 一拍）与 `values/attributes`（`sta_ssid`/`sta_ip`）；BLE `network.status`
+- 观测：TB REST 认证用 `POST /api/auth/login`；业务观测只用 GET 查询
+  `device`/`values/timeseries`/`values/attributes`，不调用任何设备配置或数据写入接口。
+  `net_mode`/`uart_baudrate`/`sta_has_ip` 约 10 s 一拍；BLE `network.status`
   提供 `net_mode`/`sta_ssid`/`sta_has_ip`/`sta_ip` 交叉核对。
-- 样本-操作关联：写前必须取得每键 30 s 内基线；窗口为
-  `[op_start-5 s, op_end+15 s]`；某键无样本 → `NOT_COVERED`，不用历史样本冒充。
-- 三类失败分离：REST → `STOP/observer_*`；BLE 读 → `STOP/device_observation_*`；
+- 样本-操作关联：写前必须取得每键 30 s 内基线并记录 `baseline_ts`；新鲜样本要求
+  `ts > baseline_ts`，上界为 `baseline_ts + 实测 elapsed + 15 s + 5 s`（不依赖主机绝对时间）；
+  只有旧样本 → `NOT_COVERED/telemetry_no_fresh_sample_*`，无样本 →
+  `NOT_COVERED/telemetry_no_sample_*`。
+- 三类失败分离：REST → `STOP/observer_*`；REST 设备身份不符 →
+  `STOP/observer_identity_mismatch`（写 0 次）；BLE 读 → `STOP/device_observation_*`；
   `busy`/拒绝/终态 → `NOT_COVERED`/`FAIL`；观测失败不写成设备操作失败。
-- 身份门：`device.status` 的 `device_id`/`firmware`/`build_sha` 任一缺失或不匹配，
-  在任何写命令前 `STOP`；设备选择按 `--addr`（默认 `10:97:BD:D3:65:DA`）绑定。
+- 身份门：BLE `device.status` 的 `device_id`/`firmware`/`build_sha` 与 REST
+  `GET /api/device/{uuid}` 的 `id`/`name` 都在写前核验；TB 名称与 BLE `device_id`
+  必须同名，或由 `--allow-alias-binding` 显式声明 alias；设备选择按 `--addr` 绑定。
 - 容错：只读命令最多 3 次、间隔 2 s；全局单调 ID；`send_request` 整体由 wait_for
   约束并在返回后复查 deadline；写命令只发一次，异常/超时 → `STOP`。
+- 凭据/JWT 仅在内存中使用，不写入日志、结果文件或测试；客户账号查询成功不等于
+  已验证其全部权限只读。
 - 纯判定在 `c152_policy.py`；REST 映射在 `c152_rest_observer.py`；Host 测试：
   `make -C tests/c152_policy run`（fake REST transport / fake BLE session / fake clock，
-  覆盖缺失/异常/过期/401/403/404/429/5xx/超时/冲突/身份/终态/退出码/无 MQTT 依赖）。
+  覆盖缺失/陈旧/边界/时钟偏差/401/403/404/429/5xx/超时/冲突/身份/终态/退出码/无 MQTT 依赖）。
 - 设备执行需单独授权；本目录脚本不参与固件构建。
