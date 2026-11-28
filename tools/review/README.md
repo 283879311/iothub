@@ -285,17 +285,24 @@
 - host `tests/cmd_net_job` 增加 D01–D05：4 个最大长度 operation、文本截断、
   计数截断、终态 job_op、无效 job_op；`truncated` 与 `text_truncated` 分开记录。
 
-## `c152_mqtt_attrs.py` + `c152_policy.py`（C15-2 专用，Host 级，待评审）
+## `c152_telemetry_rest.py` + `c152_rest_observer.py` + `c152_policy.py`（C15-2 专用，Host 级）
 
-- 取代 v9 的 C15-2 字段来源：attributes 自洽仅使用实际发布字段
-  （`net_mode`/`sta_ssid`/`sta_ip`/`uart_baudrate`，`net_mode` 运行态预期 `sta`）；
-  `sta_has_ip` 由 w1 之后 `network.status` 独立对读，要求 status 采样不早于窗口内
-  最后一条 attributes 且两侧 `sta_ip` 均非空。
-- 身份门：`device_id`/`firmware`/`build_sha` 任一缺失或不匹配，在任何写命令前 `STOP`；
-  设备选择按 `--addr`（默认 `10:97:BD:D3:65:DA`）绑定，不取扫描首个命中。
-- 容错语义：只读命令最多 3 次、间隔 2 s；所有请求由全局单调序号分配唯一 ID（跨轮询不重复，迟到响应不得满足下一次查询）；持续超时 → `STOP`（每次 `send_request` 整体由 wait_for 约束，返回后再次检查 deadline；重试间隔同样受限）；
-  `n_attr=0` → `NOT_COVERED`；写命令 transport 异常不重发；就绪门禁用
-  `time.monotonic()` 实际连续 10 s、间隔 >3 s 清零。
-- 纯判定在 `c152_policy.py`；Host 测试：`make -C tests/c152_policy run`（policy + runner
-  fake-session/fake-clock，覆盖身份门、唯一 ID、超时、busy、空 IP、SUBACK、退出码）。
+**Telemetry REST + Attributes + BLE 混合观测方案**（不使用设备 Access Token、不建
+第二 MQTT 会话）。设计见
+`docs/design/CMD/C15-2_TelemetryREST混合观测判据与harness设计_2026-11-28.md`。
+
+- 观测：TB REST 只读 `values/timeseries`（`net_mode`/`uart_baudrate`/`sta_has_ip`，
+  约 10 s 一拍）与 `values/attributes`（`sta_ssid`/`sta_ip`）；BLE `network.status`
+  提供 `net_mode`/`sta_ssid`/`sta_has_ip`/`sta_ip` 交叉核对。
+- 样本-操作关联：写前必须取得每键 30 s 内基线；窗口为
+  `[op_start-5 s, op_end+15 s]`；某键无样本 → `NOT_COVERED`，不用历史样本冒充。
+- 三类失败分离：REST → `STOP/observer_*`；BLE 读 → `STOP/device_observation_*`；
+  `busy`/拒绝/终态 → `NOT_COVERED`/`FAIL`；观测失败不写成设备操作失败。
+- 身份门：`device.status` 的 `device_id`/`firmware`/`build_sha` 任一缺失或不匹配，
+  在任何写命令前 `STOP`；设备选择按 `--addr`（默认 `10:97:BD:D3:65:DA`）绑定。
+- 容错：只读命令最多 3 次、间隔 2 s；全局单调 ID；`send_request` 整体由 wait_for
+  约束并在返回后复查 deadline；写命令只发一次，异常/超时 → `STOP`。
+- 纯判定在 `c152_policy.py`；REST 映射在 `c152_rest_observer.py`；Host 测试：
+  `make -C tests/c152_policy run`（fake REST transport / fake BLE session / fake clock，
+  覆盖缺失/异常/过期/401/403/404/429/5xx/超时/冲突/身份/终态/退出码/无 MQTT 依赖）。
 - 设备执行需单独授权；本目录脚本不参与固件构建。

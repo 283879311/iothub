@@ -1,4 +1,4 @@
-"""Host tests for the C15-2 attributes-consistency policy (no device, no MQTT)."""
+"""Host tests for the C15-2 Telemetry REST + Attributes + BLE policy."""
 
 import sys
 import unittest
@@ -7,185 +7,302 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tools" / "review"))
 import c152_policy as p  # noqa: E402
 
-
-def sample(ts, **fields):
-    base = {"net_mode": "sta", "sta_ssid": "ssid", "sta_ip": "10.0.0.2",
-            "uart_baudrate": 115200}
-    base.update(fields)
-    return {"ts": ts, "obj": base}
+T0 = 1_790_000_000.0  # epoch seconds (2026-09-22); ms form exceeds 1e11
 
 
-def attrs(**fields):
-    return sample(0, **fields)["obj"]
+def point(ts_seconds, value):
+    return {"ts": int(ts_seconds * 1000), "value": value}
+
+
+def series(**over):
+    base = {
+        "net_mode": [point(T0, "sta")],
+        "uart_baudrate": [point(T0, "115200")],
+        "sta_has_ip": [point(T0, "true")],
+    }
+    base.update(over)
+    return base
+
+
+def attr(key, value, ts=T0):
+    return {"key": key, "value": value, "lastUpdateTs": int(ts * 1000)}
 
 
 IDENT = {"device_id": "IotHub-65D8", "firmware": "1.3-956afcd",
          "build_sha": "c231c9501"}
 
 
-class AttrSampleTests(unittest.TestCase):
-    def test_sta_valid(self):
-        self.assertEqual(p.attr_sample_violations(attrs()), [])
+class ParseSeriesTests(unittest.TestCase):
+    def test_valid_and_sorted(self):
+        raw = {"net_mode": [point(T0 + 3, "sta"), point(T0 + 1, "sta")],
+               "uart_baudrate": [point(T0 + 1, "115200")],
+               "sta_has_ip": [point(T0 + 1, "true")]}
+        out, errors = p.parse_series(raw)
+        self.assertEqual(errors, [])
+        self.assertEqual([s["ts"] for s in out["net_mode"]], [T0 + 1, T0 + 3])
 
-    def test_ap_is_not_runtime_mode(self):
-        self.assertEqual(p.attr_sample_violations(attrs(net_mode="ap", sta_ssid="")), ["net_mode_not_sta"])
+    def test_missing_key_is_not_protocol_error(self):
+        out, errors = p.parse_series({"net_mode": [point(T0, "sta")]})
+        self.assertEqual(errors, [])
+        self.assertEqual(out.get("uart_baudrate"), [])
 
-    def test_apsta_is_not_runtime_mode(self):
-        self.assertEqual(p.attr_sample_violations(attrs(net_mode="apsta", sta_ip="1.2.3.4")), ["net_mode_not_sta"])
+    def test_not_object(self):
+        self.assertEqual(p.parse_series([]), ({}, ["series_not_object"]))
 
-    def test_sta_without_ssid_is_violation(self):
-        self.assertEqual(p.attr_sample_violations(attrs(sta_ssid="")), ["sta_mode_without_ssid"])
+    def test_malformed_points(self):
+        raw = {"net_mode": ["x", {"ts": 0, "value": "sta"}, {"ts": 1_790_000_000_000}]}
+        _, errors = p.parse_series(raw)
+        self.assertIn("point_not_object:net_mode", errors)
+        self.assertIn("ts_invalid:net_mode", errors)
+        self.assertIn("value_missing:net_mode", errors)
 
-    def test_invalid_mode(self):
-        self.assertEqual(p.attr_sample_violations(attrs(net_mode="mesh")), ["net_mode_invalid"])
+    def test_seconds_timestamp_accepted(self):
+        out, _ = p.parse_series({"net_mode": [{"ts": T0, "value": "sta"}]})
+        self.assertEqual(out["net_mode"][0]["ts"], T0)
 
-    def test_missing_baudrate(self):
-        obj = attrs()
-        del obj["uart_baudrate"]
-        self.assertEqual(p.attr_sample_violations(obj), ["uart_baudrate_missing"])
 
-    def test_invalid_baudrate(self):
-        self.assertIn("uart_baudrate_invalid",
-                      p.attr_sample_violations(attrs(uart_baudrate=0)))
+class ParseAttributesTests(unittest.TestCase):
+    def test_valid(self):
+        out, errors = p.parse_attributes([attr("sta_ssid", "ssid"),
+                                          attr("sta_ip", "10.0.0.2")])
+        self.assertEqual(errors, [])
+        self.assertEqual(out["sta_ssid"]["value"], "ssid")
+        self.assertEqual(out["sta_ssid"]["last_update_ts"], T0)
 
-    def test_non_object_sample(self):
-        self.assertEqual(p.attr_sample_violations(None), ["sample_not_object"])
+    def test_not_list(self):
+        self.assertEqual(p.parse_attributes({}), ({}, ["attributes_not_list"]))
+
+    def test_bad_item_and_ts_missing(self):
+        out, errors = p.parse_attributes(["x", {"key": "sta_ssid", "value": "s"}])
+        self.assertIn("attribute_not_object", errors)
+        self.assertIsNone(out["sta_ssid"]["last_update_ts"])
+
+
+class BaselineTests(unittest.TestCase):
+    def test_ok(self):
+        s, _ = p.parse_series(series())
+        baseline, reason = p.baseline_check(s, T0 + 20)
+        self.assertIsNone(reason)
+        self.assertEqual(set(baseline), set(p.TELEMETRY_KEYS))
+
+    def test_missing_key(self):
+        s, _ = p.parse_series({"net_mode": [point(T0, "sta")],
+                               "uart_baudrate": [point(T0, "115200")]})
+        baseline, reason = p.baseline_check(s, T0 + 20)
+        self.assertIsNone(baseline)
+        self.assertEqual(reason, "baseline_missing_sta_has_ip")
+
+    def test_stale(self):
+        old = T0 - 100
+        s, _ = p.parse_series(series(
+            net_mode=[point(old, "sta")],
+            uart_baudrate=[point(old, "115200")],
+            sta_has_ip=[point(old, "true")]))
+        _, reason = p.baseline_check(s, T0 + 20)
+        self.assertEqual(reason, "baseline_stale_net_mode")
+
+    def test_latest_before_ignores_future(self):
+        s, _ = p.parse_series(series(
+            net_mode=[point(T0, "sta"), point(T0 + 100, "ap")]))
+        sample = p.latest_before(s, "net_mode", T0 + 20)
+        self.assertEqual(sample["ts"], T0)
 
 
 class WindowTests(unittest.TestCase):
-    def test_zero_samples(self):
-        win = p.window_eval([], 10.0, 20.0)
-        self.assertEqual(win["n_attr"], 0)
-        self.assertEqual(p.decide(n_attr=win["n_attr"])[0], "NOT_COVERED")
+    def test_boundaries_inclusive(self):
+        s, _ = p.parse_series(series(net_mode=[point(T0, "sta"),
+                                               point(T0 + 1, "sta"),
+                                               point(T0 + 2, "ap")]))
+        win = p.window_samples(s, T0, T0 + 1)
+        self.assertEqual([x["ts"] for x in win["net_mode"]], [T0, T0 + 1])
 
-    def test_samples_outside_window_ignored(self):
-        self.assertEqual(p.window_eval([sample(5), sample(25)], 10.0, 20.0)["n_attr"], 0)
+    def test_missing_keys(self):
+        win = p.window_samples({"net_mode": []}, T0, T0 + 10)
+        self.assertEqual(p.missing_window_keys(win),
+                         ["net_mode", "uart_baudrate", "sta_has_ip"])
 
-    def test_boundaries_inclusive_and_last(self):
-        win = p.window_eval([sample(10), sample(15, sta_ip="10.0.0.3")], 10.0, 20.0)
-        self.assertEqual(win["n_attr"], 2)
-        self.assertEqual(win["last"]["sta_ip"], "10.0.0.3")
-        self.assertEqual(win["last_ts"], 15.0)
-
-    def test_violation_makes_fail(self):
-        win = p.window_eval([sample(11, net_mode="ap", sta_ssid="")], 10.0, 20.0)
-        verdict, reason = p.decide(
-            n_attr=win["n_attr"], violations=win["violations"],
-            terminal_state="failed", terminal_error="wrong_password",
-            sta_restored=True, identity_ok=True)
-        self.assertEqual((verdict, reason), ("FAIL", "attribute_inconsistent"))
+    def test_drop_future(self):
+        s, _ = p.parse_series(series(net_mode=[point(T0, "sta"),
+                                               point(T0 + 100, "sta")]))
+        clean, dropped = p.drop_future(s, T0 + 0.5)
+        self.assertEqual(dropped, 1)
+        self.assertEqual([x["ts"] for x in clean["net_mode"]], [T0])
 
 
-class CrosscheckTests(unittest.TestCase):
+class TelemetryViolationTests(unittest.TestCase):
+    def test_valid(self):
+        win = p.window_samples(p.parse_series(series())[0], T0 - 1, T0 + 1)
+        self.assertEqual(p.telemetry_violations(win), [])
+
+    def test_net_mode_ap_and_invalid(self):
+        win = p.window_samples(p.parse_series(series(
+            net_mode=[point(T0, "ap"), point(T0 + 1, "mesh")]))[0],
+            T0 - 1, T0 + 2)
+        errors = [e["error"] for e in p.telemetry_violations(win)]
+        self.assertEqual(errors, ["net_mode_not_sta", "net_mode_invalid"])
+
+    def test_baudrate_zero_and_text(self):
+        win = p.window_samples(p.parse_series(series(
+            uart_baudrate=[point(T0, 0), point(T0 + 1, "abc")]))[0],
+            T0 - 1, T0 + 2)
+        errors = [e["error"] for e in p.telemetry_violations(win)]
+        self.assertEqual(errors, ["uart_baudrate_invalid",
+                                  "uart_baudrate_invalid"])
+
+    def test_baudrate_bool_rejected(self):
+        win = p.window_samples(p.parse_series(series(
+            uart_baudrate=[point(T0, True)]))[0], T0 - 1, T0 + 1)
+        self.assertEqual(p.telemetry_violations(win)[0]["error"],
+                         "uart_baudrate_invalid")
+
+    def test_sta_has_ip_false_and_invalid(self):
+        win = p.window_samples(p.parse_series(series(
+            sta_has_ip=[point(T0, "false"), point(T0 + 1, "yes")]))[0],
+            T0 - 1, T0 + 2)
+        errors = [e["error"] for e in p.telemetry_violations(win)]
+        self.assertEqual(errors, ["sta_has_ip_not_true", "sta_has_ip_invalid"])
+
+
+class StatusTests(unittest.TestCase):
+    STATUS = {"net_mode": "sta", "sta_connected": True, "sta_has_ip": True,
+              "sta_ip": "10.0.0.2", "sta_ssid": "ssid"}
+
     def test_ok(self):
-        last = {"sta_ip": "10.0.0.2"}
-        status = {"sta_has_ip": True, "sta_ip": "10.0.0.2"}
-        self.assertEqual(p.crosscheck(last, 10.0, status, 12.0), [])
+        self.assertEqual(p.status_errors(self.STATUS), [])
 
-    def test_status_before_last_attr(self):
-        self.assertIn("status_not_after_last_attr", p.crosscheck(
-            {"sta_ip": "10.0.0.2"}, 12.0,
-            {"sta_has_ip": True, "sta_ip": "10.0.0.2"}, 11.0))
+    def test_fields(self):
+        self.assertIn("status_net_mode_not_sta",
+                      p.status_errors(dict(self.STATUS, net_mode="ap")))
+        self.assertIn("status_sta_not_connected",
+                      p.status_errors(dict(self.STATUS, sta_connected=False)))
+        self.assertIn("status_sta_has_ip_not_true",
+                      p.status_errors(dict(self.STATUS, sta_has_ip=False)))
+        self.assertIn("status_sta_ip_empty",
+                      p.status_errors(dict(self.STATUS, sta_ip="")))
+        self.assertIn("status_sta_ssid_empty",
+                      p.status_errors(dict(self.STATUS, sta_ssid="")))
 
-    def test_sta_has_ip_false(self):
-        self.assertIn("sta_has_ip_not_true", p.crosscheck(
-            {"sta_ip": "10.0.0.2"}, 10.0,
-            {"sta_has_ip": False, "sta_ip": "10.0.0.2"}, 12.0))
+    def test_not_object(self):
+        self.assertEqual(p.status_errors(None), ["status_not_object"])
 
-    def test_empty_attr_ip_is_rejected(self):
-        self.assertIn("attr_sta_ip_empty", p.crosscheck(
-            {"sta_ip": ""}, 10.0,
-            {"sta_has_ip": True, "sta_ip": ""}, 12.0))
 
-    def test_empty_status_ip_is_rejected(self):
-        self.assertIn("status_sta_ip_empty", p.crosscheck(
-            {"sta_ip": "10.0.0.2"}, 10.0,
-            {"sta_has_ip": True, "sta_ip": ""}, 12.0))
+class AttributeTests(unittest.TestCase):
+    STATUS = {"sta_ssid": "ssid"}
 
-    def test_both_empty_is_not_a_match(self):
-        errors = p.crosscheck({"sta_ip": ""}, 10.0,
-                              {"sta_has_ip": True, "sta_ip": ""}, 12.0)
-        self.assertIn("attr_sta_ip_empty", errors)
-        self.assertIn("status_sta_ip_empty", errors)
-        self.assertNotIn("sta_ip_mismatch", errors)
+    def test_ok(self):
+        attrs = {"sta_ssid": {"value": "ssid", "last_update_ts": T0}}
+        self.assertEqual(p.attributes_errors(attrs, self.STATUS), [])
 
-    def test_missing_inputs(self):
-        self.assertEqual(p.crosscheck(None, None, {}, 1.0), ["no_attribute_sample"])
-        self.assertEqual(p.crosscheck({"sta_ip": "x"}, 1.0, {}, None),
-                         ["status_sample_missing"])
+    def test_missing_empty_mismatch(self):
+        self.assertEqual(p.attributes_errors({}, self.STATUS),
+                         ["sta_ssid_missing"])
+        self.assertEqual(
+            p.attributes_errors({"sta_ssid": {"value": ""}}, self.STATUS),
+            ["sta_ssid_empty"])
+        self.assertEqual(
+            p.attributes_errors({"sta_ssid": {"value": "other"}},
+                                self.STATUS),
+            ["sta_ssid_mismatch"])
+
+    def test_sta_ip_difference_is_not_an_error(self):
+        attrs = {"sta_ssid": {"value": "ssid"},
+                 "sta_ip": {"value": "192.168.1.9"}}
+        self.assertEqual(p.attributes_errors(attrs, self.STATUS), [])
+
+    def test_staleness_records_age(self):
+        attrs = {"sta_ssid": {"value": "ssid", "last_update_ts": T0}}
+        out = p.attributes_staleness(attrs, T0 + 900)
+        self.assertTrue(out["sta_ssid"]["stale"])
+        self.assertEqual(out["sta_ssid"]["age_s"], 900.0)
+
+    def test_staleness_missing_ts(self):
+        out = p.attributes_staleness(
+            {"sta_ssid": {"value": "ssid", "last_update_ts": None}}, T0)
+        self.assertIsNone(out["sta_ssid"]["stale"])
 
 
 class IdentityTests(unittest.TestCase):
     def test_ok(self):
         self.assertEqual(p.identity_errors(IDENT, IDENT), [])
 
-    def test_device_mismatch(self):
-        dev = dict(IDENT, device_id="Other")
-        self.assertIn("device_id_mismatch", p.identity_errors(dev, IDENT))
-
-    def test_firmware_mismatch(self):
-        dev = dict(IDENT, firmware="1.3-0000000")
-        self.assertIn("firmware_mismatch", p.identity_errors(dev, IDENT))
-
-    def test_build_sha_missing(self):
-        dev = dict(IDENT)
-        del dev["build_sha"]
-        self.assertIn("build_sha_missing", p.identity_errors(dev, IDENT))
+    def test_mismatch_and_missing(self):
+        self.assertIn("device_id_mismatch",
+                      p.identity_errors(dict(IDENT, device_id="Other"), IDENT))
+        bad = dict(IDENT)
+        del bad["build_sha"]
+        self.assertIn("build_sha_missing", p.identity_errors(bad, IDENT))
 
     def test_unreadable(self):
         self.assertEqual(p.identity_errors(None, IDENT), ["identity_unreadable"])
 
 
-class SubackTests(unittest.TestCase):
-    def test_empty_and_none(self):
-        self.assertFalse(p.suback_ok(None)[0])
-        self.assertFalse(p.suback_ok([])[0])
-
-    def test_ok_and_rejected(self):
-        self.assertTrue(p.suback_ok([0])[0])
-        self.assertEqual(p.suback_ok([0x80]), (False, "rejected"))
-
-    def test_unparsable(self):
-        self.assertEqual(p.suback_ok(["x"]), (False, "unparsable"))
-
-
-class TryconnectTests(unittest.TestCase):
-    def test_classification(self):
-        self.assertEqual(p.tryconnect_class(True, "op-1", None), "accepted")
-        self.assertEqual(p.tryconnect_class(False, None, "busy"), "busy")
-        self.assertEqual(p.tryconnect_class(False, None, "state"), "rejected")
-
-    def test_busy_is_not_covered(self):
-        self.assertEqual(p.decide(busy=True), ("NOT_COVERED", "tryconnect_busy"))
-
-
-class TerminalTests(unittest.TestCase):
-    def test_terminal_ok(self):
-        self.assertTrue(p.terminal_ok("failed", "wrong_password"))
-        self.assertTrue(p.terminal_ok("failed", "ap_not_found"))
-        self.assertFalse(p.terminal_ok("failed", "timeout"))
-        self.assertFalse(p.terminal_ok("success", None))
-
-
 class DecisionTests(unittest.TestCase):
-    def passed(self, **over):
-        kwargs = dict(n_attr=2, violations=[], terminal_state="failed",
-                      terminal_error="wrong_password", sta_restored=True,
-                      identity_ok=True, cross_errors=[])
+    def pass_kwargs(self, **over):
+        kwargs = dict(terminal_state="failed", terminal_error="wrong_password",
+                      sta_restored=True, identity_after_ok=True,
+                      missing_keys=[], telemetry_errors=[], status_errors_list=[],
+                      attr_errors=[])
         kwargs.update(over)
-        return p.decide(**kwargs)
+        return kwargs
 
     def test_pass(self):
-        self.assertEqual(self.passed(), ("PASS", "ok"))
+        self.assertEqual(p.decide(**self.pass_kwargs()), ("PASS", "ok"))
 
-    def test_read_timeout_wins(self):
-        self.assertEqual(p.decide(read_timeout=True), ("STOP", "read_timeout"))
+    def test_observer_error_is_stop(self):
+        verdict, reason = p.decide(**self.pass_kwargs(observer_error="auth"))
+        self.assertEqual((verdict, reason), ("STOP", "observer_auth"))
 
-    def test_failure_branches(self):
-        self.assertEqual(self.passed(terminal_state="success")[0], "FAIL")
-        self.assertEqual(self.passed(sta_restored=False)[0], "FAIL")
-        self.assertEqual(self.passed(identity_ok=False)[0], "FAIL")
-        self.assertEqual(self.passed(cross_errors=["x"])[0], "FAIL")
+    def test_device_error_is_stop(self):
+        verdict, reason = p.decide(**self.pass_kwargs(
+            device_error="read_timeout", observer_error=None))
+        self.assertEqual((verdict, reason),
+                         ("STOP", "device_observation_read_timeout"))
+
+    def test_observer_beats_operation_failure(self):
+        verdict, _ = p.decide(**self.pass_kwargs(
+            observer_error="server", terminal_state="success",
+            terminal_error=None))
+        self.assertEqual(verdict, "STOP")
+
+    def test_busy_not_covered(self):
+        self.assertEqual(p.decide(**self.pass_kwargs(busy=True)),
+                         ("NOT_COVERED", "tryconnect_busy"))
+
+    def test_terminal_and_restore(self):
+        self.assertEqual(
+            p.decide(**self.pass_kwargs(terminal_state="success",
+                                        terminal_error=None)),
+            ("FAIL", "terminal_state"))
+        self.assertEqual(
+            p.decide(**self.pass_kwargs(sta_restored=False)),
+            ("FAIL", "sta_not_restored"))
+        self.assertEqual(
+            p.decide(**self.pass_kwargs(identity_after_ok=False)),
+            ("FAIL", "identity_mismatch"))
+
+    def test_missing_sample_is_not_covered(self):
+        self.assertEqual(
+            p.decide(**self.pass_kwargs(missing_keys=["uart_baudrate"])),
+            ("NOT_COVERED", "telemetry_no_sample_uart_baudrate"))
+
+    def test_evidence_failures(self):
+        self.assertEqual(
+            p.decide(**self.pass_kwargs(telemetry_errors=[{"error": "x"}])),
+            ("FAIL", "telemetry_inconsistent"))
+        self.assertEqual(
+            p.decide(**self.pass_kwargs(status_errors_list=["x"])),
+            ("FAIL", "status_inconsistent"))
+        self.assertEqual(
+            p.decide(**self.pass_kwargs(attr_errors=["x"])),
+            ("FAIL", "attributes_inconsistent"))
+
+    def test_write_gates(self):
+        self.assertEqual(
+            p.decide(**self.pass_kwargs(write_deadline=True)),
+            ("STOP", "write_deadline_exhausted_before_send"))
+        self.assertEqual(
+            p.decide(**self.pass_kwargs(write_unknown=True)),
+            ("STOP", "write_outcome_unknown"))
 
 
 class MiscTests(unittest.TestCase):
@@ -195,16 +312,18 @@ class MiscTests(unittest.TestCase):
         self.assertFalse(p.should_retry_read(3))
 
     def test_constants(self):
-        self.assertEqual(p.READ_MAX_ATTEMPTS, 3)
-        self.assertEqual(p.READ_RETRY_DELAY_S, 2.0)
         self.assertEqual(p.READY_STABLE_S, 10.0)
-        self.assertEqual(p.RUNTIME_NET_MODE, "sta")
+        self.assertEqual(p.BASELINE_MAX_AGE_S, 30.0)
+        self.assertEqual(p.MAX_DATA_DELAY_S, 15.0)
+        self.assertEqual(p.TELEMETRY_KEYS,
+                         ("net_mode", "uart_baudrate", "sta_has_ip"))
 
     def test_exit_codes(self):
         self.assertEqual(p.exit_code("PASS"), 0)
         self.assertEqual(p.exit_code("FAIL"), 1)
         self.assertEqual(p.exit_code("NOT_COVERED"), 2)
         self.assertEqual(p.exit_code("STOP"), 3)
+        self.assertEqual(p.exit_code("unknown"), 3)
 
 
 if __name__ == "__main__":

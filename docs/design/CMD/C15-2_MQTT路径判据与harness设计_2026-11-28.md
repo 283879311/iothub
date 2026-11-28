@@ -1,6 +1,7 @@
 # C15-2 MQTT 路径判据与专用 harness 设计（2026-11-28）
 
-> 文档状态：CURRENT（设计/判据修订，待评审）。
+> 文档状态：HISTORICAL（2026-11-28 被 [Telemetry REST 混合观测设计](C15-2_TelemetryREST混合观测判据与harness设计_2026-11-28.md) 取代）。
+> 保留原因：记录 MQTT attributes 字段来源冲突、第二 MQTT 会话副作用与旧判据的失败依据；不再作为实施入口。
 > 基线：`main@49e3f33`。本文件只定义判据与 Host 级 harness，不构成设备验证授权。
 > 背景：C15-2 仍为 `NOT_COVERED`；原始 BUSY 现象未解释。BLE hook 路径的 A0/A1 设备结果不能替代原始 MQTT 路径。
 
