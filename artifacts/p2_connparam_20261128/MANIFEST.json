@@ -4,8 +4,8 @@
       "source": "/tmp/p2_run.log",
       "source_sha256": "6a118604f17a5787f4c08c8fece82287d34053dd7f7fce4186fbdb6117be089e",
       "artifact": "run/p2_run.log",
-      "artifact_sha256": "5e4f5820521a264e1b3b2bb1c5f4e8de634808ca94a004fea7d51149c7b545f2",
-      "artifact_bytes": 397234,
+      "artifact_sha256": "3a43a5d31459b870f46ab2c4588d67dfbea2dd33ddb09f94304e5dbd80158bda",
+      "artifact_bytes": 396387,
       "sanitized": true
     },
     {
@@ -36,24 +36,24 @@
       "source": "/tmp/p2_s2_decoded.txt",
       "source_sha256": "262d4d46d985da0066781ea4ee643b6a4a8453e2be4403857664177c479eb30d",
       "artifact": "btmon/p2_s2_decoded.txt",
-      "artifact_sha256": "49c7b4af8513f3aa572b8028bb565d8a2973a9c90ce90f74bb0b2d8ca5359acd",
-      "artifact_bytes": 40674,
+      "artifact_sha256": "3a4af7d8b238f6c8a894f3be6ab84ae5c42535397f43fba39706fc130bdae8a4",
+      "artifact_bytes": 40457,
       "sanitized": true
     },
     {
       "source": "/tmp/p2_s3_decoded.txt",
       "source_sha256": "1fd4ff1bee6d740f53325a1e2ee073ce4d7fecec4681b9eb07cbf02bf214633d",
       "artifact": "btmon/p2_s3_decoded.txt",
-      "artifact_sha256": "67da311193a85fe64d6f38925222420b4ee0d9c0e1a86c2465d36a6f2d9efa4b",
-      "artifact_bytes": 65174,
+      "artifact_sha256": "d74dd8ecfc2c0ba117dc410e5a8399ca04ad4986148dadbbe99208c16aed1233",
+      "artifact_bytes": 64978,
       "sanitized": true
     },
     {
       "source": "/tmp/p2_s4_decoded.txt",
       "source_sha256": "f51ef12d4c436913c413e7f9d32c94a3d42acfcfd361d6e0f8a6ec00600f8b8b",
       "artifact": "btmon/p2_s4_decoded.txt",
-      "artifact_sha256": "4dd44f4020f1262a155db242cd52122613a7205832659523b7db3d2b0950fcda",
-      "artifact_bytes": 198526,
+      "artifact_sha256": "7c78f89427c6dd1836ddb8d10e24d78037b1ac346ab5082bcfca177178345c08",
+      "artifact_bytes": 198092,
       "sanitized": true
     },
     {
@@ -90,10 +90,10 @@
     },
     {
       "source": "/tmp/p2_serial.log",
-      "source_sha256": "269c557b1665e68d56a5df7dcd25c42152e0ff99b4ddd603c8b8a43b3bd8224b",
+      "source_sha256": "b4aaed5aaf422aafe1b14208886e792629b7f120c2339fc144df422df8ae3c98",
       "artifact": "serial/p2_serial.log",
-      "artifact_sha256": "43b9bd904ba67dff9a9f3bff307c5fe6a285243ff1055859591598d1c0847a6b",
-      "artifact_bytes": 30395,
+      "artifact_sha256": "d5b71c2025011d9ff8738474da935819a310a86f737dc548df18f9c071a576d1",
+      "artifact_bytes": 35250,
       "sanitized": true
     }
   ],

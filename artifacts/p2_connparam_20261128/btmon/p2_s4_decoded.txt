@@ -24,7 +24,7 @@ Bluetooth monitor ver 5.72
       LE Set Address Resolution Enable (0x08|0x002d) ncmd 1
         Status: Success (0x00)
 < HCI Command: LE Set Random Address (0x08|0x0005) plen 6    #5 [hci0] 1.289206
-        Address: 00:1D:53:DB:29:44 (Non-Resolvable)
+        Address: <mac-70d7> (Non-Resolvable)
 > HCI Event: Command Complete (0x0e) plen 4                  #6 [hci0] 1.290097
       LE Set Random Address (0x08|0x0005) ncmd 1
         Status: Success (0x00)
@@ -96,7 +96,7 @@ Bluetooth monitor ver 5.72
         Num reports: 1
         Event type: Connectable undirected - ADV_IND (0x00)
         Address type: Public (0x00)
-        Address: 84:FC:E6:B7:23:32 (Espressif Inc.)
+        Address: <mac-1eaa> (Espressif Inc.)
         Data length: 22
         Flags: 0x06
           LE General Discoverable Mode
@@ -110,7 +110,7 @@ Bluetooth monitor ver 5.72
         Num reports: 1
         Event type: Connectable undirected - ADV_IND (0x00)
         Address type: Random (0x01)
-        Address: 44:08:2C:4B:BB:CD (Resolvable)
+        Address: <mac-c961> (Resolvable)
         Data length: 29
         Flags: 0x1a
           LE General Discoverable Mode
@@ -138,7 +138,7 @@ Bluetooth monitor ver 5.72
         Num reports: 1
         Event type: Non connectable undirected - ADV_NONCONN_IND (0x03)
         Address type: Public (0x00)
-        Address: 6C:0D:C4:22:B6:06 (Beijing Xiaomi Electronics Co., Ltd.)
+        Address: <mac-3e62> (Beijing Xiaomi Electronics Co., Ltd.)
         Data length: 19
         Flags: 0x06
           LE General Discoverable Mode
@@ -151,7 +151,7 @@ Bluetooth monitor ver 5.72
         Num reports: 1
         Event type: Connectable undirected - ADV_IND (0x00)
         Address type: Public (0x00)
-        Address: 84:FC:E6:B7:23:32 (Espressif Inc.)
+        Address: <mac-1eaa> (Espressif Inc.)
         Data length: 22
         Flags: 0x06
           LE General Discoverable Mode
@@ -165,7 +165,7 @@ Bluetooth monitor ver 5.72
         Num reports: 1
         Event type: Connectable undirected - ADV_IND (0x00)
         Address type: Random (0x01)
-        Address: 79:29:21:AA:DD:15 (Resolvable)
+        Address: <mac-8816> (Resolvable)
         Data length: 17
         Flags: 0x1a
           LE General Discoverable Mode
@@ -218,7 +218,7 @@ Bluetooth monitor ver 5.72
         Num reports: 1
         Event type: Connectable undirected - ADV_IND (0x00)
         Address type: Public (0x00)
-        Address: 84:FC:E6:B7:23:32 (Espressif Inc.)
+        Address: <mac-1eaa> (Espressif Inc.)
         Data length: 22
         Flags: 0x06
           LE General Discoverable Mode
@@ -232,7 +232,7 @@ Bluetooth monitor ver 5.72
         Num reports: 1
         Event type: Connectable undirected - ADV_IND (0x00)
         Address type: Public (0x00)
-        Address: C4:39:60:63:8D:71 (GD Midea Air-Conditioning Equipment Co.,Ltd.)
+        Address: <mac-abd7> (GD Midea Air-Conditioning Equipment Co.,Ltd.)
         Data length: 29
         Flags: 0x06
           LE General Discoverable Mode
@@ -256,7 +256,7 @@ Bluetooth monitor ver 5.72
         Num reports: 1
         Event type: Connectable undirected - ADV_IND (0x00)
         Address type: Random (0x01)
-        Address: 70:10:AF:3C:A7:9F (Resolvable)
+        Address: <mac-cf07> (Resolvable)
         Data length: 17
         Flags: 0x1a
           LE General Discoverable Mode
@@ -282,7 +282,7 @@ Bluetooth monitor ver 5.72
         Num reports: 1
         Event type: Non connectable undirected - ADV_NONCONN_IND (0x03)
         Address type: Public (0x00)
-        Address: 6C:0D:C4:22:B6:06 (Beijing Xiaomi Electronics Co., Ltd.)
+        Address: <mac-3e62> (Beijing Xiaomi Electronics Co., Ltd.)
         Data length: 19
         Flags: 0x06
           LE General Discoverable Mode
@@ -295,7 +295,7 @@ Bluetooth monitor ver 5.72
         Num reports: 1
         Event type: Connectable undirected - ADV_IND (0x00)
         Address type: Public (0x00)
-        Address: 84:FC:E6:B7:23:32 (Espressif Inc.)
+        Address: <mac-1eaa> (Espressif Inc.)
         Data length: 22
         Flags: 0x06
           LE General Discoverable Mode
@@ -309,7 +309,7 @@ Bluetooth monitor ver 5.72
         Num reports: 1
         Event type: Scan response - SCAN_RSP (0x04)
         Address type: Public (0x00)
-        Address: 84:FC:E6:B7:23:32 (Espressif Inc.)
+        Address: <mac-1eaa> (Espressif Inc.)
         Data length: 0
         RSSI: -77 dBm (0xb3)
 > HCI Event: LE Meta Event (0x3e) plen 39                   #29 [hci0] 2.668914
@@ -317,7 +317,7 @@ Bluetooth monitor ver 5.72
         Num reports: 1
         Event type: Scan response - SCAN_RSP (0x04)
         Address type: Public (0x00)
-        Address: C4:39:60:63:8D:71 (GD Midea Air-Conditioning Equipment Co.,Ltd.)
+        Address: <mac-abd7> (GD Midea Air-Conditioning Equipment Co.,Ltd.)
         Data length: 27
         Name (complete): midea
         16-bit Service UUIDs (complete): 2 entries
@@ -331,7 +331,7 @@ Bluetooth monitor ver 5.72
         Num reports: 1
         Event type: Connectable undirected - ADV_IND (0x00)
         Address type: Random (0x01)
-        Address: 52:97:EA:89:09:EB (Resolvable)
+        Address: <mac-e790> (Resolvable)
         Data length: 31
         Flags: 0x02
           LE General Discoverable Mode
@@ -395,8 +395,8 @@ Bluetooth monitor ver 5.72
         Role: Central (0x00)
         Peer address type: Public (0x00)
         Peer address: <other-device-mac> (OUI 68-78-56)
-        Local resolvable private address: 00:00:00:00:00:00 (Non-Resolvable)
-        Peer resolvable private address: 00:00:00:00:00:00 (Non-Resolvable)
+        Local resolvable private address: <mac-c352> (Non-Resolvable)
+        Peer resolvable private address: <mac-c352> (Non-Resolvable)
         Connection interval: 7.50 msec (0x0006)
         Connection latency: 32 (0x0020)
         Supervision timeout: 3000 msec (0x012c)
@@ -413,7 +413,7 @@ Bluetooth monitor ver 5.72
         Appearance: Mouse (0x03c2)
         Name (complete): KSG BT 5.0
 < HCI Command: LE Set Random Address (0x08|0x0005) plen 6   #37 [hci0] 3.546480
-        Address: 13:01:34:A2:E7:80 (Non-Resolvable)
+        Address: <mac-b366> (Non-Resolvable)
 > HCI Event: Command Complete (0x0e) plen 4                 #38 [hci0] 3.549070
       LE Set Random Address (0x08|0x0005) ncmd 1
         Status: Success (0x00)
@@ -467,7 +467,7 @@ Bluetooth monitor ver 5.72
         Num reports: 1
         Event type: Connectable undirected - ADV_IND (0x00)
         Address type: Random (0x01)
-        Address: 44:08:2C:4B:BB:CD (Resolvable)
+        Address: <mac-c961> (Resolvable)
         Data length: 29
         Flags: 0x1a
           LE General Discoverable Mode
@@ -522,7 +522,7 @@ Bluetooth monitor ver 5.72
         Timeout multiplier: 300
 @ MGMT Event: New Connection Param.. (0x001c) plen 16  {0x0001} [hci0] 3.624034
         Store hint: Reserved (0xd2)
-        LE Address: 01:68:78:56:00:3D (OUI 01-68-78)
+        LE Address: <mac-621f> (OUI 01-68-78)
         Min connection interval: 6
         Max connection interval: 6
         Connection latency: 32 (0x0020)
@@ -552,7 +552,7 @@ Bluetooth monitor ver 5.72
         Num reports: 1
         Event type: Connectable undirected - ADV_IND (0x00)
         Address type: Random (0x01)
-        Address: 70:10:AF:3C:A7:9F (Resolvable)
+        Address: <mac-cf07> (Resolvable)
         Data length: 17
         Flags: 0x1a
           LE General Discoverable Mode
@@ -610,7 +610,7 @@ Bluetooth monitor ver 5.72
         Num reports: 1
         Event type: Connectable undirected - ADV_IND (0x00)
         Address type: Public (0x00)
-        Address: C4:39:60:63:8D:71 (GD Midea Air-Conditioning Equipment Co.,Ltd.)
+        Address: <mac-abd7> (GD Midea Air-Conditioning Equipment Co.,Ltd.)
         Data length: 29
         Flags: 0x06
           LE General Discoverable Mode
@@ -641,7 +641,7 @@ Bluetooth monitor ver 5.72
         Num reports: 1
         Event type: Connectable undirected - ADV_IND (0x00)
         Address type: Public (0x00)
-        Address: 84:FC:E6:B7:23:32 (Espressif Inc.)
+        Address: <mac-1eaa> (Espressif Inc.)
         Data length: 22
         Flags: 0x06
           LE General Discoverable Mode
@@ -859,7 +859,7 @@ Bluetooth monitor ver 5.72
         Num reports: 1
         Event type: Non connectable undirected - ADV_NONCONN_IND (0x03)
         Address type: Public (0x00)
-        Address: 6C:0D:C4:22:B6:06 (Beijing Xiaomi Electronics Co., Ltd.)
+        Address: <mac-3e62> (Beijing Xiaomi Electronics Co., Ltd.)
         Data length: 19
         Flags: 0x06
           LE General Discoverable Mode
@@ -917,7 +917,7 @@ Bluetooth monitor ver 5.72
         Num reports: 1
         Event type: Connectable undirected - ADV_IND (0x00)
         Address type: Public (0x00)
-        Address: 84:FC:E6:B7:23:32 (Espressif Inc.)
+        Address: <mac-1eaa> (Espressif Inc.)
         Data length: 22
         Flags: 0x06
           LE General Discoverable Mode
@@ -1152,7 +1152,7 @@ Bluetooth monitor ver 5.72
         Num reports: 1
         Event type: Scan response - SCAN_RSP (0x04)
         Address type: Public (0x00)
-        Address: 84:FC:E6:B7:23:32 (Espressif Inc.)
+        Address: <mac-1eaa> (Espressif Inc.)
         Data length: 0
         RSSI: -77 dBm (0xb3)
 > ACL Data RX: Handle 1 flags 0x02 dlen 14                 #184 [hci0] 4.398292
@@ -1184,7 +1184,7 @@ Bluetooth monitor ver 5.72
         Num reports: 1
         Event type: Connectable undirected - ADV_IND (0x00)
         Address type: Random (0x01)
-        Address: 52:97:EA:89:09:EB (Resolvable)
+        Address: <mac-e790> (Resolvable)
         Data length: 31
         Flags: 0x02
           LE General Discoverable Mode
@@ -1205,7 +1205,7 @@ Bluetooth monitor ver 5.72
         Num reports: 1
         Event type: Scan response - SCAN_RSP (0x04)
         Address type: Random (0x01)
-        Address: 44:08:2C:4B:BB:CD (Resolvable)
+        Address: <mac-c961> (Resolvable)
         Data length: 7
         Name (complete): HONOR
         RSSI: -43 dBm (0xd5)
@@ -1482,7 +1482,7 @@ Bluetooth monitor ver 5.72
         Num reports: 1
         Event type: Connectable undirected - ADV_IND (0x00)
         Address type: Random (0x01)
-        Address: 70:10:AF:3C:A7:9F (Resolvable)
+        Address: <mac-cf07> (Resolvable)
         Data length: 17
         Flags: 0x1a
           LE General Discoverable Mode
@@ -1498,7 +1498,7 @@ Bluetooth monitor ver 5.72
         Num reports: 1
         Event type: Scan response - SCAN_RSP (0x04)
         Address type: Random (0x01)
-        Address: 70:10:AF:3C:A7:9F (Resolvable)
+        Address: <mac-cf07> (Resolvable)
         Data length: 0
         RSSI: -83 dBm (0xad)
 > ACL Data RX: Handle 1 flags 0x02 dlen 14                 #262 [hci0] 5.823648
@@ -2090,7 +2090,7 @@ Bluetooth monitor ver 5.72
         Num reports: 1
         Event type: Scan response - SCAN_RSP (0x04)
         Address type: Random (0x01)
-        Address: 52:97:EA:89:09:EB (Resolvable)
+        Address: <mac-e790> (Resolvable)
         Data length: 29
         Service Data: Xiaomi Inc. (0xfdaa)
           Data: 830cf3e3818be582bbe5a6aee79a84586961636f6d69203132
@@ -2188,7 +2188,7 @@ Bluetooth monitor ver 5.72
         Num reports: 1
         Event type: Scan response - SCAN_RSP (0x04)
         Address type: Public (0x00)
-        Address: C4:39:60:63:8D:71 (GD Midea Air-Conditioning Equipment Co.,Ltd.)
+        Address: <mac-abd7> (GD Midea Air-Conditioning Equipment Co.,Ltd.)
         Data length: 27
         Name (complete): midea
         16-bit Service UUIDs (complete): 2 entries
@@ -2246,7 +2246,7 @@ Bluetooth monitor ver 5.72
         Num reports: 1
         Event type: Connectable undirected - ADV_IND (0x00)
         Address type: Random (0x01)
-        Address: 79:29:21:AA:DD:15 (Resolvable)
+        Address: <mac-8816> (Resolvable)
         Data length: 17
         Flags: 0x1a
           LE General Discoverable Mode
@@ -2299,7 +2299,7 @@ Bluetooth monitor ver 5.72
         RSSI: invalid (0x7f)
         UUIDs: 0
 < HCI Command: LE Set Random Address (0x08|0x0005) plen 6  #447 [hci0] 9.306616
-        Address: 01:8C:08:BC:F8:48 (Non-Resolvable)
+        Address: <mac-0f9d> (Non-Resolvable)
 > HCI Event: Command Complete (0x0e) plen 4                #448 [hci0] 9.308927
       LE Set Random Address (0x08|0x0005) ncmd 1
         Status: Success (0x00)
@@ -2334,7 +2334,7 @@ Bluetooth monitor ver 5.72
         Num reports: 1
         Event type: Connectable undirected - ADV_IND (0x00)
         Address type: Public (0x00)
-        Address: C4:39:60:63:8D:71 (GD Midea Air-Conditioning Equipment Co.,Ltd.)
+        Address: <mac-abd7> (GD Midea Air-Conditioning Equipment Co.,Ltd.)
         Data length: 29
         Flags: 0x06
           LE General Discoverable Mode
@@ -2358,7 +2358,7 @@ Bluetooth monitor ver 5.72
         Name (short): IH-65D8
         RSSI: -42 dBm (0xd6)
 @ MGMT Event: Device Found (0x0012) plen 43            {0x0001} [hci0] 9.493927
-        LE Address: C4:39:60:63:8D:71 (GD Midea Air-Conditioning Equipment Co.,Ltd.)
+        LE Address: <mac-abd7> (GD Midea Air-Conditioning Equipment Co.,Ltd.)
         RSSI: -87 dBm (0xa9)
         Flags: 0x00000000
         Data length: 29
@@ -2373,7 +2373,7 @@ Bluetooth monitor ver 5.72
         Num reports: 1
         Event type: Connectable undirected - ADV_IND (0x00)
         Address type: Public (0x00)
-        Address: 84:FC:E6:B7:23:32 (Espressif Inc.)
+        Address: <mac-1eaa> (Espressif Inc.)
         Data length: 22
         Flags: 0x06
           LE General Discoverable Mode
@@ -2483,8 +2483,8 @@ Bluetooth monitor ver 5.72
         Role: Central (0x00)
         Peer address type: Public (0x00)
         Peer address: <device-mac> (Espressif Inc.)
-        Local resolvable private address: 00:00:00:00:00:00 (Non-Resolvable)
-        Peer resolvable private address: 00:00:00:00:00:00 (Non-Resolvable)
+        Local resolvable private address: <mac-c352> (Non-Resolvable)
+        Peer resolvable private address: <mac-c352> (Non-Resolvable)
         Connection interval: 45.00 msec (0x0024)
         Connection latency: 0 (0x0000)
         Supervision timeout: 420 msec (0x002a)
@@ -2754,7 +2754,7 @@ Bluetooth monitor ver 5.72
       LE Set Address Resolution Enable (0x08|0x002d) ncmd 1
         Status: Success (0x00)
 < HCI Command: LE Set Random Addr.. (0x08|0x0005) plen 6  #519 [hci0] 15.009883
-        Address: 05:B4:9E:26:68:98 (Non-Resolvable)
+        Address: <mac-d418> (Non-Resolvable)
 > HCI Event: Command Complete (0x0e) plen 4               #520 [hci0] 15.010853
       LE Set Random Address (0x08|0x0005) ncmd 1
         Status: Success (0x00)
@@ -2789,7 +2789,7 @@ Bluetooth monitor ver 5.72
         Num reports: 1
         Event type: Connectable undirected - ADV_IND (0x00)
         Address type: Random (0x01)
-        Address: 44:08:2C:4B:BB:CD (Resolvable)
+        Address: <mac-c961> (Resolvable)
         Data length: 29
         Flags: 0x1a
           LE General Discoverable Mode
@@ -2844,7 +2844,7 @@ Bluetooth monitor ver 5.72
         Num reports: 1
         Event type: Connectable undirected - ADV_IND (0x00)
         Address type: Random (0x01)
-        Address: 70:10:AF:3C:A7:9F (Resolvable)
+        Address: <mac-cf07> (Resolvable)
         Data length: 17
         Flags: 0x1a
           LE General Discoverable Mode
@@ -2860,7 +2860,7 @@ Bluetooth monitor ver 5.72
         Num reports: 1
         Event type: Connectable undirected - ADV_IND (0x00)
         Address type: Public (0x00)
-        Address: 84:FC:E6:B7:23:32 (Espressif Inc.)
+        Address: <mac-1eaa> (Espressif Inc.)
         Data length: 22
         Flags: 0x06
           LE General Discoverable Mode
@@ -2874,7 +2874,7 @@ Bluetooth monitor ver 5.72
         Num reports: 1
         Event type: Connectable undirected - ADV_IND (0x00)
         Address type: Public (0x00)
-        Address: C4:39:60:63:8D:71 (GD Midea Air-Conditioning Equipment Co.,Ltd.)
+        Address: <mac-abd7> (GD Midea Air-Conditioning Equipment Co.,Ltd.)
         Data length: 29
         Flags: 0x06
           LE General Discoverable Mode
@@ -2892,7 +2892,7 @@ Bluetooth monitor ver 5.72
         Num reports: 1
         Event type: Connectable undirected - ADV_IND (0x00)
         Address type: Public (0x00)
-        Address: 84:FC:E6:B7:23:32 (Espressif Inc.)
+        Address: <mac-1eaa> (Espressif Inc.)
         Data length: 22
         Flags: 0x06
           LE General Discoverable Mode
@@ -2906,7 +2906,7 @@ Bluetooth monitor ver 5.72
         Num reports: 1
         Event type: Scan response - SCAN_RSP (0x04)
         Address type: Public (0x00)
-        Address: 84:FC:E6:B7:23:32 (Espressif Inc.)
+        Address: <mac-1eaa> (Espressif Inc.)
         Data length: 0
         RSSI: -82 dBm (0xae)
 > ACL Data RX: Handle 1 flags 0x02 dlen 14                #534 [hci0] 15.490338
@@ -2918,7 +2918,7 @@ Bluetooth monitor ver 5.72
         Num reports: 1
         Event type: Scan response - SCAN_RSP (0x04)
         Address type: Random (0x01)
-        Address: 44:08:2C:4B:BB:CD (Resolvable)
+        Address: <mac-c961> (Resolvable)
         Data length: 7
         Name (complete): HONOR
         RSSI: -43 dBm (0xd5)
@@ -2927,7 +2927,7 @@ Bluetooth monitor ver 5.72
         Num reports: 1
         Event type: Non connectable undirected - ADV_NONCONN_IND (0x03)
         Address type: Public (0x00)
-        Address: 6C:0D:C4:22:B6:06 (Beijing Xiaomi Electronics Co., Ltd.)
+        Address: <mac-3e62> (Beijing Xiaomi Electronics Co., Ltd.)
         Data length: 19
         Flags: 0x06
           LE General Discoverable Mode
@@ -2950,7 +2950,7 @@ Bluetooth monitor ver 5.72
         Num reports: 1
         Event type: Connectable undirected - ADV_IND (0x00)
         Address type: Public (0x00)
-        Address: 84:FC:E6:B7:23:32 (Espressif Inc.)
+        Address: <mac-1eaa> (Espressif Inc.)
         Data length: 22
         Flags: 0x06
           LE General Discoverable Mode
@@ -2964,7 +2964,7 @@ Bluetooth monitor ver 5.72
         Num reports: 1
         Event type: Scan response - SCAN_RSP (0x04)
         Address type: Public (0x00)
-        Address: 84:FC:E6:B7:23:32 (Espressif Inc.)
+        Address: <mac-1eaa> (Espressif Inc.)
         Data length: 0
         RSSI: -76 dBm (0xb4)
 > HCI Event: LE Meta Event (0x3e) plen 29                 #540 [hci0] 15.734909
@@ -2972,7 +2972,7 @@ Bluetooth monitor ver 5.72
         Num reports: 1
         Event type: Connectable undirected - ADV_IND (0x00)
         Address type: Random (0x01)
-        Address: 70:10:AF:3C:A7:9F (Resolvable)
+        Address: <mac-cf07> (Resolvable)
         Data length: 17
         Flags: 0x1a
           LE General Discoverable Mode
@@ -2988,7 +2988,7 @@ Bluetooth monitor ver 5.72
         Num reports: 1
         Event type: Scan response - SCAN_RSP (0x04)
         Address type: Random (0x01)
-        Address: 70:10:AF:3C:A7:9F (Resolvable)
+        Address: <mac-cf07> (Resolvable)
         Data length: 0
         RSSI: -83 dBm (0xad)
 > HCI Event: LE Meta Event (0x3e) plen 29                 #542 [hci0] 17.008146
@@ -2996,7 +2996,7 @@ Bluetooth monitor ver 5.72
         Num reports: 1
         Event type: Connectable undirected - ADV_IND (0x00)
         Address type: Random (0x01)
-        Address: 79:29:21:AA:DD:15 (Resolvable)
+        Address: <mac-8816> (Resolvable)
         Data length: 17
         Flags: 0x1a
           LE General Discoverable Mode
@@ -3012,7 +3012,7 @@ Bluetooth monitor ver 5.72
         Num reports: 1
         Event type: Connectable undirected - ADV_IND (0x00)
         Address type: Public (0x00)
-        Address: 84:FC:E6:B7:23:32 (Espressif Inc.)
+        Address: <mac-1eaa> (Espressif Inc.)
         Data length: 22
         Flags: 0x06
           LE General Discoverable Mode
@@ -3026,7 +3026,7 @@ Bluetooth monitor ver 5.72
         Num reports: 1
         Event type: Scan response - SCAN_RSP (0x04)
         Address type: Public (0x00)
-        Address: 84:FC:E6:B7:23:32 (Espressif Inc.)
+        Address: <mac-1eaa> (Espressif Inc.)
         Data length: 0
         RSSI: -77 dBm (0xb3)
 > ACL Data RX: Handle 1 flags 0x02 dlen 14                #545 [hci0] 17.043599
@@ -3060,7 +3060,7 @@ Bluetooth monitor ver 5.72
         Num reports: 1
         Event type: Connectable undirected - ADV_IND (0x00)
         Address type: Random (0x01)
-        Address: 6E:E3:00:48:6A:5D (Resolvable)
+        Address: <mac-1444> (Resolvable)
         Data length: 31
         Flags: 0x01
           LE Limited Discoverable Mode
@@ -3083,7 +3083,7 @@ Bluetooth monitor ver 5.72
         Num reports: 1
         Event type: Connectable undirected - ADV_IND (0x00)
         Address type: Public (0x00)
-        Address: 84:FC:E6:B7:23:32 (Espressif Inc.)
+        Address: <mac-1eaa> (Espressif Inc.)
         Data length: 22
         Flags: 0x06
           LE General Discoverable Mode
@@ -3097,7 +3097,7 @@ Bluetooth monitor ver 5.72
         Num reports: 1
         Event type: Scan response - SCAN_RSP (0x04)
         Address type: Random (0x01)
-        Address: 6E:E3:00:48:6A:5D (Resolvable)
+        Address: <mac-1444> (Resolvable)
         Data length: 28
         Company: not assigned (2502)
           Data: bb00123456781234567800001c004d01b0e0501e001f0000
@@ -3111,7 +3111,7 @@ Bluetooth monitor ver 5.72
         Num reports: 1
         Event type: Scan response - SCAN_RSP (0x04)
         Address type: Public (0x00)
-        Address: 84:FC:E6:B7:23:32 (Espressif Inc.)
+        Address: <mac-1eaa> (Espressif Inc.)
         Data length: 0
         RSSI: -77 dBm (0xb3)
 > HCI Event: LE Meta Event (0x3e) plen 31                 #554 [hci0] 18.447130
@@ -3119,7 +3119,7 @@ Bluetooth monitor ver 5.72
         Num reports: 1
         Event type: Non connectable undirected - ADV_NONCONN_IND (0x03)
         Address type: Public (0x00)
-        Address: 6C:0D:C4:22:B6:06 (Beijing Xiaomi Electronics Co., Ltd.)
+        Address: <mac-3e62> (Beijing Xiaomi Electronics Co., Ltd.)
         Data length: 19
         Flags: 0x06
           LE General Discoverable Mode
@@ -3639,7 +3639,7 @@ Bluetooth monitor ver 5.72
         RSSI: invalid (0x7f)
         UUIDs: 0
 < HCI Command: LE Set Random Addr.. (0x08|0x0005) plen 6  #678 [hci0] 23.028663
-        Address: 3E:FE:96:96:E1:BA (Non-Resolvable)
+        Address: <mac-9054> (Non-Resolvable)
 > HCI Event: Command Complete (0x0e) plen 4               #679 [hci0] 23.031145
       LE Set Random Address (0x08|0x0005) ncmd 1
         Status: Success (0x00)
@@ -3898,8 +3898,8 @@ Bluetooth monitor ver 5.72
         Role: Central (0x00)
         Peer address type: Public (0x00)
         Peer address: <device-mac> (Espressif Inc.)
-        Local resolvable private address: 00:00:00:00:00:00 (Non-Resolvable)
-        Peer resolvable private address: 00:00:00:00:00:00 (Non-Resolvable)
+        Local resolvable private address: <mac-c352> (Non-Resolvable)
+        Peer resolvable private address: <mac-c352> (Non-Resolvable)
         Connection interval: 45.00 msec (0x0024)
         Connection latency: 0 (0x0000)
         Supervision timeout: 6000 msec (0x0258)

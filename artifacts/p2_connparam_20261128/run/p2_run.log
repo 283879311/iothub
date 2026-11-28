@@ -1646,7 +1646,7 @@ bluetoothd[970]: @ MGMT Command: Start Se.. (0x003a) plen 20  {0x0001} 1.231374
       LE Set Address Resolution Enable (0x08|0x002d) ncmd 1
         Status: Success (0x00)
 < HCI Command: LE Set Random Address (0x08|0x0005) plen 6           #3 1.233768
-        Address: 3B:D2:2A:FF:86:3A (Non-Resolvable)
+        Address: <mac-d0db> (Non-Resolvable)
 > HCI Event: Command Complete (0x0e) plen 4                         #4 1.234573
       LE Set Random Address (0x08|0x0005) ncmd 1
         Status: Success (0x00)
@@ -1681,7 +1681,7 @@ bluetoothd[970]: @ MGMT Command: Start Se.. (0x003a) plen 20  {0x0001} 1.231374
         Num reports: 1
         Event type: Connectable undirected - ADV_IND (0x00)
         Address type: Random (0x01)
-        Address: 44:08:2C:4B:BB:CD (Resolvable)
+        Address: <mac-c961> (Resolvable)
         Data length: 29
         Flags: 0x1a
           LE General Discoverable Mode
@@ -1699,7 +1699,7 @@ bluetoothd[970]: @ MGMT Command: Start Se.. (0x003a) plen 20  {0x0001} 1.231374
         Num reports: 1
         Event type: Scan response - SCAN_RSP (0x04)
         Address type: Random (0x01)
-        Address: 44:08:2C:4B:BB:CD (Resolvable)
+        Address: <mac-c961> (Resolvable)
         Data length: 7
         Name (complete): HONOR
         RSSI: -49 dBm (0xcf)
@@ -1708,7 +1708,7 @@ bluetoothd[970]: @ MGMT Command: Start Se.. (0x003a) plen 20  {0x0001} 1.231374
         Num reports: 1
         Event type: Connectable undirected - ADV_IND (0x00)
         Address type: Public (0x00)
-        Address: 84:FC:E6:B7:23:32 (Espressif Inc.)
+        Address: <mac-1eaa> (Espressif Inc.)
         Data length: 22
         Flags: 0x06
           LE General Discoverable Mode
@@ -1736,7 +1736,7 @@ bluetoothd[970]: @ MGMT Command: Start Se.. (0x003a) plen 20  {0x0001} 1.231374
         Num reports: 1
         Event type: Connectable undirected - ADV_IND (0x00)
         Address type: Public (0x00)
-        Address: 84:FC:E6:B7:23:32 (Espressif Inc.)
+        Address: <mac-1eaa> (Espressif Inc.)
         Data length: 22
         Flags: 0x06
           LE General Discoverable Mode
@@ -1761,7 +1761,7 @@ bluetoothd[970]: @ MGMT Command: Start Se.. (0x003a) plen 20  {0x0001} 1.231374
         Num reports: 1
         Event type: Connectable undirected - ADV_IND (0x00)
         Address type: Random (0x01)
-        Address: 79:29:21:AA:DD:15 (Resolvable)
+        Address: <mac-8816> (Resolvable)
         Data length: 17
         Flags: 0x1a
           LE General Discoverable Mode
@@ -1777,7 +1777,7 @@ bluetoothd[970]: @ MGMT Command: Start Se.. (0x003a) plen 20  {0x0001} 1.231374
         Num reports: 1
         Event type: Connectable undirected - ADV_IND (0x00)
         Address type: Public (0x00)
-        Address: 84:FC:E6:B7:23:32 (Espressif Inc.)
+        Address: <mac-1eaa> (Espressif Inc.)
         Data length: 22
         Flags: 0x06
           LE General Discoverable Mode
@@ -1791,7 +1791,7 @@ bluetoothd[970]: @ MGMT Command: Start Se.. (0x003a) plen 20  {0x0001} 1.231374
         Num reports: 1
         Event type: Scannable undirected - ADV_SCAN_IND (0x02)
         Address type: Public (0x00)
-        Address: 90:CE:B8:0C:9C:2A (Texas Instruments)
+        Address: <mac-3b4d> (Texas Instruments)
         Data length: 30
         Flags: 0x06
           LE General Discoverable Mode
@@ -1807,7 +1807,7 @@ bluetoothd[970]: @ MGMT Command: Start Se.. (0x003a) plen 20  {0x0001} 1.231374
         Num reports: 1
         Event type: Connectable undirected - ADV_IND (0x00)
         Address type: Public (0x00)
-        Address: 84:FC:E6:B7:23:32 (Espressif Inc.)
+        Address: <mac-1eaa> (Espressif Inc.)
         Data length: 22
         Flags: 0x06
           LE General Discoverable Mode
@@ -1821,7 +1821,7 @@ bluetoothd[970]: @ MGMT Command: Start Se.. (0x003a) plen 20  {0x0001} 1.231374
         Num reports: 1
         Event type: Connectable undirected - ADV_IND (0x00)
         Address type: Random (0x01)
-        Address: 70:10:AF:3C:A7:9F (Resolvable)
+        Address: <mac-cf07> (Resolvable)
         Data length: 17
         Flags: 0x1a
           LE General Discoverable Mode
@@ -1837,7 +1837,7 @@ bluetoothd[970]: @ MGMT Command: Start Se.. (0x003a) plen 20  {0x0001} 1.231374
         Num reports: 1
         Event type: Connectable undirected - ADV_IND (0x00)
         Address type: Public (0x00)
-        Address: 84:FC:E6:B7:23:32 (Espressif Inc.)
+        Address: <mac-1eaa> (Espressif Inc.)
         Data length: 22
         Flags: 0x06
           LE General Discoverable Mode
@@ -1851,7 +1851,7 @@ bluetoothd[970]: @ MGMT Command: Start Se.. (0x003a) plen 20  {0x0001} 1.231374
         Num reports: 1
         Event type: Scan response - SCAN_RSP (0x04)
         Address type: Public (0x00)
-        Address: 84:FC:E6:B7:23:32 (Espressif Inc.)
+        Address: <mac-1eaa> (Espressif Inc.)
         Data length: 0
         RSSI: -76 dBm (0xb4)
 > HCI Event: LE Meta Event (0x3e) plen 31                          #21 1.951518
@@ -1859,7 +1859,7 @@ bluetoothd[970]: @ MGMT Command: Start Se.. (0x003a) plen 20  {0x0001} 1.231374
         Num reports: 1
         Event type: Non connectable undirected - ADV_NONCONN_IND (0x03)
         Address type: Public (0x00)
-        Address: 6C:0D:C4:22:B6:06 (Beijing Xiaomi Electronics Co., Ltd.)
+        Address: <mac-3e62> (Beijing Xiaomi Electronics Co., Ltd.)
         Data length: 19
         Flags: 0x06
           LE General Discoverable Mode
@@ -1872,7 +1872,7 @@ bluetoothd[970]: @ MGMT Command: Start Se.. (0x003a) plen 20  {0x0001} 1.231374
         Num reports: 1
         Event type: Connectable undirected - ADV_IND (0x00)
         Address type: Public (0x00)
-        Address: 84:FC:E6:B7:23:32 (Espressif Inc.)
+        Address: <mac-1eaa> (Espressif Inc.)
         Data length: 22
         Flags: 0x06
           LE General Discoverable Mode
@@ -1886,7 +1886,7 @@ bluetoothd[970]: @ MGMT Command: Start Se.. (0x003a) plen 20  {0x0001} 1.231374
         Num reports: 1
         Event type: Scan response - SCAN_RSP (0x04)
         Address type: Public (0x00)
-        Address: 84:FC:E6:B7:23:32 (Espressif Inc.)
+        Address: <mac-1eaa> (Espressif Inc.)
         Data length: 0
         RSSI: -82 dBm (0xae)
 > HCI Event: LE Meta Event (0x3e) plen 42                          #24 2.178618
@@ -1894,7 +1894,7 @@ bluetoothd[970]: @ MGMT Command: Start Se.. (0x003a) plen 20  {0x0001} 1.231374
         Num reports: 1
         Event type: Scannable undirected - ADV_SCAN_IND (0x02)
         Address type: Public (0x00)
-        Address: 90:CE:B8:0C:9C:2A (Texas Instruments)
+        Address: <mac-3b4d> (Texas Instruments)
         Data length: 30
         Flags: 0x06
           LE General Discoverable Mode
@@ -1920,7 +1920,7 @@ bluetoothd[970]: @ MGMT Command: Start Se.. (0x003a) plen 20  {0x0001} 1.231374
         Num reports: 1
         Event type: Connectable undirected - ADV_IND (0x00)
         Address type: Public (0x00)
-        Address: C4:39:60:63:8D:71 (GD Midea Air-Conditioning Equipment Co.,Ltd.)
+        Address: <mac-abd7> (GD Midea Air-Conditioning Equipment Co.,Ltd.)
         Data length: 29
         Flags: 0x06
           LE General Discoverable Mode
@@ -1934,7 +1934,7 @@ bluetoothd[970]: @ MGMT Command: Start Se.. (0x003a) plen 20  {0x0001} 1.231374
         Num reports: 1
         Event type: Connectable undirected - ADV_IND (0x00)
         Address type: Public (0x00)
-        Address: 84:FC:E6:B7:23:32 (Espressif Inc.)
+        Address: <mac-1eaa> (Espressif Inc.)
         Data length: 22
         Flags: 0x06
           LE General Discoverable Mode
@@ -1948,7 +1948,7 @@ bluetoothd[970]: @ MGMT Command: Start Se.. (0x003a) plen 20  {0x0001} 1.231374
         Num reports: 1
         Event type: Scan response - SCAN_RSP (0x04)
         Address type: Public (0x00)
-        Address: 84:FC:E6:B7:23:32 (Espressif Inc.)
+        Address: <mac-1eaa> (Espressif Inc.)
         Data length: 0
         RSSI: -76 dBm (0xb4)
 > HCI Event: LE Meta Event (0x3e) plen 42                          #29 6.921620
@@ -1993,7 +1993,7 @@ bluetoothd[970]: @ MGMT Command: Start Se.. (0x003a) plen 20  {0x0001} 1.231374
         Num reports: 1
         Event type: Connectable undirected - ADV_IND (0x00)
         Address type: Random (0x01)
-        Address: 40:5A:B1:74:74:83 (Resolvable)
+        Address: <mac-d620> (Resolvable)
         Data length: 31
         Flags: 0x01
           LE Limited Discoverable Mode
@@ -2005,7 +2005,7 @@ bluetoothd[970]: @ MGMT Command: Start Se.. (0x003a) plen 20  {0x0001} 1.231374
         Num reports: 1
         Event type: Non connectable undirected - ADV_NONCONN_IND (0x03)
         Address type: Public (0x00)
-        Address: 6C:0D:C4:22:B6:06 (Beijing Xiaomi Electronics Co., Ltd.)
+        Address: <mac-3e62> (Beijing Xiaomi Electronics Co., Ltd.)
         Data length: 19
         Flags: 0x06
           LE General Discoverable Mode
@@ -2018,7 +2018,7 @@ bluetoothd[970]: @ MGMT Command: Start Se.. (0x003a) plen 20  {0x0001} 1.231374
         Num reports: 1
         Event type: Scan response - SCAN_RSP (0x04)
         Address type: Random (0x01)
-        Address: 40:5A:B1:74:74:83 (Resolvable)
+        Address: <mac-d620> (Resolvable)
         Data length: 28
         Company: not assigned (2502)
           Data: bb00123456781234567800001c004d01b0e0501e001f0000
@@ -2028,7 +2028,7 @@ bluetoothd[970]: @ MGMT Command: Start Se.. (0x003a) plen 20  {0x0001} 1.231374
         Num reports: 1
         Event type: Connectable undirected - ADV_IND (0x00)
         Address type: Public (0x00)
-        Address: 84:FC:E6:B7:23:32 (Espressif Inc.)
+        Address: <mac-1eaa> (Espressif Inc.)
         Data length: 22
         Flags: 0x06
           LE General Discoverable Mode
@@ -2042,7 +2042,7 @@ bluetoothd[970]: @ MGMT Command: Start Se.. (0x003a) plen 20  {0x0001} 1.231374
         Num reports: 1
         Event type: Scan response - SCAN_RSP (0x04)
         Address type: Public (0x00)
-        Address: 84:FC:E6:B7:23:32 (Espressif Inc.)
+        Address: <mac-1eaa> (Espressif Inc.)
         Data length: 0
         RSSI: -76 dBm (0xb4)
 bluetoothd[970]: @ MGMT Command: Stop Disc.. (0x0024) plen 1  {0x0001} 9.240793
@@ -2073,7 +2073,7 @@ bluetoothd[970]: @ MGMT Command: Start Ser.. (0x003a) plen 4  {0x0001} 9.251416
         RSSI: invalid (0x7f)
         UUIDs: 0
 < HCI Command: LE Set Random Address (0x08|0x0005) plen 6          #38 9.251489
-        Address: 32:E9:70:D2:20:AA (Non-Resolvable)
+        Address: <mac-b52c> (Non-Resolvable)
 > HCI Event: Command Complete (0x0e) plen 4                        #39 9.253545
       LE Set Random Address (0x08|0x0005) ncmd 1
         Status: Success (0x00)
@@ -2108,7 +2108,7 @@ bluetoothd[970]: @ MGMT Command: Start Ser.. (0x003a) plen 4  {0x0001} 9.251416
         Num reports: 1
         Event type: Connectable undirected - ADV_IND (0x00)
         Address type: Random (0x01)
-        Address: 70:10:AF:3C:A7:9F (Resolvable)
+        Address: <mac-cf07> (Resolvable)
         Data length: 17
         Flags: 0x1a
           LE General Discoverable Mode
@@ -2134,7 +2134,7 @@ bluetoothd[970]: @ MGMT Command: Start Ser.. (0x003a) plen 4  {0x0001} 9.251416
         Name (short): IH-65D8
         RSSI: -42 dBm (0xd6)
 @ MGMT Event: Device Found (0x0012) plen 31                   {0x0001} 9.302638
-        LE Address: 70:10:AF:3C:A7:9F (Resolvable)
+        LE Address: <mac-cf07> (Resolvable)
         RSSI: -79 dBm (0xb1)
         Flags: 0x00000000
         Data length: 17
@@ -2151,7 +2151,7 @@ bluetoothd[970]: @ MGMT Command: Start Ser.. (0x003a) plen 4  {0x0001} 9.251416
         Num reports: 1
         Event type: Connectable undirected - ADV_IND (0x00)
         Address type: Random (0x01)
-        Address: 40:5A:B1:74:74:83 (Resolvable)
+        Address: <mac-d620> (Resolvable)
         Data length: 31
         Flags: 0x01
           LE Limited Discoverable Mode
@@ -2181,7 +2181,7 @@ bluetoothd[970]: @ MGMT Command: Stop Disc.. (0x0024) plen 1  {0x0001} 9.306722
         Num reports: 1
         Event type: Scan response - SCAN_RSP (0x04)
         Address type: Random (0x01)
-        Address: 40:5A:B1:74:74:83 (Resolvable)
+        Address: <mac-d620> (Resolvable)
         Data length: 28
         Company: not assigned (2502)
           Data: bb00123456781234567800001c004d01b0e0501e001f0000
@@ -2269,8 +2269,8 @@ bluetoothd[970]: @ MGMT Command: Stop Disc.. (0x0024) plen 1  {0x0001} 9.306722
         Role: Central (0x00)
         Peer address type: Public (0x00)
         Peer address: <device-mac> (Espressif Inc.)
-        Local resolvable private address: 00:00:00:00:00:00 (Non-Resolvable)
-        Peer resolvable private address: 00:00:00:00:00:00 (Non-Resolvable)
+        Local resolvable private address: <mac-c352> (Non-Resolvable)
+        Peer resolvable private address: <mac-c352> (Non-Resolvable)
         Connection interval: 45.00 msec (0x0024)
         Connection latency: 0 (0x0000)
         Supervision timeout: 6000 msec (0x0258)
@@ -2579,7 +2579,7 @@ bluetoothd[970]: @ MGMT Command: Start Se.. (0x003a) plen 20  {0x0001} 1.139517
       LE Set Address Resolution Enable (0x08|0x002d) ncmd 1
         Status: Success (0x00)
 < HCI Command: LE Set Random Address (0x08|0x0005) plen 6           #3 1.141885
-        Address: 2E:9C:CB:7C:05:21 (Non-Resolvable)
+        Address: <mac-575d> (Non-Resolvable)
 > HCI Event: Command Complete (0x0e) plen 4                         #4 1.142947
       LE Set Random Address (0x08|0x0005) ncmd 1
         Status: Success (0x00)
@@ -2614,7 +2614,7 @@ bluetoothd[970]: @ MGMT Command: Start Se.. (0x003a) plen 20  {0x0001} 1.139517
         Num reports: 1
         Event type: Connectable undirected - ADV_IND (0x00)
         Address type: Random (0x01)
-        Address: 44:08:2C:4B:BB:CD (Resolvable)
+        Address: <mac-c961> (Resolvable)
         Data length: 29
         Flags: 0x1a
           LE General Discoverable Mode
@@ -2669,7 +2669,7 @@ bluetoothd[970]: @ MGMT Command: Start Se.. (0x003a) plen 20  {0x0001} 1.139517
         Num reports: 1
         Event type: Non connectable undirected - ADV_NONCONN_IND (0x03)
         Address type: Public (0x00)
-        Address: 6C:0D:C4:22:B6:06 (Beijing Xiaomi Electronics Co., Ltd.)
+        Address: <mac-3e62> (Beijing Xiaomi Electronics Co., Ltd.)
         Data length: 19
         Flags: 0x06
           LE General Discoverable Mode
@@ -2682,7 +2682,7 @@ bluetoothd[970]: @ MGMT Command: Start Se.. (0x003a) plen 20  {0x0001} 1.139517
         Num reports: 1
         Event type: Connectable undirected - ADV_IND (0x00)
         Address type: Public (0x00)
-        Address: 84:FC:E6:B7:23:32 (Espressif Inc.)
+        Address: <mac-1eaa> (Espressif Inc.)
         Data length: 22
         Flags: 0x06
           LE General Discoverable Mode
@@ -2696,7 +2696,7 @@ bluetoothd[970]: @ MGMT Command: Start Se.. (0x003a) plen 20  {0x0001} 1.139517
         Num reports: 1
         Event type: Scan response - SCAN_RSP (0x04)
         Address type: Random (0x01)
-        Address: 44:08:2C:4B:BB:CD (Resolvable)
+        Address: <mac-c961> (Resolvable)
         Data length: 7
         Name (complete): HONOR
         RSSI: -43 dBm (0xd5)
@@ -2705,7 +2705,7 @@ bluetoothd[970]: @ MGMT Command: Start Se.. (0x003a) plen 20  {0x0001} 1.139517
         Num reports: 1
         Event type: Connectable undirected - ADV_IND (0x00)
         Address type: Public (0x00)
-        Address: C4:39:60:63:8D:71 (GD Midea Air-Conditioning Equipment Co.,Ltd.)
+        Address: <mac-abd7> (GD Midea Air-Conditioning Equipment Co.,Ltd.)
         Data length: 29
         Flags: 0x06
           LE General Discoverable Mode
@@ -2733,7 +2733,7 @@ bluetoothd[970]: @ MGMT Command: Start Se.. (0x003a) plen 20  {0x0001} 1.139517
         Num reports: 1
         Event type: Connectable undirected - ADV_IND (0x00)
         Address type: Public (0x00)
-        Address: 84:FC:E6:B7:23:32 (Espressif Inc.)
+        Address: <mac-1eaa> (Espressif Inc.)
         Data length: 22
         Flags: 0x06
           LE General Discoverable Mode
@@ -2768,7 +2768,7 @@ bluetoothd[970]: @ MGMT Command: Start Se.. (0x003a) plen 20  {0x0001} 1.139517
         Num reports: 1
         Event type: Non connectable undirected - ADV_NONCONN_IND (0x03)
         Address type: Public (0x00)
-        Address: 6C:0D:C4:22:B6:06 (Beijing Xiaomi Electronics Co., Ltd.)
+        Address: <mac-3e62> (Beijing Xiaomi Electronics Co., Ltd.)
         Data length: 19
         Flags: 0x06
           LE General Discoverable Mode
@@ -2781,7 +2781,7 @@ bluetoothd[970]: @ MGMT Command: Start Se.. (0x003a) plen 20  {0x0001} 1.139517
         Num reports: 1
         Event type: Scan response - SCAN_RSP (0x04)
         Address type: Public (0x00)
-        Address: 84:FC:E6:B7:23:32 (Espressif Inc.)
+        Address: <mac-1eaa> (Espressif Inc.)
         Data length: 0
         RSSI: -81 dBm (0xaf)
 > HCI Event: LE Meta Event (0x3e) plen 29                          #21 4.454280
@@ -2789,7 +2789,7 @@ bluetoothd[970]: @ MGMT Command: Start Se.. (0x003a) plen 20  {0x0001} 1.139517
         Num reports: 1
         Event type: Connectable undirected - ADV_IND (0x00)
         Address type: Random (0x01)
-        Address: 70:10:AF:3C:A7:9F (Resolvable)
+        Address: <mac-cf07> (Resolvable)
         Data length: 17
         Flags: 0x1a
           LE General Discoverable Mode
@@ -2805,7 +2805,7 @@ bluetoothd[970]: @ MGMT Command: Start Se.. (0x003a) plen 20  {0x0001} 1.139517
         Num reports: 1
         Event type: Non connectable undirected - ADV_NONCONN_IND (0x03)
         Address type: Public (0x00)
-        Address: 6C:0D:C4:22:B6:06 (Beijing Xiaomi Electronics Co., Ltd.)
+        Address: <mac-3e62> (Beijing Xiaomi Electronics Co., Ltd.)
         Data length: 19
         Flags: 0x06
           LE General Discoverable Mode
@@ -2818,7 +2818,7 @@ bluetoothd[970]: @ MGMT Command: Start Se.. (0x003a) plen 20  {0x0001} 1.139517
         Num reports: 1
         Event type: Connectable undirected - ADV_IND (0x00)
         Address type: Public (0x00)
-        Address: 84:FC:E6:B7:23:32 (Espressif Inc.)
+        Address: <mac-1eaa> (Espressif Inc.)
         Data length: 22
         Flags: 0x06
           LE General Discoverable Mode
@@ -2832,7 +2832,7 @@ bluetoothd[970]: @ MGMT Command: Start Se.. (0x003a) plen 20  {0x0001} 1.139517
         Num reports: 1
         Event type: Scan response - SCAN_RSP (0x04)
         Address type: Public (0x00)
-        Address: 84:FC:E6:B7:23:32 (Espressif Inc.)
+        Address: <mac-1eaa> (Espressif Inc.)
         Data length: 0
         RSSI: -81 dBm (0xaf)
 > HCI Event: LE Meta Event (0x3e) plen 31                          #25 5.313217
@@ -2850,7 +2850,7 @@ bluetoothd[970]: @ MGMT Command: Start Se.. (0x003a) plen 20  {0x0001} 1.139517
         Num reports: 1
         Event type: Connectable undirected - ADV_IND (0x00)
         Address type: Random (0x01)
-        Address: 52:97:EA:89:09:EB (Resolvable)
+        Address: <mac-e790> (Resolvable)
         Data length: 31
         Flags: 0x02
           LE General Discoverable Mode
@@ -2864,7 +2864,7 @@ bluetoothd[970]: @ MGMT Command: Start Se.. (0x003a) plen 20  {0x0001} 1.139517
         Num reports: 1
         Event type: Connectable undirected - ADV_IND (0x00)
         Address type: Random (0x01)
-        Address: 79:29:21:AA:DD:15 (Resolvable)
+        Address: <mac-8816> (Resolvable)
         Data length: 17
         Flags: 0x1a
           LE General Discoverable Mode
@@ -2880,7 +2880,7 @@ bluetoothd[970]: @ MGMT Command: Start Se.. (0x003a) plen 20  {0x0001} 1.139517
         Num reports: 1
         Event type: Non connectable undirected - ADV_NONCONN_IND (0x03)
         Address type: Public (0x00)
-        Address: 6C:0D:C4:22:B6:06 (Beijing Xiaomi Electronics Co., Ltd.)
+        Address: <mac-3e62> (Beijing Xiaomi Electronics Co., Ltd.)
         Data length: 19
         Flags: 0x06
           LE General Discoverable Mode
@@ -2893,7 +2893,7 @@ bluetoothd[970]: @ MGMT Command: Start Se.. (0x003a) plen 20  {0x0001} 1.139517
         Num reports: 1
         Event type: Scan response - SCAN_RSP (0x04)
         Address type: Random (0x01)
-        Address: 44:08:2C:4B:BB:CD (Resolvable)
+        Address: <mac-c961> (Resolvable)
         Data length: 7
         Name (complete): HONOR
         RSSI: -43 dBm (0xd5)
@@ -2902,7 +2902,7 @@ bluetoothd[970]: @ MGMT Command: Start Se.. (0x003a) plen 20  {0x0001} 1.139517
         Num reports: 1
         Event type: Scan response - SCAN_RSP (0x04)
         Address type: Public (0x00)
-        Address: 84:FC:E6:B7:23:32 (Espressif Inc.)
+        Address: <mac-1eaa> (Espressif Inc.)
         Data length: 0
         RSSI: -76 dBm (0xb4)
 bluetoothd[970]: @ MGMT Command: Stop Disc.. (0x0024) plen 1  {0x0001} 9.153014
@@ -2933,7 +2933,7 @@ bluetoothd[970]: @ MGMT Command: Start Ser.. (0x003a) plen 4  {0x0001} 9.161164
         RSSI: invalid (0x7f)
         UUIDs: 0
 < HCI Command: LE Set Random Address (0x08|0x0005) plen 6          #33 9.161236
-        Address: 2D:19:63:6E:C2:2A (Non-Resolvable)
+        Address: <mac-fc4f> (Non-Resolvable)
 > HCI Event: Command Complete (0x0e) plen 4                        #34 9.162960
       LE Set Random Address (0x08|0x0005) ncmd 1
         Status: Success (0x00)
@@ -2968,7 +2968,7 @@ bluetoothd[970]: @ MGMT Command: Start Ser.. (0x003a) plen 4  {0x0001} 9.161164
         Num reports: 1
         Event type: Connectable undirected - ADV_IND (0x00)
         Address type: Public (0x00)
-        Address: 84:FC:E6:B7:23:32 (Espressif Inc.)
+        Address: <mac-1eaa> (Espressif Inc.)
         Data length: 22
         Flags: 0x06
           LE General Discoverable Mode
@@ -2982,7 +2982,7 @@ bluetoothd[970]: @ MGMT Command: Start Ser.. (0x003a) plen 4  {0x0001} 9.161164
         Num reports: 1
         Event type: Non connectable undirected - ADV_NONCONN_IND (0x03)
         Address type: Public (0x00)
-        Address: 6C:0D:C4:22:B6:06 (Beijing Xiaomi Electronics Co., Ltd.)
+        Address: <mac-3e62> (Beijing Xiaomi Electronics Co., Ltd.)
         Data length: 19
         Flags: 0x06
           LE General Discoverable Mode
@@ -2991,7 +2991,7 @@ bluetoothd[970]: @ MGMT Command: Start Ser.. (0x003a) plen 4  {0x0001} 9.161164
           Data: 0a101c00009d5cbb433968ec
         RSSI: -83 dBm (0xad)
 @ MGMT Event: Device Found (0x0012) plen 34                   {0x0001} 9.232849
-        LE Address: 84:FC:E6:B7:23:32 (Espressif Inc.)
+        LE Address: <mac-1eaa> (Espressif Inc.)
         RSSI: -77 dBm (0xb3)
         Flags: 0x00000000
         Data length: 20
@@ -3002,7 +3002,7 @@ bluetoothd[970]: @ MGMT Command: Start Ser.. (0x003a) plen 4  {0x0001} 9.161164
           Unknown (0xabf0)
         Name (complete): LIPO-B72332
 @ MGMT Event: Device Found (0x0012) plen 33                   {0x0001} 9.232852
-        LE Address: 6C:0D:C4:22:B6:06 (Beijing Xiaomi Electronics Co., Ltd.)
+        LE Address: <mac-3e62> (Beijing Xiaomi Electronics Co., Ltd.)
         RSSI: -83 dBm (0xad)
         Flags: 0x00000004
           Not Connectable
@@ -3017,7 +3017,7 @@ bluetoothd[970]: @ MGMT Command: Start Ser.. (0x003a) plen 4  {0x0001} 9.161164
         Num reports: 1
         Event type: Connectable undirected - ADV_IND (0x00)
         Address type: Random (0x01)
-        Address: 44:08:2C:4B:BB:CD (Resolvable)
+        Address: <mac-c961> (Resolvable)
         Data length: 31
         Company: Microsoft (6)
           Data: 010f20223ab139ac65cadf76da9a3a0cde8eb4f20dd1ae4eb9a1b9
@@ -3027,12 +3027,12 @@ bluetoothd[970]: @ MGMT Command: Start Ser.. (0x003a) plen 4  {0x0001} 9.161164
         Num reports: 1
         Event type: Scan response - SCAN_RSP (0x04)
         Address type: Random (0x01)
-        Address: 44:08:2C:4B:BB:CD (Resolvable)
+        Address: <mac-c961> (Resolvable)
         Data length: 7
         Name (complete): HONOR
         RSSI: -45 dBm (0xd3)
 @ MGMT Event: Device Found (0x0012) plen 52                   {0x0001} 9.283825
-        LE Address: 44:08:2C:4B:BB:CD (Resolvable)
+        LE Address: <mac-c961> (Resolvable)
         RSSI: -45 dBm (0xd3)
         Flags: 0x00000000
         Data length: 38
@@ -3160,8 +3160,8 @@ bluetoothd[970]: @ MGMT Command: Stop Disc.. (0x0024) plen 1  {0x0001} 9.374238
         Role: Central (0x00)
         Peer address type: Public (0x00)
         Peer address: <device-mac> (Espressif Inc.)
-        Local resolvable private address: 00:00:00:00:00:00 (Non-Resolvable)
-        Peer resolvable private address: 00:00:00:00:00:00 (Non-Resolvable)
+        Local resolvable private address: <mac-c352> (Non-Resolvable)
+        Peer resolvable private address: <mac-c352> (Non-Resolvable)
         Connection interval: 45.00 msec (0x0024)
         Connection latency: 0 (0x0000)
         Supervision timeout: 6000 msec (0x0258)
@@ -4063,7 +4063,7 @@ bluetoothd[970]: @ MGMT Command: Start Se.. (0x003a) plen 20  {0x0001} 1.193337
       LE Set Address Resolution Enable (0x08|0x002d) ncmd 1
         Status: Success (0x00)
 < HCI Command: LE Set Random Address (0x08|0x0005) plen 6           #5 1.289206
-        Address: 00:1D:53:DB:29:44 (Non-Resolvable)
+        Address: <mac-70d7> (Non-Resolvable)
 > HCI Event: Command Complete (0x0e) plen 4                         #6 1.290097
       LE Set Random Address (0x08|0x0005) ncmd 1
         Status: Success (0x00)
@@ -4135,7 +4135,7 @@ bluetoothd[970]: @ MGMT Command: Start Se.. (0x003a) plen 20  {0x0001} 1.193337
         Num reports: 1
         Event type: Connectable undirected - ADV_IND (0x00)
         Address type: Public (0x00)
-        Address: 84:FC:E6:B7:23:32 (Espressif Inc.)
+        Address: <mac-1eaa> (Espressif Inc.)
         Data length: 22
         Flags: 0x06
           LE General Discoverable Mode
@@ -4149,7 +4149,7 @@ bluetoothd[970]: @ MGMT Command: Start Se.. (0x003a) plen 20  {0x0001} 1.193337
         Num reports: 1
         Event type: Connectable undirected - ADV_IND (0x00)
         Address type: Random (0x01)
-        Address: 44:08:2C:4B:BB:CD (Resolvable)
+        Address: <mac-c961> (Resolvable)
         Data length: 29
         Flags: 0x1a
           LE General Discoverable Mode
@@ -4177,7 +4177,7 @@ bluetoothd[970]: @ MGMT Command: Start Se.. (0x003a) plen 20  {0x0001} 1.193337
         Num reports: 1
         Event type: Non connectable undirected - ADV_NONCONN_IND (0x03)
         Address type: Public (0x00)
-        Address: 6C:0D:C4:22:B6:06 (Beijing Xiaomi Electronics Co., Ltd.)
+        Address: <mac-3e62> (Beijing Xiaomi Electronics Co., Ltd.)
         Data length: 19
         Flags: 0x06
           LE General Discoverable Mode
@@ -4190,7 +4190,7 @@ bluetoothd[970]: @ MGMT Command: Start Se.. (0x003a) plen 20  {0x0001} 1.193337
         Num reports: 1
         Event type: Connectable undirected - ADV_IND (0x00)
         Address type: Public (0x00)
-        Address: 84:FC:E6:B7:23:32 (Espressif Inc.)
+        Address: <mac-1eaa> (Espressif Inc.)
         Data length: 22
         Flags: 0x06
           LE General Discoverable Mode
@@ -4204,7 +4204,7 @@ bluetoothd[970]: @ MGMT Command: Start Se.. (0x003a) plen 20  {0x0001} 1.193337
         Num reports: 1
         Event type: Connectable undirected - ADV_IND (0x00)
         Address type: Random (0x01)
-        Address: 79:29:21:AA:DD:15 (Resolvable)
+        Address: <mac-8816> (Resolvable)
         Data length: 17
         Flags: 0x1a
           LE General Discoverable Mode
@@ -4257,7 +4257,7 @@ bluetoothd[970]: @ MGMT Command: Start Se.. (0x003a) plen 20  {0x0001} 1.193337
         Num reports: 1
         Event type: Connectable undirected - ADV_IND (0x00)
         Address type: Public (0x00)
-        Address: 84:FC:E6:B7:23:32 (Espressif Inc.)
+        Address: <mac-1eaa> (Espressif Inc.)
         Data length: 22
         Flags: 0x06
           LE General Discoverable Mode
@@ -4271,7 +4271,7 @@ bluetoothd[970]: @ MGMT Command: Start Se.. (0x003a) plen 20  {0x0001} 1.193337
         Num reports: 1
         Event type: Connectable undirected - ADV_IND (0x00)
         Address type: Public (0x00)
-        Address: C4:39:60:63:8D:71 (GD Midea Air-Conditioning Equipment Co.,Ltd.)
+        Address: <mac-abd7> (GD Midea Air-Conditioning Equipment Co.,Ltd.)
         Data length: 29
         Flags: 0x06
           LE General Discoverable Mode
@@ -4295,7 +4295,7 @@ bluetoothd[970]: @ MGMT Command: Start Se.. (0x003a) plen 20  {0x0001} 1.193337
         Num reports: 1
         Event type: Connectable undirected - ADV_IND (0x00)
         Address type: Random (0x01)
-        Address: 70:10:AF:3C:A7:9F (Resolvable)
+        Address: <mac-cf07> (Resolvable)
         Data length: 17
         Flags: 0x1a
           LE General Discoverable Mode
@@ -4321,7 +4321,7 @@ bluetoothd[970]: @ MGMT Command: Start Se.. (0x003a) plen 20  {0x0001} 1.193337
         Num reports: 1
         Event type: Non connectable undirected - ADV_NONCONN_IND (0x03)
         Address type: Public (0x00)
-        Address: 6C:0D:C4:22:B6:06 (Beijing Xiaomi Electronics Co., Ltd.)
+        Address: <mac-3e62> (Beijing Xiaomi Electronics Co., Ltd.)
         Data length: 19
         Flags: 0x06
           LE General Discoverable Mode
@@ -4334,7 +4334,7 @@ bluetoothd[970]: @ MGMT Command: Start Se.. (0x003a) plen 20  {0x0001} 1.193337
         Num reports: 1
         Event type: Connectable undirected - ADV_IND (0x00)
         Address type: Public (0x00)
-        Address: 84:FC:E6:B7:23:32 (Espressif Inc.)
+        Address: <mac-1eaa> (Espressif Inc.)
         Data length: 22
         Flags: 0x06
           LE General Discoverable Mode
@@ -4348,7 +4348,7 @@ bluetoothd[970]: @ MGMT Command: Start Se.. (0x003a) plen 20  {0x0001} 1.193337
         Num reports: 1
         Event type: Scan response - SCAN_RSP (0x04)
         Address type: Public (0x00)
-        Address: 84:FC:E6:B7:23:32 (Espressif Inc.)
+        Address: <mac-1eaa> (Espressif Inc.)
         Data length: 0
         RSSI: -77 dBm (0xb3)
 > HCI Event: LE Meta Event (0x3e) plen 39                          #29 2.668914
@@ -4356,7 +4356,7 @@ bluetoothd[970]: @ MGMT Command: Start Se.. (0x003a) plen 20  {0x0001} 1.193337
         Num reports: 1
         Event type: Scan response - SCAN_RSP (0x04)
         Address type: Public (0x00)
-        Address: C4:39:60:63:8D:71 (GD Midea Air-Conditioning Equipment Co.,Ltd.)
+        Address: <mac-abd7> (GD Midea Air-Conditioning Equipment Co.,Ltd.)
         Data length: 27
         Name (complete): midea
         16-bit Service UUIDs (complete): 2 entries
@@ -4370,7 +4370,7 @@ bluetoothd[970]: @ MGMT Command: Start Se.. (0x003a) plen 20  {0x0001} 1.193337
         Num reports: 1
         Event type: Connectable undirected - ADV_IND (0x00)
         Address type: Random (0x01)
-        Address: 52:97:EA:89:09:EB (Resolvable)
+        Address: <mac-e790> (Resolvable)
         Data length: 31
         Flags: 0x02
           LE General Discoverable Mode
@@ -4434,8 +4434,8 @@ bluetoothd[970]: @ MGMT Command: Start Se.. (0x003a) plen 20  {0x0001} 3.532232
         Role: Central (0x00)
         Peer address type: Public (0x00)
         Peer address: <other-device-mac> (OUI 68-78-56)
-        Local resolvable private address: 00:00:00:00:00:00 (Non-Resolvable)
-        Peer resolvable private address: 00:00:00:00:00:00 (Non-Resolvable)
+        Local resolvable private address: <mac-c352> (Non-Resolvable)
+        Peer resolvable private address: <mac-c352> (Non-Resolvable)
         Connection interval: 7.50 msec (0x0006)
         Connection latency: 32 (0x0020)
         Supervision timeout: 3000 msec (0x012c)
@@ -4452,7 +4452,7 @@ bluetoothd[970]: @ MGMT Command: Start Se.. (0x003a) plen 20  {0x0001} 3.532232
         Appearance: Mouse (0x03c2)
         Name (complete): KSG BT 5.0
 < HCI Command: LE Set Random Address (0x08|0x0005) plen 6          #37 3.546480
-        Address: 13:01:34:A2:E7:80 (Non-Resolvable)
+        Address: <mac-b366> (Non-Resolvable)
 > HCI Event: Command Complete (0x0e) plen 4                        #38 3.549070
       LE Set Random Address (0x08|0x0005) ncmd 1
         Status: Success (0x00)
@@ -4506,7 +4506,7 @@ bluetoothd[970]: @ MGMT Command: Start Se.. (0x003a) plen 20  {0x0001} 3.532232
         Num reports: 1
         Event type: Connectable undirected - ADV_IND (0x00)
         Address type: Random (0x01)
-        Address: 44:08:2C:4B:BB:CD (Resolvable)
+        Address: <mac-c961> (Resolvable)
         Data length: 29
         Flags: 0x1a
           LE General Discoverable Mode
@@ -4561,7 +4561,7 @@ bluetoothd[970]: < ACL Data TX: Handle 1 flags 0x00 dlen 7         #52 3.617080
         Timeout multiplier: 300
 @ MGMT Event: New Connection Parameter (0x001c) plen 16       {0x0001} 3.624034
         Store hint: Reserved (0xd2)
-        LE Address: 01:68:78:56:00:3D (OUI 01-68-78)
+        LE Address: <mac-621f> (OUI 01-68-78)
         Min connection interval: 6
         Max connection interval: 6
         Connection latency: 32 (0x0020)
@@ -4591,7 +4591,7 @@ bluetoothd[970]: < ACL Data TX: Handle 1 flags 0x00 dlen 7         #60 3.633751
         Num reports: 1
         Event type: Connectable undirected - ADV_IND (0x00)
         Address type: Random (0x01)
-        Address: 70:10:AF:3C:A7:9F (Resolvable)
+        Address: <mac-cf07> (Resolvable)
         Data length: 17
         Flags: 0x1a
           LE General Discoverable Mode
@@ -4649,7 +4649,7 @@ bluetoothd[970]: < ACL Data TX: Handle 1 flags 0x00 dlen 7         #68 3.663495
         Num reports: 1
         Event type: Connectable undirected - ADV_IND (0x00)
         Address type: Public (0x00)
-        Address: C4:39:60:63:8D:71 (GD Midea Air-Conditioning Equipment Co.,Ltd.)
+        Address: <mac-abd7> (GD Midea Air-Conditioning Equipment Co.,Ltd.)
         Data length: 29
         Flags: 0x06
           LE General Discoverable Mode
@@ -4680,7 +4680,7 @@ bluetoothd[970]: < ACL Data TX: Handle 1 flags 0x00 dlen 7         #72 3.678753
         Num reports: 1
         Event type: Connectable undirected - ADV_IND (0x00)
         Address type: Public (0x00)
-        Address: 84:FC:E6:B7:23:32 (Espressif Inc.)
+        Address: <mac-1eaa> (Espressif Inc.)
         Data length: 22
         Flags: 0x06
           LE General Discoverable Mode
@@ -4904,7 +4904,7 @@ bluetoothd[970]: < ACL Data TX: Handle 1 flags 0x00 dlen 7        #117 3.889816
         Num reports: 1
         Event type: Non connectable undirected - ADV_NONCONN_IND (0x03)
         Address type: Public (0x00)
-        Address: 6C:0D:C4:22:B6:06 (Beijing Xiaomi Electronics Co., Ltd.)
+        Address: <mac-3e62> (Beijing Xiaomi Electronics Co., Ltd.)
         Data length: 19
         Flags: 0x06
           LE General Discoverable Mode
@@ -4977,7 +4977,7 @@ bluetoothd[970]: < ACL Data TX: Handle 1 flags 0x00 dlen 11       #130 3.948798
         Num reports: 1
         Event type: Connectable undirected - ADV_IND (0x00)
         Address type: Public (0x00)
-        Address: 84:FC:E6:B7:23:32 (Espressif Inc.)
+        Address: <mac-1eaa> (Espressif Inc.)
         Data length: 22
         Flags: 0x06
           LE General Discoverable Mode
@@ -5222,7 +5222,7 @@ bluetoothd[970]: < ACL Data TX: Handle 1 flags 0x00 dlen 8        #179 4.223279
         Num reports: 1
         Event type: Scan response - SCAN_RSP (0x04)
         Address type: Public (0x00)
-        Address: 84:FC:E6:B7:23:32 (Espressif Inc.)
+        Address: <mac-1eaa> (Espressif Inc.)
         Data length: 0
         RSSI: -77 dBm (0xb3)
 > ACL Data RX: Handle 1 flags 0x02 dlen 14                        #184 4.398292
@@ -5254,7 +5254,7 @@ bluetoothd[970]: < ACL Data TX: Handle 1 flags 0x00 dlen 8        #179 4.223279
         Num reports: 1
         Event type: Connectable undirected - ADV_IND (0x00)
         Address type: Random (0x01)
-        Address: 52:97:EA:89:09:EB (Resolvable)
+        Address: <mac-e790> (Resolvable)
         Data length: 31
         Flags: 0x02
           LE General Discoverable Mode
@@ -5275,7 +5275,7 @@ bluetoothd[970]: < ACL Data TX: Handle 1 flags 0x00 dlen 8        #179 4.223279
         Num reports: 1
         Event type: Scan response - SCAN_RSP (0x04)
         Address type: Random (0x01)
-        Address: 44:08:2C:4B:BB:CD (Resolvable)
+        Address: <mac-c961> (Resolvable)
         Data length: 7
         Name (complete): HONOR
         RSSI: -43 dBm (0xd5)
@@ -5552,7 +5552,7 @@ bluetoothd[970]: < ACL Data TX: Handle 1 flags 0x00 dlen 8        #179 4.223279
         Num reports: 1
         Event type: Connectable undirected - ADV_IND (0x00)
         Address type: Random (0x01)
-        Address: 70:10:AF:3C:A7:9F (Resolvable)
+        Address: <mac-cf07> (Resolvable)
         Data length: 17
         Flags: 0x1a
           LE General Discoverable Mode
@@ -5568,7 +5568,7 @@ bluetoothd[970]: < ACL Data TX: Handle 1 flags 0x00 dlen 8        #179 4.223279
         Num reports: 1
         Event type: Scan response - SCAN_RSP (0x04)
         Address type: Random (0x01)
-        Address: 70:10:AF:3C:A7:9F (Resolvable)
+        Address: <mac-cf07> (Resolvable)
         Data length: 0
         RSSI: -83 dBm (0xad)
 > ACL Data RX: Handle 1 flags 0x02 dlen 14                        #262 5.823648
@@ -6160,7 +6160,7 @@ bluetoothd[970]: < ACL Data TX: Handle 1 flags 0x00 dlen 8        #179 4.223279
         Num reports: 1
         Event type: Scan response - SCAN_RSP (0x04)
         Address type: Random (0x01)
-        Address: 52:97:EA:89:09:EB (Resolvable)
+        Address: <mac-e790> (Resolvable)
         Data length: 29
         Service Data: Xiaomi Inc. (0xfdaa)
           Data: 830cf3e3818be582bbe5a6aee79a84586961636f6d69203132
@@ -6258,7 +6258,7 @@ bluetoothd[970]: < ACL Data TX: Handle 1 flags 0x00 dlen 8        #179 4.223279
         Num reports: 1
         Event type: Scan response - SCAN_RSP (0x04)
         Address type: Public (0x00)
-        Address: C4:39:60:63:8D:71 (GD Midea Air-Conditioning Equipment Co.,Ltd.)
+        Address: <mac-abd7> (GD Midea Air-Conditioning Equipment Co.,Ltd.)
         Data length: 27
         Name (complete): midea
         16-bit Service UUIDs (complete): 2 entries
@@ -6316,7 +6316,7 @@ bluetoothd[970]: < ACL Data TX: Handle 1 flags 0x00 dlen 8        #179 4.223279
         Num reports: 1
         Event type: Connectable undirected - ADV_IND (0x00)
         Address type: Random (0x01)
-        Address: 79:29:21:AA:DD:15 (Resolvable)
+        Address: <mac-8816> (Resolvable)
         Data length: 17
         Flags: 0x1a
           LE General Discoverable Mode
@@ -6369,7 +6369,7 @@ bluetoothd[970]: @ MGMT Command: Start Ser.. (0x003a) plen 4  {0x0001} 9.306490
         RSSI: invalid (0x7f)
         UUIDs: 0
 < HCI Command: LE Set Random Address (0x08|0x0005) plen 6         #447 9.306616
-        Address: 01:8C:08:BC:F8:48 (Non-Resolvable)
+        Address: <mac-0f9d> (Non-Resolvable)
 > HCI Event: Command Complete (0x0e) plen 4                       #448 9.308927
       LE Set Random Address (0x08|0x0005) ncmd 1
         Status: Success (0x00)
@@ -6404,7 +6404,7 @@ bluetoothd[970]: @ MGMT Command: Start Ser.. (0x003a) plen 4  {0x0001} 9.306490
         Num reports: 1
         Event type: Connectable undirected - ADV_IND (0x00)
         Address type: Public (0x00)
-        Address: C4:39:60:63:8D:71 (GD Midea Air-Conditioning Equipment Co.,Ltd.)
+        Address: <mac-abd7> (GD Midea Air-Conditioning Equipment Co.,Ltd.)
         Data length: 29
         Flags: 0x06
           LE General Discoverable Mode
@@ -6428,7 +6428,7 @@ bluetoothd[970]: @ MGMT Command: Start Ser.. (0x003a) plen 4  {0x0001} 9.306490
         Name (short): IH-65D8
         RSSI: -42 dBm (0xd6)
 @ MGMT Event: Device Found (0x0012) plen 43                   {0x0001} 9.493927
-        LE Address: C4:39:60:63:8D:71 (GD Midea Air-Conditioning Equipment Co.,Ltd.)
+        LE Address: <mac-abd7> (GD Midea Air-Conditioning Equipment Co.,Ltd.)
         RSSI: -87 dBm (0xa9)
         Flags: 0x00000000
         Data length: 29
@@ -6443,7 +6443,7 @@ bluetoothd[970]: @ MGMT Command: Start Ser.. (0x003a) plen 4  {0x0001} 9.306490
         Num reports: 1
         Event type: Connectable undirected - ADV_IND (0x00)
         Address type: Public (0x00)
-        Address: 84:FC:E6:B7:23:32 (Espressif Inc.)
+        Address: <mac-1eaa> (Espressif Inc.)
         Data length: 22
         Flags: 0x06
           LE General Discoverable Mode
@@ -6553,8 +6553,8 @@ bluetoothd[970]: @ MGMT Command: Stop Disc.. (0x0024) plen 1  {0x0001} 9.529564
         Role: Central (0x00)
         Peer address type: Public (0x00)
         Peer address: <device-mac> (Espressif Inc.)
-        Local resolvable private address: 00:00:00:00:00:00 (Non-Resolvable)
-        Peer resolvable private address: 00:00:00:00:00:00 (Non-Resolvable)
+        Local resolvable private address: <mac-c352> (Non-Resolvable)
+        Peer resolvable private address: <mac-c352> (Non-Resolvable)
         Connection interval: 45.00 msec (0x0024)
         Connection latency: 0 (0x0000)
         Supervision timeout: 420 msec (0x002a)
@@ -6835,7 +6835,7 @@ bluetoothd[970]: @ MGMT Command: Start S.. (0x003a) plen 20  {0x0001} 15.007818
       LE Set Address Resolution Enable (0x08|0x002d) ncmd 1
         Status: Success (0x00)
 < HCI Command: LE Set Random Address (0x08|0x0005) plen 6        #519 15.009883
-        Address: 05:B4:9E:26:68:98 (Non-Resolvable)
+        Address: <mac-d418> (Non-Resolvable)
 > HCI Event: Command Complete (0x0e) plen 4                      #520 15.010853
       LE Set Random Address (0x08|0x0005) ncmd 1
         Status: Success (0x00)
@@ -6870,7 +6870,7 @@ bluetoothd[970]: @ MGMT Command: Start S.. (0x003a) plen 20  {0x0001} 15.007818
         Num reports: 1
         Event type: Connectable undirected - ADV_IND (0x00)
         Address type: Random (0x01)
-        Address: 44:08:2C:4B:BB:CD (Resolvable)
+        Address: <mac-c961> (Resolvable)
         Data length: 29
         Flags: 0x1a
           LE General Discoverable Mode
@@ -6925,7 +6925,7 @@ bluetoothd[970]: @ MGMT Command: Start S.. (0x003a) plen 20  {0x0001} 15.007818
         Num reports: 1
         Event type: Connectable undirected - ADV_IND (0x00)
         Address type: Random (0x01)
-        Address: 70:10:AF:3C:A7:9F (Resolvable)
+        Address: <mac-cf07> (Resolvable)
         Data length: 17
         Flags: 0x1a
           LE General Discoverable Mode
@@ -6941,7 +6941,7 @@ bluetoothd[970]: @ MGMT Command: Start S.. (0x003a) plen 20  {0x0001} 15.007818
         Num reports: 1
         Event type: Connectable undirected - ADV_IND (0x00)
         Address type: Public (0x00)
-        Address: 84:FC:E6:B7:23:32 (Espressif Inc.)
+        Address: <mac-1eaa> (Espressif Inc.)
         Data length: 22
         Flags: 0x06
           LE General Discoverable Mode
@@ -6955,7 +6955,7 @@ bluetoothd[970]: @ MGMT Command: Start S.. (0x003a) plen 20  {0x0001} 15.007818
         Num reports: 1
         Event type: Connectable undirected - ADV_IND (0x00)
         Address type: Public (0x00)
-        Address: C4:39:60:63:8D:71 (GD Midea Air-Conditioning Equipment Co.,Ltd.)
+        Address: <mac-abd7> (GD Midea Air-Conditioning Equipment Co.,Ltd.)
         Data length: 29
         Flags: 0x06
           LE General Discoverable Mode
@@ -6973,7 +6973,7 @@ bluetoothd[970]: @ MGMT Command: Start S.. (0x003a) plen 20  {0x0001} 15.007818
         Num reports: 1
         Event type: Connectable undirected - ADV_IND (0x00)
         Address type: Public (0x00)
-        Address: 84:FC:E6:B7:23:32 (Espressif Inc.)
+        Address: <mac-1eaa> (Espressif Inc.)
         Data length: 22
         Flags: 0x06
           LE General Discoverable Mode
@@ -6987,7 +6987,7 @@ bluetoothd[970]: @ MGMT Command: Start S.. (0x003a) plen 20  {0x0001} 15.007818
         Num reports: 1
         Event type: Scan response - SCAN_RSP (0x04)
         Address type: Public (0x00)
-        Address: 84:FC:E6:B7:23:32 (Espressif Inc.)
+        Address: <mac-1eaa> (Espressif Inc.)
         Data length: 0
         RSSI: -82 dBm (0xae)
 > ACL Data RX: Handle 1 flags 0x02 dlen 14                       #534 15.490338
@@ -6999,7 +6999,7 @@ bluetoothd[970]: @ MGMT Command: Start S.. (0x003a) plen 20  {0x0001} 15.007818
         Num reports: 1
         Event type: Scan response - SCAN_RSP (0x04)
         Address type: Random (0x01)
-        Address: 44:08:2C:4B:BB:CD (Resolvable)
+        Address: <mac-c961> (Resolvable)
         Data length: 7
         Name (complete): HONOR
         RSSI: -43 dBm (0xd5)
@@ -7008,7 +7008,7 @@ bluetoothd[970]: @ MGMT Command: Start S.. (0x003a) plen 20  {0x0001} 15.007818
         Num reports: 1
         Event type: Non connectable undirected - ADV_NONCONN_IND (0x03)
         Address type: Public (0x00)
-        Address: 6C:0D:C4:22:B6:06 (Beijing Xiaomi Electronics Co., Ltd.)
+        Address: <mac-3e62> (Beijing Xiaomi Electronics Co., Ltd.)
         Data length: 19
         Flags: 0x06
           LE General Discoverable Mode
@@ -7031,7 +7031,7 @@ bluetoothd[970]: @ MGMT Command: Start S.. (0x003a) plen 20  {0x0001} 15.007818
         Num reports: 1
         Event type: Connectable undirected - ADV_IND (0x00)
         Address type: Public (0x00)
-        Address: 84:FC:E6:B7:23:32 (Espressif Inc.)
+        Address: <mac-1eaa> (Espressif Inc.)
         Data length: 22
         Flags: 0x06
           LE General Discoverable Mode
@@ -7045,7 +7045,7 @@ bluetoothd[970]: @ MGMT Command: Start S.. (0x003a) plen 20  {0x0001} 15.007818
         Num reports: 1
         Event type: Scan response - SCAN_RSP (0x04)
         Address type: Public (0x00)
-        Address: 84:FC:E6:B7:23:32 (Espressif Inc.)
+        Address: <mac-1eaa> (Espressif Inc.)
         Data length: 0
         RSSI: -76 dBm (0xb4)
 > HCI Event: LE Meta Event (0x3e) plen 29                        #540 15.734909
@@ -7053,7 +7053,7 @@ bluetoothd[970]: @ MGMT Command: Start S.. (0x003a) plen 20  {0x0001} 15.007818
         Num reports: 1
         Event type: Connectable undirected - ADV_IND (0x00)
         Address type: Random (0x01)
-        Address: 70:10:AF:3C:A7:9F (Resolvable)
+        Address: <mac-cf07> (Resolvable)
         Data length: 17
         Flags: 0x1a
           LE General Discoverable Mode
@@ -7069,7 +7069,7 @@ bluetoothd[970]: @ MGMT Command: Start S.. (0x003a) plen 20  {0x0001} 15.007818
         Num reports: 1
         Event type: Scan response - SCAN_RSP (0x04)
         Address type: Random (0x01)
-        Address: 70:10:AF:3C:A7:9F (Resolvable)
+        Address: <mac-cf07> (Resolvable)
         Data length: 0
         RSSI: -83 dBm (0xad)
 > HCI Event: LE Meta Event (0x3e) plen 29                        #542 17.008146
@@ -7077,7 +7077,7 @@ bluetoothd[970]: @ MGMT Command: Start S.. (0x003a) plen 20  {0x0001} 15.007818
         Num reports: 1
         Event type: Connectable undirected - ADV_IND (0x00)
         Address type: Random (0x01)
-        Address: 79:29:21:AA:DD:15 (Resolvable)
+        Address: <mac-8816> (Resolvable)
         Data length: 17
         Flags: 0x1a
           LE General Discoverable Mode
@@ -7093,7 +7093,7 @@ bluetoothd[970]: @ MGMT Command: Start S.. (0x003a) plen 20  {0x0001} 15.007818
         Num reports: 1
         Event type: Connectable undirected - ADV_IND (0x00)
         Address type: Public (0x00)
-        Address: 84:FC:E6:B7:23:32 (Espressif Inc.)
+        Address: <mac-1eaa> (Espressif Inc.)
         Data length: 22
         Flags: 0x06
           LE General Discoverable Mode
@@ -7107,7 +7107,7 @@ bluetoothd[970]: @ MGMT Command: Start S.. (0x003a) plen 20  {0x0001} 15.007818
         Num reports: 1
         Event type: Scan response - SCAN_RSP (0x04)
         Address type: Public (0x00)
-        Address: 84:FC:E6:B7:23:32 (Espressif Inc.)
+        Address: <mac-1eaa> (Espressif Inc.)
         Data length: 0
         RSSI: -77 dBm (0xb3)
 > ACL Data RX: Handle 1 flags 0x02 dlen 14                       #545 17.043599
@@ -7141,7 +7141,7 @@ bluetoothd[970]: @ MGMT Command: Start S.. (0x003a) plen 20  {0x0001} 15.007818
         Num reports: 1
         Event type: Connectable undirected - ADV_IND (0x00)
         Address type: Random (0x01)
-        Address: 6E:E3:00:48:6A:5D (Resolvable)
+        Address: <mac-1444> (Resolvable)
         Data length: 31
         Flags: 0x01
           LE Limited Discoverable Mode
@@ -7164,7 +7164,7 @@ bluetoothd[970]: @ MGMT Command: Start S.. (0x003a) plen 20  {0x0001} 15.007818
         Num reports: 1
         Event type: Connectable undirected - ADV_IND (0x00)
         Address type: Public (0x00)
-        Address: 84:FC:E6:B7:23:32 (Espressif Inc.)
+        Address: <mac-1eaa> (Espressif Inc.)
         Data length: 22
         Flags: 0x06
           LE General Discoverable Mode
@@ -7178,7 +7178,7 @@ bluetoothd[970]: @ MGMT Command: Start S.. (0x003a) plen 20  {0x0001} 15.007818
         Num reports: 1
         Event type: Scan response - SCAN_RSP (0x04)
         Address type: Random (0x01)
-        Address: 6E:E3:00:48:6A:5D (Resolvable)
+        Address: <mac-1444> (Resolvable)
         Data length: 28
         Company: not assigned (2502)
           Data: bb00123456781234567800001c004d01b0e0501e001f0000
@@ -7192,7 +7192,7 @@ bluetoothd[970]: @ MGMT Command: Start S.. (0x003a) plen 20  {0x0001} 15.007818
         Num reports: 1
         Event type: Scan response - SCAN_RSP (0x04)
         Address type: Public (0x00)
-        Address: 84:FC:E6:B7:23:32 (Espressif Inc.)
+        Address: <mac-1eaa> (Espressif Inc.)
         Data length: 0
         RSSI: -77 dBm (0xb3)
 > HCI Event: LE Meta Event (0x3e) plen 31                        #554 18.447130
@@ -7200,7 +7200,7 @@ bluetoothd[970]: @ MGMT Command: Start S.. (0x003a) plen 20  {0x0001} 15.007818
         Num reports: 1
         Event type: Non connectable undirected - ADV_NONCONN_IND (0x03)
         Address type: Public (0x00)
-        Address: 6C:0D:C4:22:B6:06 (Beijing Xiaomi Electronics Co., Ltd.)
+        Address: <mac-3e62> (Beijing Xiaomi Electronics Co., Ltd.)
         Data length: 19
         Flags: 0x06
           LE General Discoverable Mode
@@ -7720,7 +7720,7 @@ bluetoothd[970]: @ MGMT Command: Start Se.. (0x003a) plen 4  {0x0001} 23.028619
         RSSI: invalid (0x7f)
         UUIDs: 0
 < HCI Command: LE Set Random Address (0x08|0x0005) plen 6        #678 23.028663
-        Address: 3E:FE:96:96:E1:BA (Non-Resolvable)
+        Address: <mac-9054> (Non-Resolvable)
 > HCI Event: Command Complete (0x0e) plen 4                      #679 23.031145
       LE Set Random Address (0x08|0x0005) ncmd 1
         Status: Success (0x00)
@@ -7979,8 +7979,8 @@ bluetoothd[970]: @ MGMT Command: Stop Dis.. (0x0024) plen 1  {0x0001} 23.074154
         Role: Central (0x00)
         Peer address type: Public (0x00)
         Peer address: <device-mac> (Espressif Inc.)
-        Local resolvable private address: 00:00:00:00:00:00 (Non-Resolvable)
-        Peer resolvable private address: 00:00:00:00:00:00 (Non-Resolvable)
+        Local resolvable private address: <mac-c352> (Non-Resolvable)
+        Peer resolvable private address: <mac-c352> (Non-Resolvable)
         Connection interval: 45.00 msec (0x0024)
         Connection latency: 0 (0x0000)
         Supervision timeout: 6000 msec (0x0258)
