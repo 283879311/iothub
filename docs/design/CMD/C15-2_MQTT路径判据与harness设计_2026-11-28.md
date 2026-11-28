@@ -21,6 +21,8 @@
 
 来源：`main/mqtt.c` 的 `app_mqtt_publish_attributes()` 与 `app_mqtt_publish_state()`；`main/cmd.c` 的 `network.status`/`device.status`。21883（ThingsBoard）订阅 telemetry 被 SUBACK 0x80 拒绝，因此 C15-2 只能订阅 attributes，`sta_has_ip` 必须走 `network.status`。
 
+运行态约束：`main/wifi.c` 注释与 `cfg_validate_net_mode()` 表明 AP/APSTA 字符串仅用于读取旧 NVS 值，运行时强制 STA，非 STA 写入被拒绝。因此 `net_mode` 的预期运行值是 `sta`；`ap`/`apsta` 只作为历史值或异常观测记录。
+
 ## 2. 修订后的 C15-2 判据
 
 前提：BLE 登录成功；身份为授权镜像；`trial=idle`、`mqtt_connected=true`、`sta_connected=true` 连续稳定 10 s；attributes 订阅 CONNACK/SUBACK 成功。
@@ -30,14 +32,16 @@
 | C15-2-a | 错误口令 `network.tryconnect` 被受理并返回 `operation_id` | 命令回包 |
 | C15-2-b | 终态 `failed`，错误码 `wrong_password` 或 `ap_not_found` | `operation.get` 轮询 ≤40 s |
 | C15-2-c | STA 在 60 s 内恢复，`device_id` 匹配 | `device.status` |
-| C15-2-d | `[w0,w1]` 内至少 1 条 attributes；每条样本自洽：`net_mode ∈ {ap,sta,apsta}`；`net_mode=sta` 时 `sta_ssid` 非空；`net_mode=ap` 时 `sta_ip` 为空；`uart_baudrate` 为正数 | attributes 订阅 |
+| C15-2-d | `[w0,w1]` 内至少 1 条 attributes；每条样本自洽：`net_mode` 必须为 `sta`（AP/APSTA 仅旧 NVS 兼容映射，非当前运行模式）；`sta_ssid` 非空；`uart_baudrate` 必须存在且为正数 | attributes 订阅 |
 | C15-2-e | w1 之后采样的 `network.status`：`sta_has_ip=true`；`sta_ip` 等于窗口内最后一条 attributes 的 `sta_ip`；status 采样时间不早于该 attributes 样本时间 | `network.status` |
 
 说明：
 
-- `apsta` 不作 `sta_ip` 为空/非空的断言（该模式可能同时含 STA）；
-- 不断言 `sta_has_ip` 出现在 attributes；当前位置以“当前固件 attributes 发布契约不包含该字段”表述，不推断设计意图；
-- `w0`=tryconnect 发送前，`w1`=STA 恢复与身份核验后；status 采样在 w1 之后、且记录 `status_ts` 与 `sta_ip`。
+- `ap`/`apsta` 可被解析器识别，但作为历史值/异常观测处理：观测到即记 `net_mode_not_sta`，不按合法运行模式放行；
+- 不断言 `sta_has_ip` 出现在 attributes；以“当前固件 attributes 发布契约不包含该字段”表述，不推断设计意图；
+- `w0`=tryconnect 发送前，`w1`=STA 恢复与身份核验后；status 采样在 w1 之后，`status_ts` 取响应返回后的实际时间，并记录 `sta_ip`；
+- 身份字段 `device_id`/`firmware`/`build_sha` 任一缺失或不匹配，**在任何写命令之前** `STOP`；
+- 每次只读请求生成唯一 ID（含重试），迟到响应不得满足下一次查询。
 
 ## 3. 判定与容错语义
 
@@ -52,6 +56,10 @@
 | 只读命令超时（最多 3 次、间隔 2 s）仍失败 | `STOP`（记 `NOT_COVERED` 原因） | 不补造采样 |
 | tryconnect 返回 `busy`（就绪门禁之后） | `NOT_COVERED` | 不自动重发写命令 |
 | 写命令 transport 异常 | `STOP` | outcome unknown，不重发 |
+| 身份字段缺失/不匹配（写命令前） | `STOP` | fail-closed，优先于任何写命令 |
+| 两次有效观测间隔 > 3 s | 稳定计时清零 | 不把未观测区间当作稳定 |
+| 对读任一侧 `sta_ip` 为空 | `FAIL` | 两侧都必须非空且相等 |
+| MQTT SUBACK 空/不可解析/0x80 | `STOP` | 订阅未建立，不进入写命令 |
 
 ## 4. 专用 harness
 
@@ -59,7 +67,9 @@
 - `tools/review/c152_mqtt_attrs.py`：I/O 执行器（BLE 登录、就绪门禁、attributes 订阅、tryconnect、终态/恢复/对读），复用 `p0_acceptance` 的 `Session`；
 - `tests/c152_policy/`：Host 单元测试（字段缺失、零样本、超时、busy、终态、恢复、身份、对读、停止条件）。
 
-流程：身份 → 就绪（10 s 稳定）→ attributes 订阅 → `w0` → 错误口令 tryconnect → 终态 ≤40 s → STA 恢复 ≤60 s → 身份复核 → `w1` → `network.status` 采样 → 窗口/对读判定 → JSON 结果与退出码（0/1/2/3 = PASS/FAIL/NOT_COVERED/STOP）。
+流程：身份（`device_id`/`firmware`/`build_sha`，fail-closed）→ 就绪（`time.monotonic()` 实际连续 10 s；观测间隔 >3 s 清零）→ attributes 订阅（SUBACK 校验）→ `w0` → 错误口令 tryconnect（唯一 ID，transport 异常不重发）→ 终态 ≤40 s → STA 恢复 ≤60 s → 身份复核 → `w1` → `network.status` 采样（`status_ts` 取响应返回后）→ 窗口/对读判定 → JSON 结果与退出码（0/1/2/3 = PASS/FAIL/NOT_COVERED/STOP）。
+
+runner 以依赖注入（session/tap 工厂/monotonic/wall/sleep）组织，Host 测试使用 fake session、fake tap 与 fake 时钟，不连接 BLE 或 MQTT。
 
 ## 5. Host 测试矩阵
 
@@ -68,7 +78,7 @@
 | T1 | 合法 `sta` 样本 | 无违规 |
 | T2 | `ap` 但 `sta_ip` 非空 | `ap_mode_with_ip` |
 | T3 | `sta` 但 `sta_ssid` 为空 | `sta_mode_without_ssid` |
-| T4 | `apsta` 带 `sta_ip` | 无违规（不断言） |
+| T4 | `ap` / `apsta` | `net_mode_not_sta` |
 | T5 | 非法 `net_mode` / `uart_baudrate` | 对应违规 |
 | T6 | 窗口零样本 | `NOT_COVERED` |
 | T7 | 窗口外样本 | 不计入 |
@@ -80,6 +90,15 @@
 | T13 | busy | `NOT_COVERED` |
 | T14 | 只读持续超时 | `STOP/read_timeout` |
 | T15 | 重试边界 | 1/2 重试，3 停止 |
+| T16 | 身份 device_id 不匹配 | STOP，且未发送 tryconnect |
+| T17 | firmware/build_sha 缺失或不匹配 | STOP，且未发送 tryconnect |
+| T18 | 稳定门禁真实时间/间隔重置 | ≥10 s 才通过；间隔 >3 s 清零 |
+| T19 | 只读重试/迟到响应 | 每次请求唯一 ID；3 次超时 STOP |
+| T20 | 写命令 transport 异常 | STOP，仅一次发送 |
+| T21 | 对读两侧 IP 为空 | FAIL |
+| T22 | `uart_baudrate` 缺失 | `uart_baudrate_missing` |
+| T23 | SUBACK 空/拒绝 | STOP |
+| T24 | 退出码映射 | PASS/FAIL/NOT_COVERED/STOP = 0/1/2/3 |
 
 ## 6. 边界
 

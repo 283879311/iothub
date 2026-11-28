@@ -288,9 +288,13 @@
 ## `c152_mqtt_attrs.py` + `c152_policy.py`（C15-2 专用，Host 级，待评审）
 
 - 取代 v9 的 C15-2 字段来源：attributes 自洽仅使用实际发布字段
-  （`net_mode`/`sta_ssid`/`sta_ip`/`uart_baudrate`）；`sta_has_ip` 由 w1 之后
-  `network.status` 独立对读，并要求 status 采样不早于窗口内最后一条 attributes。
-- 容错语义：只读命令最多 3 次、间隔 2 s；持续超时 → `STOP`；`n_attr=0` →
-  `NOT_COVERED`；写命令 transport 异常不重发；就绪门禁 10 s。
-- 纯判定在 `c152_policy.py`；Host 测试：`make -C tests/c152_policy run`。
+  （`net_mode`/`sta_ssid`/`sta_ip`/`uart_baudrate`，`net_mode` 运行态预期 `sta`）；
+  `sta_has_ip` 由 w1 之后 `network.status` 独立对读，要求 status 采样不早于窗口内
+  最后一条 attributes 且两侧 `sta_ip` 均非空。
+- 身份门：`device_id`/`firmware`/`build_sha` 任一缺失或不匹配，在任何写命令前 `STOP`。
+- 容错语义：只读命令最多 3 次、每次唯一 ID、间隔 2 s；持续超时 → `STOP`；
+  `n_attr=0` → `NOT_COVERED`；写命令 transport 异常不重发；就绪门禁用
+  `time.monotonic()` 实际连续 10 s、间隔 >3 s 清零。
+- 纯判定在 `c152_policy.py`；Host 测试：`make -C tests/c152_policy run`（policy + runner
+  fake-session/fake-clock，覆盖身份门、唯一 ID、超时、busy、空 IP、SUBACK、退出码）。
 - 设备执行需单独授权；本目录脚本不参与固件构建。

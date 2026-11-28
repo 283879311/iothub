@@ -1,15 +1,17 @@
 #!/usr/bin/env python3
-"""C15-2 MQTT attributes consistency harness (Host-level, device path separate).
+"""C15-2 MQTT attributes consistency harness (Host-level; device path separate).
 
-Replaces the retired v9 C15-2 case: attributes coherence is evaluated only on
-fields the firmware actually publishes on `v1/devices/me/attributes`
-(net_mode/sta_ssid/sta_ip/uart_baudrate); `sta_has_ip` is cross-checked with a
-later BLE `network.status` sample. Decision logic lives in `c152_policy.py`
-(pure, unit-tested); this file only performs I/O.
+Attributes coherence uses only fields the firmware publishes on
+`v1/devices/me/attributes` (net_mode/sta_ssid/sta_ip/uart_baudrate).
+`sta_has_ip` is cross-checked with a later BLE `network.status` sample.
+
+Decision logic lives in `c152_policy.py` (pure, unit-tested). This file wires
+I/O and exposes `run_case()` with injectable dependencies so the runner can be
+tested with fake sessions/taps/clocks (see tests/c152_policy).
 
 Usage (device run requires separate authorization):
   IOTHUB_BLE_USER=... IOTHUB_BLE_PASSWORD=... IOTHUB_MQTT_TOKEN=... \
-  python3 tools/review/c152_mqtt_attrs.py --ssid <ssid> --device IotHub-65D8
+  IOTHUB_TEST_SSID=... python3 tools/review/c152_mqtt_attrs.py --device IotHub-65D8
 
 Exit codes: 0 PASS, 1 FAIL, 2 NOT_COVERED, 3 STOP.
 """
@@ -26,12 +28,12 @@ import threading
 import time
 from pathlib import Path
 
-import paho.mqtt.client as mqtt
-
 ROOT = Path(__file__).resolve().parents[2]
 P0 = ROOT / "tools" / "ble_p0" / "p0_acceptance.py"
 POLICY = ROOT / "tools" / "review" / "c152_policy.py"
 WRONG_PASSWORD = "race-wrong-pass-0"
+EXPECTED = {"device_id": "IotHub-65D8", "firmware": "1.3-956afcd",
+            "build_sha": "c231c9501"}
 
 
 def load_module(name: str, path: Path):
@@ -53,11 +55,27 @@ class StopRun(Exception):
     pass
 
 
+class Deps:
+    """Injectable dependencies for run_case()."""
+
+    def __init__(self, sess, tap_factory, wall=time.time,
+                 mono=time.monotonic, sleep=asyncio.sleep):
+        self.sess = sess
+        self.tap_factory = tap_factory
+        self.wall = wall
+        self.mono = mono
+        self.sleep = sleep
+
+
 class AttrTap:
     """Subscribe to the attributes topic only; CONNACK + SUBACK must succeed."""
 
     def __init__(self, host: str, port: int, username: str | None,
                  timeout: float = 10.0) -> None:
+        # Lazy import: the runner module stays importable for host tests
+        # without paho installed; only a real MQTT tap needs it.
+        import paho.mqtt.client as mqtt
+
         self.msgs: list[dict] = []
         self.lock = threading.Lock()
         self.connected = threading.Event()
@@ -83,13 +101,10 @@ class AttrTap:
         if not self.subacked.wait(timeout):
             self.stop()
             raise StopRun("mqtt SUBACK timeout")
-        for code in self.codes or []:
-            value = getattr(code, "value", code)
-            try:
-                if int(value) >= 0x80:
-                    raise StopRun("mqtt SUBACK rejected: %r" % (self.codes,))
-            except (TypeError, ValueError):
-                raise StopRun("mqtt SUBACK unparsable: %r" % (self.codes,))
+        ok, detail = policy.suback_ok(self.codes)
+        if not ok:
+            self.stop()
+            raise StopRun("mqtt SUBACK %s: %r" % (detail, self.codes))
 
     def _on_connect(self, _client, _userdata, _flags, reason_code, _props):
         self.rc = getattr(reason_code, "value", reason_code)
@@ -122,63 +137,155 @@ class AttrTap:
 
 
 def req(rid: str, cmd: str, args: dict, token: str | None) -> dict:
-    return {"id": rid, "version": "1.0", "cmd": cmd, "args": args,
-            "token": token}
+    return {"id": rid, "cmd": cmd, "args": args, "version": "1.0", "token": token}
 
 
-async def read_cmd(sess, cmd: str, args: dict, rid: str,
+async def read_cmd(deps: Deps, cmd: str, args: dict, base_rid: str,
                    timeout: float = 15.0) -> dict:
-    """Read-only command with bounded timeout retries (3 attempts, 2 s apart)."""
+    """Read-only command; unique id per attempt; bounded timeout retries."""
     attempt = 1
     while True:
+        rid = "%s-%d" % (base_rid, attempt)
         try:
-            resp = await sess.send_request(req(rid, cmd, args, sess.token),
-                                           timeout=timeout, retries=0)
-            return resp.obj
+            resp = await deps.sess.send_request(
+                req(rid, cmd, args, deps.sess.token), timeout=timeout, retries=0)
+            return resp.obj or {}
         except asyncio.TimeoutError:
             if not policy.should_retry_read(attempt):
                 raise ReadTimeout("%s timed out after %d attempts" % (cmd, attempt))
             attempt += 1
-            await asyncio.sleep(policy.READ_RETRY_DELAY_S)
+            await deps.sleep(policy.READ_RETRY_DELAY_S)
 
 
-async def wait_ready(sess, stable_s: float) -> bool:
-    """Require trial=idle + mqtt_connected + sta_connected to hold `stable_s`."""
-    deadline = time.monotonic() + 60.0
-    streak = 0.0
-    while time.monotonic() < deadline:
-        data = (await read_cmd(sess, "network.status", {}, "ready", 30)).get("data") or {}
+async def identity_gate(deps: Deps) -> tuple[dict, list[str]]:
+    dev = (await read_cmd(deps, "device.status", {}, "ident")).get("data") or {}
+    return dev, policy.identity_errors(dev, EXPECTED)
+
+
+async def wait_ready(deps: Deps, stable_s: float) -> bool:
+    """Real-time stability gate: monotonic clock, gap resets the streak."""
+    start = None
+    last_ok = None
+    deadline = deps.mono() + 60.0
+    while deps.mono() < deadline:
+        data = (await read_cmd(deps, "network.status", {}, "ready", 30)).get("data") or {}
         ok = (data.get("trial", {}).get("state") == "idle"
               and data.get("mqtt_connected") is True
               and data.get("sta_connected") is True)
-        streak = streak + 1.0 if ok else 0.0
-        if streak >= stable_s:
-            return True
-        await asyncio.sleep(1.0)
+        now = deps.mono()
+        if ok:
+            if start is None or (last_ok is not None
+                                 and now - last_ok > policy.READY_MAX_GAP_S):
+                start = now
+            last_ok = now
+            if now - start >= stable_s:
+                return True
+        else:
+            start = None
+            last_ok = None
+        await deps.sleep(1.0)
     return False
 
 
-async def wait_terminal(sess, op_id: str, timeout_s: float) -> dict:
-    deadline = time.monotonic() + timeout_s
+async def wait_terminal(deps: Deps, op_id: str, timeout_s: float) -> dict:
+    deadline = deps.mono() + timeout_s
     last: dict = {}
-    while time.monotonic() < deadline:
-        last = (await read_cmd(sess, "operation.get", {"operation_id": op_id},
-                              "term", 10)).get("data") or {}
+    while deps.mono() < deadline:
+        last = (await read_cmd(deps, "operation.get", {"operation_id": op_id},
+                               "term", 10)).get("data") or {}
         if last.get("state") in policy.TERMINAL_STATES:
             return last
-        await asyncio.sleep(0.3)
+        await deps.sleep(0.3)
     return last
 
 
-async def wait_sta(sess, timeout_s: float) -> bool:
-    deadline = time.monotonic() + timeout_s
-    while time.monotonic() < deadline:
-        net = ((await read_cmd(sess, "device.status", {}, "sta", 30)).get("data")
+async def wait_sta(deps: Deps, timeout_s: float) -> bool:
+    deadline = deps.mono() + timeout_s
+    while deps.mono() < deadline:
+        net = ((await read_cmd(deps, "device.status", {}, "sta", 30)).get("data")
                or {}).get("network") or {}
         if net.get("sta_connected") is True:
             return True
-        await asyncio.sleep(1.5)
+        await deps.sleep(1.5)
     return False
+
+
+async def run_case(deps: Deps, ssid: str) -> dict:
+    """Run C15-2; returns the result dict with verdict/reason."""
+    result: dict = {"verdict": "STOP", "reason": "unfinished"}
+    tap = None
+    try:
+        dev, errs = await identity_gate(deps)
+        result["identity"] = dev
+        if errs:
+            result.update(verdict="STOP", reason="identity", errors=errs)
+            return result
+
+        if not await wait_ready(deps, policy.READY_STABLE_S):
+            result.update(verdict="STOP", reason="readiness")
+            return result
+
+        tap = deps.tap_factory()
+        w0 = deps.wall()
+        try:
+            tc = await deps.sess.send_request(
+                req("tc1", "network.tryconnect",
+                    {"ssid": ssid, "password": WRONG_PASSWORD}, deps.sess.token),
+                timeout=20, retries=0)
+        except Exception as exc:  # noqa: BLE001
+            result.update(verdict="STOP", reason="write_outcome_unknown",
+                          detail=type(exc).__name__)
+            return result
+
+        obj = tc.obj or {}
+        op_id = (obj.get("data") or {}).get("operation_id")
+        cls = policy.tryconnect_class(obj.get("ok"), op_id,
+                                      (obj.get("error") or {}).get("code"))
+        result["tryconnect"] = {"class": cls, "operation_id": op_id}
+        if cls == "busy":
+            result.update(verdict="NOT_COVERED", reason="tryconnect_busy", w0=w0)
+            return result
+        if cls != "accepted":
+            result.update(verdict="FAIL", reason="tryconnect_rejected", w0=w0)
+            return result
+
+        term = await wait_terminal(deps, op_id, policy.TERMINAL_TIMEOUT_S)
+        result["terminal"] = {"state": term.get("state"), "error": term.get("error")}
+        restored = await wait_sta(deps, policy.RECOVERY_TIMEOUT_S)
+        result["sta_restored"] = restored
+
+        dev2, errs2 = await identity_gate(deps)
+        result["identity_after"] = dev2
+        identity_ok = not errs2
+
+        w1 = deps.wall()
+        status = (await read_cmd(deps, "network.status", {}, "post", 30)).get("data") or {}
+        status_ts = deps.wall()  # response sample time, after the read returns
+
+        win = policy.window_eval(tap.snapshot(), w0, w1)
+        cross = policy.crosscheck(win["last"], win["last_ts"], status, status_ts)
+        verdict, reason = policy.decide(
+            n_attr=win["n_attr"], violations=win["violations"],
+            terminal_state=term.get("state"), terminal_error=term.get("error"),
+            sta_restored=restored, identity_ok=identity_ok, cross_errors=cross)
+        result.update(verdict=verdict, reason=reason, w0=w0, w1=w1,
+                      window=win, cross_errors=cross, status_ts=status_ts,
+                      status={"sta_has_ip": status.get("sta_has_ip"),
+                              "sta_ip": status.get("sta_ip")})
+        return result
+    except ReadTimeout as exc:
+        result.update(verdict="STOP", reason="read_timeout", detail=str(exc))
+        return result
+    except StopRun as exc:
+        result.update(verdict="STOP", reason="stop", detail=str(exc))
+        return result
+    except Exception as exc:  # noqa: BLE001
+        result.update(verdict="STOP", reason="exception",
+                      detail="%s: %s" % (type(exc).__name__, exc))
+        return result
+    finally:
+        if tap is not None:
+            tap.stop()
 
 
 async def main() -> int:
@@ -208,7 +315,6 @@ async def main() -> int:
     p0 = load_module("p0_acceptance", P0)
     result: dict = {"verdict": "STOP", "reason": "unfinished"}
     cli = None
-    tap = None
     try:
         recs = await p0.scan_filtered(10)
         target = p0.choose_target(recs, None)
@@ -222,55 +328,9 @@ async def main() -> int:
         await asyncio.sleep(0.3)
         await sess.login(user, password, retries=0)
 
-        dev = (await read_cmd(sess, "device.status", {}, "ident")).get("data") or {}
-        identity_ok = dev.get("device_id") == args.device
-        result["identity"] = dev.get("device_id")
-
-        ready = await wait_ready(sess, policy.READY_STABLE_S)
-        if not ready:
-            raise StopRun("readiness gate not met")
-
-        tap = AttrTap(args.host, args.port, token)
-        w0 = time.time()
-        tc = await sess.send_request(
-            req("tc1", "network.tryconnect",
-                {"ssid": args.ssid, "password": WRONG_PASSWORD}, sess.token),
-            timeout=20, retries=0)
-        obj = tc.obj or {}
-        op_id = (obj.get("data") or {}).get("operation_id")
-        cls = policy.tryconnect_class(obj.get("ok"), op_id,
-                                      (obj.get("error") or {}).get("code"))
-        result["tryconnect"] = {"class": cls, "operation_id": op_id}
-        if cls != "accepted":
-            verdict, reason = policy.decide(busy=(cls == "busy"))
-            result.update(verdict=verdict, reason=reason, w0=w0)
-            return 0 if verdict == "PASS" else (2 if verdict == "NOT_COVERED" else 1)
-
-        term = await wait_terminal(sess, op_id, policy.TERMINAL_TIMEOUT_S)
-        result["terminal"] = {"state": term.get("state"),
-                              "error": term.get("error")}
-        restored = await wait_sta(sess, policy.RECOVERY_TIMEOUT_S)
-        result["sta_restored"] = restored
-        dev2 = (await read_cmd(sess, "device.status", {}, "ident2")).get("data") or {}
-        identity_ok = identity_ok and dev2.get("device_id") == args.device
-        w1 = time.time()
-        status_ts = time.time()
-        status = (await read_cmd(sess, "network.status", {}, "post")).get("data") or {}
-
-        win = policy.window_eval(tap.snapshot(), w0, w1)
-        cross = policy.crosscheck(win["last"], win["last_ts"], status, status_ts)
-        verdict, reason = policy.decide(
-            n_attr=win["n_attr"], violations=win["violations"],
-            terminal_state=term.get("state"), terminal_error=term.get("error"),
-            sta_restored=restored, identity_ok=identity_ok, cross_errors=cross)
-        result.update(verdict=verdict, reason=reason, w0=w0, w1=w1,
-                      window=win, cross_errors=cross, status_ts=status_ts,
-                      status={"sta_has_ip": status.get("sta_has_ip"),
-                              "sta_ip": status.get("sta_ip")})
-        return 0 if verdict == "PASS" else (2 if verdict == "NOT_COVERED" else 1)
-    except ReadTimeout as exc:
-        result.update(verdict="STOP", reason="read_timeout", detail=str(exc))
-        return 3
+        deps = Deps(sess, lambda: AttrTap(args.host, args.port, token))
+        result = await run_case(deps, args.ssid)
+        return policy.exit_code(result.get("verdict", "STOP"))
     except StopRun as exc:
         result.update(verdict="STOP", reason="stop", detail=str(exc))
         return 3
@@ -279,8 +339,6 @@ async def main() -> int:
                       detail="%s: %s" % (type(exc).__name__, exc))
         return 3
     finally:
-        if tap is not None:
-            tap.stop()
         if cli is not None:
             try:
                 await cli.disconnect()
