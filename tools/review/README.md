@@ -284,3 +284,13 @@
 - 设备使用需单独授权；tag、镜像 SHA-256 与证据一并归档。
 - host `tests/cmd_net_job` 增加 D01–D05：4 个最大长度 operation、文本截断、
   计数截断、终态 job_op、无效 job_op；`truncated` 与 `text_truncated` 分开记录。
+
+## `c152_mqtt_attrs.py` + `c152_policy.py`（C15-2 专用，Host 级，待评审）
+
+- 取代 v9 的 C15-2 字段来源：attributes 自洽仅使用实际发布字段
+  （`net_mode`/`sta_ssid`/`sta_ip`/`uart_baudrate`）；`sta_has_ip` 由 w1 之后
+  `network.status` 独立对读，并要求 status 采样不早于窗口内最后一条 attributes。
+- 容错语义：只读命令最多 3 次、间隔 2 s；持续超时 → `STOP`；`n_attr=0` →
+  `NOT_COVERED`；写命令 transport 异常不重发；就绪门禁 10 s。
+- 纯判定在 `c152_policy.py`；Host 测试：`make -C tests/c152_policy run`。
+- 设备执行需单独授权；本目录脚本不参与固件构建。
