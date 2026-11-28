@@ -137,3 +137,7 @@ make -C tests/cmd_net_job run
 ## 8. 边界
 
 本次结果只证明 Host 控制流、构建和符号隔离；不证明设备行为、Wi-Fi/MQTT 真机时序或 C15-2 覆盖率提升。C15-2 仍为 `BUSY_REJECTED / NOT_COVERED`，CMD-15 仍为 `TEST_PENDING`。
+
+## 9. 后续更新（2026-11-28）
+
+本节为追加更新，不改变上文限定时点结论。2026-11-28 已完成 C15-2 **hook 路径**设备验证（A0 + A1），结果见 [C15-2 hook 路径设备验证（2026-11-28）](C15-2_hook路径设备验证_2026-11-28.md)。该验证仅覆盖 hook 路径判据，不关闭 C15-2 原始 MQTT attributes/telemetry 来源冲突的 `NOT_COVERED`；CMD-15 仍为 `TEST_PENDING`。
