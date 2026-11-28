@@ -32,7 +32,7 @@
 - [C15-2 expire hook 与 defer 诊断设计（2026-11-27）](design/CMD/C15-2_expire_hook与defer诊断设计_2026-11-27.md)：test-only hook 目标过滤/同步、MQTT defer per-call 诊断、锁序、Host 矩阵与编译隔离候选。
 - [C15-2 hook/defer 诊断实现与 Host 验证（2026-11-27）](reviews/CMD/C15-2_hook_defer诊断实现与Host验证_2026-11-27.md)：实施基线、H1–H27 结果、构建/符号隔离与 NOT_COVERED 清单。
 - [C15-2 hook 路径设备验证（2026-11-28）](reviews/CMD/C15-2_hook路径设备验证_2026-11-28.md)：A0 连接参数预检 + A1 真 300 s TTL 的 hook 路径结果；C15-2 原始 NOT_COVERED 与 CMD-15 `TEST_PENDING` 不变。
-- [C15-2 C 方案 REST 只读可行性核实（2026-11-28）](reviews/CMD/C15-2_C方案REST只读可行性核实_2026-11-28.md)：`Test Device C1` 设备与 attributes 只读核验；观察者副作用可消除，但权限仍为 `TENANT_ADMIN`、目标字段时间戳陈旧；C 仍 `NOT_AVAILABLE`，维持 D。
+- [C15-2 C 方案 REST 只读可行性核实（2026-11-28）](reviews/CMD/C15-2_C方案REST只读可行性核实_2026-11-28.md)：`Test Device C1` 设备与 attributes 只读核验；客户账号 `CUSTOMER_USER` 验证（设备可读、tenant API 403）；观察者副作用可消除，但目标字段时间戳陈旧、判据待修订；C 未实施，维持 D。
 - [P2 启动定义（2026-11-28）](reviews/P2/P2启动定义_2026-11-28.md)：候选 A 连接参数条目生命周期验证；重置分类（power off/on 保留 vs 驱动释放清除）、五条判据与停止条件；未启动、不授权设备操作。
 - [MQTT 运行态与 config 同步实施证据](reviews/MQTT/MQTT运行态与config同步复核_2026-11-15.md)
 
@@ -55,7 +55,7 @@
 - [CMD-03 Phase B WAIT200 重复测量（2026-11-25）](evidence/CMD-03_phase_b_wait200_2026-11-25/README.md)：空闲与 BLE 负载两臂各 10/10 PASS；NVS 整分区 SHA 不一致仍保留 FAIL，`phy/cal_data` 按 D1 作为系统管理数据例外记录；阶段 B 已按定义 A 关闭（仅限 WAIT200 测量与验收决策）。
 - [H1-P1 main 固件设备验收（2026-11-24）](evidence/H1-P1_device_main_2026-11-24/README.md)：设备 `IotHub-65D8`；构建/设备证据执行于 `0e4d49c`，证据文档合入 `956afcd`；设备侧 200 ms 与设备侧完整并发矩阵为 NOT_COVERED。
 - [CMD-02/15 阶段 3 证据（2026-11-26）](evidence/CMD-02_15_stage3_2026-11-26/README.md)：r1–r7 原始结果、harness 缺陷与恢复核验。
-- [C15-2 C 方案 REST 只读核验证据（2026-11-28）](evidence/C15-2_C_REST_2026-11-28/README.md)：TB authority/设备/attributes 只读 GET 的脱敏结果与 SHA256。
+- [C15-2 C 方案 REST 只读核验证据（2026-11-28）](evidence/C15-2_C_REST_2026-11-28/README.md)：租户 Key 与 `customerC` 客户账号的 authority/设备/attributes 只读结果、脱敏规则与 SHA256。
 
 ## 历史材料
 
