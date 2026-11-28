@@ -1,0 +1,8 @@
+peer=<device-mac> type=1 (BDADDR_LE_PUBLIC) index=0 payload=17 bytes: 0100<device-mac-hex>011800280000005802
+[plain]
+  tx 0100ffff0000 -> 6 bytes
+  READ_VERSION reply: 0100ffff0600010000011700
+  tx 3500000011000100<device-mac-hex>011800280000005802 -> 23 bytes
+  LOAD_CONN_PARAM reply: 010000000300350000
+  Command Complete cmd=0x0035 index=0 status=0 (OK)
+RESULT: OK — peer params loaded (24-40 units / latency 0 / supervision 600)

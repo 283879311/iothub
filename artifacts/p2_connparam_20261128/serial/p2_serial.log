@@ -1,0 +1,410 @@
+I (8952712) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=7153 total_published=906
+I (8962672) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=36327 total_published=907
+I (8972682) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=46858 total_published=908
+I (8973092) diag: core idle: core0=75% core1=96%
+I (8973092) diag: heap free=42492 min=31788 largest=34816 level=normal | wifi mode=1 ch=8/0 adv=1 conn=0 cf=7 rx_age=-1 role=ble mqtt_outbox=0 mqtt_shed=0 pipe_yield=0
+I (8982652) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=12542 total_published=909
+I (8992682) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=18118 total_published=910
+I (9002682) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=12462 total_published=911
+I (9003092) diag: core idle: core0=75% core1=96%
+I (9003092) diag: task runtime stats:
+esp_timer      	1992653188		483%
+app_diag       	4668715		1%
+IDLE1          	95599985		23%
+IDLE0          	2473214017		599%
+uart1_rx       	31718770		7%
+mqtt_dp_flush  	1526142		<1%
+tcpip          	16587317		4%
+wifi_boot_monit	1331166		<1%
+mqtt_task      	20809014		5%
+mqtt_telemetry 	4005088		<1%
+factory_reset_b	2373338		<1%
+mqtt_restart   	21559		<1%
+mqtt_boost     	9258		<1%
+ble_cmd        	4283		<1%
+ble_cmd_tx     	7669		<1%
+nimble_host    	82663		<1%
+ipc0           	68666		<1%
+data_pipe      	25		<1%
+ipc1           	225372		<1%
+btController   	194068399		47%
+wifi           	280417382		67%
+Tmr Svc        	99		<1%
+sys_evt        	28572		<1%
+
+I (9003152) diag: heap free=42492 min=31788 largest=34816 level=normal | wifi mode=1 ch=8/0 adv=1 conn=0 cf=7 rx_age=-1 role=ble mqtt_outbox=0 mqtt_shed=0 pipe_yield=0
+I (9003162) diag: stack water: min=IDLE1:976B low:tcpip=1976B mqtt_task=1788B mqtt_telemetry=1332B mqtt_boost=1000B mqtt_restart=1532B app_diag=1604B esp_timer=1996B Tmr Svc=1660B IDLE0=980B IDLE1=976B
+I (9012642) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=49652 total_published=912
+I (9022682) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=3959 total_published=913
+I (9032682) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=29035 total_published=914
+I (9033182) diag: core idle: core0=75% core1=96%
+I (9033182) diag: heap free=42492 min=31788 largest=34816 level=normal | wifi mode=1 ch=8/0 adv=1 conn=0 cf=7 rx_age=-1 role=ble mqtt_outbox=0 mqtt_shed=0 pipe_yield=0
+I (9042652) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=49917 total_published=915
+I (9052682) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=26976 total_published=916
+I (9062682) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=56337 total_published=917
+I (9063182) diag: core idle: core0=75% core1=96%
+I (9063182) diag: heap free=42492 min=31788 largest=34816 level=normal | wifi mode=1 ch=8/0 adv=1 conn=0 cf=7 rx_age=-1 role=ble mqtt_outbox=0 mqtt_shed=0 pipe_yield=0
+I (9072732) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=48558 total_published=918
+I (9082692) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=56601 total_published=919
+I (9092692) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=24107 total_published=920
+I (9093182) diag: core idle: core0=75% core1=96%
+I (9093182) diag: heap free=42492 min=31788 largest=34816 level=normal | wifi mode=1 ch=8/0 adv=1 conn=0 cf=7 rx_age=-1 role=ble mqtt_outbox=0 mqtt_shed=0 pipe_yield=0
+I (9102672) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=36732 total_published=921
+I (9112692) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=29604 total_published=922
+I (9122692) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=14857 total_published=923
+I (9123182) diag: core idle: core0=75% core1=96%
+I (9123182) diag: heap free=42492 min=31788 largest=34816 level=normal | wifi mode=1 ch=8/0 adv=1 conn=0 cf=7 rx_age=-1 role=ble mqtt_outbox=0 mqtt_shed=0 pipe_yield=0
+I (9132662) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=30581 total_published=924
+I (9142702) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=3935 total_published=925
+I (9152692) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=40473 total_published=926
+I (9153182) diag: core idle: core0=75% core1=96%
+I (9153182) diag: heap free=42492 min=31788 largest=34816 level=normal | wifi mode=1 ch=8/0 adv=1 conn=0 cf=7 rx_age=-1 role=ble mqtt_outbox=0 mqtt_shed=0 pipe_yield=0
+I (9162662) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=13007 total_published=927
+I (9172702) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=4531 total_published=928
+I (9182642) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=25766 total_published=929
+I (9183182) diag: core idle: core0=75% core1=96%
+I (9183182) diag: heap free=42492 min=31788 largest=34816 level=normal | wifi mode=1 ch=8/0 adv=1 conn=0 cf=7 rx_age=-1 role=ble mqtt_outbox=0 mqtt_shed=0 pipe_yield=0
+I (9192662) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=39094 total_published=930
+I (9202772) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=59122 total_published=931
+I (9212632) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=48310 total_published=932
+I (9213182) diag: core idle: core0=75% core1=96%
+I (9213182) diag: heap free=42492 min=31788 largest=34816 level=normal | wifi mode=1 ch=8/0 adv=1 conn=0 cf=7 rx_age=-1 role=ble mqtt_outbox=0 mqtt_shed=0 pipe_yield=0
+I (9222742) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=25935 total_published=933
+I (9232672) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=23862 total_published=934
+I (9232722) state: input active (seq=22)
+I (9232722) state: outputs relay=0 led=0 seq=23 source=input
+I (9232782) state: input inactive (seq=24)
+I (9232882) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=3836 total_published=935
+I (9232922) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=17831 total_published=936
+I (9233082) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=60401 total_published=936
+I (9233122) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=19914 total_published=936
+I (9243152) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=43864 total_published=937
+I (9243182) diag: core idle: core0=75% core1=96%
+I (9243182) diag: heap free=42496 min=31788 largest=34816 level=normal | wifi mode=1 ch=8/0 adv=1 conn=0 cf=7 rx_age=-1 role=ble mqtt_outbox=0 mqtt_shed=0 pipe_yield=0
+I (9253192) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=65476 total_published=938
+I (9263122) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=1094 total_published=939
+I (9273152) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=31285 total_published=940
+I (9273182) diag: core idle: core0=75% core1=96%
+I (9273182) diag: heap free=42496 min=31788 largest=34816 level=normal | wifi mode=1 ch=8/0 adv=1 conn=0 cf=7 rx_age=-1 role=ble mqtt_outbox=0 mqtt_shed=0 pipe_yield=0
+I (9283192) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=28990 total_published=941
+I (9293122) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=5282 total_published=942
+I (9303162) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=43274 total_published=943
+I (9303182) diag: core idle: core0=75% core1=95%
+I (9303182) diag: heap free=42496 min=31788 largest=34816 level=normal | wifi mode=1 ch=8/0 adv=1 conn=0 cf=7 rx_age=-1 role=ble mqtt_outbox=0 mqtt_shed=0 pipe_yield=0
+I (9313162) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=30252 total_published=944
+I (9323122) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=49732 total_published=945
+I (9333162) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=36134 total_published=946
+I (9333182) diag: core idle: core0=75% core1=96%
+I (9333182) diag: heap free=42496 min=31788 largest=34816 level=normal | wifi mode=1 ch=8/0 adv=1 conn=0 cf=7 rx_age=-1 role=ble mqtt_outbox=0 mqtt_shed=0 pipe_yield=0
+I (9343162) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=35334 total_published=947
+I (9353122) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=15467 total_published=948
+I (9363172) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=5249 total_published=949
+I (9363182) diag: core idle: core0=75% core1=96%
+I (9363182) diag: heap free=42492 min=31788 largest=34816 level=normal | wifi mode=1 ch=8/0 adv=1 conn=0 cf=7 rx_age=-1 role=ble mqtt_outbox=0 mqtt_shed=0 pipe_yield=0
+I (9373162) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=31181 total_published=950
+I (9383132) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=65196 total_published=951
+I (9393172) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=28988 total_published=952
+I (9393182) diag: core idle: core0=75% core1=96%
+I (9393182) diag: heap free=42492 min=31788 largest=34816 level=normal | wifi mode=1 ch=8/0 adv=1 conn=0 cf=7 rx_age=-1 role=ble mqtt_outbox=0 mqtt_shed=0 pipe_yield=0
+I (9403162) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=15064 total_published=953
+I (9408552) bt_gatts: central connected (conn=0) peer_ota=<host-bt-addr> type=0 peer_id=<host-bt-addr> type=0
+I (9408552) bt_gatts: conn params policy: itvl=45ms lat=0 sup=6000ms -> satisfied, skip update request
+I (9408562) wifi: ble fast retry: link up, timer reset
+I (9408732) bt_gatts: mtu negotiated: 256 (payload 253)
+I (9409772) bt_gatts: cmd TX subscribe on (handle=10)
+I (9410172) bt_gatts: cmd RX write: 20 byte(s) last=0x22 newline=0
+I (9410262) bt_gatts: cmd RX write: 20 byte(s) last=0x65 newline=0
+I (9410352) bt_gatts: cmd RX write: 18 byte(s) last=0x0A newline=1
+I (9410352) ble_cmd: cmd line queued (57 bytes)
+I (9410352) ble_cmd: rx v1 cmd=device.info id=id
+I (9410362) NimBLE: GATT procedure initiated: notify;
+I (9410362) NimBLE: att_handle=10
+
+I (9410392) NimBLE: GATT procedure initiated: notify;
+I (9410392) NimBLE: att_handle=10
+
+I (9413142) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=22025 total_published=954
+I (9414852) bt_gatts: cmd TX subscribe off (handle=10)
+W (9414852) bt_gatts: central disconnected (reason=0x213)
+I (9414852) ble_cmd: cmd session token invalidated (disconnect)
+I (9414862) NimBLE: GAP procedure initiated: advertise;
+I (9414862) NimBLE: disc_mode=2
+I (9414862) NimBLE:  adv_channel_map=0 own_addr_type=0 adv_filter_policy=0 adv_itvl_min=32 adv_itvl_max=64
+I (9414872) NimBLE:
+
+I (9414892) app_bt: advertising restart requested (after disconnect)
+I (9415572) wifi: ble fast retry: link down, timer reset
+I (9423172) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=44610 total_published=955
+I (9423192) diag: core idle: core0=74% core1=96%
+I (9423192) diag: heap free=42496 min=31788 largest=34816 level=normal | wifi mode=1 ch=8/0 adv=1 conn=0 cf=7 rx_age=-1 role=ble mqtt_outbox=0 mqtt_shed=0 pipe_yield=0
+I (9433172) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=30909 total_published=956
+I (9443142) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=61699 total_published=957
+I (9453172) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=6027 total_published=958
+I (9453192) diag: core idle: core0=75% core1=96%
+I (9453192) diag: heap free=42492 min=31788 largest=34816 level=normal | wifi mode=1 ch=8/0 adv=1 conn=0 cf=7 rx_age=-1 role=ble mqtt_outbox=0 mqtt_shed=0 pipe_yield=0
+I (9463182) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=24773 total_published=959
+I (9473142) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=53594 total_published=960
+I (9473622) bt_gatts: central connected (conn=0) peer_ota=<host-bt-addr> type=0 peer_id=<host-bt-addr> type=0
+I (9473622) bt_gatts: conn params policy: itvl=45ms lat=0 sup=6000ms -> satisfied, skip update request
+I (9473802) bt_gatts: mtu negotiated: 256 (payload 253)
+I (9474572) wifi: ble fast retry: link up, timer reset
+W (9478852) bt_gatts: central disconnected (reason=0x213)
+I (9478852) ble_cmd: cmd session token invalidated (disconnect)
+I (9478852) NimBLE: GAP procedure initiated: advertise;
+I (9478862) NimBLE: disc_mode=2
+I (9478862) NimBLE:  adv_channel_map=0 own_addr_type=0 adv_filter_policy=0 adv_itvl_min=32 adv_itvl_max=64
+I (9478872) NimBLE:
+
+I (9478882) app_bt: advertising restart requested (after disconnect)
+I (9479572) wifi: ble fast retry: link down, timer reset
+I (9483172) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=2048 total_published=961
+I (9483192) diag: core idle: core0=74% core1=96%
+I (9483192) diag: heap free=42492 min=31788 largest=34816 level=normal | wifi mode=1 ch=8/0 adv=1 conn=0 cf=7 rx_age=-1 role=ble mqtt_outbox=0 mqtt_shed=0 pipe_yield=0
+I (9493172) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=16105 total_published=962
+I (9503142) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=19731 total_published=963
+I (9513182) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=51989 total_published=964
+I (9513192) diag: core idle: core0=75% core1=96%
+I (9513192) diag: heap free=42492 min=31788 largest=34816 level=normal | wifi mode=1 ch=8/0 adv=1 conn=0 cf=7 rx_age=-1 role=ble mqtt_outbox=0 mqtt_shed=0 pipe_yield=0
+I (9523182) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=44300 total_published=965
+I (9533142) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=39493 total_published=966
+I (9538692) bt_gatts: central connected (conn=0) peer_ota=<host-bt-addr> type=0 peer_id=<host-bt-addr> type=0
+I (9538692) bt_gatts: conn params policy: itvl=45ms lat=0 sup=420ms -> out of policy, requesting update
+I (9538702) NimBLE: GAP procedure initiated:
+I (9538712) NimBLE: connection parameter update; conn_handle=0 itvl_min=24 itvl_max=40 latency=0 supervision_timeout=600 min_ce_len=0 max_ce_len=0
+I (9538722) NimBLE:
+
+I (9538872) bt_gatts: mtu negotiated: 256 (payload 253)
+I (9539572) wifi: ble fast retry: link up, timer reset
+I (9543192) diag: core idle: core0=74% core1=96%
+I (9543192) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=12986 total_published=967
+I (9543192) diag: heap free=42204 min=31788 largest=34816 level=normal | wifi mode=1 ch=8/0 adv=0 conn=1 cf=0 rx_age=-1 role=ble mqtt_outbox=0 mqtt_shed=0 pipe_yield=0
+I (9543872) app_bt: conn params: status=531 int=45ms latency=0 timeout=420ms
+W (9543872) bt_gatts: central disconnected (reason=0x213)
+I (9543872) ble_cmd: cmd session token invalidated (disconnect)
+I (9543882) NimBLE: GAP procedure initiated: advertise;
+I (9543882) NimBLE: disc_mode=2
+I (9543882) NimBLE:  adv_channel_map=0 own_addr_type=0 adv_filter_policy=0 adv_itvl_min=32 adv_itvl_max=64
+I (9543892) NimBLE:
+
+I (9543912) app_bt: advertising restart requested (after disconnect)
+I (9544572) wifi: ble fast retry: link down, timer reset
+I (9552282) bt_gatts: central connected (conn=0) peer_ota=<host-bt-addr> type=0 peer_id=<host-bt-addr> type=0
+I (9552292) bt_gatts: conn params policy: itvl=45ms lat=0 sup=6000ms -> satisfied, skip update request
+I (9552422) bt_gatts: mtu negotiated: 256 (payload 253)
+I (9552572) wifi: ble fast retry: link up, timer reset
+I (9552782) bt_gatts: cmd TX subscribe on (handle=10)
+I (9553132) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=9170 total_published=968
+I (9553232) bt_gatts: cmd RX write: 20 byte(s) last=0x22 newline=0
+I (9553372) bt_gatts: cmd RX write: 20 byte(s) last=0x65 newline=0
+I (9553502) bt_gatts: cmd RX write: 18 byte(s) last=0x0A newline=1
+I (9553502) ble_cmd: cmd line queued (57 bytes)
+I (9553502) ble_cmd: rx v1 cmd=device.info id=id
+I (9553502) NimBLE: GATT procedure initiated: notify;
+I (9553512) NimBLE: att_handle=10
+
+I (9553532) NimBLE: GATT procedure initiated: notify;
+I (9553532) NimBLE: att_handle=10
+
+I (9557862) bt_gatts: cmd TX subscribe off (handle=10)
+W (9557862) bt_gatts: central disconnected (reason=0x213)
+I (9557862) ble_cmd: cmd session token invalidated (disconnect)
+I (9557872) NimBLE: GAP procedure initiated: advertise;
+I (9557872) NimBLE: disc_mode=2
+I (9557872) NimBLE:  adv_channel_map=0 own_addr_type=0 adv_filter_policy=0 adv_itvl_min=32 adv_itvl_max=64
+I (9557882) NimBLE:
+
+I (9557892) app_bt: advertising restart requested (after disconnect)
+I (9558572) wifi: ble fast retry: link down, timer reset
+I (9563152) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=32889 total_published=969
+I (9573152) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=57663 total_published=970
+I (9573202) diag: core idle: core0=74% core1=96%
+I (9573202) diag: heap free=42492 min=31788 largest=34816 level=normal | wifi mode=1 ch=8/0 adv=1 conn=0 cf=7 rx_age=-1 role=ble mqtt_outbox=0 mqtt_shed=0 pipe_yield=0
+I (9583182) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=62049 total_published=971
+I (9593162) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=25174 total_published=972
+I (9603162) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=26258 total_published=973
+I (9603202) diag: core idle: core0=75% core1=96%
+I (9603202) diag: task runtime stats:
+app_diag       	4997987		<1%
+IDLE1          	674556237		66%
+IDLE0          	2923939537		288%
+tcpip          	17688018		1%
+factory_reset_b	2532354		<1%
+mqtt_dp_flush  	1627199		<1%
+wifi_boot_monit	1431697		<1%
+mqtt_task      	22211039		2%
+mqtt_telemetry 	4279902		<1%
+uart1_rx       	33848350		3%
+mqtt_restart   	21559		<1%
+mqtt_boost     	9258		<1%
+data_pipe      	25		<1%
+ipc1           	225372		<1%
+ipc0           	68763		<1%
+ble_cmd        	15694		<1%
+ble_cmd_tx     	25118		<1%
+nimble_host    	272692		<1%
+wifi           	299105378		29%
+btController   	207166154		20%
+esp_timer      	2125590328		209%
+Tmr Svc        	99		<1%
+sys_evt        	28572		<1%
+
+I (9603262) diag: heap free=42492 min=31788 largest=34816 level=normal | wifi mode=1 ch=8/0 adv=1 conn=0 cf=7 rx_age=-1 role=ble mqtt_outbox=0 mqtt_shed=0 pipe_yield=0
+I (9603272) diag: stack water: min=IDLE1:976B low:tcpip=1976B mqtt_task=1788B mqtt_telemetry=1332B mqtt_boost=1000B mqtt_restart=1532B app_diag=1604B esp_timer=1996B Tmr Svc=1660B IDLE0=980B IDLE1=976B
+I (9613122) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=24515 total_published=974
+I (9623162) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=233 total_published=975
+I (9633152) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=1371 total_published=976
+I (9633292) diag: core idle: core0=75% core1=96%
+I (9633292) diag: heap free=42492 min=31788 largest=34816 level=normal | wifi mode=1 ch=8/0 adv=1 conn=0 cf=7 rx_age=-1 role=ble mqtt_outbox=0 mqtt_shed=0 pipe_yield=0
+I (9643122) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=12622 total_published=977
+I (9653172) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=35248 total_published=978
+I (9663172) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=60979 total_published=979
+I (9663292) diag: core idle: core0=75% core1=96%
+I (9663292) diag: heap free=42492 min=31788 largest=34816 level=normal | wifi mode=1 ch=8/0 adv=1 conn=0 cf=7 rx_age=-1 role=ble mqtt_outbox=0 mqtt_shed=0 pipe_yield=0
+I (9673132) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=13931 total_published=980
+I (9683162) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=60793 total_published=981
+I (9693172) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=51154 total_published=982
+I (9693292) diag: core idle: core0=75% core1=96%
+I (9693292) diag: heap free=42492 min=31788 largest=34816 level=normal | wifi mode=1 ch=8/0 adv=1 conn=0 cf=7 rx_age=-1 role=ble mqtt_outbox=0 mqtt_shed=0 pipe_yield=0
+I (9703122) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=12275 total_published=983
+I (9713172) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=14323 total_published=984
+I (9723172) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=51898 total_published=985
+I (9723292) diag: core idle: core0=75% core1=96%
+I (9723292) diag: heap free=42492 min=31788 largest=34816 level=normal | wifi mode=1 ch=8/0 adv=1 conn=0 cf=7 rx_age=-1 role=ble mqtt_outbox=0 mqtt_shed=0 pipe_yield=0
+I (9733142) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=57674 total_published=986
+I (9743182) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=51799 total_published=987
+I (9753172) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=24807 total_published=988
+I (9753292) diag: core idle: core0=75% core1=96%
+I (9753292) diag: heap free=42492 min=31788 largest=34816 level=normal | wifi mode=1 ch=8/0 adv=1 conn=0 cf=7 rx_age=-1 role=ble mqtt_outbox=0 mqtt_shed=0 pipe_yield=0
+I (9763142) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=58379 total_published=989
+I (9773182) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=27440 total_published=990
+I (9783182) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=35701 total_published=991
+I (9783292) diag: core idle: core0=75% core1=96%
+I (9783292) diag: heap free=42492 min=31788 largest=34816 level=normal | wifi mode=1 ch=8/0 adv=1 conn=0 cf=7 rx_age=-1 role=ble mqtt_outbox=0 mqtt_shed=0 pipe_yield=0
+I (9793142) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=57016 total_published=992
+I (9803182) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=22294 total_published=993
+I (9813182) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=3870 total_published=994
+I (9813292) diag: core idle: core0=75% core1=96%
+I (9813292) diag: heap free=42492 min=31788 largest=34816 level=normal | wifi mode=1 ch=8/0 adv=1 conn=0 cf=7 rx_age=-1 role=ble mqtt_outbox=0 mqtt_shed=0 pipe_yield=0
+I (9823152) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=14072 total_published=995
+I (9833192) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=37324 total_published=996
+I (9843182) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=42025 total_published=997
+I (9843292) diag: core idle: core0=75% core1=96%
+I (9843292) diag: heap free=42492 min=31788 largest=34816 level=normal | wifi mode=1 ch=8/0 adv=1 conn=0 cf=7 rx_age=-1 role=ble mqtt_outbox=0 mqtt_shed=0 pipe_yield=0
+I (9853222) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=277 total_published=998
+I (9863192) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=6683 total_published=999
+I (9873192) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=4778 total_published=1000
+I (9873292) diag: core idle: core0=75% core1=96%
+I (9873292) diag: heap free=42172 min=31788 largest=34816 level=normal | wifi mode=1 ch=8/0 adv=1 conn=0 cf=7 rx_age=-1 role=ble mqtt_outbox=0 mqtt_shed=0 pipe_yield=0
+I (9883152) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=12754 total_published=1001
+I (9893162) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=52014 total_published=1002
+I (9903122) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=18310 total_published=1003
+I (9903292) diag: core idle: core0=75% core1=95%
+I (9903292) diag: heap free=42492 min=31788 largest=34816 level=normal | wifi mode=1 ch=8/0 adv=1 conn=0 cf=7 rx_age=-1 role=ble mqtt_outbox=0 mqtt_shed=0 pipe_yield=0
+I (9913232) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=18833 total_published=1004
+I (9923152) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=29198 total_published=1005
+I (9933132) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=40081 total_published=1006
+I (9933302) diag: core idle: core0=75% core1=96%
+I (9933302) diag: heap free=42496 min=31788 largest=34816 level=normal | wifi mode=1 ch=8/0 adv=1 conn=0 cf=7 rx_age=-1 role=ble mqtt_outbox=0 mqtt_shed=0 pipe_yield=0
+I (9943232) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=60504 total_published=1007
+I (9953172) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=53867 total_published=1008
+I (9963132) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=60100 total_published=1009
+I (9963302) diag: core idle: core0=75% core1=96%
+I (9963302) diag: heap free=42368 min=31788 largest=34816 level=normal | wifi mode=1 ch=8/0 adv=1 conn=0 cf=7 rx_age=-1 role=ble mqtt_outbox=0 mqtt_shed=0 pipe_yield=0
+I (9973232) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=8308 total_published=1010
+I (9983162) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=47109 total_published=1011
+I (9993142) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=59739 total_published=1012
+I (9993302) diag: core idle: core0=75% core1=96%
+I (9993302) diag: heap free=42496 min=31788 largest=34816 level=normal | wifi mode=1 ch=8/0 adv=1 conn=0 cf=7 rx_age=-1 role=ble mqtt_outbox=0 mqtt_shed=0 pipe_yield=0
+I (10003172) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=28744 total_published=1013
+I (10013172) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=56357 total_published=1014
+I (10023202) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=19483 total_published=1015
+I (10023312) diag: core idle: core0=75% core1=96%
+I (10023312) diag: heap free=42492 min=31788 largest=34816 level=normal | wifi mode=1 ch=8/0 adv=1 conn=0 cf=7 rx_age=-1 role=ble mqtt_outbox=0 mqtt_shed=0 pipe_yield=0
+I (10033172) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=55049 total_published=1016
+I (10043182) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=7369 total_published=1017
+I (10053142) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=6133 total_published=1018
+I (10053312) diag: core idle: core0=75% core1=96%
+I (10053312) diag: heap free=42492 min=31788 largest=34816 level=normal | wifi mode=1 ch=8/0 adv=1 conn=0 cf=7 rx_age=-1 role=ble mqtt_outbox=0 mqtt_shed=0 pipe_yield=0
+I (10063182) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=30939 total_published=1019
+I (10073182) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=5315 total_published=1020
+I (10083142) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=24932 total_published=1021
+I (10083312) diag: core idle: core0=75% core1=96%
+I (10083312) diag: heap free=42496 min=31788 largest=34816 level=normal | wifi mode=1 ch=8/0 adv=1 conn=0 cf=7 rx_age=-1 role=ble mqtt_outbox=0 mqtt_shed=0 pipe_yield=0
+I (10093172) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=8261 total_published=1022
+I (10103182) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=247 total_published=1023
+I (10113152) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=46906 total_published=1024
+I (10113312) diag: core idle: core0=75% core1=96%
+I (10113312) diag: heap free=42492 min=31788 largest=34816 level=normal | wifi mode=1 ch=8/0 adv=1 conn=0 cf=7 rx_age=-1 role=ble mqtt_outbox=0 mqtt_shed=0 pipe_yield=0
+I (10123252) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=57883 total_published=1025
+I (10133122) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=10211 total_published=1026
+I (10143152) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=54595 total_published=1027
+I (10143312) diag: core idle: core0=75% core1=96%
+I (10143312) diag: heap free=42496 min=31788 largest=34816 level=normal | wifi mode=1 ch=8/0 adv=1 conn=0 cf=7 rx_age=-1 role=ble mqtt_outbox=0 mqtt_shed=0 pipe_yield=0
+I (10153182) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=55868 total_published=1028
+I (10163182) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=15674 total_published=1029
+I (10173162) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=45796 total_published=1030
+I (10173312) diag: core idle: core0=75% core1=96%
+I (10173312) diag: heap free=42492 min=31788 largest=34816 level=normal | wifi mode=1 ch=8/0 adv=1 conn=0 cf=7 rx_age=-1 role=ble mqtt_outbox=0 mqtt_shed=0 pipe_yield=0
+I (10183192) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=34487 total_published=1031
+I (10193132) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=1069 total_published=1032
+I (10203152) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=842 total_published=1033
+I (10203312) diag: core idle: core0=75% core1=96%
+I (10203312) diag: task runtime stats:
+esp_timer      	2258533232		140%
+app_diag       	5324105		<1%
+IDLE0          	3375181678		209%
+IDLE1          	1253491452		77%
+factory_reset_b	2689939		<1%
+mqtt_dp_flush  	1728115		<1%
+tcpip          	18812370		1%
+wifi_boot_monit	1521296		<1%
+mqtt_task      	23588976		1%
+mqtt_telemetry 	4535928		<1%
+uart1_rx       	36041391		2%
+mqtt_restart   	21559		<1%
+mqtt_boost     	9258		<1%
+data_pipe      	25		<1%
+ipc1           	225372		<1%
+ipc0           	68763		<1%
+ble_cmd        	15694		<1%
+ble_cmd_tx     	25118		<1%
+nimble_host    	272692		<1%
+wifi           	317838534		19%
+btController   	219906519		13%
+Tmr Svc        	99		<1%
+sys_evt        	28572		<1%
+
+I (10203372) diag: heap free=42496 min=31788 largest=34816 level=normal | wifi mode=1 ch=8/0 adv=1 conn=0 cf=7 rx_age=-1 role=ble mqtt_outbox=0 mqtt_shed=0 pipe_yield=0
+I (10203382) diag: stack water: min=IDLE1:976B low:tcpip=1976B mqtt_task=1788B mqtt_telemetry=1332B mqtt_boost=1000B mqtt_restart=1532B app_diag=1604B esp_timer=1996B Tmr Svc=1660B IDLE0=980B IDLE1=976B
+I (10205122) state: input active (seq=25)
+I (10205122) state: outputs relay=0 led=1 seq=26 source=input
+I (10205182) state: input inactive (seq=27)
+I (10205272) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=36193 total_published=1034
+I (10205312) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=50333 total_published=1035
+I (10205482) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=23317 total_published=1035
+I (10205582) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=64776 total_published=1035
+I (10215542) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=64540 total_published=1036
+I (10225582) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=42479 total_published=1037
+I (10233402) diag: core idle: core0=75% core1=96%
+I (10233402) diag: heap free=42492 min=31788 largest=34816 level=normal | wifi mode=1 ch=8/0 adv=1 conn=0 cf=7 rx_age=-1 role=ble mqtt_outbox=0 mqtt_shed=0 pipe_yield=0
+I (10235582) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=54231 total_published=1038
+I (10245552) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=51451 total_published=1039
+I (10255582) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=50573 total_published=1040
+I (10263402) diag: core idle: core0=75% core1=96%
+I (10263402) diag: heap free=42492 min=31788 largest=34816 level=normal | wifi mode=1 ch=8/0 adv=1 conn=0 cf=7 rx_age=-1 role=ble mqtt_outbox=0 mqtt_shed=0 pipe_yield=0
+I (10265522) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=33951 total_published=1041
+I (10275622) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=45659 total_published=1042
+I (10285662) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=51751 total_published=1043
+I (10293402) diag: core idle: core0=75% core1=96%
+I (10293402) diag: heap free=42492 min=31788 largest=34816 level=normal | wifi mode=1 ch=8/0 adv=1 conn=0 cf=7 rx_age=-1 role=ble mqtt_outbox=0 mqtt_shed=0 pipe_yield=0
+I (10295522) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=2408 total_published=1044
+I (10305562) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=11490 total_published=1045
+I (10315562) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=21352 total_published=1046
+I (10323402) diag: core idle: core0=75% core1=96%
+I (10323402) diag: heap free=42492 min=31788 largest=34816 level=normal | wifi mode=1 ch=8/0 adv=1 conn=0 cf=7 rx_age=-1 role=ble mqtt_outbox=0 mqtt_shed=0 pipe_yield=0
+I (10325522) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=27809 total_published=1047
+I (10335552) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=8025 total_published=1048
+I (10345562) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=8014 total_published=1049
+I (10353402) diag: core idle: core0=75% core1=96%
+I (10353402) diag: heap free=42492 min=31788 largest=34816 level=normal | wifi mode=1 ch=8/0 adv=1 conn=0 cf=7 rx_age=-1 role=ble mqtt_outbox=0 mqtt_shed=0 pipe_yield=0
+I (10355532) mqtt: MQTT_EVENT_PUBLISHED: broker ACK msg_id=11990 total_published=1050

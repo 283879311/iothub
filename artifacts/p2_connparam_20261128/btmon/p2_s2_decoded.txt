@@ -1,0 +1,922 @@
+Bluetooth monitor ver 5.72
+= Note: Linux version 7.0.0-43-generic (x86_64)                        0.032854
+= Note: Bluetooth subsystem version 2.22                               0.032856
+= New Index: <host-bt-addr> (Primary,USB,hci1)               [hci1] 0.032858
+= Open Index: <host-bt-addr>                                 [hci1] 0.032858
+= Index Info: <host-bt-addr> (Qualcomm)                      [hci1] 0.032859
+@ MGMT Open: bluetoothd (privileged) version 1.23             {0x0001} 0.032860
+@ MGMT Command: Start Service Disc.. (0x003a) plen 20  {0x0001} [hci1] 1.231374
+        Address type: 0x06
+          LE Public
+          LE Random
+        RSSI: invalid (0x7f)
+        UUIDs: 1
+        UUID: Nordic UART Service
+< HCI Command: LE Set Address Resolu.. (0x08|0x002d) plen 1  #1 [hci1] 1.231576
+        Address resolution: Disabled (0x00)
+> HCI Event: Command Complete (0x0e) plen 4                  #2 [hci1] 1.233606
+      LE Set Address Resolution Enable (0x08|0x002d) ncmd 1
+        Status: Success (0x00)
+< HCI Command: LE Set Random Address (0x08|0x0005) plen 6    #3 [hci1] 1.233768
+        Address: 3B:D2:2A:FF:86:3A (Non-Resolvable)
+> HCI Event: Command Complete (0x0e) plen 4                  #4 [hci1] 1.234573
+      LE Set Random Address (0x08|0x0005) ncmd 1
+        Status: Success (0x00)
+< HCI Command: LE Set Scan Parameters (0x08|0x000b) plen 7   #5 [hci1] 1.234730
+        Type: Active (0x01)
+        Interval: 11.250 msec (0x0012)
+        Window: 11.250 msec (0x0012)
+        Own address type: Random (0x01)
+        Filter policy: Accept all advertisement (0x00)
+> HCI Event: Command Complete (0x0e) plen 4                  #6 [hci1] 1.235531
+      LE Set Scan Parameters (0x08|0x000b) ncmd 1
+        Status: Success (0x00)
+< HCI Command: LE Set Scan Enable (0x08|0x000c) plen 2       #7 [hci1] 1.235553
+        Scanning: Enabled (0x01)
+        Filter duplicates: Enabled (0x01)
+> HCI Event: Command Complete (0x0e) plen 4                  #8 [hci1] 1.236558
+      LE Set Scan Enable (0x08|0x000c) ncmd 1
+        Status: Success (0x00)
+@ MGMT Event: Discovering (0x0013) plen 2              {0x0001} [hci1] 1.236568
+        Address type: 0x06
+          LE Public
+          LE Random
+        Discovery: Enabled (0x01)
+@ MGMT Event: Command Complete (0x0001) plen 4         {0x0001} [hci1] 1.236635
+      Start Service Discovery (0x003a) plen 1
+        Status: Success (0x00)
+        Address type: 0x06
+          LE Public
+          LE Random
+> HCI Event: LE Meta Event (0x3e) plen 41                    #9 [hci1] 1.253945
+      LE Advertising Report (0x02)
+        Num reports: 1
+        Event type: Connectable undirected - ADV_IND (0x00)
+        Address type: Random (0x01)
+        Address: 44:08:2C:4B:BB:CD (Resolvable)
+        Data length: 29
+        Flags: 0x1a
+          LE General Discoverable Mode
+          Simultaneous LE and BR/EDR (Controller)
+          Simultaneous LE and BR/EDR (Host)
+        16-bit Service UUIDs (complete): 3 entries
+          Device Information (0x180a)
+          Unknown (0xfcf8)
+          HUAWEI Technologies Co., Ltd (0xfe35)
+        128-bit Service UUIDs (complete): 1 entry
+          Vendor specific
+        RSSI: -49 dBm (0xcf)
+> HCI Event: LE Meta Event (0x3e) plen 19                   #10 [hci1] 1.255670
+      LE Advertising Report (0x02)
+        Num reports: 1
+        Event type: Scan response - SCAN_RSP (0x04)
+        Address type: Random (0x01)
+        Address: 44:08:2C:4B:BB:CD (Resolvable)
+        Data length: 7
+        Name (complete): HONOR
+        RSSI: -49 dBm (0xcf)
+> HCI Event: LE Meta Event (0x3e) plen 34                   #11 [hci1] 1.276618
+      LE Advertising Report (0x02)
+        Num reports: 1
+        Event type: Connectable undirected - ADV_IND (0x00)
+        Address type: Public (0x00)
+        Address: 84:FC:E6:B7:23:32 (Espressif Inc.)
+        Data length: 22
+        Flags: 0x06
+          LE General Discoverable Mode
+          BR/EDR Not Supported
+        16-bit Service UUIDs (complete): 1 entry
+          Unknown (0xabf0)
+        Name (complete): LIPO-B72332
+        RSSI: -82 dBm (0xae)
+> HCI Event: LE Meta Event (0x3e) plen 42                   #12 [hci1] 1.279929
+      LE Advertising Report (0x02)
+        Num reports: 1
+        Event type: Connectable undirected - ADV_IND (0x00)
+        Address type: Public (0x00)
+        Address: <device-mac> (Espressif Inc.)
+        Data length: 30
+        Flags: 0x06
+          LE General Discoverable Mode
+          BR/EDR Not Supported
+        128-bit Service UUIDs (complete): 1 entry
+          Nordic UART Service
+        Name (short): IH-65D8
+        RSSI: -42 dBm (0xd6)
+> HCI Event: LE Meta Event (0x3e) plen 34                   #13 [hci1] 1.485621
+      LE Advertising Report (0x02)
+        Num reports: 1
+        Event type: Connectable undirected - ADV_IND (0x00)
+        Address type: Public (0x00)
+        Address: 84:FC:E6:B7:23:32 (Espressif Inc.)
+        Data length: 22
+        Flags: 0x06
+          LE General Discoverable Mode
+          BR/EDR Not Supported
+        16-bit Service UUIDs (complete): 1 entry
+          Unknown (0xabf0)
+        Name (complete): LIPO-B72332
+        RSSI: -78 dBm (0xb2)
+@ MGMT Event: Device Found (0x0012) plen 44            {0x0001} [hci1] 1.485687
+        LE Address: <device-mac> (Espressif Inc.)
+        RSSI: -42 dBm (0xd6)
+        Flags: 0x00000000
+        Data length: 30
+        Flags: 0x06
+          LE General Discoverable Mode
+          BR/EDR Not Supported
+        128-bit Service UUIDs (complete): 1 entry
+          Nordic UART Service
+        Name (short): IH-65D8
+> HCI Event: LE Meta Event (0x3e) plen 29                   #14 [hci1] 1.502634
+      LE Advertising Report (0x02)
+        Num reports: 1
+        Event type: Connectable undirected - ADV_IND (0x00)
+        Address type: Random (0x01)
+        Address: 79:29:21:AA:DD:15 (Resolvable)
+        Data length: 17
+        Flags: 0x1a
+          LE General Discoverable Mode
+          Simultaneous LE and BR/EDR (Controller)
+          Simultaneous LE and BR/EDR (Host)
+        TX power: 11 dBm
+        Company: Apple, Inc. (76)
+          Type: Unknown (16)
+          Data: 7e1c03bb4e
+        RSSI: -86 dBm (0xaa)
+> HCI Event: LE Meta Event (0x3e) plen 34                   #15 [hci1] 1.511608
+      LE Advertising Report (0x02)
+        Num reports: 1
+        Event type: Connectable undirected - ADV_IND (0x00)
+        Address type: Public (0x00)
+        Address: 84:FC:E6:B7:23:32 (Espressif Inc.)
+        Data length: 22
+        Flags: 0x06
+          LE General Discoverable Mode
+          BR/EDR Not Supported
+        16-bit Service UUIDs (complete): 1 entry
+          Unknown (0xabf0)
+        Name (complete): LIPO-B72332
+        RSSI: -77 dBm (0xb3)
+> HCI Event: LE Meta Event (0x3e) plen 42                   #16 [hci1] 1.770058
+      LE Advertising Report (0x02)
+        Num reports: 1
+        Event type: Scannable undirected - ADV_SCAN_IND (0x02)
+        Address type: Public (0x00)
+        Address: 90:CE:B8:0C:9C:2A (Texas Instruments)
+        Data length: 30
+        Flags: 0x06
+          LE General Discoverable Mode
+          BR/EDR Not Supported
+        Company: Apple, Inc. (76)
+          Type: iBeacon (2)
+          UUID: daf6924e-392f-db65-e3f4-7b5637a3904a
+          Version: 14386.14137
+          TX power: -59 dB
+        RSSI: -88 dBm (0xa8)
+> HCI Event: LE Meta Event (0x3e) plen 34                   #17 [hci1] 1.824558
+      LE Advertising Report (0x02)
+        Num reports: 1
+        Event type: Connectable undirected - ADV_IND (0x00)
+        Address type: Public (0x00)
+        Address: 84:FC:E6:B7:23:32 (Espressif Inc.)
+        Data length: 22
+        Flags: 0x06
+          LE General Discoverable Mode
+          BR/EDR Not Supported
+        16-bit Service UUIDs (complete): 1 entry
+          Unknown (0xabf0)
+        Name (complete): LIPO-B72332
+        RSSI: -83 dBm (0xad)
+> HCI Event: LE Meta Event (0x3e) plen 29                   #18 [hci1] 1.830612
+      LE Advertising Report (0x02)
+        Num reports: 1
+        Event type: Connectable undirected - ADV_IND (0x00)
+        Address type: Random (0x01)
+        Address: 70:10:AF:3C:A7:9F (Resolvable)
+        Data length: 17
+        Flags: 0x1a
+          LE General Discoverable Mode
+          Simultaneous LE and BR/EDR (Controller)
+          Simultaneous LE and BR/EDR (Host)
+        TX power: 17 dBm
+        Company: Apple, Inc. (76)
+          Type: Unknown (16)
+          Data: 4a1c10f108
+        RSSI: -78 dBm (0xb2)
+> HCI Event: LE Meta Event (0x3e) plen 34                   #19 [hci1] 1.869614
+      LE Advertising Report (0x02)
+        Num reports: 1
+        Event type: Connectable undirected - ADV_IND (0x00)
+        Address type: Public (0x00)
+        Address: 84:FC:E6:B7:23:32 (Espressif Inc.)
+        Data length: 22
+        Flags: 0x06
+          LE General Discoverable Mode
+          BR/EDR Not Supported
+        16-bit Service UUIDs (complete): 1 entry
+          Unknown (0xabf0)
+        Name (complete): LIPO-B72332
+        RSSI: -78 dBm (0xb2)
+> HCI Event: LE Meta Event (0x3e) plen 12                   #20 [hci1] 1.870587
+      LE Advertising Report (0x02)
+        Num reports: 1
+        Event type: Scan response - SCAN_RSP (0x04)
+        Address type: Public (0x00)
+        Address: 84:FC:E6:B7:23:32 (Espressif Inc.)
+        Data length: 0
+        RSSI: -76 dBm (0xb4)
+> HCI Event: LE Meta Event (0x3e) plen 31                   #21 [hci1] 1.951518
+      LE Advertising Report (0x02)
+        Num reports: 1
+        Event type: Non connectable undirected - ADV_NONCONN_IND (0x03)
+        Address type: Public (0x00)
+        Address: 6C:0D:C4:22:B6:06 (Beijing Xiaomi Electronics Co., Ltd.)
+        Data length: 19
+        Flags: 0x06
+          LE General Discoverable Mode
+          BR/EDR Not Supported
+        Company: Xiaomi Inc. (911)
+          Data: 0a101c00009d5cbb433968ec
+        RSSI: -84 dBm (0xac)
+> HCI Event: LE Meta Event (0x3e) plen 34                   #22 [hci1] 2.140624
+      LE Advertising Report (0x02)
+        Num reports: 1
+        Event type: Connectable undirected - ADV_IND (0x00)
+        Address type: Public (0x00)
+        Address: 84:FC:E6:B7:23:32 (Espressif Inc.)
+        Data length: 22
+        Flags: 0x06
+          LE General Discoverable Mode
+          BR/EDR Not Supported
+        16-bit Service UUIDs (complete): 1 entry
+          Unknown (0xabf0)
+        Name (complete): LIPO-B72332
+        RSSI: -82 dBm (0xae)
+> HCI Event: LE Meta Event (0x3e) plen 12                   #23 [hci1] 2.141580
+      LE Advertising Report (0x02)
+        Num reports: 1
+        Event type: Scan response - SCAN_RSP (0x04)
+        Address type: Public (0x00)
+        Address: 84:FC:E6:B7:23:32 (Espressif Inc.)
+        Data length: 0
+        RSSI: -82 dBm (0xae)
+> HCI Event: LE Meta Event (0x3e) plen 42                   #24 [hci1] 2.178618
+      LE Advertising Report (0x02)
+        Num reports: 1
+        Event type: Scannable undirected - ADV_SCAN_IND (0x02)
+        Address type: Public (0x00)
+        Address: 90:CE:B8:0C:9C:2A (Texas Instruments)
+        Data length: 30
+        Flags: 0x06
+          LE General Discoverable Mode
+          BR/EDR Not Supported
+        Company: Apple, Inc. (76)
+          Type: iBeacon (2)
+          UUID: daf6924e-392f-db65-e3f4-7b5637a3904a
+          Version: 14386.14137
+          TX power: -59 dB
+        RSSI: -87 dBm (0xa9)
+> HCI Event: LE Meta Event (0x3e) plen 31                   #25 [hci1] 2.949562
+      LE Advertising Report (0x02)
+        Num reports: 1
+        Event type: Scan response - SCAN_RSP (0x04)
+        Address type: Public (0x00)
+        Address: <device-mac> (Espressif Inc.)
+        Data length: 19
+        Name (complete): IotHubBLE-65D8
+        TX power: 0 dBm
+        RSSI: -44 dBm (0xd4)
+> HCI Event: LE Meta Event (0x3e) plen 41                   #26 [hci1] 6.493619
+      LE Advertising Report (0x02)
+        Num reports: 1
+        Event type: Connectable undirected - ADV_IND (0x00)
+        Address type: Public (0x00)
+        Address: C4:39:60:63:8D:71 (GD Midea Air-Conditioning Equipment Co.,Ltd.)
+        Data length: 29
+        Flags: 0x06
+          LE General Discoverable Mode
+          BR/EDR Not Supported
+        Name (complete): midea
+        Company: GD Midea Air-Conditioning Equipment Co., Ltd. (1704)
+          Data: 013232303430303333414334313636
+        RSSI: -87 dBm (0xa9)
+> HCI Event: LE Meta Event (0x3e) plen 34                   #27 [hci1] 6.564588
+      LE Advertising Report (0x02)
+        Num reports: 1
+        Event type: Connectable undirected - ADV_IND (0x00)
+        Address type: Public (0x00)
+        Address: 84:FC:E6:B7:23:32 (Espressif Inc.)
+        Data length: 22
+        Flags: 0x06
+          LE General Discoverable Mode
+          BR/EDR Not Supported
+        16-bit Service UUIDs (complete): 1 entry
+          Unknown (0xabf0)
+        Name (complete): LIPO-B72332
+        RSSI: -81 dBm (0xaf)
+> HCI Event: LE Meta Event (0x3e) plen 12                   #28 [hci1] 6.565581
+      LE Advertising Report (0x02)
+        Num reports: 1
+        Event type: Scan response - SCAN_RSP (0x04)
+        Address type: Public (0x00)
+        Address: 84:FC:E6:B7:23:32 (Espressif Inc.)
+        Data length: 0
+        RSSI: -76 dBm (0xb4)
+> HCI Event: LE Meta Event (0x3e) plen 42                   #29 [hci1] 6.921620
+      LE Advertising Report (0x02)
+        Num reports: 1
+        Event type: Connectable undirected - ADV_IND (0x00)
+        Address type: Public (0x00)
+        Address: <device-mac> (Espressif Inc.)
+        Data length: 30
+        Flags: 0x06
+          LE General Discoverable Mode
+          BR/EDR Not Supported
+        128-bit Service UUIDs (complete): 1 entry
+          Nordic UART Service
+        Name (short): IH-65D8
+        RSSI: -42 dBm (0xd6)
+> HCI Event: LE Meta Event (0x3e) plen 31                   #30 [hci1] 6.924616
+      LE Advertising Report (0x02)
+        Num reports: 1
+        Event type: Scan response - SCAN_RSP (0x04)
+        Address type: Public (0x00)
+        Address: <device-mac> (Espressif Inc.)
+        Data length: 19
+        Name (complete): IotHubBLE-65D8
+        TX power: 0 dBm
+        RSSI: -42 dBm (0xd6)
+@ MGMT Event: Device Found (0x0012) plen 63            {0x0001} [hci1] 6.924660
+        LE Address: <device-mac> (Espressif Inc.)
+        RSSI: -42 dBm (0xd6)
+        Flags: 0x00000000
+        Data length: 49
+        Flags: 0x06
+          LE General Discoverable Mode
+          BR/EDR Not Supported
+        128-bit Service UUIDs (complete): 1 entry
+          Nordic UART Service
+        Name (short): IH-65D8
+        Name (complete): IotHubBLE-65D8
+        TX power: 0 dBm
+> HCI Event: LE Meta Event (0x3e) plen 43                   #31 [hci1] 7.056993
+      LE Advertising Report (0x02)
+        Num reports: 1
+        Event type: Connectable undirected - ADV_IND (0x00)
+        Address type: Random (0x01)
+        Address: 40:5A:B1:74:74:83 (Resolvable)
+        Data length: 31
+        Flags: 0x01
+          LE Limited Discoverable Mode
+        Service Data: Unknown (0xfcf8)
+          Data: 00824d7200c7120e8167bdafc04d44da1317742639411442
+        RSSI: -64 dBm (0xc0)
+> HCI Event: LE Meta Event (0x3e) plen 31                   #32 [hci1] 7.059686
+      LE Advertising Report (0x02)
+        Num reports: 1
+        Event type: Non connectable undirected - ADV_NONCONN_IND (0x03)
+        Address type: Public (0x00)
+        Address: 6C:0D:C4:22:B6:06 (Beijing Xiaomi Electronics Co., Ltd.)
+        Data length: 19
+        Flags: 0x06
+          LE General Discoverable Mode
+          BR/EDR Not Supported
+        Company: Xiaomi Inc. (911)
+          Data: 0a101c00009d5cbb433968ec
+        RSSI: -84 dBm (0xac)
+> HCI Event: LE Meta Event (0x3e) plen 40                   #33 [hci1] 7.193101
+      LE Advertising Report (0x02)
+        Num reports: 1
+        Event type: Scan response - SCAN_RSP (0x04)
+        Address type: Random (0x01)
+        Address: 40:5A:B1:74:74:83 (Resolvable)
+        Data length: 28
+        Company: not assigned (2502)
+          Data: bb00123456781234567800001c004d01b0e0501e001f0000
+        RSSI: -64 dBm (0xc0)
+> HCI Event: LE Meta Event (0x3e) plen 34                   #34 [hci1] 7.622634
+      LE Advertising Report (0x02)
+        Num reports: 1
+        Event type: Connectable undirected - ADV_IND (0x00)
+        Address type: Public (0x00)
+        Address: 84:FC:E6:B7:23:32 (Espressif Inc.)
+        Data length: 22
+        Flags: 0x06
+          LE General Discoverable Mode
+          BR/EDR Not Supported
+        16-bit Service UUIDs (complete): 1 entry
+          Unknown (0xabf0)
+        Name (complete): LIPO-B72332
+        RSSI: -79 dBm (0xb1)
+> HCI Event: LE Meta Event (0x3e) plen 12                   #35 [hci1] 8.437558
+      LE Advertising Report (0x02)
+        Num reports: 1
+        Event type: Scan response - SCAN_RSP (0x04)
+        Address type: Public (0x00)
+        Address: 84:FC:E6:B7:23:32 (Espressif Inc.)
+        Data length: 0
+        RSSI: -76 dBm (0xb4)
+@ MGMT Command: Stop Discovery (0x0024) plen 1         {0x0001} [hci1] 9.240793
+        Address type: 0x06
+          LE Public
+          LE Random
+< HCI Command: LE Set Scan Enable (0x08|0x000c) plen 2      #36 [hci1] 9.240865
+        Scanning: Disabled (0x00)
+        Filter duplicates: Disabled (0x00)
+> HCI Event: Command Complete (0x0e) plen 4                 #37 [hci1] 9.242573
+      LE Set Scan Enable (0x08|0x000c) ncmd 1
+        Status: Success (0x00)
+@ MGMT Event: Command Complete (0x0001) plen 4         {0x0001} [hci1] 9.242607
+      Stop Discovery (0x0024) plen 1
+        Status: Success (0x00)
+        Address type: 0x06
+          LE Public
+          LE Random
+@ MGMT Event: Discovering (0x0013) plen 2              {0x0001} [hci1] 9.242613
+        Address type: 0x06
+          LE Public
+          LE Random
+        Discovery: Disabled (0x00)
+@ MGMT Command: Start Service Disco.. (0x003a) plen 4  {0x0001} [hci1] 9.251416
+        Address type: 0x06
+          LE Public
+          LE Random
+        RSSI: invalid (0x7f)
+        UUIDs: 0
+< HCI Command: LE Set Random Address (0x08|0x0005) plen 6   #38 [hci1] 9.251489
+        Address: 32:E9:70:D2:20:AA (Non-Resolvable)
+> HCI Event: Command Complete (0x0e) plen 4                 #39 [hci1] 9.253545
+      LE Set Random Address (0x08|0x0005) ncmd 1
+        Status: Success (0x00)
+< HCI Command: LE Set Scan Parameters (0x08|0x000b) plen 7  #40 [hci1] 9.253657
+        Type: Active (0x01)
+        Interval: 11.250 msec (0x0012)
+        Window: 11.250 msec (0x0012)
+        Own address type: Random (0x01)
+        Filter policy: Accept all advertisement (0x00)
+> HCI Event: Command Complete (0x0e) plen 4                 #41 [hci1] 9.254595
+      LE Set Scan Parameters (0x08|0x000b) ncmd 1
+        Status: Success (0x00)
+< HCI Command: LE Set Scan Enable (0x08|0x000c) plen 2      #42 [hci1] 9.254697
+        Scanning: Enabled (0x01)
+        Filter duplicates: Enabled (0x01)
+> HCI Event: Command Complete (0x0e) plen 4                 #43 [hci1] 9.255708
+      LE Set Scan Enable (0x08|0x000c) ncmd 1
+        Status: Success (0x00)
+@ MGMT Event: Discovering (0x0013) plen 2              {0x0001} [hci1] 9.255719
+        Address type: 0x06
+          LE Public
+          LE Random
+        Discovery: Enabled (0x01)
+@ MGMT Event: Command Complete (0x0001) plen 4         {0x0001} [hci1] 9.255771
+      Start Service Discovery (0x003a) plen 1
+        Status: Success (0x00)
+        Address type: 0x06
+          LE Public
+          LE Random
+> HCI Event: LE Meta Event (0x3e) plen 29                   #44 [hci1] 9.272612
+      LE Advertising Report (0x02)
+        Num reports: 1
+        Event type: Connectable undirected - ADV_IND (0x00)
+        Address type: Random (0x01)
+        Address: 70:10:AF:3C:A7:9F (Resolvable)
+        Data length: 17
+        Flags: 0x1a
+          LE General Discoverable Mode
+          Simultaneous LE and BR/EDR (Controller)
+          Simultaneous LE and BR/EDR (Host)
+        TX power: 17 dBm
+        Company: Apple, Inc. (76)
+          Type: Unknown (16)
+          Data: 4a1c10f108
+        RSSI: -79 dBm (0xb1)
+> HCI Event: LE Meta Event (0x3e) plen 42                   #45 [hci1] 9.302577
+      LE Advertising Report (0x02)
+        Num reports: 1
+        Event type: Connectable undirected - ADV_IND (0x00)
+        Address type: Public (0x00)
+        Address: <device-mac> (Espressif Inc.)
+        Data length: 30
+        Flags: 0x06
+          LE General Discoverable Mode
+          BR/EDR Not Supported
+        128-bit Service UUIDs (complete): 1 entry
+          Nordic UART Service
+        Name (short): IH-65D8
+        RSSI: -42 dBm (0xd6)
+@ MGMT Event: Device Found (0x0012) plen 31            {0x0001} [hci1] 9.302638
+        LE Address: 70:10:AF:3C:A7:9F (Resolvable)
+        RSSI: -79 dBm (0xb1)
+        Flags: 0x00000000
+        Data length: 17
+        Flags: 0x1a
+          LE General Discoverable Mode
+          Simultaneous LE and BR/EDR (Controller)
+          Simultaneous LE and BR/EDR (Host)
+        TX power: 17 dBm
+        Company: Apple, Inc. (76)
+          Type: Unknown (16)
+          Data: 4a1c10f108
+> HCI Event: LE Meta Event (0x3e) plen 43                   #46 [hci1] 9.305596
+      LE Advertising Report (0x02)
+        Num reports: 1
+        Event type: Connectable undirected - ADV_IND (0x00)
+        Address type: Random (0x01)
+        Address: 40:5A:B1:74:74:83 (Resolvable)
+        Data length: 31
+        Flags: 0x01
+          LE Limited Discoverable Mode
+        Service Data: Unknown (0xfcf8)
+          Data: 00824d7200c7120e8167bdafc04d44da1317742639411442
+        RSSI: -53 dBm (0xcb)
+@ MGMT Event: Device Found (0x0012) plen 44            {0x0001} [hci1] 9.305655
+        LE Address: <device-mac> (Espressif Inc.)
+        RSSI: -42 dBm (0xd6)
+        Flags: 0x00000000
+        Data length: 30
+        Flags: 0x06
+          LE General Discoverable Mode
+          BR/EDR Not Supported
+        128-bit Service UUIDs (complete): 1 entry
+          Nordic UART Service
+        Name (short): IH-65D8
+@ MGMT Command: Stop Discovery (0x0024) plen 1         {0x0001} [hci1] 9.306722
+        Address type: 0x06
+          LE Public
+          LE Random
+< HCI Command: LE Set Scan Enable (0x08|0x000c) plen 2      #47 [hci1] 9.306810
+        Scanning: Disabled (0x00)
+        Filter duplicates: Disabled (0x00)
+> HCI Event: LE Meta Event (0x3e) plen 40                   #48 [hci1] 9.308533
+      LE Advertising Report (0x02)
+        Num reports: 1
+        Event type: Scan response - SCAN_RSP (0x04)
+        Address type: Random (0x01)
+        Address: 40:5A:B1:74:74:83 (Resolvable)
+        Data length: 28
+        Company: not assigned (2502)
+          Data: bb00123456781234567800001c004d01b0e0501e001f0000
+        RSSI: -55 dBm (0xc9)
+> HCI Event: Command Complete (0x0e) plen 4                 #49 [hci1] 9.309697
+      LE Set Scan Enable (0x08|0x000c) ncmd 1
+        Status: Success (0x00)
+@ MGMT Event: Command Complete (0x0001) plen 4         {0x0001} [hci1] 9.309770
+      Stop Discovery (0x0024) plen 1
+        Status: Success (0x00)
+        Address type: 0x06
+          LE Public
+          LE Random
+@ MGMT Event: Discovering (0x0013) plen 2              {0x0001} [hci1] 9.309776
+        Address type: 0x06
+          LE Public
+          LE Random
+        Discovery: Disabled (0x00)
+< HCI Command: LE Add Device To Acc.. (0x08|0x0011) plen 7  #50 [hci1] 9.313888
+        Address type: Public (0x00)
+        Address: <device-mac> (Espressif Inc.)
+> HCI Event: Command Complete (0x0e) plen 4                 #51 [hci1] 9.315722
+      LE Add Device To Accept List (0x08|0x0011) ncmd 1
+        Status: Success (0x00)
+< HCI Command: LE Set Address Resol.. (0x08|0x002d) plen 1  #52 [hci1] 9.315822
+        Address resolution: Enabled (0x01)
+> HCI Event: Command Complete (0x0e) plen 4                 #53 [hci1] 9.316588
+      LE Set Address Resolution Enable (0x08|0x002d) ncmd 1
+        Status: Success (0x00)
+< HCI Command: LE Set Scan Parameters (0x08|0x000b) plen 7  #54 [hci1] 9.316632
+        Type: Passive (0x00)
+        Interval: 60.000 msec (0x0060)
+        Window: 60.000 msec (0x0060)
+        Own address type: Public (0x00)
+        Filter policy: Ignore not in accept list (0x01)
+> HCI Event: Command Complete (0x0e) plen 4                 #55 [hci1] 9.317613
+      LE Set Scan Parameters (0x08|0x000b) ncmd 1
+        Status: Success (0x00)
+< HCI Command: LE Set Scan Enable (0x08|0x000c) plen 2      #56 [hci1] 9.317735
+        Scanning: Enabled (0x01)
+        Filter duplicates: Enabled (0x01)
+> HCI Event: Command Complete (0x0e) plen 4                 #57 [hci1] 9.318665
+      LE Set Scan Enable (0x08|0x000c) ncmd 1
+        Status: Success (0x00)
+> HCI Event: LE Meta Event (0x3e) plen 42                   #58 [hci1] 9.462061
+      LE Advertising Report (0x02)
+        Num reports: 1
+        Event type: Connectable undirected - ADV_IND (0x00)
+        Address type: Public (0x00)
+        Address: <device-mac> (Espressif Inc.)
+        Data length: 30
+        Flags: 0x06
+          LE General Discoverable Mode
+          BR/EDR Not Supported
+        128-bit Service UUIDs (complete): 1 entry
+          Nordic UART Service
+        Name (short): IH-65D8
+        RSSI: -43 dBm (0xd5)
+< HCI Command: LE Set Scan Enable (0x08|0x000c) plen 2      #59 [hci1] 9.462191
+        Scanning: Disabled (0x00)
+        Filter duplicates: Disabled (0x00)
+> HCI Event: Command Complete (0x0e) plen 4                 #60 [hci1] 9.463572
+      LE Set Scan Enable (0x08|0x000c) ncmd 1
+        Status: Success (0x00)
+< HCI Command: LE Create Connection (0x08|0x000d) plen 25   #61 [hci1] 9.463715
+        Scan interval: 60.000 msec (0x0060)
+        Scan window: 60.000 msec (0x0060)
+        Filter policy: Accept list is not used (0x00)
+        Peer address type: Public (0x00)
+        Peer address: <device-mac> (Espressif Inc.)
+        Own address type: Public (0x00)
+        Min connection interval: 30.00 msec (0x0018)
+        Max connection interval: 50.00 msec (0x0028)
+        Connection latency: 0 (0x0000)
+        Supervision timeout: 6000 msec (0x0258)
+        Min connection length: 0.000 msec (0x0000)
+        Max connection length: 0.000 msec (0x0000)
+> HCI Event: Command Status (0x0f) plen 4                   #62 [hci1] 9.465595
+      LE Create Connection (0x08|0x000d) ncmd 1
+        Status: Success (0x00)
+> HCI Event: LE Meta Event (0x3e) plen 31                   #63 [hci1] 9.502591
+      LE Enhanced Connection Complete (0x0a)
+        Status: Success (0x00)
+        Handle: 3
+        Role: Central (0x00)
+        Peer address type: Public (0x00)
+        Peer address: <device-mac> (Espressif Inc.)
+        Local resolvable private address: 00:00:00:00:00:00 (Non-Resolvable)
+        Peer resolvable private address: 00:00:00:00:00:00 (Non-Resolvable)
+        Connection interval: 45.00 msec (0x0024)
+        Connection latency: 0 (0x0000)
+        Supervision timeout: 6000 msec (0x0258)
+        Central clock accuracy: 0x00
+@ MGMT Event: Device Connected (0x000b) plen 43        {0x0001} [hci1] 9.502630
+        LE Address: <device-mac> (Espressif Inc.)
+        Flags: 0x00000008
+          Connection Locally Initiated
+        Data length: 30
+        Flags: 0x06
+          LE General Discoverable Mode
+          BR/EDR Not Supported
+        128-bit Service UUIDs (complete): 1 entry
+          Nordic UART Service
+        Name (short): IH-65D8
+< HCI Command: LE Read Remote Used... (0x08|0x0016) plen 2  #64 [hci1] 9.509355
+        Handle: 3 Address: <device-mac> (Espressif Inc.)
+> HCI Event: Command Status (0x0f) plen 4                   #65 [hci1] 9.511522
+      LE Read Remote Used Features (0x08|0x0016) ncmd 1
+        Status: Success (0x00)
+> HCI Event: LE Meta Event (0x3e) plen 12                   #66 [hci1] 9.628656
+      LE Read Remote Used Features (0x04)
+        Status: Success (0x00)
+        Handle: 3 Address: <device-mac> (Espressif Inc.)
+        Features: 0xff 0x00 0x00 0x00 0x00 0x00 0x00 0x00
+          LE Encryption
+          Connection Parameter Request Procedure
+          Extended Reject Indication
+          Peripheral-initiated Features Exchange
+          LE Ping
+          LE Data Packet Length Extension
+          LL Privacy
+          Extended Scanner Filter Policies
+< ACL Data TX: Handle 3 flags 0x00 dlen 7                   #67 [hci1] 9.628979
+      ATT: Exchange MTU Request (0x02) len 2
+        Client RX MTU: 517
+> HCI Event: Number of Completed Packets (0x13) plen 5      #68 [hci1] 9.763751
+        Num handles: 1
+        Handle: 3 Address: <device-mac> (Espressif Inc.)
+        Count: 1
+        #67: len 7 (0 Kb/s)
+        Latency: 134 msec (134-134 msec ~134 msec)
+> HCI Event: LE Meta Event (0x3e) plen 11                   #69 [hci1] 9.764535
+      LE Data Length Change (0x07)
+        Handle: 3 Address: <device-mac> (Espressif Inc.)
+        Max TX octets: 123
+        Max TX time: 1096
+        Max RX octets: 123
+        Max RX time: 1096
+> ACL Data RX: Handle 3 flags 0x02 dlen 7                   #70 [hci1] 9.809573
+      ATT: Exchange MTU Response (0x03) len 2
+        Server RX MTU: 256
+< ACL Data TX: Handle 3 flags 0x00 dlen 11                  #71 [hci1] 9.809749
+      ATT: Read By Type Request (0x08) len 6
+        Handle range: 0x0001-0xffff
+        Attribute type: Server Supported Features (0x2b3a)
+> HCI Event: Number of Completed Packets (0x13) plen 5      #72 [hci1] 9.853944
+        Num handles: 1
+        Handle: 3 Address: <device-mac> (Espressif Inc.)
+        Count: 1
+        #71: len 11 (2 Kb/s)
+        Latency: 44 msec (44-134 msec ~89 msec)
+> ACL Data RX: Handle 3 flags 0x02 dlen 9                   #73 [hci1] 9.899764
+      ATT: Error Response (0x01) len 4
+        Read By Type Request (0x08)
+        Handle: 0x0001
+        Error: Attribute Not Found (0x0a)
+< ACL Data TX: Handle 3 flags 0x00 dlen 11                  #74 [hci1] 9.899916
+      ATT: Read By Group Type Request (0x10) len 6
+        Handle range: 0x0001-0xffff
+        Attribute group type: Primary Service (0x2800)
+> HCI Event: Number of Completed Packets (0x13) plen 5      #75 [hci1] 9.943595
+        Num handles: 1
+        Handle: 3 Address: <device-mac> (Espressif Inc.)
+        Count: 1
+        #74: len 11 (2 Kb/s)
+        Latency: 43 msec (43-134 msec ~66 msec)
+> ACL Data RX: Handle 3 flags 0x02 dlen 26                  #76 [hci1] 9.990563
+      ATT: Read By Group Type Response (0x11) len 21
+        Attribute data length: 20
+        Attribute group list: 1 entry
+        Handle range: 0x0001-0xffff
+        UUID: Nordic UART Service (6e400001-b5a3-f393-e0a9-e50e24dcca9e)
+< ACL Data TX: Handle 3 flags 0x00 dlen 11                  #77 [hci1] 9.991914
+      ATT: Read By Group Type Request (0x10) len 6
+        Handle range: 0x0001-0xffff
+        Attribute group type: Secondary Service (0x2801)
+> HCI Event: Number of Completed Packets (0x13) plen 5     #78 [hci1] 10.034002
+        Num handles: 1
+        Handle: 3 Address: <device-mac> (Espressif Inc.)
+        Count: 1
+        #77: len 11 (2 Kb/s)
+        Latency: 42 msec (42-134 msec ~54 msec)
+> ACL Data RX: Handle 3 flags 0x02 dlen 9                  #79 [hci1] 10.079586
+      ATT: Error Response (0x01) len 4
+        Read By Group Type Request (0x10)
+        Handle: 0x0001
+        Error: Attribute Not Found (0x0a)
+< ACL Data TX: Handle 3 flags 0x00 dlen 11                 #80 [hci1] 10.079803
+      ATT: Read By Type Request (0x08) len 6
+        Handle range: 0x0001-0xffff
+        Attribute type: Include (0x2802)
+> HCI Event: Number of Completed Packets (0x13) plen 5     #81 [hci1] 10.123678
+        Num handles: 1
+        Handle: 3 Address: <device-mac> (Espressif Inc.)
+        Count: 1
+        #80: len 11 (2 Kb/s)
+        Latency: 43 msec (42-134 msec ~49 msec)
+> ACL Data RX: Handle 3 flags 0x02 dlen 9                  #82 [hci1] 10.214645
+      ATT: Error Response (0x01) len 4
+        Read By Type Request (0x08)
+        Handle: 0x0001
+        Error: Attribute Not Found (0x0a)
+< ACL Data TX: Handle 3 flags 0x00 dlen 11                 #83 [hci1] 10.214886
+      ATT: Read By Type Request (0x08) len 6
+        Handle range: 0x0001-0xffff
+        Attribute type: Characteristic (0x2803)
+> HCI Event: Number of Completed Packets (0x13) plen 5     #84 [hci1] 10.303567
+        Num handles: 1
+        Handle: 3 Address: <device-mac> (Espressif Inc.)
+        Count: 1
+        #83: len 11 (1 Kb/s)
+        Latency: 88 msec (42-134 msec ~68 msec)
+> ACL Data RX: Handle 3 flags 0x02 dlen 90                 #85 [hci1] 10.350685
+      ATT: Read By Type Response (0x09) len 85
+        Attribute data length: 21
+        Attribute data list: 4 entries
+        Handle: 0x0002
+        Value: 0c03009ecadc240ee5a9e093f3a3b50200406e
+            Properties: 0x0c
+              Write Without Response (0x04)
+              Write (0x08)
+            Value Handle: 0x0003
+            Value UUID: Nordic UART TX (6e400002-b5a3-f393-e0a9-e50e24dcca9e)
+        Handle: 0x0004
+        Value: 1005009ecadc240ee5a9e093f3a3b50300406e
+            Properties: 0x10
+              Notify (0x10)
+            Value Handle: 0x0005
+            Value UUID: Nordic UART RX (6e400003-b5a3-f393-e0a9-e50e24dcca9e)
+        Handle: 0x0007
+        Value: 0c08009ecadc240ee5a9e093f3a3b50400406e
+            Properties: 0x0c
+              Write Without Response (0x04)
+              Write (0x08)
+            Value Handle: 0x0008
+            Value UUID: Vendor specific (6e400004-b5a3-f393-e0a9-e50e24dcca9e)
+        Handle: 0x0009
+        Value: 100a009ecadc240ee5a9e093f3a3b50500406e
+            Properties: 0x10
+              Notify (0x10)
+            Value Handle: 0x000a
+            Value UUID: Vendor specific (6e400005-b5a3-f393-e0a9-e50e24dcca9e)
+< ACL Data TX: Handle 3 flags 0x00 dlen 11                 #86 [hci1] 10.350925
+      ATT: Read By Type Request (0x08) len 6
+        Handle range: 0x000a-0xffff
+        Attribute type: Characteristic (0x2803)
+> HCI Event: Number of Completed Packets (0x13) plen 5     #87 [hci1] 10.393627
+        Num handles: 1
+        Handle: 3 Address: <device-mac> (Espressif Inc.)
+        Count: 1
+        #86: len 11 (2 Kb/s)
+        Latency: 42 msec (42-134 msec ~55 msec)
+> ACL Data RX: Handle 3 flags 0x02 dlen 9                  #88 [hci1] 10.484325
+      ATT: Error Response (0x01) len 4
+        Read By Type Request (0x08)
+        Handle: 0x000a
+        Error: Attribute Not Found (0x0a)
+< ACL Data TX: Handle 3 flags 0x00 dlen 9                  #89 [hci1] 10.484595
+      ATT: Find Information Request (0x04) len 4
+        Handle range: 0x000b-0xffff
+> HCI Event: Number of Completed Packets (0x13) plen 5     #90 [hci1] 10.528998
+        Num handles: 1
+        Handle: 3 Address: <device-mac> (Espressif Inc.)
+        Count: 1
+        #89: len 9 (1 Kb/s)
+        Latency: 44 msec (42-134 msec ~50 msec)
+> ACL Data RX: Handle 3 flags 0x02 dlen 10                 #91 [hci1] 10.574677
+      ATT: Find Information Response (0x05) len 5
+        Format: UUID-16 (0x01)
+        Handle: 0x000b
+        UUID: Client Characteristic Configuration (0x2902)
+< ACL Data TX: Handle 3 flags 0x00 dlen 9                  #92 [hci1] 10.574965
+      ATT: Find Information Request (0x04) len 4
+        Handle range: 0x000c-0xffff
+> HCI Event: Number of Completed Packets (0x13) plen 5     #93 [hci1] 10.618913
+        Num handles: 1
+        Handle: 3 Address: <device-mac> (Espressif Inc.)
+        Count: 1
+        #92: len 9 (1 Kb/s)
+        Latency: 43 msec (42-134 msec ~47 msec)
+> ACL Data RX: Handle 3 flags 0x02 dlen 9                  #94 [hci1] 10.709676
+      ATT: Error Response (0x01) len 4
+        Find Information Request (0x04)
+        Handle: 0x000c
+        Error: Attribute Not Found (0x0a)
+< ACL Data TX: Handle 3 flags 0x00 dlen 9                  #95 [hci1] 10.719673
+      ATT: Write Request (0x12) len 4
+        Handle: 0x000b Type: Client Characteristic Configuration (0x2902)
+        Value Handle: 0x000a Type: Vendor specific (6e400005-b5a3-f393-e0a9-e50e24dcca9e)
+          Data: 0100
+            Notification (0x01)
+> HCI Event: Number of Completed Packets (0x13) plen 5     #96 [hci1] 10.798622
+        Num handles: 1
+        Handle: 3 Address: <device-mac> (Espressif Inc.)
+        Count: 1
+        #95: len 9 (0 Kb/s)
+        Latency: 78 msec (42-134 msec ~62 msec)
+> ACL Data RX: Handle 3 flags 0x02 dlen 5                  #97 [hci1] 10.844568
+      ATT: Write Response (0x13) len 0
+< ACL Data TX: Handle 3 flags 0x00 dlen 27                 #98 [hci1] 11.146439
+      ATT: Write Request (0x12) len 22
+        Handle: 0x0008 Type: Vendor specific (6e400004-b5a3-f393-e0a9-e50e24dcca9e)
+          Data: 7b226964223a226964222c2276657273696f6e22
+> HCI Event: Number of Completed Packets (0x13) plen 5     #99 [hci1] 11.203624
+        Num handles: 1
+        Handle: 3 Address: <device-mac> (Espressif Inc.)
+        Count: 1
+        #98: len 27 (3 Kb/s)
+        Latency: 57 msec (42-134 msec ~60 msec)
+> ACL Data RX: Handle 3 flags 0x02 dlen 5                 #100 [hci1] 11.249675
+      ATT: Write Response (0x13) len 0
+< ACL Data TX: Handle 3 flags 0x00 dlen 27                #101 [hci1] 11.271310
+      ATT: Write Request (0x12) len 22
+        Handle: 0x0008 Type: Vendor specific (6e400004-b5a3-f393-e0a9-e50e24dcca9e)
+          Data: 3a22312e30222c22636d64223a22646576696365
+> HCI Event: Number of Completed Packets (0x13) plen 5    #102 [hci1] 11.294040
+        Num handles: 1
+        Handle: 3 Address: <device-mac> (Espressif Inc.)
+        Count: 1
+        #101: len 27 (9 Kb/s)
+        Latency: 22 msec (22-134 msec ~41 msec)
+> ACL Data RX: Handle 3 flags 0x02 dlen 5                 #103 [hci1] 11.339568
+      ATT: Write Response (0x13) len 0
+< ACL Data TX: Handle 3 flags 0x00 dlen 25                #104 [hci1] 11.361223
+      ATT: Write Request (0x12) len 20
+        Handle: 0x0008 Type: Vendor specific (6e400004-b5a3-f393-e0a9-e50e24dcca9e)
+          Data: 2e696e666f222c2261726773223a7b7d7d0a
+> HCI Event: Number of Completed Packets (0x13) plen 5    #105 [hci1] 11.383586
+        Num handles: 1
+        Handle: 3 Address: <device-mac> (Espressif Inc.)
+        Count: 1
+        #104: len 25 (9 Kb/s)
+        Latency: 22 msec (22-134 msec ~31 msec)
+> ACL Data RX: Handle 3 flags 0x02 dlen 5                 #106 [hci1] 11.429524
+      ATT: Write Response (0x13) len 0
+> ACL Data RX: Handle 3 flags 0x02 dlen 122               #107 [hci1] 11.429541
+> ACL Data RX: Handle 3 flags 0x01 dlen 122               #108 [hci1] 11.432564
+> ACL Data RX: Handle 3 flags 0x01 dlen 7                 #109 [hci1] 11.519593
+> ACL Data RX: Handle 3 flags 0x01 dlen 9                 #110 [hci1] 11.519594
+      ATT: Handle Value Notification (0x1b) len 255
+        Handle: 0x000a Type: Vendor specific (6e400005-b5a3-f393-e0a9-e50e24dcca9e)
+          Data: 7b226964223a226964222c226f6b223a747275652c2264617461223a7b226d6f64656c223a22696f74687562222c226669726d77617265223a22312e332d39353661666364222c226275696c645f736861223a22633233316339353031222c226465766963655f6964223a22496f744875622d36354438222c226275696c645f76617269616e74223a226d7174745f6e65745f74786e3d6f6e222c2270726f746f636f6c5f76657273696f6e73223a5b22312e30225d2c227365637572697479223a7b226c696e6b5f656e63727970746564223a66616c73652c22626f6e646564223a66616c73652c226c325f7265616479223a66616c73652c227365
+> ACL Data RX: Handle 3 flags 0x02 dlen 39                #111 [hci1] 11.519594
+      ATT: Handle Value Notification (0x1b) len 34
+        Handle: 0x000a Type: Vendor specific (6e400005-b5a3-f393-e0a9-e50e24dcca9e)
+          Data: 6e7369746976655f7772697465735f616c6c6f776564223a66616c73657d7d7d
+@ MGMT Command: Disconnect (0x0014) plen 7            {0x0001} [hci1] 15.815620
+        LE Address: <device-mac> (Espressif Inc.)
+< HCI Command: Disconnect (0x01|0x0006) plen 3            #112 [hci1] 15.815681
+        Handle: 3 Address: <device-mac> (Espressif Inc.)
+        Reason: Remote User Terminated Connection (0x13)
+> HCI Event: Command Status (0x0f) plen 4                 #113 [hci1] 15.817613
+      Disconnect (0x01|0x0006) ncmd 1
+        Status: Success (0x00)
+> HCI Event: Disconnect Complete (0x05) plen 4            #114 [hci1] 15.845080
+        Status: Success (0x00)
+        Handle: 3 Address: <device-mac> (Espressif Inc.)
+        Reason: Connection Terminated By Local Host (0x16)
+@ MGMT Event: Device Disconnected (0x000c) plen 8     {0x0001} [hci1] 15.845109
+        LE Address: <device-mac> (Espressif Inc.)
+        Reason: Connection terminated by local host (0x02)
+@ MGMT Event: Command Complete (0x0001) plen 10       {0x0001} [hci1] 15.858527
+      Disconnect (0x0014) plen 7
+        Status: Success (0x00)
+        LE Address: <device-mac> (Espressif Inc.)
+= bluetoothd: No matching connection for device                [hci1] 15.858847
