@@ -291,9 +291,13 @@ async def run_case(deps: Deps, ssid: str,
         tap = deps.tap_factory()
         w0 = deps.wall()
         write_deadline = deps.mono() + deps.write_timeout
+        remaining = write_deadline - deps.mono()
+        if remaining <= 0:
+            result.update(verdict="STOP",
+                          reason="write_deadline_exhausted_before_send")
+            return result
         try:
-            effective = max(0.001, min(deps.write_timeout,
-                                       write_deadline - deps.mono()))
+            effective = min(deps.write_timeout, remaining)
             tc = await asyncio.wait_for(
                 deps.sess.send_request(
                     req(deps.rids.next("tc1"), "network.tryconnect",

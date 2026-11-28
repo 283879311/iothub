@@ -315,6 +315,16 @@ class WriteGateTests(unittest.TestCase):
         self.assertEqual(sess.writes, 1)
         self.assertEqual(sess.cmds[-1], "network.tryconnect")
 
+    def test_write_deadline_exhausted_before_send(self):
+        clock = Clock()
+        deps, sess = make_deps(make_handler(), clock, write_timeout=0.0)
+        result = run(r.run_case(deps, "ssid"))
+        self.assertEqual(
+            (result["verdict"], result["reason"]),
+            ("STOP", "write_deadline_exhausted_before_send"))
+        self.assertEqual(sess.writes, 0)
+        self.assertNotIn("network.tryconnect", sess.cmds)
+
     def test_slow_write_is_not_resent(self):
         clock = Clock()
 

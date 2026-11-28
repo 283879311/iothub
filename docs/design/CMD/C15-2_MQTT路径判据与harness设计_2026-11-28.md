@@ -57,7 +57,7 @@
 | tryconnect 返回 `busy`（就绪门禁之后） | `NOT_COVERED` | 不自动重发写命令 |
 | 写命令 transport 异常 | `STOP` | outcome unknown，不重发 |
 | 请求整体超时 | 每次 `send_request` 由 `asyncio.wait_for` 约束（含锁等待、速率等待、GATT 写、响应等待）；返回后再次检查 deadline | deadline 之后返回的响应不得接受 |
-| 写命令超时/取消 | 受 `write_timeout` 约束；超时或取消只 STOP | 分片写入中途取消不产生第二次写命令 |
+| 写命令超时/取消 | 受 `write_timeout` 约束；deadline 耗尽前不发送；超时或取消只 STOP | 分片写入中途取消不产生第二次写命令 |
 | 身份字段缺失/不匹配（写命令前） | `STOP` | fail-closed，优先于任何写命令 |
 | 两次有效观测间隔 > 3 s | 稳定计时清零 | 不把未观测区间当作稳定 |
 | 对读任一侧 `sta_ip` 为空 | `FAIL` | 两侧都必须非空且相等 |
@@ -112,6 +112,7 @@ runner 以依赖注入（session/tap 工厂/monotonic/wall/sleep）组织，Host
 | T31 | 请求过程整体超时 | 锁/写/响应耗时越过 deadline → 不接受结果 |
 | T32 | 响应恰在 deadline 之后返回 | 判为超时，不采用该响应 |
 | T33 | 慢写/取消边界 | 写命令超时或取消只 STOP，仅一次发送；读超时后无额外写 |
+| T34 | 写 deadline 耗尽 | 发送前剩余 ≤0 → STOP，未发送写命令 |
 
 ## 6. 边界
 
