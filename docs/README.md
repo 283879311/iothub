@@ -32,6 +32,7 @@
 - [C15-2 expire hook 与 defer 诊断设计（2026-11-27）](design/CMD/C15-2_expire_hook与defer诊断设计_2026-11-27.md)：test-only hook 目标过滤/同步、MQTT defer per-call 诊断、锁序、Host 矩阵与编译隔离候选。
 - [C15-2 hook/defer 诊断实现与 Host 验证（2026-11-27）](reviews/CMD/C15-2_hook_defer诊断实现与Host验证_2026-11-27.md)：实施基线、H1–H27 结果、构建/符号隔离与 NOT_COVERED 清单。
 - [C15-2 hook 路径设备验证（2026-11-28）](reviews/CMD/C15-2_hook路径设备验证_2026-11-28.md)：A0 连接参数预检 + A1 真 300 s TTL 的 hook 路径结果；C15-2 原始 NOT_COVERED 与 CMD-15 `TEST_PENDING` 不变。
+- [P2 启动定义（2026-11-28）](reviews/P2/P2启动定义_2026-11-28.md)：候选 A 连接参数条目生命周期验证；重置分类（power off/on 保留 vs 驱动释放清除）、五条判据与停止条件；未启动、不授权设备操作。
 - [MQTT 运行态与 config 同步实施证据](reviews/MQTT/MQTT运行态与config同步复核_2026-11-15.md)
 
 设计文件说明设计约束，审查文件保存限定时点的证据；任务状态只在对应台账维护，专项材料不另行维护状态。
