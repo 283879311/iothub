@@ -55,16 +55,28 @@ class StopRun(Exception):
     pass
 
 
+class RequestIds:
+    """Monotonic, collision-free request ids across all polls and retries."""
+
+    def __init__(self) -> None:
+        self._seq = 0
+
+    def next(self, tag: str) -> str:
+        self._seq += 1
+        return "%s-%d" % (tag, self._seq)
+
+
 class Deps:
     """Injectable dependencies for run_case()."""
 
     def __init__(self, sess, tap_factory, wall=time.time,
-                 mono=time.monotonic, sleep=asyncio.sleep):
+                 mono=time.monotonic, sleep=asyncio.sleep, rids=None):
         self.sess = sess
         self.tap_factory = tap_factory
         self.wall = wall
         self.mono = mono
         self.sleep = sleep
+        self.rids = rids or RequestIds()
 
 
 class AttrTap:
@@ -145,7 +157,8 @@ async def read_cmd(deps: Deps, cmd: str, args: dict, base_rid: str,
     """Read-only command; unique id per attempt; bounded timeout retries."""
     attempt = 1
     while True:
-        rid = "%s-%d" % (base_rid, attempt)
+        # Global monotonic id: never reused across polls, retries or commands.
+        rid = deps.rids.next(base_rid)
         try:
             resp = await deps.sess.send_request(
                 req(rid, cmd, args, deps.sess.token), timeout=timeout, retries=0)
@@ -229,7 +242,7 @@ async def run_case(deps: Deps, ssid: str) -> dict:
         w0 = deps.wall()
         try:
             tc = await deps.sess.send_request(
-                req("tc1", "network.tryconnect",
+                req(deps.rids.next("tc1"), "network.tryconnect",
                     {"ssid": ssid, "password": WRONG_PASSWORD}, deps.sess.token),
                 timeout=20, retries=0)
         except Exception as exc:  # noqa: BLE001

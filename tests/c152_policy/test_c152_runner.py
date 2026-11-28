@@ -46,12 +46,16 @@ class FakeSess:
         self.ids = []
         self.cmds = []
         self.writes = 0
+        self.pending = {}  # late responses keyed by request id (Session-like)
 
     async def send_request(self, req, timeout=15, retries=0):
         self.ids.append(req["id"])
         self.cmds.append(req["cmd"])
         if req["cmd"] == "network.tryconnect":
             self.writes += 1
+        rid = req["id"]
+        if rid in self.pending:  # simulate Session consuming a stored response
+            return FakeResp(self.pending.pop(rid))
         return FakeResp(self.handler(req))
 
 
@@ -176,6 +180,33 @@ class ReadCmdTests(unittest.TestCase):
         self.assertEqual(out, {"ok": True, "data": {}})
         self.assertEqual(sess.ids, ["r-1", "r-2"])
 
+    def test_ids_unique_across_calls(self):
+        clock = Clock()
+        deps, sess = make_deps(make_handler(), clock)
+        run(r.read_cmd(deps, "probe", {}, "p"))
+        run(r.read_cmd(deps, "probe", {}, "p"))
+        self.assertEqual(len(sess.ids), len(set(sess.ids)))
+
+    def test_late_response_cannot_satisfy_next_poll(self):
+        clock = Clock()
+        calls = {"n": 0}
+
+        def handler(req):
+            calls["n"] += 1
+            if calls["n"] == 1:
+                raise asyncio.TimeoutError()
+            return {"ok": True, "data": {"fresh": True}}
+
+        deps, sess = make_deps(handler, clock)
+        first = run(r.read_cmd(deps, "probe", {}, "p"))
+        self.assertEqual(first, {"ok": True, "data": {"fresh": True}})
+        stale_id = sess.ids[0]
+        sess.pending[stale_id] = {"ok": True, "data": {"stale": True}}
+        second = run(r.read_cmd(deps, "probe", {}, "p"))
+        self.assertEqual(second, {"ok": True, "data": {"fresh": True}})
+        self.assertIn(stale_id, sess.pending)  # stale entry not consumed
+        self.assertEqual(len(sess.ids), len(set(sess.ids)))
+
     def test_three_timeouts_stop(self):
         clock = Clock()
 
@@ -245,6 +276,31 @@ class OutcomeTests(unittest.TestCase):
         self.assertEqual(result["window"]["n_attr"], 1)
         self.assertEqual(result["cross_errors"], [])
         self.assertEqual(sess.writes, 1)
+
+    def test_run_case_timeout_stop(self):
+        clock = Clock()
+
+        def handler(req):
+            if req["cmd"] == "network.status":
+                raise asyncio.TimeoutError()
+            return make_handler()(req)
+
+        deps, sess = make_deps(handler, clock)
+        result = run(r.run_case(deps, "ssid"))
+        self.assertEqual((result["verdict"], result["reason"]),
+                         ("STOP", "read_timeout"))
+        self.assertEqual(sess.writes, 0)
+
+    def test_run_case_ids_unique(self):
+        clock = Clock()
+        deps, sess = make_deps(make_handler(), clock)
+        result = run(r.run_case(deps, "ssid"))
+        self.assertEqual(result["verdict"], "PASS")
+        self.assertEqual(len(sess.ids), len(set(sess.ids)))
+        for prefix in ("ident", "ready", "term", "sta", "post"):
+            self.assertTrue(any(i.startswith(prefix + "-") for i in sess.ids),
+                            prefix)
+        self.assertTrue(any(i.startswith("tc1-") for i in sess.ids))
 
     def test_tap_factory_stop_blocks_write(self):
         clock = Clock()

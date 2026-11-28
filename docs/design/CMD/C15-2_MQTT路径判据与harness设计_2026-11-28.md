@@ -41,7 +41,7 @@
 - 不断言 `sta_has_ip` 出现在 attributes；以“当前固件 attributes 发布契约不包含该字段”表述，不推断设计意图；
 - `w0`=tryconnect 发送前，`w1`=STA 恢复与身份核验后；status 采样在 w1 之后，`status_ts` 取响应返回后的实际时间，并记录 `sta_ip`；
 - 身份字段 `device_id`/`firmware`/`build_sha` 任一缺失或不匹配，**在任何写命令之前** `STOP`；
-- 每次只读请求生成唯一 ID（含重试），迟到响应不得满足下一次查询。
+- 所有请求（只读与写命令、含重试与各轮询周期）由**全局单调序号**分配唯一 ID；迟到响应不得满足下一次查询。
 
 ## 3. 判定与容错语义
 
@@ -67,7 +67,7 @@
 - `tools/review/c152_mqtt_attrs.py`：I/O 执行器（BLE 登录、就绪门禁、attributes 订阅、tryconnect、终态/恢复/对读），复用 `p0_acceptance` 的 `Session`；
 - `tests/c152_policy/`：Host 单元测试（字段缺失、零样本、超时、busy、终态、恢复、身份、对读、停止条件）。
 
-流程：身份（`device_id`/`firmware`/`build_sha`，fail-closed）→ 就绪（`time.monotonic()` 实际连续 10 s；观测间隔 >3 s 清零）→ attributes 订阅（SUBACK 校验）→ `w0` → 错误口令 tryconnect（唯一 ID，transport 异常不重发）→ 终态 ≤40 s → STA 恢复 ≤60 s → 身份复核 → `w1` → `network.status` 采样（`status_ts` 取响应返回后）→ 窗口/对读判定 → JSON 结果与退出码（0/1/2/3 = PASS/FAIL/NOT_COVERED/STOP）。
+流程：身份（`device_id`/`firmware`/`build_sha`，fail-closed）→ 就绪（`time.monotonic()` 实际连续 10 s；观测间隔 >3 s 清零）→ attributes 订阅（SUBACK 校验）→ `w0` → 错误口令 tryconnect（全局唯一 ID，transport 异常不重发）→ 终态 ≤40 s → STA 恢复 ≤60 s → 身份复核 → `w1` → `network.status` 采样（`status_ts` 取响应返回后）→ 窗口/对读判定 → JSON 结果与退出码（0/1/2/3 = PASS/FAIL/NOT_COVERED/STOP）。
 
 runner 以依赖注入（session/tap 工厂/monotonic/wall/sleep）组织，Host 测试使用 fake session、fake tap 与 fake 时钟，不连接 BLE 或 MQTT。
 
@@ -93,12 +93,15 @@ runner 以依赖注入（session/tap 工厂/monotonic/wall/sleep）组织，Host
 | T16 | 身份 device_id 不匹配 | STOP，且未发送 tryconnect |
 | T17 | firmware/build_sha 缺失或不匹配 | STOP，且未发送 tryconnect |
 | T18 | 稳定门禁真实时间/间隔重置 | ≥10 s 才通过；间隔 >3 s 清零 |
-| T19 | 只读重试/迟到响应 | 每次请求唯一 ID；3 次超时 STOP |
+| T19 | 只读重试/迟到响应 | 全局单调 ID（跨轮询不重复）；3 次超时 STOP |
 | T20 | 写命令 transport 异常 | STOP，仅一次发送 |
 | T21 | 对读两侧 IP 为空 | FAIL |
 | T22 | `uart_baudrate` 缺失 | `uart_baudrate_missing` |
 | T23 | SUBACK 空/拒绝 | STOP |
 | T24 | 退出码映射 | PASS/FAIL/NOT_COVERED/STOP = 0/1/2/3 |
+| T25 | 跨轮询调用 | 同一命令两次调用 ID 不重复 |
+| T26 | 迟到响应 | 首次超时后注入旧 ID 响应，不得满足下一次查询 |
+| T27 | run_case 只读持续超时 | STOP/read_timeout，且未发送写命令 |
 
 ## 6. 边界
 
