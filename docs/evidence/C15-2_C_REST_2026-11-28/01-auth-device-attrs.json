@@ -1,0 +1,70 @@
+{
+  "base": "http://139.9.93.245:28080",
+  "steps": {
+    "auth_user": {
+      "status": 200,
+      "authority": "TENANT_ADMIN"
+    },
+    "tenant_devices": {
+      "status": 200,
+      "n": 9,
+      "names": [
+        "Test Device A1",
+        "Test Device A2",
+        "Test Device A3",
+        "Test Device B1",
+        "Test Device C1",
+        "DHT11 Demo Device",
+        "Raspberry Pi Demo Device",
+        "Thermostat T1",
+        "Thermostat T2"
+      ]
+    },
+    "device_lookup": {
+      "status": 200,
+      "n_returned": 0,
+      "found": true,
+      "matched_name": "Test Device C1"
+    },
+    "device": {
+      "id": "8536c140-c890-11f1-9a00-67dba22715ad",
+      "name": "Test Device C1",
+      "type": "default",
+      "active": null,
+      "lastActivityTime": null,
+      "lastActivityTime_utc": null
+    },
+    "attributes": {
+      "status": 200,
+      "n_returned": 4,
+      "items": [
+        {
+          "key": "net_mode",
+          "lastUpdateTs": 1792635746514,
+          "ts_utc": "2026-10-22T02:22:26.514000+00:00",
+          "value": "sta"
+        },
+        {
+          "key": "sta_ip",
+          "lastUpdateTs": 1793623632837,
+          "ts_utc": "2026-11-02T12:47:12.837000+00:00",
+          "present": true,
+          "length_class": "1-16"
+        },
+        {
+          "key": "sta_ssid",
+          "lastUpdateTs": 1793623632837,
+          "ts_utc": "2026-11-02T12:47:12.837000+00:00",
+          "present": true,
+          "length_class": "1-16"
+        },
+        {
+          "key": "uart_baudrate",
+          "lastUpdateTs": 1792589543857,
+          "ts_utc": "2026-10-21T13:32:23.857000+00:00",
+          "value": 115200
+        }
+      ]
+    }
+  }
+}

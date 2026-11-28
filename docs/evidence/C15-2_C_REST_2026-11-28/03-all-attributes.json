@@ -1,0 +1,178 @@
+{
+  "status": 200,
+  "n": 22,
+  "items": [
+    {
+      "scope": null,
+      "key": "active",
+      "lastUpdateTs": 1792589543857,
+      "ts_utc": "2026-10-21T13:32:23.857000+00:00",
+      "present_only": true,
+      "type": "bool"
+    },
+    {
+      "scope": null,
+      "key": "active",
+      "lastUpdateTs": 1794313021681,
+      "ts_utc": "2026-11-10T12:17:01.681000+00:00",
+      "present_only": true,
+      "type": "bool"
+    },
+    {
+      "scope": null,
+      "key": "ap_ssid",
+      "lastUpdateTs": 1792635305495,
+      "ts_utc": "2026-10-22T02:15:05.495000+00:00",
+      "present_only": true,
+      "type": "str"
+    },
+    {
+      "scope": null,
+      "key": "bt_mode",
+      "lastUpdateTs": 1792589543857,
+      "ts_utc": "2026-10-21T13:32:23.857000+00:00",
+      "present_only": true,
+      "type": "str"
+    },
+    {
+      "scope": null,
+      "key": "fw_version",
+      "lastUpdateTs": 1795828870401,
+      "ts_utc": "2026-11-28T01:21:10.401000+00:00",
+      "present_only": true,
+      "type": "str"
+    },
+    {
+      "scope": null,
+      "key": "inactivityAlarmTime",
+      "lastUpdateTs": 1794230115297,
+      "ts_utc": "2026-11-09T13:15:15.297000+00:00",
+      "present_only": true,
+      "type": "int"
+    },
+    {
+      "scope": null,
+      "key": "input_state",
+      "lastUpdateTs": 1795862536673,
+      "ts_utc": "2026-11-28T10:42:16.673000+00:00",
+      "present_only": true,
+      "type": "bool"
+    },
+    {
+      "scope": null,
+      "key": "io_seq",
+      "lastUpdateTs": 1795862536673,
+      "ts_utc": "2026-11-28T10:42:16.673000+00:00",
+      "present_only": true,
+      "type": "int"
+    },
+    {
+      "scope": null,
+      "key": "io_source",
+      "lastUpdateTs": 1795828910142,
+      "ts_utc": "2026-11-28T01:21:50.142000+00:00",
+      "present_only": true,
+      "type": "str"
+    },
+    {
+      "scope": null,
+      "key": "lastActivityTime",
+      "lastUpdateTs": 1795863619063,
+      "ts_utc": "2026-11-28T11:00:19.063000+00:00",
+      "present_only": true,
+      "type": "int"
+    },
+    {
+      "scope": null,
+      "key": "lastConnectTime",
+      "lastUpdateTs": 1795860773254,
+      "ts_utc": "2026-11-28T10:12:53.254000+00:00",
+      "present_only": true,
+      "type": "int"
+    },
+    {
+      "scope": null,
+      "key": "lastDisconnectTime",
+      "lastUpdateTs": 1795860772502,
+      "ts_utc": "2026-11-28T10:12:52.502000+00:00",
+      "present_only": true,
+      "type": "int"
+    },
+    {
+      "scope": null,
+      "key": "led_power_policy",
+      "lastUpdateTs": 1792589543857,
+      "ts_utc": "2026-10-21T13:32:23.857000+00:00",
+      "present_only": true,
+      "type": "int"
+    },
+    {
+      "scope": null,
+      "key": "led_state",
+      "lastUpdateTs": 1795862536572,
+      "ts_utc": "2026-11-28T10:42:16.572000+00:00",
+      "present_only": true,
+      "type": "bool"
+    },
+    {
+      "scope": null,
+      "key": "net_mode",
+      "lastUpdateTs": 1792635746514,
+      "ts_utc": "2026-10-22T02:22:26.514000+00:00",
+      "value": "sta"
+    },
+    {
+      "scope": null,
+      "key": "online",
+      "lastUpdateTs": 1792589543857,
+      "ts_utc": "2026-10-21T13:32:23.857000+00:00",
+      "present_only": true,
+      "type": "bool"
+    },
+    {
+      "scope": null,
+      "key": "relay_power_policy",
+      "lastUpdateTs": 1792589543857,
+      "ts_utc": "2026-10-21T13:32:23.857000+00:00",
+      "present_only": true,
+      "type": "int"
+    },
+    {
+      "scope": null,
+      "key": "relay_state",
+      "lastUpdateTs": 1792589543857,
+      "ts_utc": "2026-10-21T13:32:23.857000+00:00",
+      "present_only": true,
+      "type": "bool"
+    },
+    {
+      "scope": null,
+      "key": "sta_ip",
+      "lastUpdateTs": 1793623632837,
+      "ts_utc": "2026-11-02T12:47:12.837000+00:00",
+      "present": true
+    },
+    {
+      "scope": null,
+      "key": "sta_ssid",
+      "lastUpdateTs": 1793623632837,
+      "ts_utc": "2026-11-02T12:47:12.837000+00:00",
+      "present": true
+    },
+    {
+      "scope": null,
+      "key": "uart_baudrate",
+      "lastUpdateTs": 1792589543857,
+      "ts_utc": "2026-10-21T13:32:23.857000+00:00",
+      "value": 115200
+    },
+    {
+      "scope": null,
+      "key": "uart_frame",
+      "lastUpdateTs": 1792589543857,
+      "ts_utc": "2026-10-21T13:32:23.857000+00:00",
+      "present_only": true,
+      "type": "str"
+    }
+  ]
+}

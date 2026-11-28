@@ -1,0 +1,24 @@
+{
+  "steps": {
+    "device": {
+      "status": 200,
+      "name": "Test Device C1",
+      "active": null,
+      "createdTime": 1792065846100,
+      "createdTime_utc": "2026-10-15T12:04:06.100000+00:00",
+      "lastActivityTime": null,
+      "lastActivityTime_utc": null
+    },
+    "device_info": {
+      "status": 200,
+      "active": true,
+      "deviceName": null,
+      "createdTime": 1792065846100,
+      "createdTime_utc": "2026-10-15T12:04:06.100000+00:00",
+      "lastActivityTime": null,
+      "lastActivityTime_utc": null,
+      "transport": "DEFAULT",
+      "has_fw_version": false
+    }
+  }
+}
