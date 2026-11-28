@@ -95,6 +95,69 @@
       "artifact_sha256": "d5b71c2025011d9ff8738474da935819a310a86f737dc548df18f9c071a576d1",
       "artifact_bytes": 35250,
       "sanitized": true
+    },
+    {
+      "source": "/tmp/p2r_run.log",
+      "source_sha256": "db12eed30ecb363b1a0e56630c97f3fbf92a88e38a61708596982c6964437fa6",
+      "artifact": "p2_3_rerun/run/p2r_run.log",
+      "artifact_sha256": "bda43b67ef896a7f8bb8ed99e01fc6d858da48b5413a968d79ec3fdf660c29b8",
+      "artifact_bytes": 509320,
+      "sanitized": true,
+      "rev": 3
+    },
+    {
+      "source": "/tmp/p2r_load.log",
+      "source_sha256": "5023da8dc2dce88f4ac61a014b67ccfccf14dee1b6e5959f1eb65a25051a2b96",
+      "artifact": "p2_3_rerun/load/p2r_load.log",
+      "artifact_sha256": "63b564be3438cc38facba11be1598841949b2c19ae58623be3ff6ed86c163b15",
+      "artifact_bytes": 435,
+      "sanitized": true,
+      "rev": 3
+    },
+    {
+      "source": "/tmp/p2r_pre_decoded.txt",
+      "source_sha256": "58eef0520d6f95abe1fa80ab53ec2df7c9e5d5d2d414dbbb9ebf0381cc066dee",
+      "artifact": "p2_3_rerun/btmon/p2r_pre_decoded.txt",
+      "artifact_sha256": "edcddad1d017a63b8458c43a2a78a85d3e4daae0ef5c25122a8a633db84215e7",
+      "artifact_bytes": 351131,
+      "sanitized": true,
+      "rev": 3
+    },
+    {
+      "source": "/tmp/p2r_post_decoded.txt",
+      "source_sha256": "97caad8512504104046102cf1fed68654bcdb39eb3936f8f7a358fe409f9ab1c",
+      "artifact": "p2_3_rerun/btmon/p2r_post_decoded.txt",
+      "artifact_sha256": "6d034cecec7980e5e66427102dfb9ec02b102a8e23f4b6681eeb7006db8fbc26",
+      "artifact_bytes": 143205,
+      "sanitized": true,
+      "rev": 3
+    },
+    {
+      "source": "/tmp/p2_probe_p2_3r_pre.json",
+      "source_sha256": "7f50d7eeb9b4bdd814e87ea54bbea4233965db968cff0f55a47cb5d986c62ec0",
+      "artifact": "p2_3_rerun/probes/p2_probe_p2_3r_pre.json",
+      "artifact_sha256": "7f50d7eeb9b4bdd814e87ea54bbea4233965db968cff0f55a47cb5d986c62ec0",
+      "artifact_bytes": 217,
+      "sanitized": false,
+      "rev": 3
+    },
+    {
+      "source": "/tmp/p2_probe_p2_3r_post.json",
+      "source_sha256": "161c064da038bb991fdd33e19aebe0cd3b3ffb17db2bf76b347ecd543dc38372",
+      "artifact": "p2_3_rerun/probes/p2_probe_p2_3r_post.json",
+      "artifact_sha256": "161c064da038bb991fdd33e19aebe0cd3b3ffb17db2bf76b347ecd543dc38372",
+      "artifact_bytes": 219,
+      "sanitized": false,
+      "rev": 3
+    },
+    {
+      "source": "/tmp/p2r_serial.log",
+      "source_sha256": "80dc12289f5458d93dacedc76a8bc3f8ebdf49c79e575c87c42676c880ccfda0",
+      "artifact": "p2_3_rerun/serial/p2r_serial.log",
+      "artifact_sha256": "9eedad327f4a18d9279b95e63c4c5ff337f699726a918aeea5b9ddec3b65c02c",
+      "artifact_bytes": 11112,
+      "sanitized": true,
+      "rev": 3
     }
   ],
   "withheld": [
@@ -117,6 +180,18 @@
       "source": "/tmp/p2_s4.btsnoop",
       "source_sha256": "96e36999af687604a29ee0ab91b8b35547caf557be3224faa8fd4406a635e69a",
       "withheld": "raw btsnoop contains host/device/third-party MAC literals; binary cannot be line-redacted"
+    },
+    {
+      "source": "/tmp/p2r_pre.btsnoop",
+      "source_sha256": "3072015b80763202ab6ed30f24a967465742c6dcd30e7fffeaddde119ebb022e",
+      "withheld": "raw btsnoop contains host/device/third-party MAC literals; binary cannot be line-redacted",
+      "rev": 3
+    },
+    {
+      "source": "/tmp/p2r_post.btsnoop",
+      "source_sha256": "1da39dbfa002d9bec6d022b0b50518a11a2534af82d1099bea193b0644caa964",
+      "withheld": "raw btsnoop contains host/device/third-party MAC literals; binary cannot be line-redacted",
+      "rev": 3
     }
   ]
 }

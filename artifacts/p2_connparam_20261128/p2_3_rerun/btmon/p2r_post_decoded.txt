@@ -1,0 +1,3167 @@
+Bluetooth monitor ver 5.72
+= Note: Linux version 7.0.0-43-generic (x86_64)                        0.398930
+= Note: Bluetooth subsystem version 2.22                               0.398932
+= New Index: <host-bt-addr> (Primary,USB,hci0)               [hci0] 0.398933
+= Open Index: <host-bt-addr>                                 [hci0] 0.398933
+= Index Info: <host-bt-addr> (Qualcomm)                      [hci0] 0.398934
+@ MGMT Open: bluetoothd (privileged) version 1.23             {0x0001} 0.398935
+@ MGMT Command: Start Service Disc.. (0x003a) plen 20  {0x0001} [hci0] 1.513569
+        Address type: 0x06
+          LE Public
+          LE Random
+        RSSI: invalid (0x7f)
+        UUIDs: 1
+        UUID: Nordic UART Service
+< HCI Command: LE Set Scan Enable (0x08|0x000c) plen 2       #1 [hci0] 1.513683
+        Scanning: Disabled (0x00)
+        Filter duplicates: Disabled (0x00)
+> HCI Event: Command Complete (0x0e) plen 4                  #2 [hci0] 1.608320
+      LE Set Scan Enable (0x08|0x000c) ncmd 1
+        Status: Success (0x00)
+< HCI Command: LE Set Address Resolu.. (0x08|0x002d) plen 1  #3 [hci0] 1.608459
+        Address resolution: Disabled (0x00)
+> HCI Event: Command Complete (0x0e) plen 4                  #4 [hci0] 1.609257
+      LE Set Address Resolution Enable (0x08|0x002d) ncmd 1
+        Status: Success (0x00)
+< HCI Command: LE Set Random Address (0x08|0x0005) plen 6    #5 [hci0] 1.609364
+        Address: <mac-a4ca> (Non-Resolvable)
+> HCI Event: Command Complete (0x0e) plen 4                  #6 [hci0] 1.610290
+      LE Set Random Address (0x08|0x0005) ncmd 1
+        Status: Success (0x00)
+< HCI Command: LE Set Scan Parameters (0x08|0x000b) plen 7   #7 [hci0] 1.610332
+        Type: Active (0x01)
+        Interval: 11.250 msec (0x0012)
+        Window: 11.250 msec (0x0012)
+        Own address type: Random (0x01)
+        Filter policy: Accept all advertisement (0x00)
+> HCI Event: Command Complete (0x0e) plen 4                  #8 [hci0] 1.611298
+      LE Set Scan Parameters (0x08|0x000b) ncmd 1
+        Status: Success (0x00)
+< HCI Command: LE Set Scan Enable (0x08|0x000c) plen 2       #9 [hci0] 1.611388
+        Scanning: Enabled (0x01)
+        Filter duplicates: Enabled (0x01)
+> HCI Event: Command Complete (0x0e) plen 4                 #10 [hci0] 1.612326
+      LE Set Scan Enable (0x08|0x000c) ncmd 1
+        Status: Success (0x00)
+@ MGMT Event: Discovering (0x0013) plen 2              {0x0001} [hci0] 1.612339
+        Address type: 0x06
+          LE Public
+          LE Random
+        Discovery: Enabled (0x01)
+@ MGMT Event: Command Complete (0x0001) plen 4         {0x0001} [hci0] 1.612409
+      Start Service Discovery (0x003a) plen 1
+        Status: Success (0x00)
+        Address type: 0x06
+          LE Public
+          LE Random
+> HCI Event: LE Meta Event (0x3e) plen 42                   #11 [hci0] 1.655322
+      LE Advertising Report (0x02)
+        Num reports: 1
+        Event type: Connectable undirected - ADV_IND (0x00)
+        Address type: Public (0x00)
+        Address: <device-mac> (Espressif Inc.)
+        Data length: 30
+        Flags: 0x06
+          LE General Discoverable Mode
+          BR/EDR Not Supported
+        128-bit Service UUIDs (complete): 1 entry
+          Nordic UART Service
+        Name (short): IH-65D8
+        RSSI: -43 dBm (0xd5)
+> HCI Event: LE Meta Event (0x3e) plen 34                   #12 [hci0] 1.664295
+      LE Advertising Report (0x02)
+        Num reports: 1
+        Event type: Connectable undirected - ADV_IND (0x00)
+        Address type: Public (0x00)
+        Address: <mac-1eaa> (Espressif Inc.)
+        Data length: 22
+        Flags: 0x06
+          LE General Discoverable Mode
+          BR/EDR Not Supported
+        16-bit Service UUIDs (complete): 1 entry
+          Unknown (0xabf0)
+        Name (complete): LIPO-B72332
+        RSSI: -77 dBm (0xb3)
+@ MGMT Event: Device Found (0x0012) plen 44            {0x0001} [hci0] 1.664337
+        LE Address: <device-mac> (Espressif Inc.)
+        RSSI: -43 dBm (0xd5)
+        Flags: 0x00000000
+        Data length: 30
+        Flags: 0x06
+          LE General Discoverable Mode
+          BR/EDR Not Supported
+        128-bit Service UUIDs (complete): 1 entry
+          Nordic UART Service
+        Name (short): IH-65D8
+> HCI Event: LE Meta Event (0x3e) plen 43                   #13 [hci0] 1.690310
+      LE Advertising Report (0x02)
+        Num reports: 1
+        Event type: Connectable undirected - ADV_IND (0x00)
+        Address type: Random (0x01)
+        Address: <mac-a72a> (Resolvable)
+        Data length: 31
+        Flags: 0x01
+          LE Limited Discoverable Mode
+        Service Data: Unknown (0xfcf8)
+          Data: 00824d7200c7120e8167bdafc04d44da1317742639411442
+        RSSI: -50 dBm (0xce)
+> HCI Event: LE Meta Event (0x3e) plen 34                   #14 [hci0] 1.715273
+      LE Advertising Report (0x02)
+        Num reports: 1
+        Event type: Connectable undirected - ADV_IND (0x00)
+        Address type: Public (0x00)
+        Address: <mac-1eaa> (Espressif Inc.)
+        Data length: 22
+        Flags: 0x06
+          LE General Discoverable Mode
+          BR/EDR Not Supported
+        16-bit Service UUIDs (complete): 1 entry
+          Unknown (0xabf0)
+        Name (complete): LIPO-B72332
+        RSSI: -81 dBm (0xaf)
+> HCI Event: LE Meta Event (0x3e) plen 31                   #15 [hci0] 1.718312
+      LE Advertising Report (0x02)
+        Num reports: 1
+        Event type: Non connectable undirected - ADV_NONCONN_IND (0x03)
+        Address type: Public (0x00)
+        Address: <mac-3e62> (Beijing Xiaomi Electronics Co., Ltd.)
+        Data length: 19
+        Flags: 0x06
+          LE General Discoverable Mode
+          BR/EDR Not Supported
+        Company: Xiaomi Inc. (911)
+          Data: 0a101c00009d5cbb433968ec
+        RSSI: -82 dBm (0xae)
+> HCI Event: LE Meta Event (0x3e) plen 40                   #16 [hci0] 1.721300
+      LE Advertising Report (0x02)
+        Num reports: 1
+        Event type: Scan response - SCAN_RSP (0x04)
+        Address type: Random (0x01)
+        Address: <mac-a72a> (Resolvable)
+        Data length: 28
+        Company: not assigned (2502)
+          Data: bb00123456781234567800001c004d01b0e0501e001f0000
+        RSSI: -49 dBm (0xcf)
+> HCI Event: LE Meta Event (0x3e) plen 41                   #17 [hci0] 1.746308
+      LE Advertising Report (0x02)
+        Num reports: 1
+        Event type: Connectable undirected - ADV_IND (0x00)
+        Address type: Random (0x01)
+        Address: <mac-5be4> (Resolvable)
+        Data length: 29
+        Flags: 0x1a
+          LE General Discoverable Mode
+          Simultaneous LE and BR/EDR (Controller)
+          Simultaneous LE and BR/EDR (Host)
+        16-bit Service UUIDs (complete): 3 entries
+          Device Information (0x180a)
+          Unknown (0xfcf8)
+          HUAWEI Technologies Co., Ltd (0xfe35)
+        128-bit Service UUIDs (complete): 1 entry
+          Vendor specific
+        RSSI: -43 dBm (0xd5)
+> HCI Event: LE Meta Event (0x3e) plen 41                   #18 [hci0] 1.783278
+      LE Advertising Report (0x02)
+        Num reports: 1
+        Event type: Connectable undirected - ADV_IND (0x00)
+        Address type: Public (0x00)
+        Address: <mac-abd7> (GD Midea Air-Conditioning Equipment Co.,Ltd.)
+        Data length: 29
+        Flags: 0x06
+          LE General Discoverable Mode
+          BR/EDR Not Supported
+        Name (complete): midea
+        Company: GD Midea Air-Conditioning Equipment Co., Ltd. (1704)
+          Data: 013232303430303333414334313636
+        RSSI: -88 dBm (0xa8)
+> HCI Event: LE Meta Event (0x3e) plen 34                   #19 [hci0] 1.792304
+      LE Advertising Report (0x02)
+        Num reports: 1
+        Event type: Connectable undirected - ADV_IND (0x00)
+        Address type: Public (0x00)
+        Address: <mac-1eaa> (Espressif Inc.)
+        Data length: 22
+        Flags: 0x06
+          LE General Discoverable Mode
+          BR/EDR Not Supported
+        16-bit Service UUIDs (complete): 1 entry
+          Unknown (0xabf0)
+        Name (complete): LIPO-B72332
+        RSSI: -78 dBm (0xb2)
+> HCI Event: LE Meta Event (0x3e) plen 41                   #20 [hci0] 1.871266
+      LE Advertising Report (0x02)
+        Num reports: 1
+        Event type: Connectable undirected - ADV_IND (0x00)
+        Address type: Random (0x01)
+        Address: <mac-5be4> (Resolvable)
+        Data length: 29
+        Flags: 0x1a
+          LE General Discoverable Mode
+          Simultaneous LE and BR/EDR (Controller)
+          Simultaneous LE and BR/EDR (Host)
+        16-bit Service UUIDs (complete): 3 entries
+          Device Information (0x180a)
+          Unknown (0xfcf8)
+          HUAWEI Technologies Co., Ltd (0xfe35)
+        128-bit Service UUIDs (complete): 1 entry
+          Vendor specific
+        RSSI: -46 dBm (0xd2)
+> HCI Event: LE Meta Event (0x3e) plen 31                   #21 [hci0] 1.923263
+      LE Advertising Report (0x02)
+        Num reports: 1
+        Event type: Non connectable undirected - ADV_NONCONN_IND (0x03)
+        Address type: Public (0x00)
+        Address: <mac-3e62> (Beijing Xiaomi Electronics Co., Ltd.)
+        Data length: 19
+        Flags: 0x06
+          LE General Discoverable Mode
+          BR/EDR Not Supported
+        Company: Xiaomi Inc. (911)
+          Data: 0a101c00009d5cbb433968ec
+        RSSI: -83 dBm (0xad)
+> HCI Event: LE Meta Event (0x3e) plen 42                   #22 [hci0] 1.936266
+      LE Advertising Report (0x02)
+        Num reports: 1
+        Event type: Connectable undirected - ADV_IND (0x00)
+        Address type: Public (0x00)
+        Address: <device-mac> (Espressif Inc.)
+        Data length: 30
+        Flags: 0x06
+          LE General Discoverable Mode
+          BR/EDR Not Supported
+        128-bit Service UUIDs (complete): 1 entry
+          Nordic UART Service
+        Name (short): IH-65D8
+        RSSI: -42 dBm (0xd6)
+> HCI Event: LE Meta Event (0x3e) plen 31                   #23 [hci0] 1.984263
+      LE Advertising Report (0x02)
+        Num reports: 1
+        Event type: Scan response - SCAN_RSP (0x04)
+        Address type: Public (0x00)
+        Address: <device-mac> (Espressif Inc.)
+        Data length: 19
+        Name (complete): IotHubBLE-65D8
+        TX power: 0 dBm
+        RSSI: -41 dBm (0xd7)
+@ MGMT Event: Device Found (0x0012) plen 63            {0x0001} [hci0] 1.984320
+        LE Address: <device-mac> (Espressif Inc.)
+        RSSI: -41 dBm (0xd7)
+        Flags: 0x00000000
+        Data length: 49
+        Flags: 0x06
+          LE General Discoverable Mode
+          BR/EDR Not Supported
+        128-bit Service UUIDs (complete): 1 entry
+          Nordic UART Service
+        Name (short): IH-65D8
+        Name (complete): IotHubBLE-65D8
+        TX power: 0 dBm
+> HCI Event: LE Meta Event (0x3e) plen 29                   #24 [hci0] 2.361563
+      LE Advertising Report (0x02)
+        Num reports: 1
+        Event type: Connectable undirected - ADV_IND (0x00)
+        Address type: Random (0x01)
+        Address: <mac-786b> (Resolvable)
+        Data length: 17
+        Flags: 0x1a
+          LE General Discoverable Mode
+          Simultaneous LE and BR/EDR (Controller)
+          Simultaneous LE and BR/EDR (Host)
+        TX power: 11 dBm
+        Company: Apple, Inc. (76)
+          Type: Unknown (16)
+          Data: 741cfedc1c
+        RSSI: -92 dBm (0xa4)
+> HCI Event: LE Meta Event (0x3e) plen 19                   #25 [hci0] 2.368295
+      LE Advertising Report (0x02)
+        Num reports: 1
+        Event type: Scan response - SCAN_RSP (0x04)
+        Address type: Random (0x01)
+        Address: <mac-5be4> (Resolvable)
+        Data length: 7
+        Name (complete): HONOR
+        RSSI: -44 dBm (0xd4)
+> HCI Event: LE Meta Event (0x3e) plen 34                   #26 [hci0] 2.391286
+      LE Advertising Report (0x02)
+        Num reports: 1
+        Event type: Connectable undirected - ADV_IND (0x00)
+        Address type: Public (0x00)
+        Address: <mac-1eaa> (Espressif Inc.)
+        Data length: 22
+        Flags: 0x06
+          LE General Discoverable Mode
+          BR/EDR Not Supported
+        16-bit Service UUIDs (complete): 1 entry
+          Unknown (0xabf0)
+        Name (complete): LIPO-B72332
+        RSSI: -78 dBm (0xb2)
+> HCI Event: LE Meta Event (0x3e) plen 31                   #27 [hci0] 2.431581
+      LE Advertising Report (0x02)
+        Num reports: 1
+        Event type: Scan response - SCAN_RSP (0x04)
+        Address type: Public (0x00)
+        Address: <device-mac> (Espressif Inc.)
+        Data length: 19
+        Name (complete): IotHubBLE-65D8
+        TX power: 0 dBm
+        RSSI: -41 dBm (0xd7)
+> HCI Event: LE Meta Event (0x3e) plen 31                   #28 [hci0] 2.539350
+      LE Advertising Report (0x02)
+        Num reports: 1
+        Event type: Non connectable undirected - ADV_NONCONN_IND (0x03)
+        Address type: Public (0x00)
+        Address: <mac-3e62> (Beijing Xiaomi Electronics Co., Ltd.)
+        Data length: 19
+        Flags: 0x06
+          LE General Discoverable Mode
+          BR/EDR Not Supported
+        Company: Xiaomi Inc. (911)
+          Data: 0a101c00009d5cbb433968ec
+        RSSI: -78 dBm (0xb2)
+> HCI Event: LE Meta Event (0x3e) plen 12                   #29 [hci0] 2.547532
+      LE Advertising Report (0x02)
+        Num reports: 1
+        Event type: Scan response - SCAN_RSP (0x04)
+        Address type: Public (0x00)
+        Address: <mac-1eaa> (Espressif Inc.)
+        Data length: 0
+        RSSI: -77 dBm (0xb3)
+> HCI Event: LE Meta Event (0x3e) plen 29                   #30 [hci0] 2.779294
+      LE Advertising Report (0x02)
+        Num reports: 1
+        Event type: Connectable undirected - ADV_IND (0x00)
+        Address type: Random (0x01)
+        Address: <mac-2d46> (Resolvable)
+        Data length: 17
+        Flags: 0x1a
+          LE General Discoverable Mode
+          Simultaneous LE and BR/EDR (Controller)
+          Simultaneous LE and BR/EDR (Host)
+        TX power: 17 dBm
+        Company: Apple, Inc. (76)
+          Type: Unknown (16)
+          Data: 4c1ca8a3e8
+        RSSI: -81 dBm (0xaf)
+> HCI Event: LE Meta Event (0x3e) plen 34                   #31 [hci0] 2.819251
+      LE Advertising Report (0x02)
+        Num reports: 1
+        Event type: Connectable undirected - ADV_IND (0x00)
+        Address type: Public (0x00)
+        Address: <mac-1eaa> (Espressif Inc.)
+        Data length: 22
+        Flags: 0x06
+          LE General Discoverable Mode
+          BR/EDR Not Supported
+        16-bit Service UUIDs (complete): 1 entry
+          Unknown (0xabf0)
+        Name (complete): LIPO-B72332
+        RSSI: -78 dBm (0xb2)
+> HCI Event: LE Meta Event (0x3e) plen 12                   #32 [hci0] 2.820248
+      LE Advertising Report (0x02)
+        Num reports: 1
+        Event type: Scan response - SCAN_RSP (0x04)
+        Address type: Public (0x00)
+        Address: <mac-1eaa> (Espressif Inc.)
+        Data length: 0
+        RSSI: -77 dBm (0xb3)
+> HCI Event: LE Meta Event (0x3e) plen 31                   #33 [hci0] 2.953464
+      LE Advertising Report (0x02)
+        Num reports: 1
+        Event type: Non connectable undirected - ADV_NONCONN_IND (0x03)
+        Address type: Public (0x00)
+        Address: <mac-3e62> (Beijing Xiaomi Electronics Co., Ltd.)
+        Data length: 19
+        Flags: 0x06
+          LE General Discoverable Mode
+          BR/EDR Not Supported
+        Company: Xiaomi Inc. (911)
+          Data: 0a101c00009d5cbb433968ec
+        RSSI: -78 dBm (0xb2)
+> HCI Event: LE Meta Event (0x3e) plen 31                   #34 [hci0] 3.271246
+      LE Advertising Report (0x02)
+        Num reports: 1
+        Event type: Scan response - SCAN_RSP (0x04)
+        Address type: Public (0x00)
+        Address: <device-mac> (Espressif Inc.)
+        Data length: 19
+        Name (complete): IotHubBLE-65D8
+        TX power: 0 dBm
+        RSSI: -42 dBm (0xd6)
+> HCI Event: LE Meta Event (0x3e) plen 29                   #35 [hci0] 3.492283
+      LE Advertising Report (0x02)
+        Num reports: 1
+        Event type: Connectable undirected - ADV_IND (0x00)
+        Address type: Random (0x01)
+        Address: <mac-0af4> (Resolvable)
+        Data length: 17
+        Flags: 0x1a
+          LE General Discoverable Mode
+          Simultaneous LE and BR/EDR (Controller)
+          Simultaneous LE and BR/EDR (Host)
+        Company: Apple, Inc. (76)
+          Type: Unknown (16)
+          Data: 311876f283
+        TX power: 0 dBm
+        RSSI: -82 dBm (0xae)
+> HCI Event: LE Meta Event (0x3e) plen 34                   #36 [hci0] 3.497284
+      LE Advertising Report (0x02)
+        Num reports: 1
+        Event type: Connectable undirected - ADV_IND (0x00)
+        Address type: Public (0x00)
+        Address: <mac-1eaa> (Espressif Inc.)
+        Data length: 22
+        Flags: 0x06
+          LE General Discoverable Mode
+          BR/EDR Not Supported
+        16-bit Service UUIDs (complete): 1 entry
+          Unknown (0xabf0)
+        Name (complete): LIPO-B72332
+        RSSI: -76 dBm (0xb4)
+> HCI Event: LE Meta Event (0x3e) plen 31                   #37 [hci0] 3.571247
+      LE Advertising Report (0x02)
+        Num reports: 1
+        Event type: Non connectable undirected - ADV_NONCONN_IND (0x03)
+        Address type: Public (0x00)
+        Address: <mac-3e62> (Beijing Xiaomi Electronics Co., Ltd.)
+        Data length: 19
+        Flags: 0x06
+          LE General Discoverable Mode
+          BR/EDR Not Supported
+        Company: Xiaomi Inc. (911)
+          Data: 0a101c00009d5cbb433968ec
+        RSSI: -84 dBm (0xac)
+> HCI Event: LE Meta Event (0x3e) plen 12                   #38 [hci0] 3.987249
+      LE Advertising Report (0x02)
+        Num reports: 1
+        Event type: Scan response - SCAN_RSP (0x04)
+        Address type: Public (0x00)
+        Address: <mac-1eaa> (Espressif Inc.)
+        Data length: 0
+        RSSI: -83 dBm (0xad)
+> HCI Event: LE Meta Event (0x3e) plen 33                   #39 [hci0] 5.412476
+      LE Advertising Report (0x02)
+        Num reports: 1
+        Event type: Scan response - SCAN_RSP (0x04)
+        Address type: Random (0x01)
+        Address: <mac-0af4> (Resolvable)
+        Data length: 21
+        Company: Apple, Inc. (76)
+          Identifier:
+        RSSI: -83 dBm (0xad)
+> HCI Event: LE Meta Event (0x3e) plen 29                   #40 [hci0] 7.831639
+      LE Advertising Report (0x02)
+        Num reports: 1
+        Event type: Non connectable undirected - ADV_NONCONN_IND (0x03)
+        Address type: Random (0x01)
+        Address: <mac-b084> (Resolvable)
+        Data length: 17
+        Flags: 0x1a
+          LE General Discoverable Mode
+          Simultaneous LE and BR/EDR (Controller)
+          Simultaneous LE and BR/EDR (Host)
+        Company: Apple, Inc. (76)
+          Type: Unknown (22)
+          Data: 00f56bcbd4a9ba93
+        RSSI: -79 dBm (0xb1)
+> HCI Event: LE Meta Event (0x3e) plen 34                   #41 [hci0] 7.838652
+      LE Advertising Report (0x02)
+        Num reports: 1
+        Event type: Connectable undirected - ADV_IND (0x00)
+        Address type: Public (0x00)
+        Address: <mac-1eaa> (Espressif Inc.)
+        Data length: 22
+        Flags: 0x06
+          LE General Discoverable Mode
+          BR/EDR Not Supported
+        16-bit Service UUIDs (complete): 1 entry
+          Unknown (0xabf0)
+        Name (complete): LIPO-B72332
+        RSSI: -78 dBm (0xb2)
+> HCI Event: LE Meta Event (0x3e) plen 12                   #42 [hci0] 7.839488
+      LE Advertising Report (0x02)
+        Num reports: 1
+        Event type: Scan response - SCAN_RSP (0x04)
+        Address type: Public (0x00)
+        Address: <mac-1eaa> (Espressif Inc.)
+        Data length: 0
+        RSSI: -78 dBm (0xb2)
+> HCI Event: LE Meta Event (0x3e) plen 31                   #43 [hci0] 8.097489
+      LE Advertising Report (0x02)
+        Num reports: 1
+        Event type: Non connectable undirected - ADV_NONCONN_IND (0x03)
+        Address type: Public (0x00)
+        Address: <mac-3e62> (Beijing Xiaomi Electronics Co., Ltd.)
+        Data length: 19
+        Flags: 0x06
+          LE General Discoverable Mode
+          BR/EDR Not Supported
+        Company: Xiaomi Inc. (911)
+          Data: 0a101c00009d5cbb433968ec
+        RSSI: -84 dBm (0xac)
+> HCI Event: LE Meta Event (0x3e) plen 12                   #44 [hci0] 8.126466
+      LE Advertising Report (0x02)
+        Num reports: 1
+        Event type: Scan response - SCAN_RSP (0x04)
+        Address type: Random (0x01)
+        Address: <mac-786b> (Resolvable)
+        Data length: 0
+        RSSI: -86 dBm (0xaa)
+@ MGMT Command: Stop Discovery (0x0024) plen 1         {0x0001} [hci0] 9.621723
+        Address type: 0x06
+          LE Public
+          LE Random
+< HCI Command: LE Set Scan Enable (0x08|0x000c) plen 2      #45 [hci0] 9.621867
+        Scanning: Disabled (0x00)
+        Filter duplicates: Disabled (0x00)
+> HCI Event: Command Complete (0x0e) plen 4                 #46 [hci0] 9.624454
+      LE Set Scan Enable (0x08|0x000c) ncmd 1
+        Status: Success (0x00)
+@ MGMT Event: Command Complete (0x0001) plen 4         {0x0001} [hci0] 9.624584
+      Stop Discovery (0x0024) plen 1
+        Status: Success (0x00)
+        Address type: 0x06
+          LE Public
+          LE Random
+@ MGMT Event: Discovering (0x0013) plen 2              {0x0001} [hci0] 9.624589
+        Address type: 0x06
+          LE Public
+          LE Random
+        Discovery: Disabled (0x00)
+< HCI Command: LE Set Address Resol.. (0x08|0x002d) plen 1  #47 [hci0] 9.624622
+        Address resolution: Enabled (0x01)
+> HCI Event: Command Complete (0x0e) plen 4                 #48 [hci0] 9.625166
+      LE Set Address Resolution Enable (0x08|0x002d) ncmd 1
+        Status: Success (0x00)
+< HCI Command: LE Set Scan Parameters (0x08|0x000b) plen 7  #49 [hci0] 9.625265
+        Type: Passive (0x00)
+        Interval: 60.000 msec (0x0060)
+        Window: 30.000 msec (0x0030)
+        Own address type: Public (0x00)
+        Filter policy: Ignore not in accept list (0x01)
+> HCI Event: Command Complete (0x0e) plen 4                 #50 [hci0] 9.626211
+      LE Set Scan Parameters (0x08|0x000b) ncmd 1
+        Status: Success (0x00)
+< HCI Command: LE Set Scan Enable (0x08|0x000c) plen 2      #51 [hci0] 9.626264
+        Scanning: Enabled (0x01)
+        Filter duplicates: Enabled (0x01)
+> HCI Event: Command Complete (0x0e) plen 4                 #52 [hci0] 9.627150
+      LE Set Scan Enable (0x08|0x000c) ncmd 1
+        Status: Success (0x00)
+@ MGMT Command: Start Service Disco.. (0x003a) plen 4  {0x0001} [hci0] 9.630941
+        Address type: 0x06
+          LE Public
+          LE Random
+        RSSI: invalid (0x7f)
+        UUIDs: 0
+< HCI Command: LE Set Scan Enable (0x08|0x000c) plen 2      #53 [hci0] 9.631077
+        Scanning: Disabled (0x00)
+        Filter duplicates: Disabled (0x00)
+> HCI Event: Command Complete (0x0e) plen 4                 #54 [hci0] 9.633414
+      LE Set Scan Enable (0x08|0x000c) ncmd 1
+        Status: Success (0x00)
+< HCI Command: LE Set Address Resol.. (0x08|0x002d) plen 1  #55 [hci0] 9.633557
+        Address resolution: Disabled (0x00)
+> HCI Event: Command Complete (0x0e) plen 4                 #56 [hci0] 9.634465
+      LE Set Address Resolution Enable (0x08|0x002d) ncmd 1
+        Status: Success (0x00)
+< HCI Command: LE Set Random Address (0x08|0x0005) plen 6   #57 [hci0] 9.634610
+        Address: <mac-6f4c> (Non-Resolvable)
+> HCI Event: Command Complete (0x0e) plen 4                 #58 [hci0] 9.635185
+      LE Set Random Address (0x08|0x0005) ncmd 1
+        Status: Success (0x00)
+< HCI Command: LE Set Scan Parameters (0x08|0x000b) plen 7  #59 [hci0] 9.635306
+        Type: Active (0x01)
+        Interval: 11.250 msec (0x0012)
+        Window: 11.250 msec (0x0012)
+        Own address type: Random (0x01)
+        Filter policy: Accept all advertisement (0x00)
+> HCI Event: Command Complete (0x0e) plen 4                 #60 [hci0] 9.636460
+      LE Set Scan Parameters (0x08|0x000b) ncmd 1
+        Status: Success (0x00)
+< HCI Command: LE Set Scan Enable (0x08|0x000c) plen 2      #61 [hci0] 9.636610
+        Scanning: Enabled (0x01)
+        Filter duplicates: Enabled (0x01)
+> HCI Event: Command Complete (0x0e) plen 4                 #62 [hci0] 9.637494
+      LE Set Scan Enable (0x08|0x000c) ncmd 1
+        Status: Success (0x00)
+@ MGMT Event: Discovering (0x0013) plen 2              {0x0001} [hci0] 9.637548
+        Address type: 0x06
+          LE Public
+          LE Random
+        Discovery: Enabled (0x01)
+@ MGMT Event: Command Complete (0x0001) plen 4         {0x0001} [hci0] 9.637609
+      Start Service Discovery (0x003a) plen 1
+        Status: Success (0x00)
+        Address type: 0x06
+          LE Public
+          LE Random
+> HCI Event: LE Meta Event (0x3e) plen 29                   #63 [hci0] 9.664166
+      LE Advertising Report (0x02)
+        Num reports: 1
+        Event type: Connectable undirected - ADV_IND (0x00)
+        Address type: Random (0x01)
+        Address: <mac-2d46> (Resolvable)
+        Data length: 17
+        Flags: 0x1a
+          LE General Discoverable Mode
+          Simultaneous LE and BR/EDR (Controller)
+          Simultaneous LE and BR/EDR (Host)
+        TX power: 17 dBm
+        Company: Apple, Inc. (76)
+          Type: Unknown (16)
+          Data: 4c1ca8a3e8
+        RSSI: -84 dBm (0xac)
+> HCI Event: LE Meta Event (0x3e) plen 41                   #64 [hci0] 9.667485
+      LE Advertising Report (0x02)
+        Num reports: 1
+        Event type: Connectable undirected - ADV_IND (0x00)
+        Address type: Public (0x00)
+        Address: <mac-abd7> (GD Midea Air-Conditioning Equipment Co.,Ltd.)
+        Data length: 29
+        Flags: 0x06
+          LE General Discoverable Mode
+          BR/EDR Not Supported
+        Name (complete): midea
+        Company: GD Midea Air-Conditioning Equipment Co., Ltd. (1704)
+          Data: 013232303430303333414334313636
+        RSSI: -84 dBm (0xac)
+@ MGMT Event: Device Found (0x0012) plen 31            {0x0001} [hci0] 9.667554
+        LE Address: <mac-2d46> (Resolvable)
+        RSSI: -84 dBm (0xac)
+        Flags: 0x00000000
+        Data length: 17
+        Flags: 0x1a
+          LE General Discoverable Mode
+          Simultaneous LE and BR/EDR (Controller)
+          Simultaneous LE and BR/EDR (Host)
+        TX power: 17 dBm
+        Company: Apple, Inc. (76)
+          Type: Unknown (16)
+          Data: 4c1ca8a3e8
+> HCI Event: LE Meta Event (0x3e) plen 39                   #65 [hci0] 9.670364
+      LE Advertising Report (0x02)
+        Num reports: 1
+        Event type: Scan response - SCAN_RSP (0x04)
+        Address type: Public (0x00)
+        Address: <mac-abd7> (GD Midea Air-Conditioning Equipment Co.,Ltd.)
+        Data length: 27
+        Name (complete): midea
+        16-bit Service UUIDs (complete): 2 entries
+          Unknown (0xff90)
+          Unknown (0xff80)
+        Company: GD Midea Air-Conditioning Equipment Co., Ltd. (1704)
+          Data: 01010032718d636039c4
+        RSSI: -87 dBm (0xa9)
+@ MGMT Event: Device Found (0x0012) plen 70            {0x0001} [hci0] 9.670426
+        LE Address: <mac-abd7> (GD Midea Air-Conditioning Equipment Co.,Ltd.)
+        RSSI: -87 dBm (0xa9)
+        Flags: 0x00000000
+        Data length: 56
+        Flags: 0x06
+          LE General Discoverable Mode
+          BR/EDR Not Supported
+        Name (complete): midea
+        Company: GD Midea Air-Conditioning Equipment Co., Ltd. (1704)
+          Data: 013232303430303333414334313636
+        Name (complete): midea
+        16-bit Service UUIDs (complete): 2 entries
+          Unknown (0xff90)
+          Unknown (0xff80)
+        Company: GD Midea Air-Conditioning Equipment Co., Ltd. (1704)
+          Data: 01010032718d636039c4
+> HCI Event: LE Meta Event (0x3e) plen 35                   #66 [hci0] 9.683430
+      LE Advertising Report (0x02)
+        Num reports: 1
+        Event type: Connectable undirected - ADV_IND (0x00)
+        Address type: Public (0x00)
+        Address: <other-device-mac> (OUI 68-78-56)
+        Data length: 23
+        Flags: 0x04
+          BR/EDR Not Supported
+        Company: Ericsson Technology Licensing (0)
+          Data:
+        Appearance: Mouse (0x03c2)
+        Name (complete): KSG BT 5.0
+        RSSI: -50 dBm (0xce)
+< HCI Command: LE Set Scan Enable (0x08|0x000c) plen 2      #67 [hci0] 9.683585
+        Scanning: Disabled (0x00)
+        Filter duplicates: Disabled (0x00)
+> HCI Event: Command Complete (0x0e) plen 4                 #68 [hci0] 9.702493
+      LE Set Scan Enable (0x08|0x000c) ncmd 1
+        Status: Success (0x00)
+@ MGMT Event: Device Found (0x0012) plen 37            {0x0001} [hci0] 9.702544
+        LE Address: <other-device-mac> (OUI 68-78-56)
+        RSSI: -50 dBm (0xce)
+        Flags: 0x00000000
+        Data length: 23
+        Flags: 0x04
+          BR/EDR Not Supported
+        Company: Ericsson Technology Licensing (0)
+          Data:
+        Appearance: Mouse (0x03c2)
+        Name (complete): KSG BT 5.0
+@ MGMT Event: Discovering (0x0013) plen 2              {0x0001} [hci0] 9.702550
+        Address type: 0x06
+          LE Public
+          LE Random
+        Discovery: Disabled (0x00)
+< HCI Command: LE Create Connection (0x08|0x000d) plen 25   #69 [hci0] 9.702603
+        Scan interval: 60.000 msec (0x0060)
+        Scan window: 60.000 msec (0x0060)
+        Filter policy: Accept list is not used (0x00)
+        Peer address type: Public (0x00)
+        Peer address: <other-device-mac> (OUI 68-78-56)
+        Own address type: Public (0x00)
+        Min connection interval: 7.50 msec (0x0006)
+        Max connection interval: 7.50 msec (0x0006)
+        Connection latency: 32 (0x0020)
+        Supervision timeout: 3000 msec (0x012c)
+        Min connection length: 0.000 msec (0x0000)
+        Max connection length: 0.000 msec (0x0000)
+@ MGMT Command: Start Service Disco.. (0x003a) plen 4  {0x0001} [hci0] 9.703075
+        Address type: 0x06
+          LE Public
+          LE Random
+        RSSI: invalid (0x7f)
+        UUIDs: 0
+> HCI Event: Command Status (0x0f) plen 4                   #70 [hci0] 9.704189
+      LE Create Connection (0x08|0x000d) ncmd 1
+        Status: Success (0x00)
+> HCI Event: LE Meta Event (0x3e) plen 31                   #71 [hci0] 9.708153
+      LE Enhanced Connection Complete (0x0a)
+        Status: Success (0x00)
+        Handle: 1
+        Role: Central (0x00)
+        Peer address type: Public (0x00)
+        Peer address: <other-device-mac> (OUI 68-78-56)
+        Local resolvable private address: <mac-c352> (Non-Resolvable)
+        Peer resolvable private address: <mac-c352> (Non-Resolvable)
+        Connection interval: 7.50 msec (0x0006)
+        Connection latency: 32 (0x0020)
+        Supervision timeout: 3000 msec (0x012c)
+        Central clock accuracy: 0x00
+@ MGMT Event: Device Connected (0x000b) plen 36        {0x0001} [hci0] 9.708203
+        LE Address: <other-device-mac> (OUI 68-78-56)
+        Flags: 0x00000008
+          Connection Locally Initiated
+        Data length: 23
+        Flags: 0x04
+          BR/EDR Not Supported
+        Company: Ericsson Technology Licensing (0)
+          Data:
+        Appearance: Mouse (0x03c2)
+        Name (complete): KSG BT 5.0
+< HCI Command: LE Set Random Address (0x08|0x0005) plen 6   #72 [hci0] 9.711403
+        Address: <mac-601e> (Non-Resolvable)
+> HCI Event: Command Complete (0x0e) plen 4                 #73 [hci0] 9.713160
+      LE Set Random Address (0x08|0x0005) ncmd 1
+        Status: Success (0x00)
+< HCI Command: LE Set Scan Parameters (0x08|0x000b) plen 7  #74 [hci0] 9.713202
+        Type: Active (0x01)
+        Interval: 11.250 msec (0x0012)
+        Window: 11.250 msec (0x0012)
+        Own address type: Random (0x01)
+        Filter policy: Accept all advertisement (0x00)
+> HCI Event: Command Complete (0x0e) plen 4                 #75 [hci0] 9.714159
+      LE Set Scan Parameters (0x08|0x000b) ncmd 1
+        Status: Success (0x00)
+< HCI Command: LE Set Scan Enable (0x08|0x000c) plen 2      #76 [hci0] 9.714187
+        Scanning: Enabled (0x01)
+        Filter duplicates: Enabled (0x01)
+> HCI Event: Command Complete (0x0e) plen 4                 #77 [hci0] 9.715253
+      LE Set Scan Enable (0x08|0x000c) ncmd 1
+        Status: Success (0x00)
+@ MGMT Event: Discovering (0x0013) plen 2              {0x0001} [hci0] 9.715260
+        Address type: 0x06
+          LE Public
+          LE Random
+        Discovery: Enabled (0x01)
+@ MGMT Event: Command Complete (0x0001) plen 4         {0x0001} [hci0] 9.715308
+      Start Service Discovery (0x003a) plen 1
+        Status: Success (0x00)
+        Address type: 0x06
+          LE Public
+          LE Random
+< HCI Command: LE Read Remote Used... (0x08|0x0016) plen 2  #78 [hci0] 9.715377
+        Handle: 1 Address: <other-device-mac> (OUI 68-78-56)
+> HCI Event: Command Status (0x0f) plen 4                   #79 [hci0] 9.716199
+      LE Read Remote Used Features (0x08|0x0016) ncmd 1
+        Status: Success (0x00)
+> HCI Event: LE Meta Event (0x3e) plen 31                   #80 [hci0] 9.732443
+      LE Advertising Report (0x02)
+        Num reports: 1
+        Event type: Non connectable undirected - ADV_NONCONN_IND (0x03)
+        Address type: Public (0x00)
+        Address: <mac-3e62> (Beijing Xiaomi Electronics Co., Ltd.)
+        Data length: 19
+        Flags: 0x06
+          LE General Discoverable Mode
+          BR/EDR Not Supported
+        Company: Xiaomi Inc. (911)
+          Data: 0a101c00009d5cbb433968ec
+        RSSI: -78 dBm (0xb2)
+@ MGMT Event: Device Found (0x0012) plen 33            {0x0001} [hci0] 9.732507
+        LE Address: <mac-3e62> (Beijing Xiaomi Electronics Co., Ltd.)
+        RSSI: -78 dBm (0xb2)
+        Flags: 0x00000004
+          Not Connectable
+        Data length: 19
+        Flags: 0x06
+          LE General Discoverable Mode
+          BR/EDR Not Supported
+        Company: Xiaomi Inc. (911)
+          Data: 0a101c00009d5cbb433968ec
+> HCI Event: LE Meta Event (0x3e) plen 12                   #81 [hci0] 9.733167
+      LE Read Remote Used Features (0x04)
+        Status: Success (0x00)
+        Handle: 1 Address: <other-device-mac> (OUI 68-78-56)
+        Features: 0x01 0x00 0x00 0x00 0x00 0x00 0x00 0x00
+          LE Encryption
+< HCI Command: LE Start Encryption (0x08|0x0019) plen 28    #82 [hci0] 9.733361
+        Handle: 1 Address: <other-device-mac> (OUI 68-78-56)
+        Random number: 0xba576a8dd17a6f4d
+        Encrypted diversifier: 0xe9fd
+        Long term key: 33221166554499887722110055443366
+> HCI Event: Command Status (0x0f) plen 4                   #83 [hci0] 9.748674
+      LE Start Encryption (0x08|0x0019) ncmd 1
+        Status: Success (0x00)
+> HCI Event: LE Meta Event (0x3e) plen 34                   #84 [hci0] 9.751151
+      LE Advertising Report (0x02)
+        Num reports: 1
+        Event type: Connectable undirected - ADV_IND (0x00)
+        Address type: Public (0x00)
+        Address: <mac-1eaa> (Espressif Inc.)
+        Data length: 22
+        Flags: 0x06
+          LE General Discoverable Mode
+          BR/EDR Not Supported
+        16-bit Service UUIDs (complete): 1 entry
+          Unknown (0xabf0)
+        Name (complete): LIPO-B72332
+        RSSI: -77 dBm (0xb3)
+> HCI Event: LE Meta Event (0x3e) plen 12                   #85 [hci0] 9.752455
+      LE Advertising Report (0x02)
+        Num reports: 1
+        Event type: Scan response - SCAN_RSP (0x04)
+        Address type: Public (0x00)
+        Address: <mac-1eaa> (Espressif Inc.)
+        Data length: 0
+        RSSI: -76 dBm (0xb4)
+@ MGMT Event: Device Found (0x0012) plen 34            {0x0001} [hci0] 9.752468
+        LE Address: <mac-1eaa> (Espressif Inc.)
+        RSSI: -76 dBm (0xb4)
+        Flags: 0x00000000
+        Data length: 20
+        Flags: 0x06
+          LE General Discoverable Mode
+          BR/EDR Not Supported
+        16-bit Service UUIDs (complete): 1 entry
+          Unknown (0xabf0)
+        Name (complete): LIPO-B72332
+> HCI Event: Encryption Change (0x08) plen 4                #86 [hci0] 9.784159
+        Status: Success (0x00)
+        Handle: 1 Address: <other-device-mac> (OUI 68-78-56)
+        Encryption: Enabled with AES-CCM (0x01)
+< HCI Command: Write Authenticated... (0x03|0x007c) plen 4  #87 [hci0] 9.784179
+        Handle: 1 Address: <other-device-mac> (OUI 68-78-56)
+        Timeout: 30000 msec (0x0bb8)
+< ACL Data TX: Handle 1 flags 0x00 dlen 7                   #88 [hci0] 9.784278
+      ATT: Exchange MTU Request (0x02) len 2
+        Client RX MTU: 517
+> HCI Event: Command Complete (0x0e) plen 6                 #89 [hci0] 9.785158
+      Write Authenticated Payload Timeout (0x03|0x007c) ncmd 1
+        Status: Success (0x00)
+        Handle: 1 Address: <other-device-mac> (OUI 68-78-56)
+> HCI Event: Number of Completed Packets (0x13) plen 5      #90 [hci0] 9.791158
+        Num handles: 1
+        Handle: 1 Address: <other-device-mac> (OUI 68-78-56)
+        Count: 1
+        #88: len 7 (9 Kb/s)
+        Latency: 6 msec (6-6 msec ~6 msec)
+> ACL Data RX: Handle 1 flags 0x02 dlen 16                  #91 [hci0] 9.792295
+      LE L2CAP: Connection Parameter Update Request (0x12) ident 2 len 8
+        Min interval: 6
+        Max interval: 6
+        Peripheral latency: 32
+        Timeout multiplier: 300
+@ MGMT Event: New Connection Param.. (0x001c) plen 16  {0x0001} [hci0] 9.792310
+        Store hint: Reserved (0xd2)
+        LE Address: <mac-621f> (OUI 01-68-78)
+        Min connection interval: 6
+        Max connection interval: 6
+        Connection latency: 32 (0x0020)
+        Supervision timeout: 300
+< ACL Data TX: Handle 1 flags 0x00 dlen 10                  #92 [hci0] 9.792316
+      LE L2CAP: Connection Parameter Update Response (0x13) ident 2 len 2
+        Result: Connection Parameters accepted (0x0000)
+< HCI Command: LE Connection Update (0x08|0x0013) plen 14   #93 [hci0] 9.792327
+        Handle: 1 Address: <other-device-mac> (OUI 68-78-56)
+        Min connection interval: 7.50 msec (0x0006)
+        Max connection interval: 7.50 msec (0x0006)
+        Connection latency: 32 (0x0020)
+        Supervision timeout: 3000 msec (0x012c)
+        Min connection length: 0.000 msec (0x0000)
+        Max connection length: 0.000 msec (0x0000)
+> HCI Event: Command Status (0x0f) plen 4                   #94 [hci0] 9.793152
+      LE Connection Update (0x08|0x0013) ncmd 1
+        Status: Success (0x00)
+> ACL Data RX: Handle 1 flags 0x02 dlen 7                   #95 [hci0] 9.800301
+      ATT: Exchange MTU Response (0x03) len 2
+        Server RX MTU: 23
+< ACL Data TX: Handle 1 flags 0x00 dlen 7                   #96 [hci0] 9.800397
+      ATT: Read Request (0x0a) len 2
+        Handle: 0x0030
+> HCI Event: Number of Completed Packets (0x13) plen 5      #97 [hci0] 9.806159
+        Num handles: 1
+        Handle: 1 Address: <other-device-mac> (OUI 68-78-56)
+        Count: 1
+        #92: len 10 (6 Kb/s)
+        Latency: 13 msec (6-13 msec ~10 msec)
+> HCI Event: Number of Completed Packets (0x13) plen 5      #98 [hci0] 9.807160
+        Num handles: 1
+        Handle: 1 Address: <other-device-mac> (OUI 68-78-56)
+        Count: 1
+        #96: len 7 (9 Kb/s)
+        Latency: 6 msec (6-13 msec ~8 msec)
+> ACL Data RX: Handle 1 flags 0x02 dlen 9                   #99 [hci0] 9.815294
+      ATT: Error Response (0x01) len 4
+        Read Request (0x0a)
+        Handle: 0x0030
+        Error: Attribute Not Found (0x0a)
+< ACL Data TX: Handle 1 flags 0x00 dlen 7                  #100 [hci0] 9.815948
+      ATT: Read Request (0x0a) len 2
+        Handle: 0x0010
+> HCI Event: Number of Completed Packets (0x13) plen 5     #101 [hci0] 9.821160
+        Num handles: 1
+        Handle: 1 Address: <other-device-mac> (OUI 68-78-56)
+        Count: 1
+        #100: len 7 (11 Kb/s)
+        Latency: 5 msec (5-13 msec ~6 msec)
+> ACL Data RX: Handle 1 flags 0x02 dlen 12                 #102 [hci0] 9.829293
+      ATT: Read Response (0x0b) len 7
+< ACL Data TX: Handle 1 flags 0x00 dlen 7                  #103 [hci0] 9.829426
+      ATT: Read Request (0x0a) len 2
+        Handle: 0x0003
+> HCI Event: LE Meta Event (0x3e) plen 42                  #104 [hci0] 9.833160
+      LE Advertising Report (0x02)
+        Num reports: 1
+        Event type: Connectable undirected - ADV_IND (0x00)
+        Address type: Public (0x00)
+        Address: <device-mac> (Espressif Inc.)
+        Data length: 30
+        Flags: 0x06
+          LE General Discoverable Mode
+          BR/EDR Not Supported
+        128-bit Service UUIDs (complete): 1 entry
+          Nordic UART Service
+        Name (short): IH-65D8
+        RSSI: -42 dBm (0xd6)
+> HCI Event: Number of Completed Packets (0x13) plen 5     #105 [hci0] 9.836156
+        Num handles: 1
+        Handle: 1 Address: <other-device-mac> (OUI 68-78-56)
+        Count: 1
+        #103: len 7 (9 Kb/s)
+        Latency: 6 msec (5-13 msec ~6 msec)
+> ACL Data RX: Handle 1 flags 0x02 dlen 15                 #106 [hci0] 9.845296
+      ATT: Read Response (0x0b) len 10
+< ACL Data TX: Handle 1 flags 0x00 dlen 7                  #107 [hci0] 9.845440
+      ATT: Read Request (0x0a) len 2
+        Handle: 0x0013
+> HCI Event: Number of Completed Packets (0x13) plen 5     #108 [hci0] 9.851157
+        Num handles: 1
+        Handle: 1 Address: <other-device-mac> (OUI 68-78-56)
+        Count: 1
+        #107: len 7 (11 Kb/s)
+        Latency: 5 msec (5-13 msec ~6 msec)
+> ACL Data RX: Handle 1 flags 0x02 dlen 6                  #109 [hci0] 9.860288
+      ATT: Read Response (0x0b) len 1
+< ACL Data TX: Handle 1 flags 0x00 dlen 7                  #110 [hci0] 9.860376
+      ATT: Read Request (0x0a) len 2
+        Handle: 0x0017
+> HCI Event: Number of Completed Packets (0x13) plen 5     #111 [hci0] 9.866148
+        Num handles: 1
+        Handle: 1 Address: <other-device-mac> (OUI 68-78-56)
+        Count: 1
+        #110: len 7 (11 Kb/s)
+        Latency: 5 msec (5-13 msec ~6 msec)
+> ACL Data RX: Handle 1 flags 0x02 dlen 7                  #112 [hci0] 9.874292
+      ATT: Read Response (0x0b) len 2
+< ACL Data TX: Handle 1 flags 0x00 dlen 7                  #113 [hci0] 9.874373
+      ATT: Read Request (0x0a) len 2
+        Handle: 0x001b
+> HCI Event: Number of Completed Packets (0x13) plen 5     #114 [hci0] 9.881158
+        Num handles: 1
+        Handle: 1 Address: <other-device-mac> (OUI 68-78-56)
+        Count: 1
+        #113: len 7 (9 Kb/s)
+        Latency: 6 msec (5-13 msec ~6 msec)
+> ACL Data RX: Handle 1 flags 0x02 dlen 7                  #115 [hci0] 9.889329
+      ATT: Read Response (0x0b) len 2
+< ACL Data TX: Handle 1 flags 0x00 dlen 7                  #116 [hci0] 9.889474
+      ATT: Read Request (0x0a) len 2
+        Handle: 0x001f
+> HCI Event: Number of Completed Packets (0x13) plen 5     #117 [hci0] 9.896187
+        Num handles: 1
+        Handle: 1 Address: <other-device-mac> (OUI 68-78-56)
+        Count: 1
+        #116: len 7 (9 Kb/s)
+        Latency: 6 msec (5-13 msec ~6 msec)
+> ACL Data RX: Handle 1 flags 0x02 dlen 7                  #118 [hci0] 9.905324
+      ATT: Read Response (0x0b) len 2
+< ACL Data TX: Handle 1 flags 0x00 dlen 7                  #119 [hci0] 9.905451
+      ATT: Read Request (0x0a) len 2
+        Handle: 0x0023
+> HCI Event: Number of Completed Packets (0x13) plen 5     #120 [hci0] 9.911180
+        Num handles: 1
+        Handle: 1 Address: <other-device-mac> (OUI 68-78-56)
+        Count: 1
+        #119: len 7 (11 Kb/s)
+        Latency: 5 msec (5-13 msec ~6 msec)
+> ACL Data RX: Handle 1 flags 0x02 dlen 7                  #121 [hci0] 9.919334
+      ATT: Read Response (0x0b) len 2
+< ACL Data TX: Handle 1 flags 0x00 dlen 7                  #122 [hci0] 9.919440
+      ATT: Read Request (0x0a) len 2
+        Handle: 0x0026
+> HCI Event: LE Meta Event (0x3e) plen 31                  #123 [hci0] 9.925178
+      LE Advertising Report (0x02)
+        Num reports: 1
+        Event type: Scan response - SCAN_RSP (0x04)
+        Address type: Public (0x00)
+        Address: <device-mac> (Espressif Inc.)
+        Data length: 19
+        Name (complete): IotHubBLE-65D8
+        TX power: 0 dBm
+        RSSI: -42 dBm (0xd6)
+@ MGMT Event: Device Found (0x0012) plen 63            {0x0001} [hci0] 9.925189
+        LE Address: <device-mac> (Espressif Inc.)
+        RSSI: -42 dBm (0xd6)
+        Flags: 0x00000000
+        Data length: 49
+        Flags: 0x06
+          LE General Discoverable Mode
+          BR/EDR Not Supported
+        128-bit Service UUIDs (complete): 1 entry
+          Nordic UART Service
+        Name (short): IH-65D8
+        Name (complete): IotHubBLE-65D8
+        TX power: 0 dBm
+> HCI Event: Number of Completed Packets (0x13) plen 5     #124 [hci0] 9.926154
+        Num handles: 1
+        Handle: 1 Address: <other-device-mac> (OUI 68-78-56)
+        Count: 1
+        #122: len 7 (9 Kb/s)
+        Latency: 6 msec (5-13 msec ~6 msec)
+@ MGMT Command: Stop Discovery (0x0024) plen 1         {0x0001} [hci0] 9.926489
+        Address type: 0x06
+          LE Public
+          LE Random
+< HCI Command: LE Set Scan Enable (0x08|0x000c) plen 2     #125 [hci0] 9.926549
+        Scanning: Disabled (0x00)
+        Filter duplicates: Disabled (0x00)
+> HCI Event: Command Complete (0x0e) plen 4                #126 [hci0] 9.928166
+      LE Set Scan Enable (0x08|0x000c) ncmd 1
+        Status: Success (0x00)
+@ MGMT Event: Command Complete (0x0001) plen 4         {0x0001} [hci0] 9.928220
+      Stop Discovery (0x0024) plen 1
+        Status: Success (0x00)
+        Address type: 0x06
+          LE Public
+          LE Random
+@ MGMT Event: Discovering (0x0013) plen 2              {0x0001} [hci0] 9.928225
+        Address type: 0x06
+          LE Public
+          LE Random
+        Discovery: Disabled (0x00)
+< HCI Command: LE Add Device To Ac.. (0x08|0x0011) plen 7  #127 [hci0] 9.932788
+        Address type: Public (0x00)
+        Address: <device-mac> (Espressif Inc.)
+> HCI Event: Command Complete (0x0e) plen 4                #128 [hci0] 9.935202
+      LE Add Device To Accept List (0x08|0x0011) ncmd 1
+        Status: Success (0x00)
+< HCI Command: LE Set Address Reso.. (0x08|0x002d) plen 1  #129 [hci0] 9.935258
+        Address resolution: Enabled (0x01)
+> HCI Event: Command Complete (0x0e) plen 4                #130 [hci0] 9.936185
+      LE Set Address Resolution Enable (0x08|0x002d) ncmd 1
+        Status: Success (0x00)
+< HCI Command: LE Set Scan Paramet.. (0x08|0x000b) plen 7  #131 [hci0] 9.936241
+        Type: Passive (0x00)
+        Interval: 60.000 msec (0x0060)
+        Window: 60.000 msec (0x0060)
+        Own address type: Public (0x00)
+        Filter policy: Ignore not in accept list (0x01)
+> ACL Data RX: Handle 1 flags 0x02 dlen 7                  #132 [hci0] 9.936289
+      ATT: Read Response (0x0b) len 2
+< ACL Data TX: Handle 1 flags 0x00 dlen 7                  #133 [hci0] 9.936370
+      ATT: Read Request (0x0a) len 2
+        Handle: 0x002d
+> HCI Event: Command Complete (0x0e) plen 4                #134 [hci0] 9.937172
+      LE Set Scan Parameters (0x08|0x000b) ncmd 1
+        Status: Success (0x00)
+< HCI Command: LE Set Scan Enable (0x08|0x000c) plen 2     #135 [hci0] 9.937226
+        Scanning: Enabled (0x01)
+        Filter duplicates: Enabled (0x01)
+> HCI Event: Command Complete (0x0e) plen 4                #136 [hci0] 9.938166
+      LE Set Scan Enable (0x08|0x000c) ncmd 1
+        Status: Success (0x00)
+> HCI Event: Number of Completed Packets (0x13) plen 5     #137 [hci0] 9.941182
+        Num handles: 1
+        Handle: 1 Address: <other-device-mac> (OUI 68-78-56)
+        Count: 1
+        #133: len 7 (14 Kb/s)
+        Latency: 4 msec (4-13 msec ~5 msec)
+> ACL Data RX: Handle 1 flags 0x02 dlen 9                  #138 [hci0] 9.950330
+      ATT: Read Response (0x0b) len 4
+< ACL Data TX: Handle 1 flags 0x00 dlen 8                  #139 [hci0] 9.950389
+      ATT: Write Request (0x12) len 3
+        Handle: 0x0025
+          Data: 02
+> HCI Event: Number of Completed Packets (0x13) plen 5     #140 [hci0] 9.956200
+        Num handles: 1
+        Handle: 1 Address: <other-device-mac> (OUI 68-78-56)
+        Count: 1
+        #139: len 8 (12 Kb/s)
+        Latency: 5 msec (4-13 msec ~5 msec)
+> ACL Data RX: Handle 1 flags 0x02 dlen 5                  #141 [hci0] 9.965291
+      ATT: Write Response (0x13) len 0
+< ACL Data TX: Handle 1 flags 0x00 dlen 11                 #142 [hci0] 9.965387
+      ATT: Read By Type Request (0x08) len 6
+        Handle range: 0x0001-0xffff
+        Attribute type: Server Supported Features (0x2b3a)
+> HCI Event: Number of Completed Packets (0x13) plen 5     #143 [hci0] 9.971151
+        Num handles: 1
+        Handle: 1 Address: <other-device-mac> (OUI 68-78-56)
+        Count: 1
+        #142: len 11 (17 Kb/s)
+        Latency: 5 msec (4-13 msec ~5 msec)
+> ACL Data RX: Handle 1 flags 0x02 dlen 9                  #144 [hci0] 9.979291
+      ATT: Error Response (0x01) len 4
+        Read By Type Request (0x08)
+        Handle: 0x0001
+        Error: Attribute Not Found (0x0a)
+< ACL Data TX: Handle 1 flags 0x00 dlen 11                 #145 [hci0] 9.979366
+      ATT: Read By Group Type Request (0x10) len 6
+        Handle range: 0x0001-0xffff
+        Attribute group type: Primary Service (0x2800)
+> HCI Event: Number of Completed Packets (0x13) plen 5     #146 [hci0] 9.986151
+        Num handles: 1
+        Handle: 1 Address: <other-device-mac> (OUI 68-78-56)
+        Count: 1
+        #145: len 11 (14 Kb/s)
+        Latency: 6 msec (4-13 msec ~6 msec)
+> ACL Data RX: Handle 1 flags 0x02 dlen 24                 #147 [hci0] 9.995362
+      ATT: Read By Group Type Response (0x11) len 19
+        Attribute data length: 6
+        Attribute group list: 3 entries
+        Handle range: 0x0001-0x0007
+        UUID: Generic Access Profile (0x1800)
+        Handle range: 0x0008-0x000b
+        UUID: Generic Attribute Profile (0x1801)
+        Handle range: 0x000c-0x0010
+        UUID: Device Information (0x180a)
+< ACL Data TX: Handle 1 flags 0x00 dlen 7                  #148 [hci0] 9.995449
+      ATT: Read Request (0x0a) len 2
+        Handle: 0x0016
+> HCI Event: Number of Completed Packets (0x13) plen 5    #149 [hci0] 10.001173
+        Num handles: 1
+        Handle: 1 Address: <other-device-mac> (OUI 68-78-56)
+        Count: 1
+        #148: len 7 (11 Kb/s)
+        Latency: 5 msec (4-13 msec ~5 msec)
+> ACL Data RX: Handle 1 flags 0x02 dlen 7                 #150 [hci0] 10.010845
+      ATT: Read Response (0x0b) len 2
+< ACL Data TX: Handle 1 flags 0x00 dlen 7                 #151 [hci0] 10.010931
+      ATT: Read Request (0x0a) len 2
+        Handle: 0x001a
+> HCI Event: LE Meta Event (0x3e) plen 42                 #152 [hci0] 10.016152
+      LE Advertising Report (0x02)
+        Num reports: 1
+        Event type: Connectable undirected - ADV_IND (0x00)
+        Address type: Public (0x00)
+        Address: <device-mac> (Espressif Inc.)
+        Data length: 30
+        Flags: 0x06
+          LE General Discoverable Mode
+          BR/EDR Not Supported
+        128-bit Service UUIDs (complete): 1 entry
+          Nordic UART Service
+        Name (short): IH-65D8
+        RSSI: -42 dBm (0xd6)
+< HCI Command: LE Set Scan Enable (0x08|0x000c) plen 2    #153 [hci0] 10.016208
+        Scanning: Disabled (0x00)
+        Filter duplicates: Disabled (0x00)
+> HCI Event: Number of Completed Packets (0x13) plen 5    #154 [hci0] 10.017147
+        Num handles: 1
+        Handle: 1 Address: <other-device-mac> (OUI 68-78-56)
+        Count: 1
+        #151: len 7 (9 Kb/s)
+        Latency: 6 msec (4-13 msec ~6 msec)
+> HCI Event: Command Complete (0x0e) plen 4               #155 [hci0] 10.018146
+      LE Set Scan Enable (0x08|0x000c) ncmd 1
+        Status: Success (0x00)
+< HCI Command: LE Create Connect.. (0x08|0x000d) plen 25  #156 [hci0] 10.018184
+        Scan interval: 60.000 msec (0x0060)
+        Scan window: 60.000 msec (0x0060)
+        Filter policy: Accept list is not used (0x00)
+        Peer address type: Public (0x00)
+        Peer address: <device-mac> (Espressif Inc.)
+        Own address type: Public (0x00)
+        Min connection interval: 30.00 msec (0x0018)
+        Max connection interval: 50.00 msec (0x0028)
+        Connection latency: 0 (0x0000)
+        Supervision timeout: 6000 msec (0x0258)
+        Min connection length: 0.000 msec (0x0000)
+        Max connection length: 0.000 msec (0x0000)
+> HCI Event: Command Status (0x0f) plen 4                 #157 [hci0] 10.019146
+      LE Create Connection (0x08|0x000d) ncmd 1
+        Status: Success (0x00)
+> ACL Data RX: Handle 1 flags 0x02 dlen 7                 #158 [hci0] 10.025289
+      ATT: Read Response (0x0b) len 2
+< ACL Data TX: Handle 1 flags 0x00 dlen 7                 #159 [hci0] 10.025385
+      ATT: Read Request (0x0a) len 2
+        Handle: 0x001e
+> HCI Event: Number of Completed Packets (0x13) plen 5    #160 [hci0] 10.031147
+        Num handles: 1
+        Handle: 1 Address: <other-device-mac> (OUI 68-78-56)
+        Count: 1
+        #159: len 7 (11 Kb/s)
+        Latency: 5 msec (4-13 msec ~5 msec)
+> ACL Data RX: Handle 1 flags 0x02 dlen 7                 #161 [hci0] 10.039290
+      ATT: Read Response (0x0b) len 2
+< ACL Data TX: Handle 1 flags 0x00 dlen 7                 #162 [hci0] 10.039390
+      ATT: Read Request (0x0a) len 2
+        Handle: 0x0022
+> HCI Event: Number of Completed Packets (0x13) plen 5    #163 [hci0] 10.046147
+        Num handles: 1
+        Handle: 1 Address: <other-device-mac> (OUI 68-78-56)
+        Count: 1
+        #162: len 7 (9 Kb/s)
+        Latency: 6 msec (4-13 msec ~6 msec)
+> ACL Data RX: Handle 1 flags 0x02 dlen 7                 #164 [hci0] 10.054292
+      ATT: Read Response (0x0b) len 2
+< ACL Data TX: Handle 1 flags 0x00 dlen 11                #165 [hci0] 10.054384
+      ATT: Read By Group Type Request (0x10) len 6
+        Handle range: 0x0011-0xffff
+        Attribute group type: Primary Service (0x2800)
+> HCI Event: LE Meta Event (0x3e) plen 31                 #166 [hci0] 10.057143
+      LE Enhanced Connection Complete (0x0a)
+        Status: Success (0x00)
+        Handle: 2
+        Role: Central (0x00)
+        Peer address type: Public (0x00)
+        Peer address: <device-mac> (Espressif Inc.)
+        Local resolvable private address: <mac-c352> (Non-Resolvable)
+        Peer resolvable private address: <mac-c352> (Non-Resolvable)
+        Connection interval: 45.00 msec (0x0024)
+        Connection latency: 0 (0x0000)
+        Supervision timeout: 6000 msec (0x0258)
+        Central clock accuracy: 0x00
+@ MGMT Event: Device Connected (0x000b) plen 43       {0x0001} [hci0] 10.057201
+        LE Address: <device-mac> (Espressif Inc.)
+        Flags: 0x00000008
+          Connection Locally Initiated
+        Data length: 30
+        Flags: 0x06
+          LE General Discoverable Mode
+          BR/EDR Not Supported
+        128-bit Service UUIDs (complete): 1 entry
+          Nordic UART Service
+        Name (short): IH-65D8
+> HCI Event: Number of Completed Packets (0x13) plen 5    #167 [hci0] 10.061154
+        Num handles: 1
+        Handle: 1 Address: <other-device-mac> (OUI 68-78-56)
+        Count: 1
+        #165: len 11 (14 Kb/s)
+        Latency: 6 msec (4-13 msec ~6 msec)
+< HCI Command: LE Read Remote Use.. (0x08|0x0016) plen 2  #168 [hci0] 10.061461
+        Handle: 2 Address: <device-mac> (Espressif Inc.)
+> HCI Event: Command Status (0x0f) plen 4                 #169 [hci0] 10.062145
+      LE Read Remote Used Features (0x08|0x0016) ncmd 1
+        Status: Success (0x00)
+> ACL Data RX: Handle 1 flags 0x02 dlen 18                #170 [hci0] 10.070308
+      ATT: Read By Group Type Response (0x11) len 13
+        Attribute data length: 6
+        Attribute group list: 2 entries
+        Handle range: 0x0011-0x002d
+        UUID: Human Interface Device (0x1812)
+        Handle range: 0x002e-0x0033
+        UUID: Battery Service (0x180f)
+< ACL Data TX: Handle 1 flags 0x00 dlen 9                 #171 [hci0] 10.070381
+      ATT: Write Request (0x12) len 4
+        Handle: 0x0016
+          Data: 0100
+> HCI Event: Number of Completed Packets (0x13) plen 5    #172 [hci0] 10.076147
+        Num handles: 1
+        Handle: 1 Address: <other-device-mac> (OUI 68-78-56)
+        Count: 1
+        #171: len 9 (14 Kb/s)
+        Latency: 5 msec (4-13 msec ~6 msec)
+> ACL Data RX: Handle 1 flags 0x02 dlen 5                 #173 [hci0] 10.084292
+      ATT: Write Response (0x13) len 0
+< ACL Data TX: Handle 1 flags 0x00 dlen 9                 #174 [hci0] 10.084402
+      ATT: Write Request (0x12) len 4
+        Handle: 0x001a
+          Data: 0100
+> HCI Event: Number of Completed Packets (0x13) plen 5    #175 [hci0] 10.091475
+        Num handles: 1
+        Handle: 1 Address: <other-device-mac> (OUI 68-78-56)
+        Count: 1
+        #174: len 9 (10 Kb/s)
+        Latency: 7 msec (4-13 msec ~6 msec)
+> ACL Data RX: Handle 1 flags 0x02 dlen 5                 #176 [hci0] 10.100431
+      ATT: Write Response (0x13) len 0
+< ACL Data TX: Handle 1 flags 0x00 dlen 9                 #177 [hci0] 10.100817
+      ATT: Write Request (0x12) len 4
+        Handle: 0x001e
+          Data: 0100
+> HCI Event: Number of Completed Packets (0x13) plen 5    #178 [hci0] 10.106426
+        Num handles: 1
+        Handle: 1 Address: <other-device-mac> (OUI 68-78-56)
+        Count: 1
+        #177: len 9 (14 Kb/s)
+        Latency: 5 msec (4-13 msec ~6 msec)
+> ACL Data RX: Handle 1 flags 0x02 dlen 5                 #179 [hci0] 10.115374
+      ATT: Write Response (0x13) len 0
+< ACL Data TX: Handle 1 flags 0x00 dlen 9                 #180 [hci0] 10.115599
+      ATT: Write Request (0x12) len 4
+        Handle: 0x0022
+          Data: 0100
+> HCI Event: Number of Completed Packets (0x13) plen 5    #181 [hci0] 10.121460
+        Num handles: 1
+        Handle: 1 Address: <other-device-mac> (OUI 68-78-56)
+        Count: 1
+        #180: len 9 (14 Kb/s)
+        Latency: 5 msec (4-13 msec ~5 msec)
+> ACL Data RX: Handle 1 flags 0x02 dlen 5                 #182 [hci0] 10.130581
+      ATT: Write Response (0x13) len 0
+< ACL Data TX: Handle 1 flags 0x00 dlen 11                #183 [hci0] 10.130798
+      ATT: Read By Group Type Request (0x10) len 6
+        Handle range: 0x0034-0xffff
+        Attribute group type: Primary Service (0x2800)
+> HCI Event: Number of Completed Packets (0x13) plen 5    #184 [hci0] 10.136459
+        Num handles: 1
+        Handle: 1 Address: <other-device-mac> (OUI 68-78-56)
+        Count: 1
+        #183: len 11 (17 Kb/s)
+        Latency: 5 msec (4-13 msec ~5 msec)
+> ACL Data RX: Handle 1 flags 0x02 dlen 9                 #185 [hci0] 10.145572
+      ATT: Error Response (0x01) len 4
+        Read By Group Type Request (0x10)
+        Handle: 0x0034
+        Error: Attribute Not Found (0x0a)
+< ACL Data TX: Handle 1 flags 0x00 dlen 9                 #186 [hci0] 10.152089
+      ATT: Write Request (0x12) len 4
+        Handle: 0x000b
+          Data: 0200
+> HCI Event: Number of Completed Packets (0x13) plen 5    #187 [hci0] 10.159167
+        Num handles: 1
+        Handle: 1 Address: <other-device-mac> (OUI 68-78-56)
+        Count: 1
+        #186: len 9 (10 Kb/s)
+        Latency: 7 msec (4-13 msec ~6 msec)
+> ACL Data RX: Handle 1 flags 0x02 dlen 5                 #188 [hci0] 10.168570
+      ATT: Write Response (0x13) len 0
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #189 [hci0] 10.296604
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00000000000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #190 [hci0] 10.296606
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00080006000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #191 [hci0] 10.302299
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 000e0008000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #192 [hci0] 10.309290
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 000f0008000000
+> HCI Event: LE Meta Event (0x3e) plen 12                 #193 [hci0] 10.311157
+      LE Read Remote Used Features (0x04)
+        Status: Success (0x00)
+        Handle: 2 Address: <device-mac> (Espressif Inc.)
+        Features: 0xff 0x00 0x00 0x00 0x00 0x00 0x00 0x00
+          LE Encryption
+          Connection Parameter Request Procedure
+          Extended Reject Indication
+          Peripheral-initiated Features Exchange
+          LE Ping
+          LE Data Packet Length Extension
+          LL Privacy
+          Extended Scanner Filter Policies
+< ACL Data TX: Handle 2 flags 0x00 dlen 7                 #194 [hci0] 10.311382
+      ATT: Exchange MTU Request (0x02) len 2
+        Client RX MTU: 517
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #195 [hci0] 10.317295
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 000e0006000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #196 [hci0] 10.324355
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 000c0005000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #197 [hci0] 10.333404
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00090003000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #198 [hci0] 10.340292
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00060002000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #199 [hci0] 10.348324
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00050002000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #200 [hci0] 10.355572
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00010000000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #201 [hci0] 10.369653
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00020000000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #202 [hci0] 10.400603
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00020000000000
+> HCI Event: Number of Completed Packets (0x13) plen 5    #203 [hci0] 10.401187
+        Num handles: 1
+        Handle: 2 Address: <device-mac> (Espressif Inc.)
+        Count: 1
+        #194: len 7 (0 Kb/s)
+        Latency: 89 msec (89-89 msec ~89 msec)
+> HCI Event: LE Meta Event (0x3e) plen 11                 #204 [hci0] 10.402465
+      LE Data Length Change (0x07)
+        Handle: 2 Address: <device-mac> (Espressif Inc.)
+        Max TX octets: 123
+        Max TX time: 1096
+        Max RX octets: 123
+        Max RX time: 1096
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #205 [hci0] 10.408571
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00020000000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #206 [hci0] 10.423508
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00020000000000
+> ACL Data RX: Handle 2 flags 0x02 dlen 7                 #207 [hci0] 10.448596
+      ATT: Exchange MTU Response (0x03) len 2
+        Server RX MTU: 256
+< ACL Data TX: Handle 2 flags 0x00 dlen 11                #208 [hci0] 10.448840
+      ATT: Read By Type Request (0x08) len 6
+        Handle range: 0x0001-0xffff
+        Attribute type: Server Supported Features (0x2b3a)
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #209 [hci0] 10.490687
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00010003000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #210 [hci0] 10.498581
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00ffff04000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #211 [hci0] 10.505510
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00fdff08000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #212 [hci0] 10.513458
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00feff08000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #213 [hci0] 10.520661
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00feff09000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #214 [hci0] 10.528575
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00fdff09000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #215 [hci0] 10.535290
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00fbff08000000
+> HCI Event: Number of Completed Packets (0x13) plen 5    #216 [hci0] 10.536151
+        Num handles: 1
+        Handle: 2 Address: <device-mac> (Espressif Inc.)
+        Count: 1
+        #208: len 11 (1 Kb/s)
+        Latency: 87 msec (87-89 msec ~88 msec)
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #217 [hci0] 10.543588
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00f9ff08000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #218 [hci0] 10.552291
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00f9ff07000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #219 [hci0] 10.558615
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00f7ff04000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #220 [hci0] 10.565291
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00f6ff04000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #221 [hci0] 10.573576
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00f6ff01000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #222 [hci0] 10.580495
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00f6ff01000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #223 [hci0] 10.588576
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00f5ff00000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #224 [hci0] 10.595578
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00f7ff00000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #225 [hci0] 10.610504
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00f3fff9ff0000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #226 [hci0] 10.618296
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00f1fff4ff0000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #227 [hci0] 10.624343
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00eefff1ff0000
+> ACL Data RX: Handle 2 flags 0x02 dlen 9                 #228 [hci0] 10.627611
+      ATT: Error Response (0x01) len 4
+        Read By Type Request (0x08)
+        Handle: 0x0001
+        Error: Attribute Not Found (0x0a)
+< ACL Data TX: Handle 2 flags 0x00 dlen 11                #229 [hci0] 10.627860
+      ATT: Read By Group Type Request (0x10) len 6
+        Handle range: 0x0001-0xffff
+        Attribute group type: Primary Service (0x2800)
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #230 [hci0] 10.632303
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00efffeeff0000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #231 [hci0] 10.640597
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00edffebff0000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #232 [hci0] 10.648301
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00ecffeaff0000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #233 [hci0] 10.655573
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00efffe9ff0000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #234 [hci0] 10.663598
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00efffe9ff0000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #235 [hci0] 10.670314
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00f2ffecff0000
+> HCI Event: Number of Completed Packets (0x13) plen 5    #236 [hci0] 10.671176
+        Num handles: 1
+        Handle: 2 Address: <device-mac> (Espressif Inc.)
+        Count: 1
+        #229: len 11 (2 Kb/s)
+        Latency: 43 msec (43-89 msec ~65 msec)
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #237 [hci0] 10.678582
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00f4ffedff0000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #238 [hci0] 10.684289
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00f8ffefff0000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #239 [hci0] 10.693512
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00fbfff2ff0000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #240 [hci0] 10.700316
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00fefff3ff0000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #241 [hci0] 10.707565
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 000000f7ff0000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #242 [hci0] 10.715314
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 000200f9ff0000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #243 [hci0] 10.730342
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 000000feff0000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #244 [hci0] 10.738564
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 000200ffff0000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #245 [hci0] 10.746589
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 000100ffff0000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #246 [hci0] 10.754314
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 000200feff0000
+> ACL Data RX: Handle 2 flags 0x02 dlen 26                #247 [hci0] 10.763330
+      ATT: Read By Group Type Response (0x11) len 21
+        Attribute data length: 20
+        Attribute group list: 1 entry
+        Handle range: 0x0001-0xffff
+        UUID: Nordic UART Service (6e400001-b5a3-f393-e0a9-e50e24dcca9e)
+< ACL Data TX: Handle 2 flags 0x00 dlen 11                #248 [hci0] 10.763525
+      ATT: Read By Group Type Request (0x10) len 6
+        Handle range: 0x0001-0xffff
+        Attribute group type: Secondary Service (0x2801)
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #249 [hci0] 10.836569
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00020000000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #250 [hci0] 10.842343
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00020000000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #251 [hci0] 10.850588
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00020000000000
+> HCI Event: Number of Completed Packets (0x13) plen 5    #252 [hci0] 10.851144
+        Num handles: 1
+        Handle: 2 Address: <device-mac> (Espressif Inc.)
+        Count: 1
+        #248: len 11 (1 Kb/s)
+        Latency: 87 msec (43-89 msec ~76 msec)
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #253 [hci0] 10.858574
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00030000000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #254 [hci0] 10.865321
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00020000000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #255 [hci0] 10.873580
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00030000000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #256 [hci0] 10.881545
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00020000000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #257 [hci0] 10.888566
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00020000000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #258 [hci0] 10.896581
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00020000000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #259 [hci0] 10.903568
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00020000000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #260 [hci0] 10.911354
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00040002000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #261 [hci0] 10.917658
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00040002000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #262 [hci0] 10.925570
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00050001000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #263 [hci0] 10.934596
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00050002000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #264 [hci0] 10.941464
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00040002000000
+> ACL Data RX: Handle 2 flags 0x02 dlen 9                 #265 [hci0] 10.941468
+      ATT: Error Response (0x01) len 4
+        Read By Group Type Request (0x10)
+        Handle: 0x0001
+        Error: Attribute Not Found (0x0a)
+< ACL Data TX: Handle 2 flags 0x00 dlen 11                #266 [hci0] 10.941621
+      ATT: Read By Type Request (0x08) len 6
+        Handle range: 0x0001-0xffff
+        Attribute type: Include (0x2802)
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #267 [hci0] 10.955591
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00030002000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #268 [hci0] 10.963577
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00020002000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #269 [hci0] 10.971578
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00020002000000
+> HCI Event: Number of Completed Packets (0x13) plen 5    #270 [hci0] 10.986446
+        Num handles: 1
+        Handle: 2 Address: <device-mac> (Espressif Inc.)
+        Count: 1
+        #266: len 11 (2 Kb/s)
+        Latency: 44 msec (43-89 msec ~60 msec)
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #271 [hci0] 11.008589
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00010001000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #272 [hci0] 11.023603
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00010001000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #273 [hci0] 11.032593
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00000002000000
+> ACL Data RX: Handle 2 flags 0x02 dlen 9                 #274 [hci0] 11.032595
+      ATT: Error Response (0x01) len 4
+        Read By Type Request (0x08)
+        Handle: 0x0001
+        Error: Attribute Not Found (0x0a)
+< ACL Data TX: Handle 2 flags 0x00 dlen 11                #275 [hci0] 11.032783
+      ATT: Read By Type Request (0x08) len 6
+        Handle range: 0x0001-0xffff
+        Attribute type: Characteristic (0x2803)
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #276 [hci0] 11.038568
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 0000000200ff00
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #277 [hci0] 11.053294
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00010001000000
+> HCI Event: LE Meta Event (0x3e) plen 10                 #278 [hci0] 11.059453
+      LE Connection Update Complete (0x03)
+        Status: Success (0x00)
+        Handle: 1 Address: <other-device-mac> (OUI 68-78-56)
+        Connection interval: 7.50 msec (0x0006)
+        Connection latency: 32 (0x0020)
+        Supervision timeout: 3000 msec (0x012c)
+> HCI Event: Number of Completed Packets (0x13) plen 5    #279 [hci0] 11.076231
+        Num handles: 1
+        Handle: 2 Address: <device-mac> (Espressif Inc.)
+        Count: 1
+        #275: len 11 (2 Kb/s)
+        Latency: 43 msec (43-89 msec ~52 msec)
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #280 [hci0] 11.077579
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 0000000000ff00
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #281 [hci0] 11.097522
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 0000000000ff00
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #282 [hci0] 11.120358
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 0000000000ff00
+> ACL Data RX: Handle 2 flags 0x02 dlen 90                #283 [hci0] 11.123292
+      ATT: Read By Type Response (0x09) len 85
+        Attribute data length: 21
+        Attribute data list: 4 entries
+        Handle: 0x0002
+        Value: 0c03009ecadc240ee5a9e093f3a3b50200406e
+            Properties: 0x0c
+              Write Without Response (0x04)
+              Write (0x08)
+            Value Handle: 0x0003
+            Value UUID: Nordic UART TX (6e400002-b5a3-f393-e0a9-e50e24dcca9e)
+        Handle: 0x0004
+        Value: 1005009ecadc240ee5a9e093f3a3b50300406e
+            Properties: 0x10
+              Notify (0x10)
+            Value Handle: 0x0005
+            Value UUID: Nordic UART RX (6e400003-b5a3-f393-e0a9-e50e24dcca9e)
+        Handle: 0x0007
+        Value: 0c08009ecadc240ee5a9e093f3a3b50400406e
+            Properties: 0x0c
+              Write Without Response (0x04)
+              Write (0x08)
+            Value Handle: 0x0008
+            Value UUID: Vendor specific (6e400004-b5a3-f393-e0a9-e50e24dcca9e)
+        Handle: 0x0009
+        Value: 100a009ecadc240ee5a9e093f3a3b50500406e
+            Properties: 0x10
+              Notify (0x10)
+            Value Handle: 0x000a
+            Value UUID: Vendor specific (6e400005-b5a3-f393-e0a9-e50e24dcca9e)
+< ACL Data TX: Handle 2 flags 0x00 dlen 11                #284 [hci0] 11.123381
+      ATT: Read By Type Request (0x08) len 6
+        Handle range: 0x000a-0xffff
+        Attribute type: Characteristic (0x2803)
+> HCI Event: Number of Completed Packets (0x13) plen 5    #285 [hci0] 11.166197
+        Num handles: 1
+        Handle: 2 Address: <device-mac> (Espressif Inc.)
+        Count: 1
+        #284: len 11 (2 Kb/s)
+        Latency: 42 msec (42-89 msec ~47 msec)
+> ACL Data RX: Handle 2 flags 0x02 dlen 9                 #286 [hci0] 11.213576
+      ATT: Error Response (0x01) len 4
+        Read By Type Request (0x08)
+        Handle: 0x000a
+        Error: Attribute Not Found (0x0a)
+< ACL Data TX: Handle 2 flags 0x00 dlen 9                 #287 [hci0] 11.213699
+      ATT: Find Information Request (0x04) len 4
+        Handle range: 0x000b-0xffff
+> HCI Event: Number of Completed Packets (0x13) plen 5    #288 [hci0] 11.256155
+        Num handles: 1
+        Handle: 2 Address: <device-mac> (Espressif Inc.)
+        Count: 1
+        #287: len 9 (1 Kb/s)
+        Latency: 42 msec (42-89 msec ~44 msec)
+> ACL Data RX: Handle 2 flags 0x02 dlen 10                #289 [hci0] 11.302350
+      ATT: Find Information Response (0x05) len 5
+        Format: UUID-16 (0x01)
+        Handle: 0x000b
+        UUID: Client Characteristic Configuration (0x2902)
+< ACL Data TX: Handle 2 flags 0x00 dlen 9                 #290 [hci0] 11.302468
+      ATT: Find Information Request (0x04) len 4
+        Handle range: 0x000c-0xffff
+> HCI Event: Number of Completed Packets (0x13) plen 5    #291 [hci0] 11.346169
+        Num handles: 1
+        Handle: 2 Address: <device-mac> (Espressif Inc.)
+        Count: 1
+        #290: len 9 (1 Kb/s)
+        Latency: 43 msec (42-89 msec ~44 msec)
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #292 [hci0] 11.367493
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00000000000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #293 [hci0] 11.376387
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00030000000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #294 [hci0] 11.383592
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00020000000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #295 [hci0] 11.391608
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00020000000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #296 [hci0] 11.398444
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00030000000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #297 [hci0] 11.405592
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00020000000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #298 [hci0] 11.413345
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 000200feff0000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #299 [hci0] 11.421599
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 000200feff0000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #300 [hci0] 11.436426
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00020000000000
+> ACL Data RX: Handle 2 flags 0x02 dlen 9                 #301 [hci0] 11.436429
+      ATT: Error Response (0x01) len 4
+        Find Information Request (0x04)
+        Handle: 0x000c
+        Error: Attribute Not Found (0x0a)
+< ACL Data TX: Handle 2 flags 0x00 dlen 9                 #302 [hci0] 11.445133
+      ATT: Write Request (0x12) len 4
+        Handle: 0x000b Type: Client Characteristic Configuration (0x2902)
+        Value Handle: 0x000a Type: Vendor specific (6e400005-b5a3-f393-e0a9-e50e24dcca9e)
+          Data: 0100
+            Notification (0x01)
+> HCI Event: Number of Completed Packets (0x13) plen 5    #303 [hci0] 11.481445
+        Num handles: 1
+        Handle: 2 Address: <device-mac> (Espressif Inc.)
+        Count: 1
+        #302: len 9 (2 Kb/s)
+        Latency: 36 msec (36-89 msec ~40 msec)
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #304 [hci0] 11.488591
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 000300feff0000
+> ACL Data RX: Handle 2 flags 0x02 dlen 5                 #305 [hci0] 11.528574
+      ATT: Write Response (0x13) len 0
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #306 [hci0] 11.571712
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 0000000000ff00
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #307 [hci0] 11.607328
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 0000000000ff00
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #308 [hci0] 11.660343
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 0000000000ff00
+< ACL Data TX: Handle 2 flags 0x00 dlen 27                #309 [hci0] 11.830571
+      ATT: Write Request (0x12) len 22
+        Handle: 0x0008 Type: Vendor specific (6e400004-b5a3-f393-e0a9-e50e24dcca9e)
+          Data: 7b226964223a226964222c2276657273696f6e22
+> HCI Event: Number of Completed Packets (0x13) plen 5    #310 [hci0] 11.841128
+        Num handles: 1
+        Handle: 2 Address: <device-mac> (Espressif Inc.)
+        Count: 1
+        #309: len 27 (21 Kb/s)
+        Latency: 10 msec (10-89 msec ~25 msec)
+> ACL Data RX: Handle 2 flags 0x02 dlen 5                 #311 [hci0] 11.888597
+      ATT: Write Response (0x13) len 0
+< ACL Data TX: Handle 2 flags 0x00 dlen 27                #312 [hci0] 11.909791
+      ATT: Write Request (0x12) len 22
+        Handle: 0x0008 Type: Vendor specific (6e400004-b5a3-f393-e0a9-e50e24dcca9e)
+          Data: 3a22312e30222c22636d64223a22646576696365
+> HCI Event: Number of Completed Packets (0x13) plen 5    #313 [hci0] 11.931134
+        Num handles: 1
+        Handle: 2 Address: <device-mac> (Espressif Inc.)
+        Count: 1
+        #312: len 27 (10 Kb/s)
+        Latency: 21 msec (10-89 msec ~23 msec)
+> ACL Data RX: Handle 2 flags 0x02 dlen 5                 #314 [hci0] 11.977578
+      ATT: Write Response (0x13) len 0
+< ACL Data TX: Handle 2 flags 0x00 dlen 25                #315 [hci0] 11.998905
+      ATT: Write Request (0x12) len 20
+        Handle: 0x0008 Type: Vendor specific (6e400004-b5a3-f393-e0a9-e50e24dcca9e)
+          Data: 2e696e666f222c2261726773223a7b7d7d0a
+> HCI Event: Number of Completed Packets (0x13) plen 5    #316 [hci0] 12.021271
+        Num handles: 1
+        Handle: 2 Address: <device-mac> (Espressif Inc.)
+        Count: 1
+        #315: len 25 (9 Kb/s)
+        Latency: 22 msec (10-89 msec ~22 msec)
+> ACL Data RX: Handle 2 flags 0x02 dlen 5                 #317 [hci0] 12.068577
+      ATT: Write Response (0x13) len 0
+> ACL Data RX: Handle 2 flags 0x02 dlen 122               #318 [hci0] 12.068594
+> ACL Data RX: Handle 2 flags 0x01 dlen 122               #319 [hci0] 12.070571
+> ACL Data RX: Handle 2 flags 0x01 dlen 7                 #320 [hci0] 12.158648
+> ACL Data RX: Handle 2 flags 0x01 dlen 9                 #321 [hci0] 12.158652
+      ATT: Handle Value Notification (0x1b) len 255
+        Handle: 0x000a Type: Vendor specific (6e400005-b5a3-f393-e0a9-e50e24dcca9e)
+          Data: 7b226964223a226964222c226f6b223a747275652c2264617461223a7b226d6f64656c223a22696f74687562222c226669726d77617265223a22312e332d39353661666364222c226275696c645f736861223a22633233316339353031222c226465766963655f6964223a22496f744875622d36354438222c226275696c645f76617269616e74223a226d7174745f6e65745f74786e3d6f6e222c2270726f746f636f6c5f76657273696f6e73223a5b22312e30225d2c227365637572697479223a7b226c696e6b5f656e63727970746564223a66616c73652c22626f6e646564223a66616c73652c226c325f7265616479223a66616c73652c227365
+> ACL Data RX: Handle 2 flags 0x02 dlen 39                #322 [hci0] 12.158652
+      ATT: Handle Value Notification (0x1b) len 34
+        Handle: 0x000a Type: Vendor specific (6e400005-b5a3-f393-e0a9-e50e24dcca9e)
+          Data: 6e7369746976655f7772697465735f616c6c6f776564223a66616c73657d7d7d
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #323 [hci0] 13.236578
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00010000000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #324 [hci0] 13.243581
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 000200feff0000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #325 [hci0] 13.251291
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 000100ffff0000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #326 [hci0] 13.258576
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 000100ffff0000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #327 [hci0] 13.273299
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 000200feff0000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #328 [hci0] 13.296590
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 000100ffff0000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #329 [hci0] 13.312590
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 000200feff0000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #330 [hci0] 13.318618
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 000100fdff0000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #331 [hci0] 13.327576
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 000100ffff0000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #332 [hci0] 13.333556
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 000300fdff0000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #333 [hci0] 13.341575
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 000300fdff0000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #334 [hci0] 13.348567
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 000200fdff0000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #335 [hci0] 13.356534
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 000200fdff0000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #336 [hci0] 13.362380
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 000200fdff0000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #337 [hci0] 13.370338
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 000100fdff0000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #338 [hci0] 13.377586
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 000100fcff0000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #339 [hci0] 13.385296
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 000100fcff0000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #340 [hci0] 13.393574
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 000100fbff0000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #341 [hci0] 13.401473
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 000000faff0000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #342 [hci0] 13.407576
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 000100fcff0000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #343 [hci0] 13.417606
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 000000fdff0000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #344 [hci0] 13.432576
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 000000fdff0000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #345 [hci0] 13.437290
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 000100fdff0000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #346 [hci0] 13.446573
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 000100fdff0000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #347 [hci0] 13.453334
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 000000fcff0000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #348 [hci0] 13.461291
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 000100fcff0000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #349 [hci0] 13.469544
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 000000fcff0000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #350 [hci0] 13.476585
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 000000fbff0000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #351 [hci0] 13.482290
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 000000faff0000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #352 [hci0] 13.491574
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 000000faff0000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #353 [hci0] 13.498573
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 000000fbff0000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #354 [hci0] 13.505654
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 000000faff0000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #355 [hci0] 13.513584
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 000000fbff0000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #356 [hci0] 13.520326
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 000000faff0000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #357 [hci0] 13.528587
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 000000faff0000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #358 [hci0] 13.536319
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 000000faff0000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #359 [hci0] 13.551577
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 000000fbff0000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #360 [hci0] 13.558580
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 000000fcff0000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #361 [hci0] 13.567376
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 000000fcff0000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #362 [hci0] 13.572708
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00fdfffdff0000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #363 [hci0] 13.581592
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00fffffeff0000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #364 [hci0] 13.588591
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00fffffeff0000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #365 [hci0] 13.603350
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00ffffffff0000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #366 [hci0] 13.618618
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00ffffffff0000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #367 [hci0] 13.648707
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00feff00000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #368 [hci0] 13.663572
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00feff00000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #369 [hci0] 13.678318
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00ffff00000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #370 [hci0] 13.686298
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00ffff00000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #371 [hci0] 13.858572
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00020000000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #372 [hci0] 13.866572
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00020000000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #373 [hci0] 13.872579
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00030000000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #374 [hci0] 13.881585
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00030000000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #375 [hci0] 13.888356
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00030001000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #376 [hci0] 13.896295
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00030000000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #377 [hci0] 13.902586
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00020001000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #378 [hci0] 13.911494
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00020000000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #379 [hci0] 13.918582
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00010001000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #380 [hci0] 13.926575
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00010001000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #381 [hci0] 13.941577
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00020000000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #382 [hci0] 13.963579
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00020000000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #383 [hci0] 13.970345
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00010000000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #384 [hci0] 13.978581
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00030000000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #385 [hci0] 13.986570
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00020000000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #386 [hci0] 13.993572
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00020000000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #387 [hci0] 14.003048
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00020001000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #388 [hci0] 14.008592
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00020001000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #389 [hci0] 14.016571
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00020000000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #390 [hci0] 14.022595
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00020002000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #391 [hci0] 14.031585
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00020000000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #392 [hci0] 14.037327
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00020000000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #393 [hci0] 14.046584
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00020000000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #394 [hci0] 14.052580
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00030000000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #395 [hci0] 14.061589
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00010000000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #396 [hci0] 14.069319
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00020000000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #397 [hci0] 14.083425
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00030003000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #398 [hci0] 14.091573
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00020000000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #399 [hci0] 14.097626
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00020000000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #400 [hci0] 14.105583
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00020002000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #401 [hci0] 14.113591
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00020000000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #402 [hci0] 14.121459
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00030002000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #403 [hci0] 14.127470
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00030000000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #404 [hci0] 14.136636
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00020000000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #405 [hci0] 14.143568
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00020002000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #406 [hci0] 14.151574
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00030001000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #407 [hci0] 14.158454
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00020000000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #408 [hci0] 14.166590
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00030000000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #409 [hci0] 14.172575
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00030002000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #410 [hci0] 14.181576
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00030002000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #411 [hci0] 14.197311
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00040000000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #412 [hci0] 14.210300
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00020002000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #413 [hci0] 14.217287
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00020000000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #414 [hci0] 14.226484
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00020002000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #415 [hci0] 14.240293
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00020000000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #416 [hci0] 14.247324
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00020000000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #417 [hci0] 14.256336
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00020000000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #418 [hci0] 14.262326
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00020000000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #419 [hci0] 14.271074
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00020000000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #420 [hci0] 14.277297
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00020002000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #421 [hci0] 14.285429
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00020000000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #422 [hci0] 14.292339
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00030000000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #423 [hci0] 14.301579
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00030000000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #424 [hci0] 14.309577
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00020000000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #425 [hci0] 14.316289
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00030001000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #426 [hci0] 14.323581
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00010001000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #427 [hci0] 14.330658
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00020000000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #428 [hci0] 14.338091
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00020000000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #429 [hci0] 14.353350
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00020000000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #430 [hci0] 14.361575
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00010000000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #431 [hci0] 14.368576
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00010000000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #432 [hci0] 14.383581
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00020000000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #433 [hci0] 14.390428
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00020002000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #434 [hci0] 14.406292
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00020000000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #435 [hci0] 14.413574
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00020002000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #436 [hci0] 14.421342
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00020000000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #437 [hci0] 14.428594
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00030000000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #438 [hci0] 14.436362
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00030002000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #439 [hci0] 14.443336
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00020000000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #440 [hci0] 14.451581
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00010001000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #441 [hci0] 14.457668
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00010001000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #442 [hci0] 14.496297
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00020000000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #443 [hci0] 14.511580
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00010001000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #444 [hci0] 14.526719
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00020003000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #445 [hci0] 14.533577
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00010000000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #446 [hci0] 14.541725
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00020002000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #447 [hci0] 14.548581
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00020000000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #448 [hci0] 14.555364
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00010001000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #449 [hci0] 14.563590
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00010001000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #450 [hci0] 14.593580
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00010001000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #451 [hci0] 14.608579
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00000001000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #452 [hci0] 14.616583
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00000001000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #453 [hci0] 14.631576
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00000002000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #454 [hci0] 14.646581
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00000002000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #455 [hci0] 14.668652
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00000002000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #456 [hci0] 14.683587
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00000002000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #457 [hci0] 14.690578
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00000002000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #458 [hci0] 14.698407
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00ffff01000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #459 [hci0] 14.706337
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00ffff01000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #460 [hci0] 14.713424
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00feff02000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #461 [hci0] 14.721515
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00000001000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #462 [hci0] 14.728575
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00000001000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #463 [hci0] 14.736609
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00000002000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #464 [hci0] 14.743577
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00feff03000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #465 [hci0] 14.758587
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00000001000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #466 [hci0] 14.767586
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00feff02000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #467 [hci0] 14.781567
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00feff03000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #468 [hci0] 14.788799
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00000001000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #469 [hci0] 14.796575
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00ffff01000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #470 [hci0] 14.803627
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00ffff01000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #471 [hci0] 14.811598
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00ffff01000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #472 [hci0] 14.817673
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00ffff01000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #473 [hci0] 14.826580
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00feff02000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #474 [hci0] 14.840292
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00feff02000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #475 [hci0] 14.849606
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00ffff01000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #476 [hci0] 14.857576
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00ffff01000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #477 [hci0] 14.863585
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00ffff01000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #478 [hci0] 14.871293
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00ffff01000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #479 [hci0] 14.877573
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00feff02000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #480 [hci0] 14.892522
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00ffff03000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #481 [hci0] 14.901578
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00ffff01000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #482 [hci0] 14.907344
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00ffff01000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #483 [hci0] 14.916598
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00ffff01000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #484 [hci0] 14.922310
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00ffff01000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #485 [hci0] 14.930572
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00ffff01000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #486 [hci0] 14.938591
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00feff03000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #487 [hci0] 14.953615
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00feff01000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #488 [hci0] 14.962580
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00feff02000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #489 [hci0] 14.969572
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00ffff01000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #490 [hci0] 14.976292
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00feff01000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #491 [hci0] 14.983602
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00feff00000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #492 [hci0] 14.990593
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00feff02000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #493 [hci0] 14.998566
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00fdff01000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #494 [hci0] 15.005835
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00fdff03000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #495 [hci0] 15.014573
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00feff02000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #496 [hci0] 15.021290
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00feff01000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #497 [hci0] 15.028592
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00fdff02000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #498 [hci0] 15.036305
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00fdff01000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #499 [hci0] 15.043578
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00feff01000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #500 [hci0] 15.051592
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00feff02000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #501 [hci0] 15.057600
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00fdff01000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #502 [hci0] 15.073300
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00fdff02000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #503 [hci0] 15.081577
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00feff01000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #504 [hci0] 15.088579
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00ffff01000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #505 [hci0] 15.096291
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00feff02000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #506 [hci0] 15.103342
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00feff00000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #507 [hci0] 15.111591
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00ffff01000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #508 [hci0] 15.118587
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00feff02000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #509 [hci0] 15.125569
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00ffff01000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #510 [hci0] 15.132569
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00feff02000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #511 [hci0] 15.148566
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00feff00000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #512 [hci0] 15.157603
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00ffff01000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #513 [hci0] 15.164573
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00feff01000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #514 [hci0] 15.171351
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00feff01000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #515 [hci0] 15.178511
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00ffff01000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #516 [hci0] 15.186317
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00ffff01000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #517 [hci0] 15.192596
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00ffff01000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #518 [hci0] 15.201599
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00ffff01000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #519 [hci0] 15.207371
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00ffff01000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #520 [hci0] 15.222780
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00feff02000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #521 [hci0] 15.246724
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00feff02000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #522 [hci0] 15.261578
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00ffff01000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #523 [hci0] 15.291594
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00ffff01000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #524 [hci0] 15.306577
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00ffff01000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #525 [hci0] 15.321427
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00feff02000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #526 [hci0] 15.606574
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00000002000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #527 [hci0] 15.621637
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00ffff01000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #528 [hci0] 15.651566
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00ffff01000000
+@ MGMT Command: Disconnect (0x0014) plen 7            {0x0001} [hci0] 16.815208
+        LE Address: <device-mac> (Espressif Inc.)
+< HCI Command: Disconnect (0x01|0x0006) plen 3            #529 [hci0] 16.815291
+        Handle: 2 Address: <device-mac> (Espressif Inc.)
+        Reason: Remote User Terminated Connection (0x13)
+> HCI Event: Command Status (0x0f) plen 4                 #530 [hci0] 16.817383
+      Disconnect (0x01|0x0006) ncmd 1
+        Status: Success (0x00)
+> HCI Event: Disconnect Complete (0x05) plen 4            #531 [hci0] 16.842116
+        Status: Success (0x00)
+        Handle: 2 Address: <device-mac> (Espressif Inc.)
+        Reason: Connection Terminated By Local Host (0x16)
+@ MGMT Event: Device Disconnected (0x000c) plen 8     {0x0001} [hci0] 16.842172
+        LE Address: <device-mac> (Espressif Inc.)
+        Reason: Connection terminated by local host (0x02)
+@ MGMT Event: Command Complete (0x0001) plen 10       {0x0001} [hci0] 16.853588
+      Disconnect (0x0014) plen 7
+        Status: Success (0x00)
+        LE Address: <device-mac> (Espressif Inc.)
+= bluetoothd: No matching connection for device                [hci0] 16.853843
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #532 [hci0] 17.023731
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00000000000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #533 [hci0] 17.031587
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00010003000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #534 [hci0] 17.038584
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00030003000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #535 [hci0] 17.047585
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00020002000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #536 [hci0] 17.053583
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00010002000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #537 [hci0] 17.060338
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00020003000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #538 [hci0] 17.068573
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00020004000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #539 [hci0] 17.075524
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00030005000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #540 [hci0] 17.083574
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00030006000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #541 [hci0] 17.091746
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00020006000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #542 [hci0] 17.098591
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00020005000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #543 [hci0] 17.106336
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00020004000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #544 [hci0] 17.114573
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00010005000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #545 [hci0] 17.120347
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00010006000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #546 [hci0] 17.127291
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00000006000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #547 [hci0] 17.143466
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00000006000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #548 [hci0] 17.151575
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00000006000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #549 [hci0] 17.158575
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00000006000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #550 [hci0] 17.166574
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00000006000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #551 [hci0] 17.172595
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00000010000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #552 [hci0] 17.181601
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 0000000a000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #553 [hci0] 17.187380
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 0000000b000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #554 [hci0] 17.195591
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00000009000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #555 [hci0] 17.203589
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00000009000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #556 [hci0] 17.210429
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 0000000a000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #557 [hci0] 17.217664
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 0000000a000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #558 [hci0] 17.226339
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00000008000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #559 [hci0] 17.233289
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00000008000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #560 [hci0] 17.240294
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00000007000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #561 [hci0] 17.247349
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00000006000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #562 [hci0] 17.263576
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00000006000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #563 [hci0] 17.271574
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00000006000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #564 [hci0] 17.277574
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00000006000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #565 [hci0] 17.286587
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 0000000a000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #566 [hci0] 17.292292
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 0000000a000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #567 [hci0] 17.301580
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00000008000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #568 [hci0] 17.308558
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00000006000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #569 [hci0] 17.316603
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00000006000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #570 [hci0] 17.323570
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00000005000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #571 [hci0] 17.331581
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00000005000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #572 [hci0] 17.337364
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00000005000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #573 [hci0] 17.345608
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00000005000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #574 [hci0] 17.353595
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00000005000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #575 [hci0] 17.360644
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00000004000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #576 [hci0] 17.368570
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00000005000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #577 [hci0] 17.383661
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00000003000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #578 [hci0] 17.391318
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00ffff03000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #579 [hci0] 17.398575
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00ffff03000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #580 [hci0] 17.406331
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00000002000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #581 [hci0] 17.413575
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00ffff01000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #582 [hci0] 17.421575
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00ffff03000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #583 [hci0] 17.427337
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00ffff01000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #584 [hci0] 17.436596
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00ffff01000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #585 [hci0] 17.444731
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00ffff01000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #586 [hci0] 17.451295
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00ffff01000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #587 [hci0] 17.466573
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00ffff01000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #588 [hci0] 17.488605
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00feff00000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #589 [hci0] 17.502575
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00feff00000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #590 [hci0] 17.511601
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00feff00000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #591 [hci0] 17.518366
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00fdff00000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #592 [hci0] 17.525378
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00fdff00000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #593 [hci0] 17.533577
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00feff00000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #594 [hci0] 17.541541
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00feff00000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #595 [hci0] 17.548668
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00ffff00000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #596 [hci0] 17.557487
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00fdfffeff0000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #597 [hci0] 17.563586
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00fefffeff0000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #598 [hci0] 17.571575
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00fdfffeff0000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #599 [hci0] 17.586568
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00fefffeff0000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #600 [hci0] 17.593322
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00ffffffff0000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #601 [hci0] 17.602575
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00fffffeff0000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #602 [hci0] 17.608325
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00fefffdff0000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #603 [hci0] 17.624599
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00fdfffdff0000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #604 [hci0] 17.646564
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 000000feff0000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #605 [hci0] 17.652652
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00ffffffff0000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #606 [hci0] 17.736576
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00fefffeff0000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #607 [hci0] 17.743361
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00ffffffff0000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #608 [hci0] 17.751574
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00ffffffff0000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #609 [hci0] 17.758581
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00ffffffff0000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #610 [hci0] 17.766682
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00fefffeff0000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #611 [hci0] 17.772541
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00ffffffff0000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #612 [hci0] 17.782294
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00ffffffff0000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #613 [hci0] 17.787456
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00ffffffff0000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #614 [hci0] 17.795590
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00ffffffff0000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #615 [hci0] 17.908614
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00feff00000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #616 [hci0] 17.968330
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00feff00000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #617 [hci0] 17.983569
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00000000000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #618 [hci0] 17.991573
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00ffff01000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #619 [hci0] 17.998580
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00ffff01000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #620 [hci0] 18.006589
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00ffff01000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #621 [hci0] 18.088565
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 01000000000000
+> ACL Data RX: Handle 1 flags 0x02 dlen 14                #622 [hci0] 18.126295
+      ATT: Handle Value Notification (0x1b) len 9
+        Handle: 0x0019
+          Data: 00000000000000
+> HCI Event: Read Remote Version Complete (0x0c) plen 8   #623 [hci0] 43.735728
+        Status: Success (0x00)
+        Handle: 1 Address: <other-device-mac> (OUI 68-78-56)
+        LMP version: Bluetooth 5.0 (0x09) - Subversion 8 (0x0008)
+        Manufacturer: Yichip Microelectronics (Hangzhou) Co.,Ltd. (1294)

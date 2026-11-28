@@ -1,0 +1,13 @@
+{
+ "phase": "p2_3r_pre",
+ "ok": true,
+ "scan_hits": 1,
+ "rssi": -40,
+ "connect_s": 1.6,
+ "identity": {
+  "device_id": "IotHub-65D8",
+  "firmware": "1.3-956afcd",
+  "build_sha": "c231c9501"
+ },
+ "disconnected": true
+}
