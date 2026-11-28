@@ -71,12 +71,14 @@
 
 runner 以依赖注入（session/tap 工厂/monotonic/wall/sleep）组织，Host 测试使用 fake session、fake tap 与 fake 时钟，不连接 BLE 或 MQTT。
 
+设备选择绑定 `--addr`（默认 `10:97:BD:D3:65:DA`），`--device`/`--expect-fw`/`--expect-sha` 参与身份门，不采用“扫描第一个命中”。`wait_ready`/`wait_terminal`/`wait_sta` 以及身份、post 读取的每次尝试与重试间隔均受剩余 deadline 限制；deadline 耗尽即停止，不会开始预计越界的读取。
+
 ## 5. Host 测试矩阵
 
 | # | 场景 | 期望 |
 |---|---|---|
 | T1 | 合法 `sta` 样本 | 无违规 |
-| T2 | `ap` 但 `sta_ip` 非空 | `ap_mode_with_ip` |
+| T2 | `ap` | `net_mode_not_sta` |
 | T3 | `sta` 但 `sta_ssid` 为空 | `sta_mode_without_ssid` |
 | T4 | `ap` / `apsta` | `net_mode_not_sta` |
 | T5 | 非法 `net_mode` / `uart_baudrate` | 对应违规 |
@@ -102,6 +104,9 @@ runner 以依赖注入（session/tap 工厂/monotonic/wall/sleep）组织，Host
 | T25 | 跨轮询调用 | 同一命令两次调用 ID 不重复 |
 | T26 | 迟到响应 | 首次超时后注入旧 ID 响应，不得满足下一次查询 |
 | T27 | run_case 只读持续超时 | STOP/read_timeout，且未发送写命令 |
+| T28 | 设备选择 | 按 `--addr` 绑定，非首个命中 |
+| T29 | 读取 deadline | deadline 已耗尽时不发送请求，直接 STOP |
+| T30 | 三次超时后的迟到响应 | 上一轮旧 ID 响应在下一轮到达，不得影响下一轮结果 |
 
 ## 6. 边界
 

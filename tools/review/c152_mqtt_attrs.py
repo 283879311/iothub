@@ -35,6 +35,16 @@ WRONG_PASSWORD = "race-wrong-pass-0"
 EXPECTED = {"device_id": "IotHub-65D8", "firmware": "1.3-956afcd",
             "build_sha": "c231c9501"}
 
+DEFAULT_ADDR = "10:97:BD:D3:65:DA"
+
+
+def select_target(recs, addr: str):
+    """Bind the scan result to the explicit BLE address; never "first hit"."""
+    for rec in recs:
+        if rec.get("address", "").lower() == addr.lower():
+            return rec
+    return None
+
 
 def load_module(name: str, path: Path):
     spec = importlib.util.spec_from_file_location(name, path)
@@ -153,35 +163,56 @@ def req(rid: str, cmd: str, args: dict, token: str | None) -> dict:
 
 
 async def read_cmd(deps: Deps, cmd: str, args: dict, base_rid: str,
-                   timeout: float = 15.0) -> dict:
-    """Read-only command; unique id per attempt; bounded timeout retries."""
+                   timeout: float = 15.0, deadline: float | None = None) -> dict:
+    """Read-only command; unique id per attempt; hard deadline respected.
+
+    Each attempt uses min(timeout, remaining); retries and their delays are
+    bounded by the same deadline, so a bounded wait cannot overrun it.
+    """
     attempt = 1
     while True:
-        # Global monotonic id: never reused across polls, retries or commands.
+        now = deps.mono()
+        if deadline is not None:
+            remaining = deadline - now
+            if remaining <= 0:
+                raise ReadTimeout("%s deadline exhausted before send" % cmd)
+            effective = min(timeout, remaining)
+        else:
+            effective = timeout
         rid = deps.rids.next(base_rid)
         try:
             resp = await deps.sess.send_request(
-                req(rid, cmd, args, deps.sess.token), timeout=timeout, retries=0)
+                req(rid, cmd, args, deps.sess.token), timeout=effective, retries=0)
             return resp.obj or {}
         except asyncio.TimeoutError:
             if not policy.should_retry_read(attempt):
                 raise ReadTimeout("%s timed out after %d attempts" % (cmd, attempt))
+            if deadline is not None:
+                remaining = deadline - deps.mono()
+                if remaining <= 0:
+                    raise ReadTimeout("%s deadline exhausted after timeout" % cmd)
+                nap = min(policy.READ_RETRY_DELAY_S, remaining)
+            else:
+                nap = policy.READ_RETRY_DELAY_S
             attempt += 1
-            await deps.sleep(policy.READ_RETRY_DELAY_S)
+            await deps.sleep(nap)
 
-
-async def identity_gate(deps: Deps) -> tuple[dict, list[str]]:
-    dev = (await read_cmd(deps, "device.status", {}, "ident")).get("data") or {}
-    return dev, policy.identity_errors(dev, EXPECTED)
-
+async def identity_gate(deps: Deps, expected: dict,
+                        deadline: float | None = None) -> tuple[dict, list[str]]:
+    dev = (await read_cmd(deps, "device.status", {}, "ident", 15,
+                          deadline)).get("data") or {}
+    return dev, policy.identity_errors(dev, expected)
 
 async def wait_ready(deps: Deps, stable_s: float) -> bool:
-    """Real-time stability gate: monotonic clock, gap resets the streak."""
+    """Real-time stability gate; every read/delay is capped by the deadline."""
     start = None
     last_ok = None
     deadline = deps.mono() + 60.0
-    while deps.mono() < deadline:
-        data = (await read_cmd(deps, "network.status", {}, "ready", 30)).get("data") or {}
+    while True:
+        if deadline - deps.mono() <= 0:
+            return False
+        data = (await read_cmd(deps, "network.status", {}, "ready", 30,
+                               deadline)).get("data") or {}
         ok = (data.get("trial", {}).get("state") == "idle"
               and data.get("mqtt_connected") is True
               and data.get("sta_connected") is True)
@@ -196,39 +227,48 @@ async def wait_ready(deps: Deps, stable_s: float) -> bool:
         else:
             start = None
             last_ok = None
-        await deps.sleep(1.0)
-    return False
-
+        remaining = deadline - deps.mono()
+        if remaining <= 0:
+            return False
+        await deps.sleep(min(1.0, remaining))
 
 async def wait_terminal(deps: Deps, op_id: str, timeout_s: float) -> dict:
     deadline = deps.mono() + timeout_s
     last: dict = {}
-    while deps.mono() < deadline:
+    while True:
+        if deadline - deps.mono() <= 0:
+            return last
         last = (await read_cmd(deps, "operation.get", {"operation_id": op_id},
-                               "term", 10)).get("data") or {}
+                               "term", 10, deadline)).get("data") or {}
         if last.get("state") in policy.TERMINAL_STATES:
             return last
-        await deps.sleep(0.3)
-    return last
-
+        remaining = deadline - deps.mono()
+        if remaining <= 0:
+            return last
+        await deps.sleep(min(0.3, remaining))
 
 async def wait_sta(deps: Deps, timeout_s: float) -> bool:
     deadline = deps.mono() + timeout_s
-    while deps.mono() < deadline:
-        net = ((await read_cmd(deps, "device.status", {}, "sta", 30)).get("data")
-               or {}).get("network") or {}
+    while True:
+        if deadline - deps.mono() <= 0:
+            return False
+        net = ((await read_cmd(deps, "device.status", {}, "sta", 30,
+                               deadline)).get("data") or {}).get("network") or {}
         if net.get("sta_connected") is True:
             return True
-        await deps.sleep(1.5)
-    return False
+        remaining = deadline - deps.mono()
+        if remaining <= 0:
+            return False
+        await deps.sleep(min(1.5, remaining))
 
-
-async def run_case(deps: Deps, ssid: str) -> dict:
+async def run_case(deps: Deps, ssid: str,
+                   expected: dict | None = None) -> dict:
     """Run C15-2; returns the result dict with verdict/reason."""
+    expected = expected or EXPECTED
     result: dict = {"verdict": "STOP", "reason": "unfinished"}
     tap = None
     try:
-        dev, errs = await identity_gate(deps)
+        dev, errs = await identity_gate(deps, expected, deps.mono() + 45.0)
         result["identity"] = dev
         if errs:
             result.update(verdict="STOP", reason="identity", errors=errs)
@@ -267,12 +307,13 @@ async def run_case(deps: Deps, ssid: str) -> dict:
         restored = await wait_sta(deps, policy.RECOVERY_TIMEOUT_S)
         result["sta_restored"] = restored
 
-        dev2, errs2 = await identity_gate(deps)
+        dev2, errs2 = await identity_gate(deps, expected, deps.mono() + 45.0)
         result["identity_after"] = dev2
         identity_ok = not errs2
 
         w1 = deps.wall()
-        status = (await read_cmd(deps, "network.status", {}, "post", 30)).get("data") or {}
+        status = (await read_cmd(deps, "network.status", {}, "post", 30,
+                                deps.mono() + 45.0)).get("data") or {}
         status_ts = deps.wall()  # response sample time, after the read returns
 
         win = policy.window_eval(tap.snapshot(), w0, w1)
@@ -308,7 +349,10 @@ async def main() -> int:
     parser.add_argument("--port", type=int, default=int(os.environ.get(
         "IOTHUB_MQTT_PORT", "21883")))
     parser.add_argument("--ssid", default=os.environ.get("IOTHUB_TEST_SSID"))
+    parser.add_argument("--addr", default=DEFAULT_ADDR)
     parser.add_argument("--device", default="IotHub-65D8")
+    parser.add_argument("--expect-fw", default="1.3-956afcd")
+    parser.add_argument("--expect-sha", default="c231c9501")
     parser.add_argument("--out", default="/tmp/c152_mqtt_attrs.json")
     args = parser.parse_args()
 
@@ -330,19 +374,21 @@ async def main() -> int:
     cli = None
     try:
         recs = await p0.scan_filtered(10)
-        target = p0.choose_target(recs, None)
+        target = select_target(recs, args.addr)
         if not target:
-            raise StopRun("device not found in scan")
-        cli = p0.BleakClient(target["address"], timeout=25)
+            raise StopRun("target %s not found in scan" % args.addr)
+        cli = p0.BleakClient(args.addr, timeout=25)
         await cli.connect()
-        sess = p0.Session(cli, address=target["address"],
+        sess = p0.Session(cli, address=args.addr,
                           username=user, password=password)
         await cli.start_notify(p0.CMD_TX, sess.on_notify)
         await asyncio.sleep(0.3)
         await sess.login(user, password, retries=0)
 
         deps = Deps(sess, lambda: AttrTap(args.host, args.port, token))
-        result = await run_case(deps, args.ssid)
+        expected = {"device_id": args.device, "firmware": args.expect_fw,
+                    "build_sha": args.expect_sha}
+        result = await run_case(deps, args.ssid, expected)
         return policy.exit_code(result.get("verdict", "STOP"))
     except StopRun as exc:
         result.update(verdict="STOP", reason="stop", detail=str(exc))

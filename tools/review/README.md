@@ -291,8 +291,9 @@
   （`net_mode`/`sta_ssid`/`sta_ip`/`uart_baudrate`，`net_mode` 运行态预期 `sta`）；
   `sta_has_ip` 由 w1 之后 `network.status` 独立对读，要求 status 采样不早于窗口内
   最后一条 attributes 且两侧 `sta_ip` 均非空。
-- 身份门：`device_id`/`firmware`/`build_sha` 任一缺失或不匹配，在任何写命令前 `STOP`。
-- 容错语义：只读命令最多 3 次、间隔 2 s；所有请求由全局单调序号分配唯一 ID（跨轮询不重复，迟到响应不得满足下一次查询）；持续超时 → `STOP`；
+- 身份门：`device_id`/`firmware`/`build_sha` 任一缺失或不匹配，在任何写命令前 `STOP`；
+  设备选择按 `--addr`（默认 `10:97:BD:D3:65:DA`）绑定，不取扫描首个命中。
+- 容错语义：只读命令最多 3 次、间隔 2 s；所有请求由全局单调序号分配唯一 ID（跨轮询不重复，迟到响应不得满足下一次查询）；持续超时 → `STOP`（每次尝试与重试均受剩余 deadline 限制）；
   `n_attr=0` → `NOT_COVERED`；写命令 transport 异常不重发；就绪门禁用
   `time.monotonic()` 实际连续 10 s、间隔 >3 s 清零。
 - 纯判定在 `c152_policy.py`；Host 测试：`make -C tests/c152_policy run`（policy + runner

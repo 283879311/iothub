@@ -164,6 +164,15 @@ class ReadinessTests(unittest.TestCase):
         self.assertFalse(run(r.wait_ready(deps, 10.0)))
 
 
+class TargetSelectionTests(unittest.TestCase):
+    def test_binds_address_not_first_hit(self):
+        recs = [{"address": "AA:BB:CC:DD:EE:01"},
+                {"address": "10:97:BD:D3:65:DA"}]
+        hit = r.select_target(recs, "10:97:BD:D3:65:DA")
+        self.assertEqual(hit["address"], "10:97:BD:D3:65:DA")
+        self.assertIsNone(r.select_target(recs[:1], "10:97:BD:D3:65:DA"))
+
+
 class ReadCmdTests(unittest.TestCase):
     def test_retry_uses_unique_ids(self):
         clock = Clock()
@@ -205,6 +214,36 @@ class ReadCmdTests(unittest.TestCase):
         second = run(r.read_cmd(deps, "probe", {}, "p"))
         self.assertEqual(second, {"ok": True, "data": {"fresh": True}})
         self.assertIn(stale_id, sess.pending)  # stale entry not consumed
+        self.assertEqual(len(sess.ids), len(set(sess.ids)))
+
+    def test_deadline_exhausted_before_send(self):
+        clock = Clock()
+        deps, sess = make_deps(make_handler(), clock)
+        with self.assertRaises(r.ReadTimeout):
+            run(r.read_cmd(deps, "probe", {}, "p", deadline=clock.now() - 1.0))
+        self.assertEqual(sess.ids, [])
+
+    def test_three_timeouts_then_late_response(self):
+        clock = Clock()
+        calls = {"n": 0}
+
+        def handler(req):
+            calls["n"] += 1
+            if calls["n"] <= 3:
+                raise asyncio.TimeoutError()
+            return {"ok": True, "data": {"fresh": True}}
+
+        deps, sess = make_deps(handler, clock)
+        with self.assertRaises(r.ReadTimeout):
+            run(r.read_cmd(deps, "probe", {}, "p",
+                           deadline=clock.now() + 120.0))
+        first_ids = list(sess.ids)
+        self.assertEqual(len(first_ids), 3)
+        sess.pending[first_ids[0]] = {"ok": True, "data": {"stale": True}}
+        second = run(r.read_cmd(deps, "probe", {}, "p",
+                                deadline=clock.now() + 120.0))
+        self.assertEqual(second, {"ok": True, "data": {"fresh": True}})
+        self.assertIn(first_ids[0], sess.pending)
         self.assertEqual(len(sess.ids), len(set(sess.ids)))
 
     def test_three_timeouts_stop(self):
@@ -276,6 +315,14 @@ class OutcomeTests(unittest.TestCase):
         self.assertEqual(result["window"]["n_attr"], 1)
         self.assertEqual(result["cross_errors"], [])
         self.assertEqual(sess.writes, 1)
+
+    def test_expected_identity_parameter(self):
+        clock = Clock()
+        deps, sess = make_deps(make_handler(), clock)
+        result = run(r.run_case(deps, "ssid", dict(IDENT, firmware="other")))
+        self.assertEqual((result["verdict"], result["reason"]),
+                         ("STOP", "identity"))
+        self.assertEqual(sess.writes, 0)
 
     def test_run_case_timeout_stop(self):
         clock = Clock()
